@@ -31,7 +31,19 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify compliance with `.specify/memory/constitution.md` core principles:
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Secrets Stay in Rust | [ ] Pass / [ ] N/A | UI never handles seeds, keys, raw payloads |
+| II. Orchard-Only Privacy | [ ] Pass / [ ] N/A | Shielded default, no transparent spending |
+| III. Fail-Closed Safety | [ ] Pass / [ ] N/A | Privacy modes error, never silently downgrade |
+| IV. Typed IPC Contracts | [ ] Pass / [ ] N/A | Versioned schemas, no untyped payloads |
+| V. Test-Driven Quality | [ ] Pass / [ ] N/A | Unit + integration + security regression tests |
+| VI. Data Minimization | [ ] Pass / [ ] N/A | Minimal storage, separate wallet/app state |
+| VII. Decision Traceability | [ ] Pass / [ ] N/A | ADRs for architectural decisions |
+
+For detailed rules, see `docs/constitution.md`.
 
 ## Project Structure
 

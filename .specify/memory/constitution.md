@@ -1,50 +1,144 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+==================
+Version change: 0.0.0 -> 1.0.0
+Bump rationale: Initial adoption - MAJOR version for first ratification
+
+Modified principles: N/A (initial creation)
+
+Added sections:
+  - Preamble
+  - Core Principles (7 principles consolidated from 15 articles)
+  - Non-Negotiable Checklist
+  - Governance
+
+Templates requiring updates:
+  - .specify/templates/plan-template.md: Constitution Check section exists
+  - .specify/templates/spec-template.md: No constitution references found
+  - .specify/templates/tasks-template.md: No constitution references found
+
+Source document: docs/constitution.md (15-article detailed version)
+
+Follow-up TODOs: None
+==================
+-->
+
+# Zkore Desktop Constitution
+
+## Preamble
+
+This document defines the non-negotiable principles governing Zkore Desktop development. These principles are consolidated from the detailed 15-article constitution in `docs/constitution.md`. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
+
+For detailed implementation rules, enforcement specifics, and article-by-article guidance, refer to the full constitution at `docs/constitution.md`.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Secrets Stay in Rust
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The Rust backend is the single trust boundary for all secret material. The UI MUST NOT receive, store, log, or compute with seed phrases, spending keys, or raw signing payloads.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Enforceable rules:**
+- Backend never sends mnemonic words, raw seeds, or spending keys to UI
+- UI never persists secret material or signing payloads beyond active session
+- Memory containing secrets MUST use zeroization where feasible
+- Logs MUST redact seeds, keys, full payloads, and raw memos by default
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Orchard-Only Privacy
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+All spending operations MUST use the Orchard shielded pool. Transparent funds MAY be received and displayed but MUST NOT be spent directly.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Enforceable rules:**
+- Default receive address MUST NOT include a transparent receiver
+- Transparent funds require explicit shielding before becoming spendable
+- Any privacy downgrade MUST be explicit, scoped, and user-acknowledged
+- No Sapling spending, no transparent spending (receive-only for compatibility)
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Fail-Closed Safety
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+When a privacy or safety mode is enabled, operations MUST error rather than silently downgrade. Crashes and errors MUST NOT leak secrets or corrupt wallet state.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Enforceable rules:**
+- Tor mode enabled: MUST fail if Tor unhealthy, MUST NOT silently retry direct
+- Network errors: MUST surface actionable prompts (retry, disable, change endpoint)
+- All failures: MUST preserve wallet state integrity and redact secrets from crash logs
+- Beta features: MUST have clear label, defined failure mode, rollback path
+
+### IV. Typed IPC Contracts
+
+All communication between UI and backend MUST use versioned, strongly typed request/response models. Generic untyped payloads are forbidden for security-critical actions.
+
+**Enforceable rules:**
+- Every IPC command and event MUST have versioned schema
+- Breaking changes MUST include documented migration path
+- Errors MUST map to stable code + user-safe message + optional developer detail (no secrets)
+- No panics across IPC boundaries
+
+### V. Test-Driven Quality
+
+Every milestone MUST include unit tests for domain logic, integration tests for database/sync boundaries, and targeted security regression tests.
+
+**Enforceable rules:**
+- Privacy regressions (fail-open, unintended transparent usage) MUST have regression tests
+- Key leakage via logs or serialization MUST have regression tests
+- Malformed payload ingestion in signing flows MUST have regression tests
+- CI MUST cover at least two server implementations (Zaino + lightwalletd)
+
+### VI. Data Minimization
+
+Store only the minimum information needed to render balances, activity, and resume in-progress operations. Separate wallet state from app-only metadata.
+
+**Enforceable rules:**
+- Wallet state: zcash_client_sqlite wallet database
+- App state: separate store for preferences, backup flags, swap records, server config
+- Avoid storing raw payloads, full memo bodies in logs, hardware wallet identifiers
+- Every schema change MUST include forward migration + rollback strategy + tests
+
+### VII. Decision Traceability
+
+Significant changes MUST be documented with problem, options considered, chosen approach, and consequences. Every release MUST include changelog with privacy/security impacts.
+
+**Enforceable rules:**
+- Architectural decisions MUST have ADR/RFC documenting reasoning
+- Security-sensitive reviews MUST involve maintainer familiar with key management, tx construction, networking, signing
+- Every milestone deliverable MUST link implementation, tests, and acceptance criteria
+- Critical security fixes MUST use patch release path
+
+## Non-Negotiable Checklist
+
+Before merging work that touches wallet, signing, networking, or persistence, confirm:
+
+- [ ] Secrets cannot reach the UI
+- [ ] Logs remain redacted
+- [ ] Transparent spending is still impossible
+- [ ] Tor mode cannot silently downgrade
+- [ ] IPC types are versioned and validated
+- [ ] Migrations are tested
+- [ ] Failure modes are user-explainable and safe
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Amendment Process
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Any intentional deviation from these principles requires an amendment. An amendment MUST include:
+- Exact text change
+- Reason for change
+- Risk analysis (privacy, security, user impact)
+- Migration plan if behavior changes
+- Acceptance criteria for the new rule
+
+Amendments MUST be reviewed and approved by maintainers responsible for security and architecture.
+
+### Versioning
+
+This constitution follows semantic versioning:
+- **MAJOR**: Backward-incompatible governance/principle removals or redefinitions
+- **MINOR**: New principle/section added or materially expanded guidance
+- **PATCH**: Clarifications, wording, non-semantic refinements
+
+### Reference Documents
+
+- **Detailed constitution**: `docs/constitution.md` (full 15-article version with implementation specifics)
+- **Feature specifications**: `docs/spec.md`
+- **Implementation plan**: `docs/plan.md`
+
+**Version**: 1.0.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-21
