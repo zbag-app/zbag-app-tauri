@@ -21,8 +21,13 @@
 - Using only zcash_primitives: Rejected as it lacks light client sync, transaction construction, and witness management
 
 **Implementation Notes**:
-- Enable features: `orchard`, `pczt`, `tor` in Cargo.toml
-- Use `WalletDb` from zcash_client_sqlite for wallet persistence
+- Enable features in Cargo.toml:
+  - `orchard`: Orchard shielded pool support (required)
+  - `transparent-inputs`: Receive transparent funds and shield them (FR-010/FR-011)
+  - `pczt`: PCZT signing for Keystone hardware wallet (FR-020-028)
+  - `tor`: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)
+- Use `WalletDb` from zcash_client_sqlite for wallet persistence (viewing keys and scanned state)
+- Spending keys are NOT stored in wallet DB - must be derived from mnemonic when needed
 - Use `LightWalletReader` trait implementations for CompactTxStreamer compatibility
 
 ### 2. Keystone PCZT Signing Protocol
@@ -59,11 +64,29 @@
 - WebSocket for status updates: Rejected as 1Click uses polling model
 
 **Implementation Notes**:
-- Base URL: `https://1click.chaindefuser.com/v1`
-- Endpoints: `/quote`, `/deposit-address`, `/status/{intent_id}`
+- Base URL: `https://1click.chaindefuser.com/` (no trailing version in base)
+- API Version: v0 (current production version)
+- Endpoints:
+  - `GET /v0/quote` - Get swap quote with parameters
+  - `POST /v0/deposit/submit` - Submit deposit intent after user sends funds
+  - `GET /v0/status?intent_id={id}` - Poll swap status
+  - `GET /v0/tokens` - List supported tokens and chains
+- Query parameters for quote:
+  - `defuse_asset_identifier_in` - Source asset (e.g., "near:mainnet:native")
+  - `defuse_asset_identifier_out` - Target asset (e.g., "zcash:mainnet:native")
+  - `exact_amount_in` or `exact_amount_out` - Amount specification
+  - `dry=true` for quote-only without commitment
 - Poll interval: 5 seconds for active swaps, exponential backoff on errors
 - Timeout: 30 seconds per request
-- State mapping: `PENDING` -> `Pending`, `COMPLETED` -> `Completed`, `FAILED` -> `Failed`, `REFUNDED` -> `Refunded`
+- **Status mapping (v0 API statuses)**:
+  - `PENDING_DEPOSIT` -> `AwaitingDeposit` (waiting for user to send)
+  - `PROCESSING` -> `Pending` (swap in progress)
+  - `SUCCESS` -> `Completed` (swap successful)
+  - `INCOMPLETE_DEPOSIT` -> `Failed` (partial deposit, needs action)
+  - `REFUNDED` -> `Refunded` (swap failed, funds returned)
+  - `FAILED` -> `Failed` (swap failed)
+- Rate limiting: Respect API rate limits, implement client-side throttling
+- See: https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api
 
 ### 4. Tor Integration (Arti-based)
 
@@ -227,7 +250,8 @@
 **Decision**: Support custom servers with security warnings
 
 **Rationale**:
-- Default: zec.rocks (Zaino+Zebra, replaced lightwalletd+zcashd April 2025)
+- Default production endpoints use lightwalletd + Zebra (CompactTxStreamer gRPC)
+- Zaino (Rust-native indexer) is available on experimental endpoints
 - Regional endpoints improve latency and reliability
 - Custom server support enables enterprise and privacy-focused deployments
 - Connection test prevents invalid configurations
@@ -238,12 +262,33 @@
 - No connection validation: Rejected for error-prone setup
 
 **Implementation Notes**:
-- Default server: `https://zec.rocks`
-- Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `me.zec.rocks`, `sa.zec.rocks`
-- Connection test: Call `GetLightdInfo` before saving server config
+
+**Mainnet servers (production)**:
+- Primary: `https://zec.rocks` (lightwalletd + Zebra)
+- Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+- Note: Zaino migration is in progress but not yet complete on all endpoints
+
+**Testnet servers**:
+- Public: Use team's own testnet endpoint (see Development Configuration below)
+- Alternative: `https://testnet.zec.rocks` (if available)
+
+**Zaino endpoints (experimental)**:
+- Available for testing Zaino compatibility: check zec.rocks announcements
+- Constitution requires testing against multiple server implementations (Zaino + lightwalletd)
+
+**Development Configuration**:
+- For initial development, use team's own lightwalletd/Zaino + Zebra testnet endpoint
+- SSL via reverse proxy recommended for production-like testing
+- Configure via environment variable: `ZKORE_GRPC_URL`
+
+**Connection validation**:
+- Call `GetLightdInfo` before saving server config
 - Server network validation: Must match wallet network (mainnet/testnet)
 - Security warning: Display when user configures non-default server
 - Server stored in app metadata DB per wallet
+
+**References**:
+- [zec.rocks Zcashd Deprecation Timeline](https://forum.zcashcommunity.com/t/zec-rocks-zcashd-deprecation-timeline/50907)
 
 ## Resolved Clarifications
 

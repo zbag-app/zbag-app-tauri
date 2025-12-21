@@ -75,7 +75,8 @@ export type AddressType = 'ShieldedOnly' | 'Transparent';
 export interface AddressInfo {
   encoded: string;
   address_type: AddressType;
-  diversifier_index: number;
+  /** Diversifier index as string to avoid JS number overflow for u64 values */
+  diversifier_index: string;
 }
 
 // ============================================================================
@@ -270,18 +271,31 @@ export interface ListTransactionsRequest extends VersionedPayload {
   offset: number;
 }
 
-/** Build send transaction */
-export interface BuildSendRequest extends VersionedPayload {
+/**
+ * Prepare a send transaction (software wallet flow).
+ * Returns a proposal that can be confirmed. Transaction bytes stay in backend.
+ */
+export interface PrepareSendRequest extends VersionedPayload {
   account_id: number;
   recipient: string;
   amount: Zatoshis;
   memo: string | null;
 }
 
-/** Submit transaction */
-export interface SubmitTransactionRequest extends VersionedPayload {
-  /** Raw transaction bytes, base64 encoded */
-  tx_bytes: string;
+/**
+ * Confirm and broadcast a prepared send transaction.
+ * The proposal_id references the transaction prepared in the backend.
+ */
+export interface ConfirmSendRequest extends VersionedPayload {
+  /** Proposal ID from PrepareSendResponse */
+  proposal_id: string;
+}
+
+/**
+ * Cancel a prepared send transaction (optional, proposals expire automatically).
+ */
+export interface CancelSendRequest extends VersionedPayload {
+  proposal_id: string;
 }
 
 /** Shield transparent funds */
@@ -401,15 +415,36 @@ export interface ListTransactionsResponse extends VersionedPayload {
   total_count: number;
 }
 
-export interface BuildSendResponse extends VersionedPayload {
-  /** Raw transaction bytes, base64 encoded */
-  tx_bytes: string;
+/**
+ * Response from PrepareSend. Contains proposal details for user review.
+ * Transaction bytes are held in backend memory, not sent to UI.
+ */
+export interface PrepareSendResponse extends VersionedPayload {
+  /** Unique proposal identifier (backend-side reference) */
+  proposal_id: string;
   /** Fee for the transaction */
   fee: Zatoshis;
+  /** Summary for user verification */
+  summary: TransactionSummary;
+  /** Proposal expiration timestamp (proposals auto-expire after ~5 minutes) */
+  expires_at: number;
 }
 
-export interface SubmitTransactionResponse extends VersionedPayload {
+/** Transaction summary for user verification before confirming */
+export interface TransactionSummary {
+  recipient: string;
+  amount: Zatoshis;
+  fee: Zatoshis;
+  memo_present: boolean;
+  total_spend: Zatoshis;
+}
+
+export interface ConfirmSendResponse extends VersionedPayload {
   txid: string;
+}
+
+export interface CancelSendResponse extends VersionedPayload {
+  cancelled: boolean;
 }
 
 export interface ShieldFundsResponse extends VersionedPayload {
@@ -556,6 +591,8 @@ export const ErrorCodes = {
   TRANSPARENT_SPEND_BLOCKED: 'E3003',
   TRANSACTION_FAILED: 'E3004',
   MEMO_TOO_LONG: 'E3005',
+  PROPOSAL_NOT_FOUND: 'E3006',
+  PROPOSAL_EXPIRED: 'E3007',
 
   // Sync errors
   SYNC_IN_PROGRESS: 'E4001',
@@ -606,8 +643,9 @@ export const Commands = {
 
   // Transactions
   LIST_TRANSACTIONS: 'zkore_list_transactions',
-  BUILD_SEND: 'zkore_build_send',
-  SUBMIT_TRANSACTION: 'zkore_submit_transaction',
+  PREPARE_SEND: 'zkore_prepare_send',
+  CONFIRM_SEND: 'zkore_confirm_send',
+  CANCEL_SEND: 'zkore_cancel_send',
   SHIELD_FUNDS: 'zkore_shield_funds',
 
   // Backup

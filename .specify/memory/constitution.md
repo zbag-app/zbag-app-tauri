@@ -35,11 +35,20 @@ For detailed implementation rules, enforcement specifics, and article-by-article
 
 ### I. Secrets Stay in Rust
 
-The Rust backend is the single trust boundary for all secret material. The UI MUST NOT receive, store, log, or compute with seed phrases, spending keys, or raw signing payloads.
+The Rust backend is the single trust boundary for all secret material. The UI MUST NOT store, log, or compute with spending keys or raw seeds.
 
-**Enforceable rules:**
-- Backend never sends mnemonic words, raw seeds, or spending keys to UI
-- UI never persists secret material or signing payloads beyond active session
+**Permitted mnemonic flows (with strict constraints):**
+- Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, and restore entry
+- UI MUST NOT persist mnemonic to durable storage, MUST NOT log it, MUST clear from memory after flow completes
+- Backend MUST NOT re-send mnemonic after initial creation response
+
+**Permitted payload flows:**
+- Raw unsigned/signed payloads MAY cross IPC ONLY for external signing flows (Keystone PCZT)
+- Software wallet flows MUST use proposal-based pattern (tx bytes stay in backend)
+
+**Prohibited flows:**
+- Backend MUST NEVER send: raw seeds (entropy bytes), spending keys, tx bytes for software wallets
+- UI MUST NEVER persist secrets, log mnemonic/seeds/payloads, or retain payloads beyond active session
 - Memory containing secrets MUST use zeroization where feasible
 - Logs MUST redact seeds, keys, full payloads, and raw memos by default
 

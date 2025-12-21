@@ -11,18 +11,32 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 ## Project Structure
 
 ```text
-backend/
-frontend/
+crates/                          # Rust backend workspace
+  zkore-core/                    # Domain types and IPC contracts
+  zkore-engine/                  # Wallet engine (librustzcash wrapper)
+  zkore-network/                 # gRPC/HTTP clients, Tor transport
+  zkore-keystone/                # Hardware wallet (PCZT, UFVK)
+  zkore-tor/                     # Embedded Arti Tor manager
+apps/
+  zkore-app-tauri/               # Tauri app shell
+    src-tauri/                   # Rust Tauri commands
+    src/                         # React TypeScript frontend
 tests/
+  integration/                   # Cross-crate integration tests
+  e2e/                           # End-to-end Tauri tests
+specs/
+  001-zkore-desktop-wallet/      # Feature specification and design docs
+docs/                            # Project-wide documentation
 ```
 
 ## Commands
 
 - `bun install` - Install frontend dependencies
-- `bun run tauri dev` - Run development server
-- `bun run tauri build` - Build production app
-- `cargo test` - Run Rust tests
-- `cargo clippy` - Run Rust linter
+- `bun tauri dev` - Run development server (Tauri CLI via @tauri-apps/cli)
+- `bun tauri build` - Build production app
+- `cargo test --workspace` - Run all Rust tests
+- `cargo clippy --workspace` - Run Rust linter
+- `cargo build --release --locked` - Production build with lock verification
 
 ## Code Style
 

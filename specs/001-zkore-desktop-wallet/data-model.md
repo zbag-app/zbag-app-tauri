@@ -34,8 +34,36 @@ The root entity containing seed-derived keys and accounts.
 
 **Notes**:
 - Seed phrase NEVER stored in app metadata DB
-- Seed stored in wallet DB managed by zcash_client_sqlite
 - Network field is IMMUTABLE after wallet creation
+
+### Key Storage Architecture
+
+This section clarifies the separation of viewing keys and spending capability, following `zcash_client_backend`'s design.
+
+**zcash_client_sqlite stores (UFVK-based):**
+- Unified Full Viewing Keys (UFVKs) per account
+- Scanned wallet state (notes, witnesses, transactions)
+- Address derivation metadata
+
+**Spending capability stored separately:**
+- `zcash_client_backend` does NOT store spending keys - they must be supplied when creating transactions
+- Spending keys derived on-demand from mnemonic when transaction construction is needed
+- Mnemonic storage options (choose one per deployment):
+  1. **OS Keychain** (preferred): macOS Keychain, Windows Credential Manager, Linux Secret Service
+  2. **Encrypted file**: User-password-protected file in wallet directory
+  3. **Memory-only mode**: Mnemonic kept in memory only, user must re-enter on each app launch
+
+**Key derivation flow:**
+1. User unlocks wallet (provides password or OS unlocks keychain)
+2. Backend retrieves mnemonic from secure store
+3. Backend derives spending keys as needed for transaction construction
+4. Spending keys held in memory only for duration of operation
+5. Spending keys zeroized after use
+
+**Lock/unlock semantics:**
+- `locked`: Mnemonic not in memory, spending operations blocked
+- `unlocked`: Mnemonic accessible, spending operations permitted
+- WatchOnly wallets have no lock state (no spending capability)
 
 ---
 
@@ -65,7 +93,8 @@ A logical grouping within a wallet for Orchard shielded operations.
 
 **Constraints**:
 - Account 0 always exists after wallet creation
-- WatchOnly wallets have only WatchOnly accounts
+- WatchOnly wallets MUST NOT contain Software accounts (no spending keys)
+- WatchOnly wallets MAY contain WatchOnly or HardwareSigner accounts
 
 ---
 
@@ -76,7 +105,7 @@ Derived addresses for receiving funds.
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
 | account_id | u32 | Parent account reference | FK to Account |
-| diversifier_index | u64 | Address derivation index | >= 0 |
+| diversifier_index | u64 | Address derivation index (use string in IPC for JS safety) | >= 0 |
 | address_type | AddressType | Shielded or Transparent | Enum value |
 | encoded | String | Bech32m/Base58 encoded address | Valid encoding |
 | created_at | Timestamp | Generation timestamp | Auto-set |

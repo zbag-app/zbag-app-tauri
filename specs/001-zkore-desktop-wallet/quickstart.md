@@ -9,7 +9,7 @@
 
 - **Rust**: 1.92.0+ (edition 2024, with rustup)
 - **Bun**: 1.3.5+
-- **Tauri CLI**: v2
+- **Tauri CLI**: v2 (installed as dev dependency via `@tauri-apps/cli`, not global)
 
 > **Note**: We use Rust 1.92.0 with edition 2024 to align with the librustzcash ecosystem. While librustzcash MSRV is 1.85.1, we target 1.92.0 for the development toolchain to leverage the latest improvements. Edition 2024 provides improved safety semantics and is production-proven in Zcash infrastructure.
 
@@ -62,8 +62,13 @@ repository = "https://github.com/zkore/zkore-desktop"
 [workspace.dependencies]
 # Zcash libraries (aligned with librustzcash/Zashi)
 # Using caret constraints for semver-compatible updates
-zcash_client_backend = { version = "0.21", features = ["orchard", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.19" }
+# Features enabled:
+#   - orchard: Orchard shielded pool support (required)
+#   - transparent-inputs: Receive transparent funds + shield them (FR-010/FR-011)
+#   - pczt: PCZT signing for Keystone hardware wallet (FR-020-028)
+#   - tor: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)
+zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor"] }
+zcash_client_sqlite = { version = "0.19", features = ["transparent-inputs"] }
 zcash_primitives = { version = "0.26" }
 zcash_protocol = { version = "0.7" }
 
@@ -124,22 +129,24 @@ cargo new --lib crates/zkore-tor
 ### 3. Initialize Tauri App
 
 ```bash
-# Install Tauri CLI
-cargo install tauri-cli --version "^2.0.0"
-
-# Create Tauri app
+# Create Tauri app directory
 cd apps
 bun create tauri-app zkore-app-tauri --template react-ts
 cd zkore-app-tauri
 
-# Install dependencies
+# Install dependencies (includes @tauri-apps/cli as dev dependency)
 bun install
+
+# Add Tauri CLI as dev dependency (preferred over global cargo install)
+bun add -D @tauri-apps/cli
 
 # Install additional UI dependencies
 bun add @keystonehq/animated-qr @keystonehq/keystone-sdk
 bun add qrcode.react @tanstack/react-query
 bun add -D @types/node
 ```
+
+> **Note**: We use `@tauri-apps/cli` as a dev dependency rather than `cargo install tauri-cli`. This ensures consistent CLI versions across the team and integrates with bun scripts (`bun tauri dev`, `bun tauri build`).
 
 ### 4. Configure Tauri for Workspace
 

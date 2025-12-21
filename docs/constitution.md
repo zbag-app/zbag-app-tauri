@@ -72,18 +72,36 @@ These are guarantees the project makes to users and must be preserved through al
   * Tor routing decisions
 * The UI is untrusted for secrets and must operate only on derived, non-sensitive data.
 
-### 3.2 Prohibited data flows
+### 3.2 Data flow rules
 
-* The backend must never send to the UI:
+**Permitted flows (with strict constraints):**
 
-  * mnemonic words
-  * raw seeds
-  * spending keys or raw key material
-  * raw unsigned or signed payloads unless required for external signing flows, and only in a deliberately scoped form
-* The UI must never persist:
+* Mnemonic words MAY be sent to UI ONLY for:
+  * Initial wallet creation display (one-time, immediately after generation)
+  * Backup verification challenge (user re-entry validation)
+  * Wallet restoration entry (user-provided seed for import)
 
-  * any secret material
-  * signing payload contents beyond what is strictly needed for the active signing session
+  Constraints on permitted mnemonic flows:
+  * UI MUST NOT persist mnemonic to disk, localStorage, or any durable storage
+  * UI MUST NOT log mnemonic words
+  * UI MUST clear mnemonic from memory after the flow completes
+  * Backend MUST NOT re-send mnemonic after initial creation response
+
+* Raw unsigned/signed payloads MAY cross IPC ONLY for:
+  * External signing flows (Keystone PCZT) where air-gapped device requires the payload
+  * Such payloads MUST be displayed for user verification before signing
+
+**Prohibited flows:**
+
+* The backend MUST NEVER send to the UI:
+  * Raw seeds (entropy bytes, not mnemonic words)
+  * Spending keys or any derived key material capable of signing
+  * Raw transaction bytes for software wallet flows (use proposal-based pattern instead)
+
+* The UI MUST NEVER:
+  * Persist any secret material to durable storage
+  * Log mnemonic words, seeds, or signing payloads
+  * Retain signing payload contents beyond the active signing session
 
 ### 3.3 Memory and log hygiene
 
@@ -446,7 +464,9 @@ Amendments must be reviewed and approved by maintainers responsible for security
 
 Before merging work that touches wallet, signing, networking, or persistence, confirm:
 
-* secrets cannot reach the UI
+* spending keys and raw seeds cannot reach the UI
+* mnemonic flows follow permitted patterns (creation, backup, restore only) with no persistence
+* software wallet send flows use proposal-based IPC (no raw tx bytes in UI)
 * logs remain redacted
 * transparent spending is still impossible
 * Tor mode cannot silently downgrade

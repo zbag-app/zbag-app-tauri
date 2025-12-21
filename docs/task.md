@@ -65,13 +65,16 @@
 
   * Create a separate SQLite DB for app metadata
   * Add migrations and schema version table
+  * Schema aligned with `specs/001-zkore-desktop-wallet/data-model.md`
   * Tables to create initially:
 
-    * `app_flags` (first_run_completed, backup_required, backup_completed_at, last_opened_wallet_id)
-    * `servers` (name, grpc_url, is_default, last_success_at)
-    * `tor_settings` (enabled, last_status, last_error, updated_at)
-    * `receive_rotation` (account_id, diversifier_index, created_at) optional
-    * `swaps` (swap_id, kind, state, created_at, updated_at, remote_payload_json, last_error) placeholder until Milestone 5
+    * `wallets` (id, name, directory_path, wallet_type, network, created_at, last_opened_at)
+    * `backup_status` (wallet_id FK, backup_required, backup_completed_at, verification_method)
+    * `servers` (id, name, grpc_url, network, is_default, last_success_at, created_at)
+    * `tor_settings` (id=1 singleton, enabled, status, last_error, updated_at)
+    * `swaps` (id, remote_id, wallet_id FK, swap_type, input_asset, input_amount, output_asset, output_amount, deposit_address, destination_address, refund_address, state, deadline, last_error, created_at, updated_at)
+    * `receive_rotation` (wallet_id, account_id, diversifier_index, created_at) - tracks address rotation state
+    * `_app_migrations` (version, applied_at) - migration version tracking
 
 ### Logging and crash hygiene
 
@@ -173,11 +176,14 @@
 
 * Implement Tauri command handlers in `zkore-app-tauri`
 
-  * Wallet create
+  * Wallet create (returns seed_phrase for initial display only)
   * Load wallet
   * Get receive addresses
   * Start sync and get progress
   * Get balances and transactions
+  * Prepare send (proposal-based, returns proposal_id + summary)
+  * Confirm send (accepts proposal_id, returns txid)
+  * Cancel send (clears proposal)
 * Implement event subscription bridge
 
   * Main window subscribes to topics
@@ -231,18 +237,27 @@
 
 ### Backend: transaction building and submission
 
-* Implement `TxService.build_send`
+* Implement `TxService.prepare_send` (proposal-based pattern)
 
   * Validate recipient supports Orchard
   * Reject transparent-only recipients
   * Support optional memo field
   * Select Orchard notes, compute fee, build transaction
-  * Return unsigned bytes ready to submit (software wallet path)
-* Implement `TxService.submit`
+  * Store transaction bytes in backend memory (NOT sent to UI)
+  * Return proposal_id, fee, and summary for user verification
+  * Proposals auto-expire after ~5 minutes
 
+* Implement `TxService.confirm_send`
+
+  * Look up proposal by proposal_id
   * Submit via CompactTxStreamer endpoint
   * Insert pending activity entry immediately
   * Publish `tx.changed` for pending and later confirmed transitions
+  * Clear proposal from memory after submission
+
+* Implement `TxService.cancel_send` (optional)
+
+  * Clear proposal from memory without submitting
 * Implement mandatory shielding rules in backend
 
   * Ensure transparent balance is visible but cannot be spent as a direct payment source
@@ -300,10 +315,13 @@
 
 ### Backend: backup state and enforcement
 
-* Implement seed generation and storage rules
+* Implement seed generation and key storage architecture
 
   * Generate BIP-39 mnemonic on wallet creation
-  * Store seed encrypted at rest or in OS keychain if available, otherwise store only in memory and require user export immediately (choose one approach and enforce consistently)
+  * Store UFVK (viewing key) in zcash_client_sqlite wallet database
+  * Store mnemonic in secure store (OS keychain preferred, encrypted file fallback)
+  * Spending keys are NOT stored - derived on-demand from mnemonic when needed
+  * See data-model.md "Key Storage Architecture" section for full design
 * Implement backup gating
 
   * Metadata: `backup_required`, `backup_completed_at`

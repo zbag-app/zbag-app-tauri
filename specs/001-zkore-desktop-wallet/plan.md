@@ -186,16 +186,17 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Network field stored in ServerConfig model
 
 ### Server Configuration
-- **Default Server**: zec.rocks (Zaino+Zebra infrastructure)
+- **Default Servers**: zec.rocks infrastructure (lightwalletd + Zebra, CompactTxStreamer gRPC)
   - Primary endpoint: `https://zec.rocks`
-  - Regional endpoints for improved performance:
-    - North America: `https://na.zec.rocks`
-    - Europe: `https://eu.zec.rocks`
-    - Middle East: `https://me.zec.rocks`
-    - South America: `https://sa.zec.rocks`
+  - Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+  - Note: Zaino migration in progress - not yet complete on all production endpoints
+- **Testnet**: Use team's own endpoint for development (lightwalletd/Zaino + Zebra)
+  - SSL via reverse proxy recommended for production-like testing
+  - Configure via `ZKORE_GRPC_URL` environment variable
 - **Custom Server**: User can configure alternative lightwalletd/Zaino endpoint
   - Security warning displayed when using custom servers
-  - Validation of server connectivity before saving
+  - Validation of server connectivity and network match before saving
+- **Compatibility testing**: CI must test against both lightwalletd and Zaino endpoints
 
 ### Tor Anonymization
 - Implementation: zcash_client_backend's tor feature using Arti (Rust-native Tor client)
