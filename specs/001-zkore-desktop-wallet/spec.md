@@ -186,6 +186,23 @@ A user views the home screen and sees a status widget summarizing wallet state: 
 
 ---
 
+### User Story 12 - Network Selection (Priority: P2)
+
+A user creating a new wallet chooses between mainnet and testnet. The network is immutable after wallet creation. Visual indicators (color coding, badges) distinguish networks throughout the UI, and address prefixes differ per network to prevent cross-network mistakes.
+
+**Why this priority**: Network selection is essential for testing and development workflows, but is set once at creation and impacts fewer users than core wallet operations.
+
+**Independent Test**: Can be fully tested by creating wallets on both mainnet and testnet, verifying visual distinctions persist throughout the UI, and confirming that addresses have network-appropriate prefixes.
+
+**Acceptance Scenarios**:
+
+1. **Given** a user initiates wallet creation, **When** they reach the network selection step, **Then** they can choose between mainnet and testnet with clear explanations
+2. **Given** a wallet has been created, **When** the user views wallet settings, **Then** the network is displayed but cannot be changed
+3. **Given** a user has mainnet and testnet wallets, **When** they view the wallet list or home screen, **Then** visual indicators (color coding, badges) clearly distinguish the networks
+4. **Given** a user views a receive address, **When** checking the address prefix, **Then** mainnet and testnet addresses have distinct prefixes preventing cross-network sends
+
+---
+
 ### Edge Cases
 
 - What happens when a user enters an invalid or checksum-failed seed phrase during restore?
@@ -266,9 +283,19 @@ A user views the home screen and sees a status widget summarizing wallet state: 
 - **FR-046**: System MUST show shielding-in-progress status when applicable
 - **FR-047**: System MUST update status widget in real-time without requiring page refresh
 
+**Network Selection and Custom Servers**
+- **FR-048**: System MUST allow network selection (mainnet/testnet) at wallet creation
+- **FR-049**: System MUST NOT allow changing network after wallet creation
+- **FR-050**: System MUST use separate database directories for mainnet and testnet wallets
+- **FR-051**: System MUST visually distinguish mainnet and testnet wallets (color coding, badges)
+- **FR-052**: System MUST allow users to configure custom lightwalletd/Zaino server URLs
+- **FR-053**: System MUST display security warning when configuring custom servers
+- **FR-054**: System MUST test server connection before saving custom server configuration
+- **FR-055**: System MUST validate that server network matches wallet network
+
 ### Key Entities
 
-- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only)
+- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only). Network (mainnet/testnet) is set at creation and immutable thereafter
 - **Account**: A logical grouping within a wallet, supporting Orchard shielded pool. Each account has derived addresses and maintains balance state
 - **Address**: Either a shielded-only Unified Address (default), a full Unified Address with transparent receiver (not default), or a standalone transparent address (compatibility). Addresses rotate on receive screen access
 - **Transaction**: An Orchard shielded transaction with sender, recipient, amount, optional memo, and lifecycle state (pending/confirmed)
@@ -276,6 +303,7 @@ A user views the home screen and sees a status widget summarizing wallet state: 
 - **Swap Intent**: A NEAR Intents operation with source/target assets, amounts, deadlines, state machine, and lifecycle tracking
 - **Backup Status**: A durable flag tracking whether the user has verified their seed phrase backup
 - **Tor State**: Current state of Tor connection: Off, Connecting, On, or Error
+- **ServerConfig**: Configuration for lightwalletd/Zaino server including URL and network field. Must match wallet network
 
 ## Success Criteria *(mandatory)*
 
@@ -303,11 +331,14 @@ A user views the home screen and sees a status widget summarizing wallet state: 
 - Tor integration uses embedded Arti-based client from zcash_client_backend
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)
 - Webcam access is available for QR scanning (with microSD fallback if not)
+- Same seed phrase generates different addresses on mainnet vs testnet (due to BIP-44 coin_type)
+- Default server is zec.rocks with regional endpoints available
 
 ## Dependencies
 
 - librustzcash ecosystem (zcash_client_backend, zcash_client_sqlite) for wallet engine
 - CompactTxStreamer gRPC protocol for light client sync
+- Zaino (Rust indexer, lightwalletd-compatible) as alternative to lightwalletd
 - Keystone SDK for hardware wallet integration
 - NEAR Intents 1Click API for swap operations
 - Arti-based Tor client for anonymized networking

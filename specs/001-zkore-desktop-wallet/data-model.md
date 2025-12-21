@@ -14,9 +14,9 @@ The root entity containing seed-derived keys and accounts.
 |-------|------|-------------|------------|
 | id | UUID | Unique wallet identifier | Auto-generated |
 | name | String | User-defined wallet name | 1-50 chars, non-empty |
-| directory_path | String | Filesystem path to wallet data | Valid path, writable |
+| directory_path | String | Filesystem path to wallet data (network-specific: ~/.zkore/wallets/{network}/{wallet-id}/) | Valid path, writable |
 | wallet_type | WalletType | Software or WatchOnly | Enum value |
-| network | Network | Mainnet or Testnet | Enum value |
+| network | Network | Mainnet or Testnet (IMMUTABLE after creation) | Enum value |
 | created_at | Timestamp | Creation timestamp | Auto-set |
 | last_opened_at | Timestamp | Last access timestamp | Updated on open |
 
@@ -25,8 +25,8 @@ The root entity containing seed-derived keys and accounts.
 - `WatchOnly` - View-only from imported UFVK
 
 **Network Enum**:
-- `Mainnet` - Production Zcash network
-- `Testnet` - Test network
+- `Mainnet` - Production Zcash network (addresses start with u1, zs, t1/t3)
+- `Testnet` - Test network (addresses start with utest, ztestsapling, tm)
 
 **Relationships**:
 - Has many `Account` (1:N)
@@ -35,6 +35,7 @@ The root entity containing seed-derived keys and accounts.
 **Notes**:
 - Seed phrase NEVER stored in app metadata DB
 - Seed stored in wallet DB managed by zcash_client_sqlite
+- Network field is IMMUTABLE after wallet creation
 
 ---
 
@@ -269,13 +270,17 @@ Light client server configuration.
 | id | UUID | Server identifier | Auto-generated |
 | name | String | Display name | 1-50 chars |
 | grpc_url | String | gRPC endpoint URL | Valid URL |
+| network | Network | Mainnet or Testnet | Enum value, must match wallet network |
 | is_default | bool | Whether selected | Only one true |
 | last_success_at | Option<Timestamp> | Last successful connection | - |
 | created_at | Timestamp | When added | Auto-set |
 
 **Default Servers**:
-- Zaino mainnet endpoint
-- Lightwalletd mainnet endpoint
+- zec.rocks with regional options (Mainnet and Testnet variants)
+
+**Validation Rules**:
+- Server network MUST match wallet network when connecting
+- Only servers matching the wallet's network are available for selection
 
 ---
 
@@ -375,6 +380,7 @@ TorState ─────── (global singleton)
 - Managed by librustzcash
 - Contains: accounts, addresses, transactions, notes, witnesses
 - Migrations handled by library
+- Directory structure: ~/.zkore/wallets/mainnet/{wallet-id}/ and ~/.zkore/wallets/testnet/{wallet-id}/
 
 ### App Metadata DB (custom SQLite)
 ```sql
@@ -382,9 +388,9 @@ TorState ─────── (global singleton)
 CREATE TABLE wallets (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    directory_path TEXT NOT NULL,
+    directory_path TEXT NOT NULL,  -- Network-specific path: ~/.zkore/wallets/{network}/{wallet-id}/
     wallet_type TEXT NOT NULL,
-    network TEXT NOT NULL,
+    network TEXT NOT NULL,  -- IMMUTABLE after creation
     created_at INTEGER NOT NULL,
     last_opened_at INTEGER
 );
@@ -402,6 +408,7 @@ CREATE TABLE servers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     grpc_url TEXT NOT NULL,
+    network TEXT NOT NULL,  -- Mainnet or Testnet, must match wallet network
     is_default INTEGER NOT NULL DEFAULT 0,
     last_success_at INTEGER,
     created_at INTEGER NOT NULL

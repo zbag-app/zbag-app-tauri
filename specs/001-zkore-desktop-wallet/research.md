@@ -70,9 +70,10 @@
 **Decision**: Embedded Arti Tor client via zcash_client_backend tor feature
 
 **Rationale**:
-- zcash_client_backend provides tor feature with Arti integration
-- Single binary deployment without external Tor daemon requirement
-- Fail-closed behavior enforceable at transport abstraction layer
+- Arti version: 0.35+ (latest in librustzcash)
+- Zashi 2.1 uses this in production (beta feature)
+- Proven fail-closed behavior in production
+- Routes: tx submit, tx fetch, swap APIs, rate APIs
 
 **Alternatives Considered**:
 - System Tor daemon: Rejected for deployment complexity and platform differences
@@ -200,19 +201,66 @@
 - App DB tables: `app_flags`, `servers`, `tor_settings`, `swaps`, `receive_rotation`
 - Migration version table: `_app_migrations(version, applied_at)`
 
+### 11. Network Selection Strategy
+
+**Decision**: Runtime network selection at wallet creation, immutable after
+
+**Rationale**:
+- Separate database directories per network prevent data corruption
+- Same seed generates different addresses (BIP-44 coin_type: 133' mainnet, 1' testnet)
+- Address prefixes prevent cross-network mistakes (mainnet: u1..., testnet: utest1...)
+- Network is a fundamental wallet property that should not change
+
+**Alternatives Considered**:
+- Network switching on existing wallet: Rejected for data integrity and confusion
+- Global network setting: Rejected to support multiple wallets on different networks
+
+**Implementation Notes**:
+- Network selection during wallet creation flow
+- Store network in wallet metadata (immutable field)
+- Database path includes network: `wallets/{wallet_id}/{network}/`
+- UI clearly indicates network in wallet list and detail screens
+- No UI affordance for changing network after creation
+
+### 12. Server Configuration
+
+**Decision**: Support custom servers with security warnings
+
+**Rationale**:
+- Default: zec.rocks (Zaino+Zebra, replaced lightwalletd+zcashd April 2025)
+- Regional endpoints improve latency and reliability
+- Custom server support enables enterprise and privacy-focused deployments
+- Connection test prevents invalid configurations
+
+**Alternatives Considered**:
+- Hardcoded servers only: Rejected for reduced flexibility
+- No default server: Rejected for poor UX
+- No connection validation: Rejected for error-prone setup
+
+**Implementation Notes**:
+- Default server: `https://zec.rocks`
+- Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `me.zec.rocks`, `sa.zec.rocks`
+- Connection test: Call `GetLightdInfo` before saving server config
+- Server network validation: Must match wallet network (mainnet/testnet)
+- Security warning: Display when user configures non-default server
+- Server stored in app metadata DB per wallet
+
 ## Resolved Clarifications
 
 All technical context items have been resolved. No outstanding clarifications needed.
 
 | Original Unknown | Resolution |
 |-----------------|------------|
-| Rust version | 1.75+ (required for zcash_client_backend features) |
+| Rust version | 1.92.0+ (required for zcash_client_backend features) |
+| Package manager | bun 1.3.5+ |
 | Primary dependencies | zcash_client_backend, zcash_client_sqlite, Tauri v2, tonic, Arti |
 | Storage | Dual SQLite (wallet + app metadata) |
 | Testing | cargo test + vitest + integration tests |
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
 | Constraints | Secrets in Rust only, Orchard-only, fail-closed Tor |
+| Default server | zec.rocks (Zaino+Zebra) |
+| Network selection | Runtime at wallet creation, immutable after |
 
 ## References
 
@@ -223,3 +271,6 @@ All technical context items have been resolved. No outstanding clarifications ne
 - [NEAR Intents 1Click API](https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api)
 - [Tauri v2 documentation](https://v2.tauri.app)
 - [Arti (Tor implementation in Rust)](https://gitlab.torproject.org/tpo/core/arti)
+- [Zaino GitHub](https://github.com/zingolabs/zaino)
+- [Zashi 2.1 Tor announcement](https://electriccoin.co/blog/zashi-2-1-enhanced-privacy-with-tor-beta/)
+- [zec.rocks infrastructure](https://zec.rocks)

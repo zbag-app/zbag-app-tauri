@@ -1,3 +1,14 @@
+## Technical Context
+
+### Environment and tooling
+
+* **Rust 1.92.0+** (backend)
+* **TypeScript 5.x** (frontend)
+* **bun** for package management (frontend dependencies)
+* **Tauri CLI**: Install with `bun add @tauri-apps/cli`
+
+---
+
 ## Tech stack and architecture decisions
 
 ### Desktop app framework
@@ -23,17 +34,19 @@
 
 ### Light client server connectivity
 
-* **CompactTxStreamer gRPC** to a remote server (default: **Zaino** or any lightwalletd-compatible endpoint)
+* **CompactTxStreamer gRPC** to a remote server
 
-  * Zaino describes itself as a Rust indexer intended to serve light clients and expose chain + mempool data. ([GitHub][3])
-  * Keep the client **server-agnostic**: “lightwalletd API compatible” first, Zaino-specific additions optional later.
+  * **Default server**: zec.rocks with regional endpoints (primary and fallback)
+  * **Custom server support**: Users can configure alternative lightwalletd-compatible servers with security warnings
+  * **Server configuration**: `ServerConfig` includes a `network` field (mainnet/testnet) that must match the wallet's network
+  * Keep the client **server-agnostic**: "lightwalletd API compatible" first, Zaino-specific additions optional later ([GitHub][3])
 
 ### Tor
 
 * **Opt-in Tor (Beta), fail-closed**
 
-  * Use an embedded Tor client based on Arti patterns and the `zcash_client_backend::tor` integration for lightwalletd connections. ([Zcash Community Forum][4])
-  * Route “sensitive” calls (tx submit, tx fetch, third party APIs like swaps) through Tor when enabled; never silently fall back. ([Zcash Community Forum][4])
+  * Use `zcash_client_backend`'s `tor` feature flag, which provides embedded Arti (Rust Tor client) integration for lightwalletd connections. ([Zcash Community Forum][4])
+  * Route "sensitive" calls (tx submit, tx fetch, third party APIs like swaps) through Tor when enabled; never silently fall back. ([Zcash Community Forum][4])
 
 ### Keystone hardware wallet
 
@@ -171,11 +184,14 @@ SQLite is fine for metadata too; it keeps everything transactionally safe and ea
 
 Backend flow:
 
-1. Generate mnemonic (BIP-39) and seed.
-2. Create new wallet DB.
-3. Derive account keys for **Orchard**.
-4. Immediately allow receiving.
-5. Set `backup_required = true` and persist.
+1. User selects network (mainnet or testnet) during wallet creation.
+2. Generate mnemonic (BIP-39) and seed.
+3. Create new wallet DB in network-specific directory:
+   - Mainnet: `~/.zkore/wallets/mainnet/`
+   - Testnet: `~/.zkore/wallets/testnet/`
+4. Derive account keys for **Orchard** on the selected network.
+5. Immediately allow receiving.
+6. Set `backup_required = true` and persist.
 
 UI flow:
 

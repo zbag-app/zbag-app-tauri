@@ -14,15 +14,25 @@ Users must be able to create a new wallet or restore an existing wallet using a 
 
 Desktop UX requirements:
 
-* Fast create: allow wallet creation without forcing backup before first receive, but keep a persistent, unavoidable reminder until backup is completed, and require backup before first spend. This matches Zashi’s direction of reducing onboarding friction while still guiding users to back up. ([Zcash Community Forum][1])
-* Restore guidance and progress: during restore, show clear progress states and actionable guidance, including an optional “approximate date of first transaction” helper to estimate wallet birthday height and reduce scan time (mirroring Zashi’s restore improvements). ([Zcash Community Forum][1])
-* Spend before sync: support a “spend before sync” mode (or an explicit design placeholder for it) for restored wallets so users can access already available funds without waiting for a full historical scan, consistent with Zashi’s positioning. ([Electric Coin Company][2])
+* Fast create: allow wallet creation without forcing backup before first receive, but keep a persistent, unavoidable reminder until backup is completed, and require backup before first spend. This matches Zashi's direction of reducing onboarding friction while still guiding users to back up. ([Zcash Community Forum][1])
+* Restore guidance and progress: during restore, show clear progress states and actionable guidance, including an optional "approximate date of first transaction" helper to estimate wallet birthday height and reduce scan time (mirroring Zashi's restore improvements). ([Zcash Community Forum][1])
+* Spend before sync: support a "spend before sync" mode (or an explicit design placeholder for it) for restored wallets so users can access already available funds without waiting for a full historical scan, consistent with Zashi's positioning. ([Electric Coin Company][2])
+
+Network selection requirements:
+
+* Users must choose between testnet and mainnet during wallet creation.
+* Network selection is immutable after wallet creation. Changing networks requires creating a new wallet.
+* Address prefixes differ by network:
+  * Mainnet: u1 (Unified Addresses), zs (Sapling), t1/t3 (transparent)
+  * Testnet: utest (Unified Addresses), ztestsapling (Sapling), tm (transparent)
+* Display network indicator clearly in the UI to prevent confusion.
 
 Acceptance criteria:
 
 * New wallet can be created in under 1 minute.
 * Restore flow communicates: scanning, estimated time, what is available now vs later.
 * Backup completion is verifiable by re entering specific words.
+* Network selection is explicit during creation and clearly displayed throughout the app.
 
 ### 2. Shielded Zcash transactions with optional memos (Orchard only)
 
@@ -133,16 +143,23 @@ Updated behavior to match Zashi direction:
 * Tor is opt in, marked as Beta, and can impact performance.
 * Tor should be used for wallet network activity like submitting transactions, fetching transaction data, and connecting to third party APIs, with clear toggles and status. ([Zcash Community Forum][11])
 * Fail closed: if Tor is enabled and fails, the wallet should not silently fall back to direct connections. It should prompt the user to disable Tor or retry. Zashi explicitly calls out this property as a benefit of integrated Tor. ([Zcash Community Forum][11])
-* If Tor is not implemented in the first desktop milestone, keep the toggle present but disabled with explicit “unavailable” messaging, and do not imply protection is active.
+* If Tor is not implemented in the first desktop milestone, keep the toggle present but disabled with explicit "unavailable" messaging, and do not imply protection is active.
+
+Implementation approach:
+
+* Use zcash_client_backend's tor feature, which is based on Arti (the Rust Tor implementation).
+* Fail closed behavior is mandatory: no silent fallback to clearnet connections.
+* This implementation is proven in production by Zashi 2.1.
 
 Acceptance criteria:
 
 * UI always indicates Tor mode: Off, Connecting, On, Error.
 * No silent fallback from Tor to direct when Tor is enabled.
+* Tor feature uses zcash_client_backend's tor integration.
 
 ### 6. Wallet status widget and privacy posture indicator (value at rest)
 
-Replace the single purpose “privacy level indicator” with a Zashi style “wallet status widget” that also includes a privacy posture summary.
+Replace the single purpose "privacy level indicator" with a Zashi style "wallet status widget" that also includes a privacy posture summary.
 
 What it must do:
 
@@ -153,8 +170,8 @@ What it must do:
   * Restoring or syncing: show progress and what is available
   * Transparent funds present: prompt to shield, with one click shortcut
   * All funds shielded: indicate best posture
-    This maps directly to Zashi’s wallet status widget goals and examples. ([Zcash Community Forum][1])
-* Privacy posture calculation should prioritize “spendable shielded value” and “transparent value requiring shielding”, and update in real time after shielding, receiving, and swaps.
+    This maps directly to Zashi's wallet status widget goals and examples. ([Zcash Community Forum][1])
+* Privacy posture calculation should prioritize "spendable shielded value" and "transparent value requiring shielding", and update in real time after shielding, receiving, and swaps.
 
 Desktop UX:
 
@@ -166,17 +183,45 @@ Acceptance criteria:
 * Any time transparent funds exist, user gets a clear prompt and a direct action to shield.
 * Status updates without needing page refresh or app restart.
 
+### 7. Custom RPC server configuration
+
+Users must be able to configure custom lightwalletd or Zaino server URLs for both mainnet and testnet.
+
+Server configuration requirements:
+
+* Default server: zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, etc.).
+* Users can add custom server URLs for advanced use cases.
+* Display security warning when configuring custom servers: "Custom servers can see your IP address and transaction patterns. Only use servers you trust."
+* Connection test required before saving server configuration to validate reachability and protocol compatibility.
+* Per network configuration: mainnet and testnet servers are configured independently.
+
+Desktop UX:
+
+* Settings screen with server configuration section.
+* Server selection dropdown with defaults and custom option.
+* Custom server input field with validation and test connection button.
+* Clear indicator of active server in settings and optionally in status bar.
+
+Acceptance criteria:
+
+* User can select from default regional servers.
+* User can configure custom server URL with connection validation.
+* Security warning is displayed before custom server is saved.
+* Connection test prevents saving invalid server configurations.
+
 ## User Stories
 
 ### 1. Create and restore wallets from seed phrases
 
 * As a new user, I want to create a wallet quickly and start receiving funds, while the app keeps reminding me to back up until I finish.
+* As a new user, I want to explicitly choose between testnet and mainnet during wallet creation, with clear explanation of the difference.
 * As a returning user, I want to restore my wallet using my seed phrase with guidance that reduces restore time, like picking an approximate first use date.
 * As a user restoring a wallet, I want to see clear restore progress and know when funds are usable, including support for spend before sync where possible. ([Zcash Community Forum][1])
 
 Desktop specific:
 
 * As a desktop user, I want seed entry to support paste, word autocomplete, and full keyboard navigation.
+* As a user, I want the network (testnet/mainnet) to be clearly displayed so I never confuse which network I am using.
 
 ### 2. Shielded Zcash transactions with optional memos (Orchard only)
 
@@ -210,11 +255,19 @@ Desktop specific:
 
 * As a privacy conscious user, I want to enable Tor in settings and see clear confirmation that my wallet traffic is routed through Tor.
 * As a user, I want the wallet to fail closed if Tor fails so it does not silently downgrade privacy. ([Zcash Community Forum][11])
+* As a user, I want to know that Tor is implemented using proven, production tested technology from the Zcash ecosystem.
 
 ### 6. Wallet status widget and privacy posture indicator
 
 * As a user, I want one place that summarizes my wallet state and tells me what to do next, including shielding and backup reminders. ([Zcash Community Forum][1])
 * As a user, I want the privacy posture to update immediately as my holdings change, especially after shielding and after swaps.
+
+### 7. Custom RPC server configuration
+
+* As an advanced user, I want to configure a custom lightwalletd or Zaino server URL for privacy or performance reasons.
+* As a user, I want clear warnings about the privacy implications of using custom servers before I save my configuration.
+* As a user, I want the wallet to test my custom server before saving it so I know it will work.
+* As a user in a specific region, I want to choose a regional default server for better performance.
 
 ## Explicit constraints and out of scope (for now)
 

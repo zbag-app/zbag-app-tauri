@@ -18,6 +18,10 @@
 
   * Rust cargo features: `orchard_only`, `pczt`, `tor`, `mainnet`, `testnet`
   * Ensure sapling spend and transparent spend code paths are not compiled or are unreachable behind a hard gate
+* Update directory structure to include network-specific paths
+
+  * `~/.zkore/wallets/mainnet/{wallet-id}/`
+  * `~/.zkore/wallets/testnet/{wallet-id}/`
 
 ### Typed IPC and eventing
 
@@ -75,7 +79,8 @@
   * Run integration smoke tests with a configurable lightwalletd endpoint
 * Add developer scripts
 
-  * `make dev` launches Tauri with hot reload
+  * `bun run dev` launches Tauri with hot reload
+  * `bun run tauri dev` for Tauri development
   * `make testnet` switches configs quickly
 * Add configuration system
 
@@ -90,9 +95,12 @@
 
 * Implement `WalletManager`
 
+  * Implement network selection at wallet creation (mainnet/testnet choice)
+  * Create wallet directory structure with network separation: `~/.zkore/wallets/mainnet/{wallet-id}/` and `~/.zkore/wallets/testnet/{wallet-id}/`
   * Create wallet folder and initialize wallet DB
   * Create first Orchard account
   * Store `backup_required = true` in metadata DB
+  * Add Network field to ServerConfig and validate network match
   * Expose `lock_wallet` and `unlock_wallet` interfaces even if first version is no-op (so later adding encryption does not break IPC)
 * Implement `AddressService`
 
@@ -165,12 +173,13 @@
 
 * Implement server list and selection
 
-  * Default entry for a known endpoint
-  * Allow adding custom endpoint
+  * Default: zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, me.zec.rocks, sa.zec.rocks)
+  * Allow adding custom endpoint with security warning dialog
   * Persist selection in metadata DB
 * Implement connection test action
 
   * Ping gRPC endpoint and show status
+  * Validate URL and check network match
   * Save last success timestamp
 
 ### Testing

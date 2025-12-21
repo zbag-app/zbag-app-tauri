@@ -11,11 +11,16 @@ Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone har
 
 ## Technical Context
 
-**Language/Version**: Rust 1.75+ (backend), TypeScript 5.x (frontend)
+**Language/Version**: Rust 1.92.0+ (backend), TypeScript 5.x (frontend)
 **Primary Dependencies**:
 - Backend: zcash_client_backend (pczt, tor features), zcash_client_sqlite, Tauri v2, tonic (gRPC)
-- Frontend: React 18+, @keystonehq/animated-qr, @keystonehq/keystone-sdk
+- Frontend: React 18+, @keystonehq/animated-qr, @keystonehq/keystone-sdk, bun 1.3.5+ (package manager)
 **Storage**: zcash_client_sqlite wallet DB + separate SQLite app metadata DB
+  - Wallet directory structure with network separation:
+    - `~/.zkore/wallets/mainnet/{wallet-id}/` (mainnet wallets)
+    - `~/.zkore/wallets/testnet/{wallet-id}/` (testnet wallets)
+  - Network selection at wallet creation (immutable after creation)
+  - Separate database files per network
 **Testing**: cargo test (Rust), vitest/jest (TypeScript), integration tests against Zaino/lightwalletd endpoints
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
@@ -169,3 +174,29 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 | VII. Decision Traceability | Confirmed | research.md documents all technology decisions with rationale and alternatives considered. Plan links to spec.md for acceptance criteria. |
 
 **Result**: All constitution principles remain satisfied after detailed design. No violations or amendments required.
+
+## Feature Implementation Notes
+
+### Network Separation
+- Network selection (mainnet/testnet) required at wallet creation
+- Network choice is immutable after wallet creation (cannot be changed)
+- Separate database files per network to prevent cross-network operations
+- Network field stored in ServerConfig model
+
+### Server Configuration
+- **Default Server**: zec.rocks (Zaino+Zebra infrastructure)
+  - Primary endpoint: `https://zec.rocks`
+  - Regional endpoints for improved performance:
+    - North America: `https://na.zec.rocks`
+    - Europe: `https://eu.zec.rocks`
+    - Middle East: `https://me.zec.rocks`
+    - South America: `https://sa.zec.rocks`
+- **Custom Server**: User can configure alternative lightwalletd/Zaino endpoint
+  - Security warning displayed when using custom servers
+  - Validation of server connectivity before saving
+
+### Tor Anonymization
+- Implementation: zcash_client_backend's tor feature using Arti (Rust-native Tor client)
+- Production validation: Zashi 2.1 reference
+- **Beta status**: Opt-in toggle with clear beta labeling in UI
+- Fail-closed mode: Operations fail if Tor enabled but unhealthy (no silent fallback)

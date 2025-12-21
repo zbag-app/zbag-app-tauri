@@ -7,9 +7,8 @@
 
 ### Required Tools
 
-- **Rust**: 1.75+ (with rustup)
-- **Node.js**: 20+ (LTS)
-- **pnpm**: 8+ (package manager)
+- **Rust**: 1.92.0+ (with rustup)
+- **Bun**: 1.3.5+
 - **Tauri CLI**: v2
 
 ### Platform-Specific
@@ -119,16 +118,16 @@ cargo install tauri-cli --version "^2.0.0"
 
 # Create Tauri app
 cd apps
-pnpm create tauri-app zkore-app-tauri --template react-ts
+bun create tauri-app zkore-app-tauri --template react-ts
 cd zkore-app-tauri
 
 # Install dependencies
-pnpm install
+bun install
 
 # Install additional UI dependencies
-pnpm add @keystonehq/animated-qr @keystonehq/keystone-sdk
-pnpm add qrcode.react @tanstack/react-query
-pnpm add -D @types/node
+bun add @keystonehq/animated-qr @keystonehq/keystone-sdk
+bun add qrcode.react @tanstack/react-query
+bun add -D @types/node
 ```
 
 ### 4. Configure Tauri for Workspace
@@ -281,7 +280,7 @@ export function onSyncProgress(
 
 ```bash
 # From apps/zkore-app-tauri
-pnpm tauri dev
+bun run tauri dev
 ```
 
 ### Running Tests
@@ -291,14 +290,14 @@ pnpm tauri dev
 cargo test --workspace
 
 # TypeScript tests
-cd apps/zkore-app-tauri && pnpm test
+cd apps/zkore-app-tauri && bun test
 ```
 
 ### Building for Production
 
 ```bash
 # Build release
-pnpm tauri build
+bun run tauri build
 ```
 
 ## Directory Structure After Setup
@@ -362,8 +361,8 @@ Edit `apps/zkore-app-tauri/src-tauri/tauri.conf.json`:
   "identifier": "com.zkore.desktop",
   "version": "0.1.0",
   "build": {
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -403,6 +402,7 @@ Create `.env.development`:
 
 ```bash
 # Light client server
+# Regional options: na.zec.rocks, eu.zec.rocks, sa.zec.rocks, ap.zec.rocks
 ZKORE_GRPC_URL=https://zec.rocks:443
 ZKORE_NETWORK=testnet
 
