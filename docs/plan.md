@@ -2,10 +2,12 @@
 
 ### Environment and tooling
 
-* **Rust 1.92.0+** (backend)
+* **Rust 1.85.0+** with **edition 2024** (backend) - aligned with librustzcash/Zashi
 * **TypeScript 5.x** (frontend)
 * **bun** for package management (frontend dependencies)
 * **Tauri CLI**: Install with `bun add @tauri-apps/cli`
+
+> **Version alignment**: We track librustzcash versions (zcash_client_backend 0.21+, zcash_primitives 0.26+) for ecosystem compatibility. Use caret constraints and commit Cargo.lock.
 
 ---
 

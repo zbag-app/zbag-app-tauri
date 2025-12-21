@@ -7,9 +7,11 @@
 
 ### Required Tools
 
-- **Rust**: 1.92.0+ (with rustup)
+- **Rust**: 1.85.0+ (edition 2024, with rustup)
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2
+
+> **Note**: We use Rust edition 2024 to align with the librustzcash ecosystem (Zashi). This provides improved safety semantics and is production-proven in Zcash infrastructure.
 
 ### Platform-Specific
 
@@ -52,16 +54,21 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/zkore/zkore-desktop"
 
 [workspace.dependencies]
-# Zcash libraries
-zcash_client_backend = { version = "0.14", features = ["orchard", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.12" }
-zcash_primitives = { version = "0.19" }
-zcash_protocol = { version = "0.4" }
+# Zcash libraries (aligned with librustzcash/Zashi)
+# Using caret constraints for semver-compatible updates
+zcash_client_backend = { version = "0.21", features = ["orchard", "pczt", "tor"] }
+zcash_client_sqlite = { version = "0.19" }
+zcash_primitives = { version = "0.26" }
+zcash_protocol = { version = "0.7" }
+
+# Modules relocated from zcash_primitives in 0.20+
+zip32 = "0.2"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -70,18 +77,18 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# gRPC
-tonic = "0.12"
-prost = "0.13"
+# gRPC (tonic 0.14+ required for prost 0.14 compatibility)
+tonic = "0.14"
+prost = "0.14"
 
 # HTTP
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # Error handling
-thiserror = "1"
+thiserror = "2"
 anyhow = "1"
 
 # Logging
@@ -90,12 +97,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Zeroization
 zeroize = { version = "1", features = ["derive"] }
+secrecy = "0.8"
 
 # UUID
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
+
+# FFI (if needed for C bindings)
+# bindgen = "0.72"
 EOF
 ```
 
@@ -408,6 +419,110 @@ ZKORE_NETWORK=testnet
 
 # Logging
 RUST_LOG=info,zkore=debug
+```
+
+## API Migration Notes (librustzcash 0.21+)
+
+These notes are critical for implementation. The versions specified above differ from older tutorials/examples.
+
+### Module Relocations
+
+Several modules moved out of `zcash_primitives` in version 0.20+:
+
+```rust
+// OLD (0.19 and earlier):
+use zcash_primitives::consensus::{BlockHeight, Network};
+use zcash_primitives::memo::Memo;
+use zcash_primitives::zip32::ExtendedSpendingKey;
+
+// NEW (0.26+):
+use zcash_protocol::consensus::{BlockHeight, Network};
+use zcash_protocol::memo::Memo;
+use zip32::ExtendedSpendingKey;  // separate crate
+```
+
+### Type Changes
+
+```rust
+// Amounts now use Zatoshis type instead of u64
+use zcash_protocol::value::Zatoshis;
+
+// OLD: builder.add_orchard_output(value: u64, recipient, memo)
+// NEW: builder.add_orchard_output(value: Zatoshis, recipient, memo)
+```
+
+### Input Selection API
+
+```rust
+// OLD (0.14):
+input_source.select_spendable_notes(account, anchor_height, target_amount)
+
+// NEW (0.21+):
+use zcash_client_backend::data_api::{TargetHeight, ConfirmationsPolicy};
+input_source.select_spendable_notes(
+    account,
+    target_height: TargetHeight,
+    confirmations_policy: ConfirmationsPolicy,
+    target_amount
+)
+```
+
+### TransparentAddressMetadata
+
+```rust
+// OLD: struct TransparentAddressMetadata { account_id, address_index }
+// NEW: enum TransparentAddressMetadata { Derived { account_id, address_index }, Standalone }
+
+// OLD: metadata.scope() returns TransparentKeyScope
+// NEW: metadata.scope() returns Option<TransparentKeyScope>
+```
+
+### rusqlite 0.37
+
+```rust
+// Breaking: execute() now validates single statement only
+// OLD (allowed multiple statements):
+conn.execute("INSERT INTO t1 VALUES (1); INSERT INTO t2 VALUES (2);", [])?;
+
+// NEW (must be separate calls):
+conn.execute("INSERT INTO t1 VALUES (1)", [])?;
+conn.execute("INSERT INTO t2 VALUES (2)", [])?;
+```
+
+## Security Practices
+
+### Required for All Builds
+
+1. **Commit Cargo.lock** to version control (reproducible builds)
+2. **Production builds** must use `--locked` flag:
+   ```bash
+   cargo build --release --locked
+   ```
+
+### CI Pipeline Requirements
+
+Add these to the CI pipeline:
+
+```yaml
+# .github/workflows/ci.yml
+- name: Security audit
+  run: cargo audit
+
+- name: Build with lock verification
+  run: cargo build --release --locked
+
+- name: Clippy lints
+  run: cargo clippy -- -D warnings
+```
+
+### Toolchain Pinning
+
+Create `rust-toolchain.toml` at workspace root:
+
+```toml
+[toolchain]
+channel = "1.85.0"
+components = ["rustfmt", "clippy"]
 ```
 
 ## Next Steps

@@ -10,6 +10,12 @@
   * `crates/zkore-keystone`
   * `apps/zkore-app-tauri/src-tauri`
   * `apps/zkore-ui`
+* Configure Rust edition 2024 in workspace Cargo.toml
+
+  * Set `edition = "2024"` and `rust-version = "1.85"` in `[workspace.package]`
+  * **Note**: Edition 2024 requires explicit `unsafe` blocks inside `unsafe fn`
+  * **Note**: Avoid using `gen` as identifier (reserved keyword)
+  * See `specs/001-zkore-desktop-wallet/quickstart.md` for API migration notes
 * Add consistent formatting and linting
 
   * Rust: `rustfmt`, `clippy`, `deny(warnings)` in CI for critical crates
@@ -22,6 +28,15 @@
 
   * `~/.zkore/wallets/mainnet/{wallet-id}/`
   * `~/.zkore/wallets/testnet/{wallet-id}/`
+
+### librustzcash version alignment
+
+* Use zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+
+* Add `zip32 = "0.2"` as separate dependency (module relocated from zcash_primitives)
+* Use `zcash_protocol::consensus` instead of `zcash_primitives::consensus`
+* Use `zcash_protocol::memo` instead of `zcash_primitives::memo`
+* Use `Zatoshis` type from `zcash_protocol::value` for amounts (not raw `u64`)
+* Handle `TransparentAddressMetadata` as enum (not struct) with `.scope()` returning `Option`
 
 ### Typed IPC and eventing
 
@@ -77,6 +92,9 @@
   * Build UI
   * Run unit tests (Rust + TS)
   * Run integration smoke tests with a configurable lightwalletd endpoint
+  * **Security audit**: Run `cargo audit` to check for known vulnerabilities
+  * **Lock file verification**: Build with `cargo build --locked` to ensure reproducibility
+  * **Clippy lints**: Run `cargo clippy -- -D warnings` for all crates
 * Add developer scripts
 
   * `bun run dev` launches Tauri with hot reload
@@ -86,6 +104,21 @@
 
   * App config file (server URL, network, Tor enabled)
   * Overrides via environment variables for dev and CI
+
+### Toolchain and version pinning
+
+* Create `rust-toolchain.toml` at workspace root
+
+  * Pin to Rust 1.85.0 (minimum for edition 2024)
+  * Include components: `rustfmt`, `clippy`
+* Commit `Cargo.lock` to version control
+
+  * Required for reproducible builds and security verification
+  * Production builds MUST use `--locked` flag
+* Install `cargo-audit` in CI
+
+  * Add to CI pipeline for automated vulnerability scanning
+  * Block merge on known vulnerabilities in dependencies
 
 ---
 

@@ -251,9 +251,10 @@ All technical context items have been resolved. No outstanding clarifications ne
 
 | Original Unknown | Resolution |
 |-----------------|------------|
-| Rust version | 1.92.0+ (required for zcash_client_backend features) |
+| Rust version | 1.85.0+ (minimum for edition 2024) |
+| Rust edition | 2024 (aligned with librustzcash/Zashi) |
 | Package manager | bun 1.3.5+ |
-| Primary dependencies | zcash_client_backend, zcash_client_sqlite, Tauri v2, tonic, Arti |
+| Primary dependencies | zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+, Arti |
 | Storage | Dual SQLite (wallet + app metadata) |
 | Testing | cargo test + vitest + integration tests |
 | Target platforms | macOS, Windows, Linux |
@@ -261,12 +262,44 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Constraints | Secrets in Rust only, Orchard-only, fail-closed Tor |
 | Default server | zec.rocks (Zaino+Zebra) |
 | Network selection | Runtime at wallet creation, immutable after |
+| Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |
+
+### Edition 2024 Rationale
+
+We use Rust edition 2024 because:
+1. **Ecosystem alignment**: librustzcash and Zashi use edition 2024
+2. **Improved safety**: Explicit `unsafe` blocks in `unsafe fn` reduce accidental unsafety
+3. **Production-proven**: Stable since Rust 1.85.0, used in Zcash infrastructure
+4. **Future-ready**: Prepared for generators and better async ergonomics
+
+Key migration considerations:
+- RPIT lifetime capture has new semantics (may need `use<..>` bounds)
+- `gen` keyword is reserved (avoid as identifier)
+- Temporal scope changes affect drop order
+
+### Dependency Version Strategy
+
+We follow the same approach as Zashi (zcash-light-client-ffi):
+- Use **caret constraints** (e.g., `"0.21"`) for semver-compatible updates
+- Align with librustzcash releases for ecosystem compatibility
+- Always commit `Cargo.lock` for reproducible builds
+- Build production with `cargo build --release --locked`
+- Run `cargo audit` in CI for security scanning
 
 ## References
 
+### Zcash Libraries
 - [zcash_client_backend docs](https://docs.rs/zcash_client_backend)
 - [zcash_client_sqlite docs](https://docs.rs/zcash_client_sqlite)
+- [librustzcash repository](https://github.com/zcash/librustzcash) - source of truth for version alignment
 - [PCZT specification (ZIP-320)](https://zips.z.cash/zip-0320)
+
+### Rust Edition 2024
+- [Rust 2024 Edition Guide](https://doc.rust-lang.org/edition-guide/rust-2024/index.html)
+- [Announcing Rust 1.85.0 and Rust 2024](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/)
+- [Changes to impl Trait in Rust 2024](https://blog.rust-lang.org/2024/09/05/impl-trait-capture-rules.html)
+
+### Infrastructure
 - [Keystone SDK documentation](https://dev.keyst.one/docs/integration-guide-basics/install-the-sdk)
 - [NEAR Intents 1Click API](https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api)
 - [Tauri v2 documentation](https://v2.tauri.app)
