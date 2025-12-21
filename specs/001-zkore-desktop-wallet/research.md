@@ -251,7 +251,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 
 | Original Unknown | Resolution |
 |-----------------|------------|
-| Rust version | 1.85.0+ (minimum for edition 2024) |
+| Rust version | 1.92.0+ (development toolchain, MSRV 1.85.1 for librustzcash compatibility) |
 | Rust edition | 2024 (aligned with librustzcash/Zashi) |
 | Package manager | bun 1.3.5+ |
 | Primary dependencies | zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+, Arti |
@@ -271,6 +271,8 @@ We use Rust edition 2024 because:
 2. **Improved safety**: Explicit `unsafe` blocks in `unsafe fn` reduce accidental unsafety
 3. **Production-proven**: Stable since Rust 1.85.0, used in Zcash infrastructure
 4. **Future-ready**: Prepared for generators and better async ergonomics
+
+We target Rust 1.92.0 as the development toolchain while maintaining MSRV 1.85.1 compatibility with librustzcash.
 
 Key migration considerations:
 - RPIT lifetime capture has new semantics (may need `use<..>` bounds)

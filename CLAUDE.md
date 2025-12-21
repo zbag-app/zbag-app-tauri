@@ -4,7 +4,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-21
 
 ## Active Technologies
 
-- Rust 1.85.0+ with edition 2024 (backend), TypeScript 5.x (frontend) (001-zkore-desktop-wallet)
+- Rust 1.92.0+ with edition 2024 (backend), TypeScript 5.x (frontend) (001-zkore-desktop-wallet)
 - Bun 1.3.5+ (package manager)
 - Key crates: zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+
 

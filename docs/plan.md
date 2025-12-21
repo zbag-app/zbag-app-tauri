@@ -2,7 +2,7 @@
 
 ### Environment and tooling
 
-* **Rust 1.85.0+** with **edition 2024** (backend) - aligned with librustzcash/Zashi
+* **Rust 1.92.0+** with **edition 2024** (backend) - aligned with librustzcash/Zashi
 * **TypeScript 5.x** (frontend)
 * **bun** for package management (frontend dependencies)
 * **Tauri CLI**: Install with `bun add @tauri-apps/cli`

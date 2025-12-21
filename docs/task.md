@@ -12,7 +12,7 @@
   * `apps/zkore-ui`
 * Configure Rust edition 2024 in workspace Cargo.toml
 
-  * Set `edition = "2024"` and `rust-version = "1.85"` in `[workspace.package]`
+  * Set `edition = "2024"` and `rust-version = "1.92"` in `[workspace.package]`
   * **Note**: Edition 2024 requires explicit `unsafe` blocks inside `unsafe fn`
   * **Note**: Avoid using `gen` as identifier (reserved keyword)
   * See `specs/001-zkore-desktop-wallet/quickstart.md` for API migration notes
@@ -109,7 +109,7 @@
 
 * Create `rust-toolchain.toml` at workspace root
 
-  * Pin to Rust 1.85.0 (minimum for edition 2024)
+  * Pin to Rust 1.92.0 (minimum for edition 2024)
   * Include components: `rustfmt`, `clippy`
 * Commit `Cargo.lock` to version control
 

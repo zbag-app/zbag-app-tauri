@@ -7,11 +7,11 @@
 
 ### Required Tools
 
-- **Rust**: 1.85.0+ (edition 2024, with rustup)
+- **Rust**: 1.92.0+ (edition 2024, with rustup)
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2
 
-> **Note**: We use Rust edition 2024 to align with the librustzcash ecosystem (Zashi). This provides improved safety semantics and is production-proven in Zcash infrastructure.
+> **Note**: We use Rust 1.92.0 with edition 2024 to align with the librustzcash ecosystem. While librustzcash MSRV is 1.85.1, we target 1.92.0 for the development toolchain to leverage the latest improvements. Edition 2024 provides improved safety semantics and is production-proven in Zcash infrastructure.
 
 ### Platform-Specific
 
@@ -55,7 +55,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.92.0"
 license = "MIT"
 repository = "https://github.com/zkore/zkore-desktop"
 
@@ -521,7 +521,7 @@ Create `rust-toolchain.toml` at workspace root:
 
 ```toml
 [toolchain]
-channel = "1.85.0"
+channel = "1.92.0"
 components = ["rustfmt", "clippy"]
 ```
 
