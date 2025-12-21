@@ -291,6 +291,55 @@
 **References**:
 - [zec.rocks Zcashd Deprecation Timeline](https://forum.zcashcommunity.com/t/zec-rocks-zcashd-deprecation-timeline/50907)
 
+### 13. Logging Infrastructure
+
+**Decision**: Use tracing + tracing-subscriber with tracing-appender for file logging
+
+**Rationale**:
+- Standard Rust ecosystem, supports structured logging, file rotation built-in
+- Aligns with NFR-001 (local filesystem only) and NFR-002 (no remote telemetry)
+- tracing-appender's RollingFileAppender provides daily rotation (NFR-004)
+- User-accessible log location for support (NFR-003)
+
+**Alternatives Considered**:
+- env_logger: Rejected for lack of file rotation support
+- Custom logging solution: Rejected for increased complexity and maintenance burden
+- syslog integration: Rejected as not portable across platforms
+
+**Implementation Notes**:
+- Log location: `~/.zkore/logs/zkore.log` (with date-based rotation)
+- Use tracing-appender's RollingFileAppender with daily rotation
+- Keep 7 days of logs by default
+- Log levels: ERROR/WARN always, INFO for operations, DEBUG via RUST_LOG
+- Redact sensitive data (memos, addresses beyond first 8 chars) in logs
+- No remote telemetry - constitution principle
+- Provide IPC command to expose log directory path to UI for support workflows
+
+### 14. Accessibility Patterns
+
+**Decision**: React accessibility with radix-ui primitives and custom focus management
+
+**Rationale**:
+- Radix provides accessible primitives with built-in ARIA (NFR-006)
+- focus-visible CSS provides keyboard-only focus indicators (NFR-007)
+- react-hotkeys-hook supports standard keyboard shortcuts (NFR-008)
+- Ensures full keyboard navigation (NFR-005)
+
+**Alternatives Considered**:
+- React Aria: Rejected for larger bundle size and steeper learning curve
+- Material UI: Rejected for heavier framework weight
+- Custom accessibility implementation: Rejected for reinventing well-tested solutions
+
+**Implementation Notes**:
+- Use radix-ui/react-* for dialogs, menus, tabs (built-in ARIA)
+- focus-visible CSS for keyboard-only focus indicators
+- Custom useFocusTrap hook for modal dialogs
+- Keyboard shortcuts: react-hotkeys-hook for global shortcuts
+- Testing: axe-core for automated accessibility testing, manual keyboard testing
+- All interactive elements must have visible focus states
+- Tab order follows logical reading order
+- Standard shortcuts: Tab (navigation), Enter (activate), Escape (close/cancel), arrow keys (within components)
+
 ## Resolved Clarifications
 
 All technical context items have been resolved. No outstanding clarifications needed.

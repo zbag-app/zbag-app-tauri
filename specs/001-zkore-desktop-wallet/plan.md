@@ -29,6 +29,8 @@ Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone har
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), sub-second balance/status updates
 **Constraints**: No secrets in UI layer, Orchard-only spending, fail-closed Tor mode, typed IPC only, memory zeroization for secrets
 **Scale/Scope**: Single-user desktop wallet, ~15 screens, supports typical wallet sizes up to 1GB database
+**Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zkore/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.
+**Accessibility**: Full keyboard navigation, ARIA labels via radix-ui primitives, visible focus indicators, standard shortcuts (Tab/Enter/Escape/arrows)
 
 ## Constitution Check
 
@@ -135,6 +137,8 @@ apps/
 │       │   ├── ipc.ts             # Tauri IPC wrapper
 │       │   └── events.ts          # Event subscription hooks
 │       ├── hooks/                 # React hooks
+│       │   ├── useFocusTrap.ts    # Focus management for modals
+│       │   └── useKeyboardShortcuts.ts  # Global keyboard shortcuts
 │       └── types/                 # TypeScript type definitions
 └── zkore-ui/                      # (Optional) shared UI package if needed
 

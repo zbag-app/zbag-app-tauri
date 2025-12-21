@@ -381,6 +381,16 @@ export interface TestServerRequest extends VersionedPayload {
   server_id: string;
 }
 
+/** Get log file location for support */
+export interface GetLogLocationRequest extends VersionedPayload {}
+
+export interface GetLogLocationResponse extends VersionedPayload {
+  /** Directory containing log files */
+  log_directory: string;
+  /** Current log file path */
+  current_log_file: string;
+}
+
 // ============================================================================
 // Command Responses
 // ============================================================================
@@ -672,6 +682,9 @@ export const Commands = {
   SET_DEFAULT_SERVER: 'zkore_set_default_server',
   TEST_SERVER: 'zkore_test_server',
   LIST_SERVERS: 'zkore_list_servers',
+
+  // Logs
+  GET_LOG_LOCATION: 'zkore_get_log_location',
 } as const;
 
 // ============================================================================

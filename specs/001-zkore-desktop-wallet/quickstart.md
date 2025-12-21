@@ -143,7 +143,9 @@ bun add -D @tauri-apps/cli
 # Install additional UI dependencies
 bun add @keystonehq/animated-qr @keystonehq/keystone-sdk
 bun add qrcode.react @tanstack/react-query
-bun add -D @types/node
+bun add @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-tabs
+bun add react-hotkeys-hook
+bun add -D @types/node @axe-core/react
 ```
 
 > **Note**: We use `@tauri-apps/cli` as a dev dependency rather than `cargo install tauri-cli`. This ensures consistent CLI versions across the team and integrates with bun scripts (`bun tauri dev`, `bun tauri build`).
@@ -311,6 +313,20 @@ cargo test --workspace
 cd apps/zkore-app-tauri && bun test
 ```
 
+### Accessibility Testing
+
+```bash
+# Run automated accessibility tests
+cd apps/zkore-app-tauri && bun test:a11y
+
+# Manual keyboard testing checklist:
+# - Tab through all interactive elements
+# - Enter/Space activates buttons and links
+# - Escape closes modals and dropdowns
+# - Arrow keys navigate within components
+# - Focus indicator visible on all focused elements
+```
+
 ### Building for Production
 
 ```bash
@@ -427,6 +443,9 @@ ZKORE_NETWORK=testnet
 
 # Logging
 RUST_LOG=info,zkore=debug
+
+# Log file location (logs written here automatically)
+# ~/.zkore/logs/zkore.YYYY-MM-DD.log (rotated daily, 7 days retained)
 ```
 
 ## API Migration Notes (librustzcash 0.21+)
