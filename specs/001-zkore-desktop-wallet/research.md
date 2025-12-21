@@ -69,7 +69,7 @@
 - Endpoints:
   - `GET /v0/quote` - Get swap quote with parameters
   - `POST /v0/deposit/submit` - Submit deposit intent after user sends funds
-  - `GET /v0/status?intent_id={id}` - Poll swap status
+  - `GET /v0/status?depositAddress={addr}` - Poll swap status (optional `depositMemo`)
   - `GET /v0/tokens` - List supported tokens and chains
 - Query parameters for quote:
   - `defuse_asset_identifier_in` - Source asset (e.g., "near:mainnet:native")
@@ -85,6 +85,7 @@
   - `INCOMPLETE_DEPOSIT` -> `Failed` (partial deposit, needs action)
   - `REFUNDED` -> `Refunded` (swap failed, funds returned)
   - `FAILED` -> `Failed` (swap failed)
+- **Testnet caveat**: NEAR Intents has no testnet deployment; swaps are mainnet-only
 - Rate limiting: Respect API rate limits, implement client-side throttling
 - See: https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api
 
@@ -269,17 +270,17 @@
 - Note: Zaino migration is in progress but not yet complete on all endpoints
 
 **Testnet servers**:
-- Public: Use team's own testnet endpoint (see Development Configuration below)
-- Alternative: `https://testnet.zec.rocks` (if available)
+- Default: `lwd.testnet.zec.pro` (team lightwalletd + Zebra)
+- Fallback: `https://testnet.zec.rocks` (community endpoint, check Hosh for status)
 
 **Zaino endpoints (experimental)**:
 - Available for testing Zaino compatibility: check zec.rocks announcements
 - Constitution requires testing against multiple server implementations (Zaino + lightwalletd)
 
 **Development Configuration**:
-- For initial development, use team's own lightwalletd/Zaino + Zebra testnet endpoint
+- Default testnet: `lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
-- Configure via environment variable: `ZKORE_GRPC_URL`
+- Configure override via environment variable: `ZKORE_GRPC_URL`
 
 **Connection validation**:
 - Call `GetLightdInfo` before saving server config

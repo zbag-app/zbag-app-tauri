@@ -420,8 +420,9 @@ Create `.env.development`:
 
 ```bash
 # Light client server
-# Regional options: na.zec.rocks, eu.zec.rocks, sa.zec.rocks, ap.zec.rocks
-ZKORE_GRPC_URL=https://zec.rocks:443
+# Mainnet: zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
+# Testnet: lwd.testnet.zec.pro (default)
+ZKORE_GRPC_URL=https://lwd.testnet.zec.pro:443
 ZKORE_NETWORK=testnet
 
 # Logging
