@@ -4,6 +4,26 @@
 **Status**: Draft
 **Input**: Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
 
+## Clarifications
+
+### Session 2025-12-21
+
+- Q: What features are explicitly out of scope for v1? → A: Mobile apps, multi-currency support, cloud backup/sync
+- Q: What observability/telemetry approach should the wallet use? → A: Local logs only, no remote telemetry
+- Q: Should wallet support data export beyond seed phrase? → A: Seed phrase only; no transaction/metadata export
+- Q: What accessibility requirements are needed for v1? → A: Basic keyboard navigation and screen reader labels
+- Q: How should multi-device usage of the same seed be handled? → A: Allowed but unsupported; no sync, user manages conflicts
+
+## Out of Scope
+
+The following features are explicitly excluded from the initial release:
+
+- **Mobile applications**: No iOS or Android versions; desktop-only (macOS, Windows, Linux)
+- **Multi-currency support**: ZEC only; no Bitcoin, Ethereum, or other cryptocurrency support
+- **Cloud backup/sync**: No cloud-based seed backup, wallet sync, or cross-device synchronization
+- **Transaction history export**: No CSV, JSON, or other export of transaction data; seed phrase is the sole backup mechanism
+- **Multi-device synchronization**: No cross-device sync or conflict resolution; protocol-level nullifier rejection handles conflicts
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create New Wallet and Receive Funds (Priority: P1)
@@ -293,6 +313,20 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-054**: System MUST test server connection before saving custom server configuration
 - **FR-055**: System MUST validate that server network matches wallet network
 
+### Non-Functional Requirements
+
+**Observability**
+- **NFR-001**: System MUST write application logs to local filesystem only
+- **NFR-002**: System MUST NOT transmit any telemetry, crash reports, or usage data to external servers
+- **NFR-003**: System MUST provide user-accessible log location for manual sharing during support requests
+- **NFR-004**: System MUST include log rotation to prevent unbounded disk usage
+
+**Accessibility**
+- **NFR-005**: System MUST support full keyboard navigation for all primary workflows
+- **NFR-006**: System MUST provide appropriate ARIA labels for screen reader compatibility
+- **NFR-007**: System MUST maintain visible focus indicators during keyboard navigation
+- **NFR-008**: System MUST support standard keyboard shortcuts (Tab, Enter, Escape, arrow keys)
+
 ### Key Entities
 
 - **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only). Network (mainnet/testnet) is set at creation and immutable thereafter
@@ -324,6 +358,8 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 
 ## Assumptions
 
+- Users may restore the same seed on multiple devices; each device operates independently with no synchronization
+- Multi-device conflict resolution relies on Zcash protocol-level nullifier rejection; no application-level sync is provided
 - Users have internet connectivity for wallet operations (sync, send, swap)
 - Keystone hardware wallet firmware supports Zcash Orchard and PCZT signing protocol
 - NEAR Intents API is available and provides the required swap functionality
