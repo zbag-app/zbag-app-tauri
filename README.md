@@ -70,9 +70,6 @@ Platform targets: macOS, Windows, Linux
 
 ## Requirements
 
-- Rust 1.75+
-- Node.js 20+ (LTS)
-- pnpm 8+
 - Platform-specific dependencies (see [Quickstart](specs/001-zkore-desktop-wallet/quickstart.md))
 
 ## License
