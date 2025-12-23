@@ -50,7 +50,7 @@ Rust 1.92.0+ (backend), TypeScript 5.x (frontend): Follow standard conventions
 
 ## Default Server
 
-- Default: zec.rocks (lightwalletd + Zebra; Zaino migration in progress)
+- Mainnet: lwd.zec.pro (default), zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
 - Testnet: lwd.testnet.zec.pro (default)
 - Custom servers supported with validation
 

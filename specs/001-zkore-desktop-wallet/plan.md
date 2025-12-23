@@ -190,11 +190,11 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Network field stored in ServerConfig model
 
 ### Server Configuration
-- **Default Servers**: zec.rocks infrastructure (lightwalletd + Zebra, CompactTxStreamer gRPC)
-  - Primary endpoint: `https://zec.rocks`
-  - Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+- **Default Servers**: lightwalletd + Zebra infrastructure (CompactTxStreamer gRPC)
+  - Primary endpoint: `https://lwd.zec.pro` (team)
+  - Regional endpoints: `zec.rocks`, `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
   - Note: Zaino migration in progress - not yet complete on all production endpoints
-- **Testnet**: Use team's own endpoint for development (lightwalletd/Zaino + Zebra)
+- **Testnet**: `lwd.testnet.zec.pro` (team lightwalletd + Zebra)
   - SSL via reverse proxy recommended for production-like testing
   - Configure via `ZKORE_GRPC_URL` environment variable
 - **Custom Server**: User can configure alternative lightwalletd/Zaino endpoint

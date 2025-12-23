@@ -212,7 +212,7 @@
 
 * Implement server list and selection
 
-  * Default: zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, me.zec.rocks, sa.zec.rocks)
+  * Default: lwd.zec.pro (primary), zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, me.zec.rocks, sa.zec.rocks)
   * Allow adding custom endpoint with security warning dialog
   * Persist selection in metadata DB
 * Implement connection test action

@@ -369,7 +369,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)
 - Webcam access is available for QR scanning (with microSD fallback if not)
 - Same seed phrase generates different addresses on mainnet vs testnet (due to BIP-44 coin_type)
-- Default server is zec.rocks with regional endpoints available
+- Default server is lwd.zec.pro with zec.rocks regional endpoints available
 
 ## Dependencies
 

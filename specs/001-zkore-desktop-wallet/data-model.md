@@ -306,8 +306,8 @@ Light client server configuration.
 | created_at | Timestamp | When added | Auto-set |
 
 **Default Servers**:
-- Mainnet: zec.rocks with regional options
-- Testnet: lwd.testnet.zec.pro as default
+- Mainnet: lwd.zec.pro (default), zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
+- Testnet: lwd.testnet.zec.pro (default)
 
 **Validation Rules**:
 - Server network MUST match wallet network when connecting

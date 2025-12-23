@@ -265,8 +265,8 @@
 **Implementation Notes**:
 
 **Mainnet servers (production)**:
-- Primary: `https://zec.rocks` (lightwalletd + Zebra)
-- Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+- Primary: `https://lwd.zec.pro` (team lightwalletd + Zebra)
+- Regional: `https://zec.rocks`, `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
 - Note: Zaino migration is in progress but not yet complete on all endpoints
 
 **Testnet servers**:
@@ -355,7 +355,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
 | Constraints | Secrets in Rust only, Orchard-only, fail-closed Tor |
-| Default server | zec.rocks (Zaino+Zebra) |
+| Default server | lwd.zec.pro (lightwalletd+Zebra), zec.rocks (regional) |
 | Network selection | Runtime at wallet creation, immutable after |
 | Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |
 
