@@ -18,6 +18,8 @@ Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone har
 
 > **Version Strategy**: We use caret (^) semver constraints aligned with librustzcash/Zashi. This allows security fixes while maintaining compatibility. Always commit Cargo.lock and build with `--locked` in production.
 **Storage**: Encrypted wallet DB (zcash_client_sqlite-backed) + separate SQLite app metadata DB
+  - Wallet DB encryption uses SQLCipher with a per-wallet DEK wrapped by a password-derived KEK (Argon2id; parameters versioned per wallet). Optional OS keychain “remember unlock” stores unlock material in the OS credential store and MUST NOT satisfy per-action re-auth.
+  - All schema changes include forward migration + rollback strategy + automated migration tests (gated in CI).
   - Wallet directory structure with network separation:
     - `~/.zkore/wallets/mainnet/{wallet-id}/` (mainnet wallets)
     - `~/.zkore/wallets/testnet/{wallet-id}/` (testnet wallets)
@@ -189,6 +191,8 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Manual wallet-password re-authentication required for every spending attempt (send, shield, swap-from-ZEC) and for "View seed phrase"; OS keychain “remember unlock” MUST NOT satisfy per-action re-auth.
 - Wallet DB encrypted at rest; transaction history, balances, addresses, and note metadata must not be readable without successful unlock.
 - Memos treated as sensitive: memo plaintext must not be written to disk; encryption-at-rest must cover memo contents.
+- Wallet DB key hierarchy (v1): wallet password → Argon2id KEK → unwrap per-wallet DEK; the DEK is the raw SQLCipher key for the wallet DB. Store only `wrapped_dek` + KDF params/salt in app metadata; prefer storing DEK (not password) in OS keychain for “remember unlock”.
+- Migration safety (v1): before applying any app metadata DB or wallet DB migration, create a pre-migration DB snapshot; on failure, rollback by restoring the snapshot; migration tests are required and run in CI.
 
 ### Network Separation
 - Network selection (mainnet/testnet) required at wallet creation
@@ -208,6 +212,9 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
   - Security warning displayed when using custom servers
   - Validation of server connectivity and network match before saving
 - **Compatibility testing**: CI must test against both lightwalletd and Zaino endpoints
+
+### Privacy / Telemetry
+- No remote telemetry or crash reporting: audit dependencies and build config to ensure nothing transmits telemetry/crash reports by default; only local logs are produced (see NFR-002).
 
 ### Swaps (NEAR Intents)
 - Swaps are supported only for Mainnet wallets due to 1Click API deployment; disable Swap UI and return stable error for Testnet
