@@ -316,6 +316,9 @@ export function onSyncProgress(
 }
 ```
 
+> **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
+> currently loaded wallet set by `LoadWallet`; call `LoadWallet` before using them.
+
 ## Development Workflow
 
 ### Running Development Server
@@ -458,9 +461,9 @@ Create `.env.development`:
 
 ```bash
 # Light client server
-# Mainnet: lwd.zec.pro (default), zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
-# Testnet: lwd.testnet.zec.pro (default)
-ZKORE_GRPC_URL=https://lwd.testnet.zec.pro:443
+# Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
+# Testnet: https://lwd.testnet.zec.pro (default)
+ZKORE_GRPC_URL=https://lwd.testnet.zec.pro
 ZKORE_NETWORK=testnet
 
 # Logging

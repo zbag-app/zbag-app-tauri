@@ -275,7 +275,7 @@ export interface CreateWalletRequest extends VersionedPayload {
   remember_unlock: boolean;
 }
 
-/** Load an existing wallet */
+/** Load an existing wallet and set it as the active wallet for account-scoped requests/events */
 export interface LoadWalletRequest extends VersionedPayload {
   wallet_id: string;
 }
@@ -316,6 +316,10 @@ export interface ViewSeedPhraseRequest extends VersionedPayload {
   reauth_token: string;
 }
 
+/**
+ * Account-scoped requests (those with account_id) operate on the currently loaded wallet
+ * set by LoadWallet; account_id values are wallet-local.
+ */
 /** Get fresh shielded receive address */
 export interface GetReceiveAddressRequest extends VersionedPayload {
   account_id: number;
@@ -691,6 +695,10 @@ export interface ListSwapsResponse extends VersionedPayload {
 // Events
 // ============================================================================
 
+/**
+ * Events are emitted for the currently loaded wallet set by LoadWallet.
+ * Any account_id values are wallet-local to that wallet.
+ */
 /** Sync progress update */
 export interface SyncProgressEvent extends VersionedPayload {
   event: 'sync.progress';

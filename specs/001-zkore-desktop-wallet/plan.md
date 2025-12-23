@@ -194,6 +194,98 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Wallet DB key hierarchy (v1): wallet password → Argon2id KEK → unwrap per-wallet DEK; the DEK is the raw SQLCipher key for the wallet DB. Store only `wrapped_dek` + KDF params/salt in app metadata; prefer storing DEK (not password) in OS keychain for “remember unlock”.
 - Migration safety (v1): before applying any app metadata DB or wallet DB migration, create a pre-migration DB snapshot; on failure, rollback by restoring the snapshot; migration tests are required and run in CI.
 
+### Security & Persistence Design Notes (v1)
+
+This section is **non-normative**. It clarifies how the requirements above are intended to be met so implementation tasks and tests can be unambiguous.
+
+#### Wallet DB encryption approach (zcash_client_sqlite-backed)
+
+- Zkore uses **SQLCipher** (SQLite page-level encryption) for the wallet DB (transaction history, balances, addresses, note metadata). The encryption mechanism MUST encrypt the entire DB file at rest (not just selected columns).
+- Zkore uses a per-wallet **key hierarchy**:
+  - **Wallet password** → KDF → **Key Encryption Key (KEK)**
+  - Random 32-byte **Data Encryption Key (DEK)** provided as the raw SQLCipher key for the wallet DB (and used to encrypt any other wallet-private blobs)
+  - The DEK is stored only as **wrapped_dek** (encrypted with the KEK) in app metadata; the DEK itself is never written to disk in plaintext
+- **KDF (initial v1 parameters)**:
+  - Algorithm: **Argon2id**
+  - Parameters: memory = **64 MiB**, iterations = **3**, parallelism = **1**
+  - Salt: **16 bytes**, random per wallet
+  - Output: **32 bytes** (KEK)
+  - KDF parameters and salt are stored per-wallet and are **versioned** to allow future tuning/migration
+- **AEAD for wrapping**:
+  - Wrap/unwrap the DEK using an AEAD (e.g., **XChaCha20-Poly1305**) with associated data binding to `(wallet_id, network, schema_version)` to prevent cross-wallet swapping
+- **Unlock validation**:
+  - The wallet password is validated by deriving the KEK and successfully unwrapping the DEK; there is no separate password hash stored
+
+#### Unlock lifecycle, “remember unlock”, and re-auth separation
+
+- **Locked by default on restart**. If the user enables “remember unlock”, the wallet MAY auto-unlock on launch via OS keychain, but the default is locked.
+- While unlocked, the DEK (and other derived secret material) MUST exist only in Rust process memory and MUST be zeroized on lock and on process exit.
+- **OS keychain “remember unlock”** stores unlock material only in the OS credential store (never plaintext on disk). For v1, store **DEK** (preferred) or an additional key-wrapping secret in the keychain; do not store the wallet password if avoidable.
+- **Per-action re-auth** is always password-based:
+  - Every spend (send, shield, swap-from-ZEC) and every “View seed phrase” MUST require the user to enter the wallet password to obtain a short-lived reauth token.
+  - Keychain auto-unlock MUST NOT satisfy per-action re-auth and MUST NOT mint reauth tokens without explicit password entry.
+
+#### Backup verification challenge semantics (v1)
+
+- Backup verification MUST be performed via a backend-issued challenge containing:
+  - `challenge_id` (opaque identifier)
+  - exactly **4** distinct word indices in the range **1..=24** (1-based, user-facing “word #N”)
+- Challenge validity:
+  - Challenges MUST expire after **10 minutes**
+  - After **5** failed attempts, the challenge MUST be invalidated and the user MUST request a new challenge
+  - Challenges MUST be stored in-memory only (not persisted). App restart MUST invalidate all outstanding `challenge_id` values.
+- Verification behavior:
+  - A successful verification MUST mark backup as complete and clear the active challenge
+  - A failed verification MUST increment the attempt counter and return a stable, user-safe error without revealing which word(s) were incorrect
+
+#### Password loss and recovery
+
+- If the user forgets the wallet password, the encrypted wallet DB cannot be unlocked. The recovery path is to **restore from seed phrase** into a new wallet (new password) after explicitly deleting/archiving the old encrypted DB.
+
+#### Key rotation / password change
+
+- Changing the wallet password is **out of scope for v1**, but the key hierarchy is designed to support it by re-wrapping the DEK with a newly derived KEK.
+- DEK rotation (re-keying the DB to a new DEK) is also out of scope for v1; if added, it MUST be implemented as an explicit migration with rollback + tests (see NFR-016).
+
+#### Schema migration safety (forward + rollback + tests)
+
+- For both the **app metadata DB** and the **wallet DB**, any schema migration MUST:
+  1. Create an on-disk backup snapshot of the pre-migration DB file(s)
+  2. Apply the forward migration
+  3. Run post-migration validation (e.g., can open DB, expected tables/columns present)
+  4. If any step fails, rollback by restoring the snapshot
+- Automated tests MUST exercise:
+  - upgrade from at least one older schema fixture → current schema
+  - rollback path (restore snapshot) when a migration/validation step fails
+
+#### Transaction state source-of-truth (pending/confirmed)
+
+- “Pending” and “Confirmed” are derived from two sources:
+  - **Mempool detection** from the configured light client server (lightwalletd and Zaino) via CompactTxStreamer mempool APIs (to satisfy FR-013 for incoming transactions)
+  - **Chain inclusion** from compact block scanning (to satisfy FR-014)
+- Outgoing transactions MUST be shown as **pending** once submission is accepted (even if mempool detection is delayed), and MUST transition to **confirmed** once mined; reorg handling may transition confirmed → pending again.
+
+#### Broadcast retry queue (disconnect during broadcast)
+
+- If broadcast fails after signing (e.g., network disconnect), the wallet MUST queue the signed tx bytes in encrypted wallet storage so the user can retry later (including after app restart).
+- Retry MUST require explicit user intent (no silent re-broadcast) and MUST require manual wallet-password re-authentication.
+- The queue MUST be bounded by time: entries are deleted after successful broadcast or after **7 days** (whichever comes first).
+- Logs MUST NOT include signed tx bytes or other raw payloads for queued broadcasts.
+
+#### Shield-and-consolidate semantics (transparent → Orchard)
+
+- The one-click “Shield and Consolidate” action MUST spend **all spendable** transparent UTXOs for the wallet/account; v1 does not provide manual UTXO selection.
+- Fees are paid from transparent inputs: the Orchard output value = sum(transparent inputs) − fee. The transaction MUST NOT create a transparent change output.
+- If the transparent input set cannot fit into a single transaction due to size/limit constraints, the wallet MUST automatically batch into multiple shielding transactions and surface progress; the operation completes when no spendable transparent UTXOs remain.
+- If the total spendable transparent balance is insufficient to cover the required fee (or would result in a zero/invalid output), the wallet MUST fail with a stable, user-safe error and provide actionable guidance (including required-minimum amount) to acquire additional transparent ZEC.
+
+#### Spend-before-sync semantics (restore)
+
+- During restore/sync, the wallet MUST distinguish between:
+  - `orchard_spendable`: funds safe to spend with the wallet’s current witness/anchor state
+  - `orchard_pending`: funds detected but not yet safe to spend (e.g., insufficient confirmations, incomplete witness tracking)
+- Spend-before-sync means: **spending is allowed during restore only from `orchard_spendable`**, while restore continues in the background; spending MUST NOT draw from `orchard_pending`.
+
 ### Network Separation
 - Network selection (mainnet/testnet) required at wallet creation
 - Network choice is immutable after wallet creation (cannot be changed)
