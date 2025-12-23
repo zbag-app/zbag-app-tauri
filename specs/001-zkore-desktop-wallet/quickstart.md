@@ -31,6 +31,18 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 - Visual Studio Build Tools with C++ workload
 - WebView2 Runtime (usually pre-installed on Windows 11)
 
+### Encryption Prerequisites
+
+- Wallet DB encryption requires SQLCipher. Pick one build strategy and keep it consistent across `rusqlite` and `zcash_client_sqlite`:
+  - **Bundled SQLCipher (recommended)**: use the `rusqlite` `bundled-sqlcipher` feature.
+  - **System SQLCipher**: install SQLCipher and enable the matching `rusqlite` feature (e.g., `sqlcipher`).
+- KDF crate: `argon2` configured for **Argon2id**.
+- AEAD crate: `chacha20poly1305` for **XChaCha20-Poly1305** wrapping.
+- System SQLCipher packages:
+  - macOS: `brew install sqlcipher`
+  - Ubuntu/Debian: `sudo apt install libsqlcipher-dev`
+  - Windows: prefer `bundled-sqlcipher` or install SQLCipher via vcpkg.
+
 ## Project Setup
 
 ### 1. Initialize Rust Workspace
@@ -79,6 +91,10 @@ zip32 = "0.2"
 bip39 = "2"
 rand = "0.8"
 
+# Crypto (KDF + AEAD)
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
@@ -100,7 +116,7 @@ prost = "0.14"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 # Database
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher"] }
 
 # Error handling
 thiserror = "2"
