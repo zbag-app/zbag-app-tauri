@@ -75,12 +75,22 @@ zcash_protocol = { version = "0.7" }
 # Modules relocated from zcash_primitives in 0.20+
 zip32 = "0.2"
 
+# Mnemonic + randomness
+bip39 = "2"
+rand = "0.8"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing-appender = "0.2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Encoding
+base64 = "0.22"
 
 # gRPC (tonic 0.14+ required for prost 0.14 compatibility)
 tonic = "0.14"
@@ -206,12 +216,24 @@ Create `crates/zkore-core/src/domain/mod.rs`:
 //! Domain models
 
 mod wallet;
+mod account;
+mod address;
+mod backup;
 mod balance;
+mod server;
+mod sync;
 mod transaction;
+mod transparent_utxo;
 
 pub use wallet::*;
+pub use account::*;
+pub use address::*;
+pub use backup::*;
 pub use balance::*;
+pub use server::*;
+pub use sync::*;
 pub use transaction::*;
+pub use transparent_utxo::*;
 ```
 
 ### Step 2: Tauri Commands Skeleton

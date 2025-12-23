@@ -56,7 +56,7 @@
 - [ ] T017 [P] Create crates/zkore-core/src/domain/account.rs with Account, AccountType, AccountInfo structs
 - [ ] T018 [P] Create crates/zkore-core/src/domain/address.rs with Address, AddressType, AddressInfo structs
 - [ ] T019 [P] Create crates/zkore-core/src/domain/transaction.rs with Transaction, TransactionType, TransactionStatus, TransactionInfo structs
-- [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (orchard_spendable, orchard_pending, transparent_total)
+- [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (orchard_spendable, orchard_pending, transparent_total, total)
 - [ ] T021 [P] Create crates/zkore-core/src/domain/sync.rs with SyncProgress and SyncPhase types
 - [ ] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus and BackupAction types
 - [ ] T023 [P] Create crates/zkore-core/src/domain/transparent_utxo.rs with TransparentUTXO struct
@@ -74,7 +74,9 @@
 - [ ] T032 [P] Create crates/zkore-core/src/ipc/v1/commands/balance.rs with GetBalance request/response types
 - [ ] T033 [P] Create crates/zkore-core/src/ipc/v1/commands/transaction.rs with ListTransactions, PrepareSend, ConfirmSend, CancelSend, ShieldFunds request/response types
 - [ ] T034 [P] Create crates/zkore-core/src/ipc/v1/commands/backup.rs with VerifyBackup, RestoreWallet request/response types
-- [ ] T035 [P] Create crates/zkore-core/src/ipc/v1/events.rs with SyncProgressEvent, BalanceChangedEvent, TransactionChangedEvent, WalletStatusEvent
+- [ ] T035 [P] Create crates/zkore-core/src/ipc/v1/events/mod.rs with SyncProgressEvent, BalanceChangedEvent, TransactionChangedEvent, WalletStatusEvent (re-export event structs)
+- [ ] T035a [P] Create crates/zkore-core/src/ipc/v1/commands/keystone.rs with ImportUfvk, BuildSigningRequest, FinalizeSigning request/response types
+- [ ] T035b [P] Create crates/zkore-core/src/ipc/v1/commands/server.rs with AddServer, SetDefaultServer, TestServer, ListServers request/response types (update commands/mod.rs re-exports)
 
 ### 2.3: App Metadata Database
 
@@ -198,7 +200,7 @@
 ### Implementation for User Story 3
 
 - [ ] T101 [US3] Implement transparent balance tracking in crates/zkore-engine/src/balance.rs (transparent_total from TransparentUTXOs)
-- [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature
+- [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature with BACKUP_REQUIRED guard
 - [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
 - [ ] T104 [US3] Add transparent balance display to apps/zkore-app-tauri/src/pages/Home.tsx with "Needs Shielding" label and Shield Now button
 - [ ] T105 [US3] Implement TRANSPARENT_SPEND_BLOCKED error when attempting direct transparent spend in crates/zkore-engine/src/tx_service.rs
@@ -322,6 +324,8 @@
 - [ ] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment
 - [ ] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent
 - [ ] T160 [US8] Implement SwapChangedEvent emission in crates/zkore-engine/src/swap_service.rs on state transitions
+- [ ] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error
+- [ ] T160b [US8] Disable Swap UI for Testnet wallets with clear explanation in apps/zkore-app-tauri/src/pages/Swap.tsx and apps/zkore-app-tauri/src/pages/SwapFromZec.tsx
 
 **Checkpoint**: User Story 8 complete - Swap to ZEC via NEAR Intents functional
 
@@ -340,6 +344,7 @@
 - [ ] T163 [US9] Create apps/zkore-app-tauri/src/pages/SwapFromZec.tsx with target asset, destination address input
 - [ ] T164 [US9] Create apps/zkore-app-tauri/src/components/swap/PrivacyWarning.tsx explaining transparent interaction tradeoffs
 - [ ] T165 [US9] Add FromZec validation ensuring shielded ZEC spend in crates/zkore-engine/src/swap_service.rs
+- [ ] T165a [US9] Enforce BACKUP_REQUIRED guard for swap_from_zec and pay flows in crates/zkore-engine/src/swap_service.rs
 
 **Checkpoint**: User Story 9 complete - Swap from ZEC via NEAR Intents functional
 
@@ -362,6 +367,9 @@
 - [ ] T172 [US10] Implement health check before marking status as On in crates/zkore-tor/src/manager.rs
 - [ ] T173 [US10] Implement Tor-aware transport selection in crates/zkore-network/src/transport.rs
 - [ ] T174 [US10] Implement fail-closed check in grpc_client blocking requests when Tor enabled but unhealthy in crates/zkore-network/src/grpc_client.rs
+- [ ] T174a [US10] Add Tor-aware transport support to crates/zkore-network/src/http_client.rs
+- [ ] T174b [US10] Update crates/zkore-network/src/near_intents.rs to use Tor-aware http_client
+- [ ] T174c [US10] Enforce fail-closed behavior for HTTP when Tor enabled but unhealthy in crates/zkore-network/src/http_client.rs
 - [ ] T175 [US10] Create crates/zkore-engine/src/db/tor_meta.rs with tor_settings table operations
 - [ ] T176 [US10] Implement SetTorEnabled Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
 - [ ] T177 [US10] Implement GetTorState Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs

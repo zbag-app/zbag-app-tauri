@@ -143,6 +143,7 @@ export interface SwapInfo {
   output_amount: string | null;
   deposit_address: string | null;
   destination_address: string | null;
+  refund_address: string | null;
   state: SwapState;
   deadline: number | null;
   last_error: string | null;
@@ -203,6 +204,7 @@ export interface ServerInfo {
   id: string;
   name: string;
   grpc_url: string;
+  network: Network;
   is_default: boolean;
   last_success_at: number | null;
 }
@@ -248,6 +250,14 @@ export interface LoadWalletRequest extends VersionedPayload {
   wallet_id: string;
 }
 
+/** List all wallets */
+export interface ListWalletsRequest extends VersionedPayload {}
+
+/** Get wallet status for status widget */
+export interface GetWalletStatusRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
 /** Get fresh shielded receive address */
 export interface GetReceiveAddressRequest extends VersionedPayload {
   account_id: number;
@@ -256,6 +266,16 @@ export interface GetReceiveAddressRequest extends VersionedPayload {
 
 /** Start wallet sync */
 export interface StartSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Stop wallet sync */
+export interface StopSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Get current sync progress snapshot */
+export interface GetSyncProgressRequest extends VersionedPayload {
   wallet_id: string;
 }
 
@@ -360,10 +380,16 @@ export interface GetSwapStatusRequest extends VersionedPayload {
   swap_id: string;
 }
 
+/** List swaps */
+export interface ListSwapsRequest extends VersionedPayload {}
+
 /** Set Tor enabled */
 export interface SetTorEnabledRequest extends VersionedPayload {
   enabled: boolean;
 }
+
+/** Get current Tor state */
+export interface GetTorStateRequest extends VersionedPayload {}
 
 /** Add server */
 export interface AddServerRequest extends VersionedPayload {
@@ -380,6 +406,9 @@ export interface SetDefaultServerRequest extends VersionedPayload {
 export interface TestServerRequest extends VersionedPayload {
   server_id: string;
 }
+
+/** List configured servers */
+export interface ListServersRequest extends VersionedPayload {}
 
 /** Get log file location for support */
 export interface GetLogLocationRequest extends VersionedPayload {}
@@ -408,12 +437,24 @@ export interface LoadWalletResponse extends VersionedPayload {
   accounts: AccountInfo[];
 }
 
+export interface ListWalletsResponse extends VersionedPayload {
+  wallets: WalletInfo[];
+}
+
 export interface GetReceiveAddressResponse extends VersionedPayload {
   address: AddressInfo;
 }
 
 export interface StartSyncResponse extends VersionedPayload {
   started: boolean;
+}
+
+export interface StopSyncResponse extends VersionedPayload {
+  stopped: boolean;
+}
+
+export interface GetSyncProgressResponse extends VersionedPayload {
+  progress: SyncProgress;
 }
 
 export interface GetBalanceResponse extends VersionedPayload {

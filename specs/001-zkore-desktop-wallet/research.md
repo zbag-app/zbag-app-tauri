@@ -222,7 +222,7 @@
 **Implementation Notes**:
 - Wallet DB: Managed by zcash_client_sqlite, location per wallet directory
 - App DB: Separate SQLite with custom migration runner
-- App DB tables: `app_flags`, `servers`, `tor_settings`, `swaps`, `receive_rotation`
+- App DB tables: `wallets`, `backup_status`, `servers`, `tor_settings`, `swaps`, `receive_rotation`, `_app_migrations`
 - Migration version table: `_app_migrations(version, applied_at)`
 
 ### 11. Network Selection Strategy
@@ -242,7 +242,7 @@
 **Implementation Notes**:
 - Network selection during wallet creation flow
 - Store network in wallet metadata (immutable field)
-- Database path includes network: `wallets/{wallet_id}/{network}/`
+- Database path includes network: `wallets/{network}/{wallet-id}/`
 - UI clearly indicates network in wallet list and detail screens
 - No UI affordance for changing network after creation
 
@@ -307,7 +307,7 @@
 - syslog integration: Rejected as not portable across platforms
 
 **Implementation Notes**:
-- Log location: `~/.zkore/logs/zkore.log` (with date-based rotation)
+- Log location: `~/.zkore/logs/zkore.YYYY-MM-DD.log` (daily rotation, retention policy enforced)
 - Use tracing-appender's RollingFileAppender with daily rotation
 - Keep 7 days of logs by default
 - Log levels: ERROR/WARN always, INFO for operations, DEBUG via RUST_LOG

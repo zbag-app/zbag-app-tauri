@@ -31,8 +31,8 @@
 ## Notes
 
 - Specification derived from comprehensive existing documentation (docs/spec.md, docs/constitution.md)
-- 11 user stories covering all 6 major requirement areas from the original spec
-- 47 functional requirements mapped from original acceptance criteria
+- 12 user stories covering all 6 major requirement areas from the original spec
+- 55 functional requirements mapped from original acceptance criteria
 - 12 measurable success criteria defined
 - Edge cases documented for error handling, network issues, and boundary conditions
 - Assumptions and dependencies clearly stated

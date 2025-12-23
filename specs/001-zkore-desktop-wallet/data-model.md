@@ -202,6 +202,7 @@ A NEAR Intents swap or pay operation.
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
 | id | UUID | Local swap identifier | Auto-generated |
+| wallet_id | UUID | Parent wallet reference | FK to Wallet |
 | remote_id | Option<String> | 1Click intent ID | From API response |
 | swap_type | SwapType | ToZec, FromZec, Pay | Enum value |
 | input_asset | String | Source asset symbol | Non-empty |
@@ -300,12 +301,13 @@ Light client server configuration.
 | name | String | Display name | 1-50 chars |
 | grpc_url | String | gRPC endpoint URL | Valid URL |
 | network | Network | Mainnet or Testnet | Enum value, must match wallet network |
-| is_default | bool | Whether selected | Only one true |
+| is_default | bool | Whether selected | Only one default per network |
 | last_success_at | Option<Timestamp> | Last successful connection | - |
 | created_at | Timestamp | When added | Auto-set |
 
 **Default Servers**:
-- zec.rocks with regional options (Mainnet and Testnet variants)
+- Mainnet: zec.rocks with regional options
+- Testnet: lwd.testnet.zec.pro as default
 
 **Validation Rules**:
 - Server network MUST match wallet network when connecting
@@ -396,7 +398,7 @@ Wallet (1) ─────── (*) Account (1) ─────── (*) Trans
    │
    └─── (1) BackupStatus
 
-SwapIntent ─────── (references) ─────── Account
+SwapIntent ─────── (references) ─────── Wallet
 
 ServerConfig ─────── (selected) ─────── Wallet
 
@@ -438,10 +440,15 @@ CREATE TABLE servers (
     name TEXT NOT NULL,
     grpc_url TEXT NOT NULL,
     network TEXT NOT NULL,  -- Mainnet or Testnet, must match wallet network
-    is_default INTEGER NOT NULL DEFAULT 0,
+    is_default INTEGER NOT NULL DEFAULT 0, -- Default server per network
     last_success_at INTEGER,
     created_at INTEGER NOT NULL
 );
+
+-- Ensure one default server per network
+CREATE UNIQUE INDEX servers_one_default_per_network
+ON servers(network)
+WHERE is_default = 1;
 
 -- Tor settings (singleton)
 CREATE TABLE tor_settings (

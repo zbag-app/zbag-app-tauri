@@ -147,7 +147,7 @@ A user wants to acquire ZEC using another cryptocurrency. They select source ass
 
 **Why this priority**: DEX integration expands utility but is not core wallet functionality. Users can acquire ZEC through other means.
 
-**Independent Test**: Can be fully tested by initiating a testnet/sandbox swap flow, verifying the quote display, and tracking status updates in Activity.
+**Independent Test**: Can be fully tested on mainnet with small amounts, or using mocked 1Click API responses in integration tests.
 
 **Acceptance Scenarios**:
 
@@ -163,7 +163,7 @@ A user wants to convert shielded ZEC to another cryptocurrency. They select targ
 
 **Why this priority**: Off-ramp functionality is valuable but not core to wallet operations.
 
-**Independent Test**: Can be fully tested by initiating an off-ramp flow with testnet ZEC, verifying the shielded spend, and tracking completion.
+**Independent Test**: Can be fully tested on mainnet with small amounts, or using mocked 1Click API responses in integration tests.
 
 **Acceptance Scenarios**:
 
@@ -331,7 +331,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 
 - **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only). Network (mainnet/testnet) is set at creation and immutable thereafter
 - **Account**: A logical grouping within a wallet, supporting Orchard shielded pool. Each account has derived addresses and maintains balance state
-- **Address**: Either a shielded-only Unified Address (default), a full Unified Address with transparent receiver (not default), or a standalone transparent address (compatibility). Addresses rotate on receive screen access
+- **Address**: Either a shielded-only Unified Address (default, Orchard receiver only) or a standalone transparent address (compatibility). Shielded addresses rotate on Receive screen access
 - **Transaction**: An Orchard shielded transaction with sender, recipient, amount, optional memo, and lifecycle state (pending/confirmed)
 - **Transparent UTXO**: A transparent fund that has been received but is not spendable until shielded. Tracked separately from spendable balance
 - **Swap Intent**: A NEAR Intents operation with source/target assets, amounts, deadlines, state machine, and lifecycle tracking
@@ -363,6 +363,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - Users have internet connectivity for wallet operations (sync, send, swap)
 - Keystone hardware wallet firmware supports Zcash Orchard and PCZT signing protocol
 - NEAR Intents API is available and provides the required swap functionality
+- NEAR Intents 1Click API is mainnet-only; swap/pay features must be disabled for Testnet wallets
 - CompactTxStreamer-compatible light client server is available for sync operations
 - Tor integration uses embedded Arti-based client from zcash_client_backend
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)
