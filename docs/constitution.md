@@ -80,12 +80,13 @@ These are guarantees the project makes to users and must be preserved through al
   * Initial wallet creation display (one-time, immediately after generation)
   * Backup verification challenge (user re-entry validation)
   * Wallet restoration entry (user-provided seed for import)
+  * User-initiated "View seed phrase" flow (manual wallet-password re-authentication)
 
   Constraints on permitted mnemonic flows:
   * UI MUST NOT persist mnemonic to disk, localStorage, or any durable storage
   * UI MUST NOT log mnemonic words
   * UI MUST clear mnemonic from memory after the flow completes
-  * Backend MUST NOT re-send mnemonic after initial creation response
+  * Backend MUST NOT re-send mnemonic after initial creation response unless the user explicitly initiates the "View seed phrase" flow (manual wallet-password re-authentication required)
 
 * Raw unsigned/signed payloads MAY cross IPC ONLY for:
   * External signing flows (Keystone PCZT) where air-gapped device requires the payload
@@ -458,6 +459,15 @@ An amendment must include:
 
 Amendments must be reviewed and approved by maintainers responsible for security and architecture.
 
+### 15.4 Amendment log
+
+* **2025-12-23 — Allow user-initiated "View seed phrase" flow (Status: Proposed)**
+  * **Exact text change**: Article 3.2 permitted mnemonic flows updated to include "View seed phrase" (manual wallet-password re-authentication); related constraint and Appendix A checklist updated accordingly.
+  * **Reason**: Allow users to re-check their backup without forcing restore workflows.
+  * **Risk analysis**: Increases mnemonic exposure surface if an attacker can access the running UI; mitigate by requiring manual wallet-password re-authentication every time, forbidding OS keychain to satisfy re-auth, and preserving existing no-persist/no-logs/clear-from-memory constraints.
+  * **Migration plan**: If existing wallets do not store the mnemonic in a displayable encrypted form, add a one-time migration path that keeps mnemonic encrypted at rest and never logs/exports it.
+  * **Acceptance criteria**: Seed phrase can only be displayed after manual password entry; mnemonic is never persisted by the UI, is cleared from memory after the view flow, and does not appear in logs.
+
 ---
 
 ## Appendix A: Non-negotiable checklist
@@ -465,7 +475,7 @@ Amendments must be reviewed and approved by maintainers responsible for security
 Before merging work that touches wallet, signing, networking, or persistence, confirm:
 
 * spending keys and raw seeds cannot reach the UI
-* mnemonic flows follow permitted patterns (creation, backup, restore only) with no persistence
+* mnemonic flows follow permitted patterns (creation, backup, restore, view seed) with no persistence; "View seed phrase" requires manual wallet-password re-authentication
 * software wallet send flows use proposal-based IPC (no raw tx bytes in UI)
 * logs remain redacted
 * transparent spending is still impossible

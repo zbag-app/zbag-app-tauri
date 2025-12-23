@@ -14,6 +14,14 @@
 - Q: What accessibility requirements are needed for v1? → A: Basic keyboard navigation and screen reader labels
 - Q: How should multi-device usage of the same seed be handled? → A: Allowed but unsupported; no sync, user manages conflicts
 
+### Session 2025-12-23
+
+- Q: How should Zkore protect spend-capable secret material at rest on disk (seed/spending keys)? → A: Encrypt with wallet password; optional OS keychain remember
+- Q: When should Zkore prompt for the wallet password to unlock a spend-capable wallet? → A: Prompt on app launch (keychain remember optional); require manual password re-auth for every spend (no keychain)
+- Q: Can users re-view the seed phrase after the initial wallet creation flow? → A: Yes; "View seed phrase" behind manual wallet-password re-auth (constitution amended)
+- Q: How should Zkore store transaction memos on disk? → A: Encrypt memos at rest using the wallet password
+- Q: Should the wallet database (transaction history, balances, addresses/notes) be encrypted at rest with the wallet password? → A: Yes; encrypt the entire wallet DB at rest
+
 ## Out of Scope
 
 The following features are explicitly excluded from the initial release:
@@ -253,6 +261,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-007**: System MUST display distinct restore phases, progress percentage, and estimated time remaining
 - **FR-008**: System MUST support spend-before-sync for funds discovered during an ongoing restore
 - **FR-008a**: System MUST support reopening an existing wallet after restart (list wallets, load by id, and persist last_opened_at)
+- **FR-008b**: System MUST provide a user-initiated "View seed phrase" flow after wallet creation, gated by manual wallet-password re-authentication
 
 **Shielded Transactions (Orchard Only)**
 - **FR-009**: System MUST construct all spends using only Orchard shielded funds
@@ -328,6 +337,15 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **NFR-006**: System MUST provide appropriate ARIA labels for screen reader compatibility
 - **NFR-007**: System MUST maintain visible focus indicators during keyboard navigation
 - **NFR-008**: System MUST support standard keyboard shortcuts (Tab, Enter, Escape, arrow keys)
+
+**Security**
+- **NFR-009**: System MUST encrypt spend-capable secret material at rest (seed phrase and any spending-capable keys) using a user-defined wallet password
+- **NFR-010**: System MUST support optional "remember unlock" via OS keychain; wallet password/unlock material MUST NOT be stored in plaintext on disk
+- **NFR-011**: System MUST default to "locked on restart" for spend-capable wallets and prompt for wallet password to unlock on app launch
+- **NFR-012**: System MUST require manual wallet-password re-authentication for every spending attempt (send, shield, swap-from-ZEC); OS keychain "remember unlock" MUST NOT satisfy per-spend re-auth
+- **NFR-013**: System MUST require manual wallet-password re-authentication to display the seed phrase after creation; OS keychain "remember unlock" MUST NOT satisfy seed-display re-auth
+- **NFR-014**: System MUST encrypt transaction memo contents at rest using the wallet password; memo plaintext MUST NOT be written to disk
+- **NFR-015**: System MUST encrypt the entire wallet database at rest using the wallet password; wallet transaction history, balances, addresses, and note metadata MUST NOT be readable without a successful unlock
 
 ### Key Entities
 
