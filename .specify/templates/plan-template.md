@@ -17,7 +17,7 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.92.0 or NEEDS CLARIFICATION]  
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
 **Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
 **Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
 **Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
@@ -31,19 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Verify compliance with `.specify/memory/constitution.md` core principles:
-
-| Principle | Status | Notes |
-|-----------|--------|-------|
-| I. Secrets Stay in Rust | [ ] Pass / [ ] N/A | UI never handles seeds, keys, raw payloads |
-| II. Orchard-Only Privacy | [ ] Pass / [ ] N/A | Shielded default, no transparent spending |
-| III. Fail-Closed Safety | [ ] Pass / [ ] N/A | Privacy modes error, never silently downgrade |
-| IV. Typed IPC Contracts | [ ] Pass / [ ] N/A | Versioned schemas, no untyped payloads |
-| V. Test-Driven Quality | [ ] Pass / [ ] N/A | Unit + integration + security regression tests |
-| VI. Data Minimization | [ ] Pass / [ ] N/A | Minimal storage, separate wallet/app state |
-| VII. Decision Traceability | [ ] Pass / [ ] N/A | ADRs for architectural decisions |
-
-For detailed rules, see `docs/constitution.md`.
+[Gates determined based on constitution file]
 
 ## Project Structure
 
