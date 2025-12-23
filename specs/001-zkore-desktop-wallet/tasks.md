@@ -69,7 +69,7 @@
 - [ ] T027 Create crates/zkore-core/src/ipc/v1/mod.rs with command and event submodules
 - [ ] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult
 - [ ] T028a [P] Enforce typed IPC: add `#[serde(deny_unknown_fields)]` to all v1 request structs and implement schema_version validation helper in crates/zkore-core/src/ipc/v1/common.rs
-- [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts
+- [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts; ALSO add a regression check that IPC payloads never include mnemonic/seed/spending keys/tx bytes except in explicitly permitted mnemonic flows (CreateWallet, RestoreWallet, ViewSeedPhrase), and that IpcError developer_detail never includes secrets
 - [ ] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus, UnlockWallet, LockWallet, ReauthWallet, ViewSeedPhrase request/response types
 - [ ] T030 [P] Create crates/zkore-core/src/ipc/v1/commands/address.rs with GetReceiveAddress request/response types
 - [ ] T031 [P] Create crates/zkore-core/src/ipc/v1/commands/sync.rs with StartSync, StopSync, GetSyncProgress request/response types
@@ -330,6 +330,7 @@
 - [ ] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
 - [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
 - [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, and broadcast
+- [ ] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs
 
 **Checkpoint**: User Story 7 complete - full Keystone air-gapped signing functional
 
@@ -510,7 +511,7 @@
 - [ ] T210 Implement memory zeroization for mnemonic and spending keys using zeroize crate in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T210a Clear sensitive UI state after use (seed words, backup word inputs, signing payloads/frames) in apps/zkore-app-tauri/src/pages and components
 - [ ] T211 Remove hardware wallet identifiers from PCZT payloads in crates/zkore-keystone/src/pczt.rs
-- [ ] T212 Verify no secrets logged (mnemonic, raw seeds, spending keys) across all crates
+- [ ] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
 
 ### Validation
 
