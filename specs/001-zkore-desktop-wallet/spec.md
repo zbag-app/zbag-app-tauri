@@ -27,7 +27,7 @@
 The following features are explicitly excluded from the initial release:
 
 - **Mobile applications**: No iOS or Android versions; desktop-only (macOS, Windows, Linux)
-- **Multi-currency support**: ZEC only; no Bitcoin, Ethereum, or other cryptocurrency support
+- **Multi-currency support**: ZEC-only wallet balances; swap flows may reference non-ZEC assets for quoting/deposit/payout, but these are not tracked as wallet balances
 - **Cloud backup/sync**: No cloud-based seed backup, wallet sync, or cross-device synchronization
 - **Transaction history export**: No CSV, JSON, or other export of transaction data; seed phrase is the sole backup mechanism
 - **Multi-device synchronization**: No cross-device sync or conflict resolution; protocol-level nullifier rejection handles conflicts
