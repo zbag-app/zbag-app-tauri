@@ -7,7 +7,7 @@
 
 ## Summary
 
-Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps/pay, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
+Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps/pay, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words (BIP-39 24-word English; no passphrase in v1) are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
 
 ## Technical Context
 
@@ -28,7 +28,7 @@ Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone har
 **Testing**: cargo test (Rust), vitest/jest (TypeScript), integration tests against Zaino/lightwalletd endpoints
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
-**Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), sub-second balance/status updates
+**Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
 **Constraints**: No spending secrets in UI layer, Orchard-only spending, fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
 **Scale/Scope**: Single-user desktop wallet, ~15 screens, supports typical wallet sizes up to 1GB database
 **Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zkore/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.

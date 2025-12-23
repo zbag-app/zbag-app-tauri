@@ -31,6 +31,7 @@ The following features are explicitly excluded from the initial release:
 - **Cloud backup/sync**: No cloud-based seed backup, wallet sync, or cross-device synchronization
 - **Transaction history export**: No CSV, JSON, or other export of transaction data; seed phrase is the sole backup mechanism
 - **Multi-device synchronization**: No cross-device sync or conflict resolution; protocol-level nullifier rejection handles conflicts
+- **BIP-39 passphrase and alternate wordlists**: No “25th word” passphrase support and no non-English BIP-39 wordlists in v1 (24-word English mnemonic only)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -47,7 +48,7 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 1. **Given** a user launches Zkore for the first time, **When** they select "Create Wallet", **Then** a new wallet is created in under 60 seconds and a shielded receive address is displayed
 2. **Given** a user has created a wallet but not backed up, **When** they view the home screen, **Then** a persistent backup reminder is visible and cannot be dismissed
 3. **Given** a user has created a wallet but not backed up, **When** they attempt to send funds, **Then** they are blocked and prompted to complete backup verification first
-4. **Given** a user is verifying backup, **When** they correctly re-enter specific seed words requested by a backend-issued challenge, **Then** backup is marked complete and spending is enabled
+4. **Given** a user is verifying backup, **When** they correctly re-enter 4 specific seed words requested by a backend-issued challenge (by 1-based word number), **Then** backup is marked complete and spending is enabled
 5. **Given** a user has previously created a wallet, **When** they restart Zkore, **Then** the most recently opened wallet is loaded and they can resume without re-creating a wallet
 
 ---
@@ -70,17 +71,20 @@ A user with backed-up wallet and shielded funds sends ZEC to another shielded ad
 
 ### User Story 3 - Shield Transparent Funds (Priority: P1)
 
-A user who has received ZEC to a transparent address (for exchange/legacy wallet compatibility) must shield those funds before they can spend them. The wallet provides a one-click "Shield and Consolidate" action.
+A user who has received ZEC to a transparent address (for exchange/legacy wallet compatibility) must shield those funds before they can spend them. The wallet provides a one-click "Shield and Consolidate" action that sweeps all spendable transparent funds into Orchard (fee deducted from transparent inputs), batching into multiple shielding transactions if needed.
 
 **Why this priority**: Critical for privacy enforcement. Transparent funds being unspendable directly is a core privacy guarantee from the constitution.
 
-**Independent Test**: Can be fully tested by receiving testnet ZEC to the compatibility transparent address, verifying it shows as "unspendable", clicking "Shield Now", and confirming the funds become shielded and spendable.
+**Independent Test**: Can be fully tested by receiving multiple testnet transactions to the compatibility transparent address, verifying transparent funds show as "unspendable", clicking "Shield Now", and confirming all spendable transparent funds are shielded (transparent spendable goes to zero) and become spendable.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user has transparent funds, **When** they view their balance, **Then** transparent funds are displayed separately and marked as "not spendable until shielded"
 2. **Given** a user has transparent funds, **When** they attempt to include them in a send, **Then** the wallet prevents this and prompts them to shield first
 3. **Given** a user clicks "Shield Now", **When** the shielding transaction completes, **Then** the funds appear as shielded and spendable
+4. **Given** a wallet has multiple transparent UTXOs, **When** the user shields, **Then** all spendable transparent funds are swept into Orchard (minus fees) and the transparent spendable balance becomes zero
+5. **Given** a wallet has too many transparent UTXOs to fit in one transaction, **When** the user shields, **Then** the wallet automatically batches into multiple shielding transactions and shows progress until completion
+6. **Given** a wallet’s spendable transparent balance is too small to cover the shielding fee, **When** the user shields, **Then** the wallet fails with a clear error and guidance (including the minimum required amount)
 
 ---
 
@@ -237,26 +241,28 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - What happens when a user enters an invalid or checksum-failed seed phrase during restore?
   - The wallet must validate the seed phrase and display a clear error before proceeding
 - How does the system handle network disconnection during a transaction broadcast?
-  - The transaction is saved locally, and the user is prompted to retry when connectivity resumes
+  - The signed transaction is queued in encrypted wallet storage and the user is prompted to retry when connectivity resumes (never auto re-broadcast). Queued entries are deleted after successful broadcast or after 7 days; retry requires explicit user action and manual wallet-password re-authentication.
 - What happens when Keystone QR scanning fails repeatedly?
   - The wallet offers "slow QR mode" with frame rate/brightness tips and microSD fallback
 - How does the wallet handle if a swap deadline expires?
   - The swap transitions to "Refunded" or "Failed" state with clear explanation and any refund outcome surfaced
 - What happens when transparent funds are received while Tor is enabled?
   - The funds are received and displayed as unspendable until shielded; Tor applies to network operations, not on-chain receiving
-- How does the system handle insufficient shielded balance for shielding fee?
-  - The wallet explains that shielding requires a fee and suggests acquiring minimal additional ZEC
+- How does the system handle insufficient transparent balance to cover the shielding fee?
+  - The wallet explains that shielding fees are deducted from transparent inputs; if the total is below the minimum, it shows a clear error (including required-minimum amount) and suggests acquiring minimal additional transparent ZEC
+- What happens when there are too many transparent UTXOs to shield in a single transaction?
+  - The wallet automatically batches shielding into multiple transactions and shows progress until all spendable transparent UTXOs are shielded
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 **Wallet Creation & Restoration**
-- **FR-001**: System MUST create a new wallet with seed phrase generation in under 60 seconds
+- **FR-001**: System MUST create a new wallet with BIP-39 24-word English mnemonic generation in under 60 seconds (no BIP-39 passphrase support in v1)
 - **FR-002**: System MUST allow receiving funds before backup is completed
 - **FR-003**: System MUST display a persistent, undismissable backup reminder until backup is verified
-- **FR-004**: System MUST block all spending until backup verification is complete (re-entering specific seed words)
-- **FR-005**: System MUST support wallet restoration from BIP-39 seed phrase with word autocomplete and paste support
+- **FR-004**: System MUST block all spending until backup verification is complete (re-entering 4 specific seed words requested by a backend-issued challenge)
+- **FR-005**: System MUST support wallet restoration from a BIP-39 24-word English mnemonic with word autocomplete and paste support (no BIP-39 passphrase support in v1)
 - **FR-006**: System MUST accept an optional approximate first-transaction date during restore to reduce scan time
 - **FR-007**: System MUST display distinct restore phases, progress percentage, and estimated time remaining
 - **FR-008**: System MUST support spend-before-sync for funds discovered during an ongoing restore
@@ -379,6 +385,19 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - Every spend (send, shield, swap-from-ZEC) and every “View seed phrase” MUST require the user to enter the wallet password to obtain a short-lived reauth token.
   - Keychain auto-unlock MUST NOT satisfy per-action re-auth and MUST NOT mint reauth tokens without explicit password entry.
 
+#### Backup verification challenge semantics (v1)
+
+- Backup verification MUST be performed via a backend-issued challenge containing:
+  - `challenge_id` (opaque identifier)
+  - exactly **4** distinct word indices in the range **1..=24** (1-based, user-facing “word #N”)
+- Challenge validity:
+  - Challenges MUST expire after **10 minutes**
+  - After **5** failed attempts, the challenge MUST be invalidated and the user MUST request a new challenge
+  - Challenges MUST be stored in-memory only (not persisted). App restart MUST invalidate all outstanding `challenge_id` values.
+- Verification behavior:
+  - A successful verification MUST mark backup as complete and clear the active challenge
+  - A failed verification MUST increment the attempt counter and return a stable, user-safe error without revealing which word(s) were incorrect
+
 #### Password loss and recovery
 
 - If the user forgets the wallet password, the encrypted wallet DB cannot be unlocked. The recovery path is to **restore from seed phrase** into a new wallet (new password) after explicitly deleting/archiving the old encrypted DB.
@@ -406,6 +425,20 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - **Chain inclusion** from compact block scanning (to satisfy FR-014)
 - Outgoing transactions MUST be shown as **pending** once submission is accepted (even if mempool detection is delayed), and MUST transition to **confirmed** once mined; reorg handling may transition confirmed → pending again.
 
+#### Broadcast retry queue (disconnect during broadcast)
+
+- If broadcast fails after signing (e.g., network disconnect), the wallet MUST queue the signed tx bytes in encrypted wallet storage so the user can retry later (including after app restart).
+- Retry MUST require explicit user intent (no silent re-broadcast) and MUST require manual wallet-password re-authentication.
+- The queue MUST be bounded by time: entries are deleted after successful broadcast or after **7 days** (whichever comes first).
+- Logs MUST NOT include signed tx bytes or other raw payloads for queued broadcasts.
+
+#### Shield-and-consolidate semantics (transparent → Orchard)
+
+- The one-click “Shield and Consolidate” action MUST spend **all spendable** transparent UTXOs for the wallet/account; v1 does not provide manual UTXO selection.
+- Fees are paid from transparent inputs: the Orchard output value = sum(transparent inputs) − fee. The transaction MUST NOT create a transparent change output.
+- If the transparent input set cannot fit into a single transaction due to size/limit constraints, the wallet MUST automatically batch into multiple shielding transactions and surface progress; the operation completes when no spendable transparent UTXOs remain.
+- If the total spendable transparent balance is insufficient to cover the required fee (or would result in a zero/invalid output), the wallet MUST fail with a stable, user-safe error and provide actionable guidance (including required-minimum amount) to acquire additional transparent ZEC.
+
 #### Spend-before-sync semantics (restore)
 
 - During restore/sync, the wallet MUST distinguish between:
@@ -431,7 +464,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
 
 - **SC-001**: Users can create a new wallet and see a receive address in under 60 seconds
 - **SC-002**: Users can complete wallet restoration with known transaction history in under 10 minutes for typical wallet sizes
-- **SC-003**: 95% of shielded transactions confirm within the expected block time after broadcast
+- **SC-003**: For 95% of outgoing shielded sends, the wallet receives a successful broadcast acknowledgment from the configured server within 10 seconds of user confirmation (assuming server connectivity)
 - **SC-004**: Users can complete the full Keystone signing flow (create transaction, scan to device, sign, scan back, broadcast) in under 3 minutes
 - **SC-005**: Wallet status widget correctly reflects current state within 2 seconds of any state change
 - **SC-006**: No user can spend funds without completing backup verification (100% enforcement)

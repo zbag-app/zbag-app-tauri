@@ -95,6 +95,10 @@ export interface TransactionInfo {
   memo_present: boolean;
   memo: string | null;
   status: TransactionStatus;
+  /** Last error message for failed/queued broadcasts (user-safe, redacted) */
+  last_error: string | null;
+  /** True if user can retry broadcasting this tx (e.g., queued after broadcast failure) */
+  can_retry_broadcast: boolean;
   mined_height: number | null;
   created_at: number;
   confirmed_at: number | null;
@@ -206,7 +210,7 @@ export interface WalletStatus {
 export interface BackupChallenge {
   /** Opaque challenge identifier */
   challenge_id: string;
-  /** Seed word indices requested for verification */
+  /** Seed word indices requested for verification (exactly 4; 1..=24, 1-based word numbers) */
   indices: number[];
   /** Challenge expiry timestamp (unix seconds) */
   expires_at: number;
@@ -374,6 +378,16 @@ export interface CancelSendRequest extends VersionedPayload {
   proposal_id: string;
 }
 
+/**
+ * Retry broadcasting a previously-signed transaction that was queued after a broadcast failure.
+ * Requires explicit user action and manual re-auth.
+ */
+export interface RetryBroadcastRequest extends VersionedPayload {
+  txid: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
 /** Shield transparent funds */
 export interface ShieldFundsRequest extends VersionedPayload {
   account_id: number;
@@ -392,7 +406,7 @@ export interface VerifyBackupRequest extends VersionedPayload {
   wallet_id: string;
   /** Challenge ID issued by the backend (prevents UI-controlled verification) */
   challenge_id: string;
-  /** Map of word index (0-23) to word */
+  /** Map of word index (1-24) to word */
   word_challenges: Record<number, string>;
 }
 
@@ -592,6 +606,10 @@ export interface CancelSendResponse extends VersionedPayload {
   cancelled: boolean;
 }
 
+export interface RetryBroadcastResponse extends VersionedPayload {
+  txid: string;
+}
+
 export interface ShieldFundsResponse extends VersionedPayload {
   txid: string;
   fee: Zatoshis;
@@ -735,6 +753,7 @@ export const ErrorCodes = {
   REAUTH_REQUIRED: 'E1009',
   REAUTH_TOKEN_INVALID: 'E1010',
   REAUTH_TOKEN_EXPIRED: 'E1011',
+  BACKUP_CHALLENGE_TOO_MANY_ATTEMPTS: 'E1012',
 
   // Account errors
   ACCOUNT_NOT_FOUND: 'E2001',
@@ -748,6 +767,8 @@ export const ErrorCodes = {
   MEMO_TOO_LONG: 'E3005',
   PROPOSAL_NOT_FOUND: 'E3006',
   PROPOSAL_EXPIRED: 'E3007',
+  QUEUED_BROADCAST_NOT_FOUND: 'E3008',
+  QUEUED_BROADCAST_EXPIRED: 'E3009',
 
   // Sync errors
   SYNC_IN_PROGRESS: 'E4001',
@@ -805,6 +826,7 @@ export const Commands = {
   PREPARE_SEND: 'zkore_prepare_send',
   CONFIRM_SEND: 'zkore_confirm_send',
   CANCEL_SEND: 'zkore_cancel_send',
+  RETRY_BROADCAST: 'zkore_retry_broadcast',
   SHIELD_FUNDS: 'zkore_shield_funds',
 
   // Backup
