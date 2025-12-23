@@ -15,14 +15,14 @@ The root entity containing seed-derived keys and accounts.
 | id | UUID | Unique wallet identifier | Auto-generated |
 | name | String | User-defined wallet name | 1-50 chars, non-empty |
 | directory_path | String | Filesystem path to wallet data (network-specific: ~/.zkore/wallets/{network}/{wallet-id}/) | Valid path, writable |
-| wallet_type | WalletType | Software or WatchOnly | Enum value |
+| wallet_type | WalletType | Software (v1); WatchOnly reserved for future | Enum value |
 | network | Network | Mainnet or Testnet (IMMUTABLE after creation) | Enum value |
 | created_at | Timestamp | Creation timestamp | Auto-set |
 | last_opened_at | Timestamp | Last access timestamp | Updated on open |
 
 **WalletType Enum**:
-- `Software` - Full spending capability with seed
-- `WatchOnly` - View-only from imported UFVK
+- `Software` - Seed-backed wallet for v1
+- `WatchOnly` - Reserved for future (watch-only is modeled via AccountType in v1)
 
 **Network Enum**:
 - `Mainnet` - Production Zcash network (addresses start with u1, zs, t1/t3)
@@ -35,6 +35,7 @@ The root entity containing seed-derived keys and accounts.
 **Notes**:
 - Seed phrase NEVER stored in app metadata DB
 - Network field is IMMUTABLE after wallet creation
+- In v1, `wallet_type` is always `Software`; watch-only behavior is represented by `AccountType`
 
 ### Key Storage Architecture
 
@@ -65,7 +66,7 @@ This section clarifies the separation of viewing keys and spending capability, f
 - `locked`: wallet DB not decrypted/open; mnemonic not accessible; spending operations blocked
 - `unlocked`: wallet DB decrypted/open; read-only wallet operations allowed, but spending still requires per-action re-authentication
 - `reauthenticated`: short-lived, per-action authorization granted after manual wallet-password entry (required for send/shield/swap-from-ZEC and "View seed phrase"; OS keychain must not satisfy)
-- WatchOnly wallets still require unlock for the encrypted wallet DB, but have no spending capability
+- Watch-only accounts still require unlock for the encrypted wallet DB, but have no spending capability
 
 ---
 
@@ -95,8 +96,8 @@ A logical grouping within a wallet for Orchard shielded operations.
 
 **Constraints**:
 - Account 0 always exists after wallet creation
-- WatchOnly wallets MUST NOT contain Software accounts (no spending keys)
-- WatchOnly wallets MAY contain WatchOnly or HardwareSigner accounts
+- In v1, `wallet_type` MUST be `Software`; watch-only is represented by `AccountType`
+- Wallets MAY contain `Software`, `WatchOnly`, or `HardwareSigner` accounts
 
 ---
 
