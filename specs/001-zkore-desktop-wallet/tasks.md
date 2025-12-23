@@ -83,8 +83,8 @@
 ### 2.3: App Metadata Database
 
 - [ ] T036 Create crates/zkore-engine/src/db/mod.rs with app metadata database module structure
-- [ ] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations)
-- [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking
+- [ ] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations); include per-wallet encryption metadata (wrapped_dek, KDF params/salt, AEAD scheme/version) in wallet_encryption
+- [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version)
 - [ ] T038a Add rollback strategy for app metadata DB migrations in crates/zkore-engine/src/db/migrations.rs: create pre-migration snapshot of the DB file, run forward migrations, validate, and restore snapshot on failure (document rollback limits)
 - [ ] T038b Add automated migration tests for app metadata DB in crates/zkore-engine/tests/app_db_migrations.rs using fixtures under tests/fixtures/app_db/ to exercise migrate-up + rollback-on-failure paths (aligns with NFR-016)
 - [ ] T039 Create crates/zkore-engine/src/db/wallet_meta.rs with CRUD operations for wallet metadata table
