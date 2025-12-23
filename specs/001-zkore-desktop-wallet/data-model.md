@@ -197,14 +197,14 @@ A transparent fund that must be shielded before spending.
 
 ### SwapIntent
 
-A NEAR Intents swap or pay operation.
+A NEAR Intents swap operation.
 
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
 | id | UUID | Local swap identifier | Auto-generated |
 | wallet_id | UUID | Parent wallet reference | FK to Wallet |
 | remote_id | Option<String> | 1Click intent ID | From API response |
-| swap_type | SwapType | ToZec, FromZec, Pay | Enum value |
+| swap_type | SwapType | ToZec, FromZec | Enum value |
 | input_asset | String | Source asset symbol | Non-empty |
 | input_amount | String | Source amount | Decimal string |
 | output_asset | String | Target asset symbol | Non-empty |
@@ -221,7 +221,6 @@ A NEAR Intents swap or pay operation.
 **SwapType Enum**:
 - `ToZec` - External asset -> Shielded ZEC
 - `FromZec` - Shielded ZEC -> External asset
-- `Pay` - Shielded ZEC -> Exact output in external asset
 
 **SwapState Enum**:
 - `Draft` - Quote received, not started

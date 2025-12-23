@@ -510,7 +510,7 @@ Use Tauri windows for:
 
 * Main window: app
 * Full-screen signing window: Keystone QR display + scanning
-* Optional: “QR viewer” detached window for Receive screen and Pay deposit screens
+* Optional: “QR viewer” detached window for Receive screen and Swap deposit screens
 
 This makes camera workflows smoother and matches desktop multi-tasking patterns.
 

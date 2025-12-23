@@ -123,7 +123,7 @@ export interface SyncProgress {
 // Swap Types
 // ============================================================================
 
-export type SwapType = 'ToZec' | 'FromZec' | 'Pay';
+export type SwapType = 'ToZec' | 'FromZec';
 export type SwapState =
   | 'Draft'
   | 'AwaitingDeposit'
@@ -178,15 +178,16 @@ export interface TorState {
 // Wallet Status Types
 // ============================================================================
 
-export type BackupAction = { Required: null } | { Complete: null };
+/** NOTE: Rust serde serializes unit enum variants as strings (e.g. "Required"). */
+export type BackupAction = 'Required' | 'Complete';
 export type SyncStatus =
-  | { Synced: null }
+  | 'Synced'
   | { Syncing: { progress_percent: number } }
   | { Error: { message: string } };
 export type ShieldAction =
-  | { None: null }
+  | 'None'
   | { Available: { amount: Zatoshis } }
-  | { InProgress: null };
+  | 'InProgress';
 export type PrivacyPosture = 'Optimal' | 'NeedsAction';
 
 export interface WalletStatus {
@@ -194,6 +195,19 @@ export interface WalletStatus {
   sync_status: SyncStatus;
   shield_status: ShieldAction;
   privacy_posture: PrivacyPosture;
+}
+
+// ============================================================================
+// Backup Types
+// ============================================================================
+
+export interface BackupChallenge {
+  /** Opaque challenge identifier */
+  challenge_id: string;
+  /** Seed word indices requested for verification */
+  indices: number[];
+  /** Challenge expiry timestamp (unix seconds) */
+  expires_at: number;
 }
 
 // ============================================================================
@@ -324,9 +338,16 @@ export interface ShieldFundsRequest extends VersionedPayload {
   consolidate: boolean;
 }
 
+/** Get a fresh backend-generated backup challenge */
+export interface GetBackupChallengeRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
 /** Verify backup words */
 export interface VerifyBackupRequest extends VersionedPayload {
   wallet_id: string;
+  /** Challenge ID issued by the backend (prevents UI-controlled verification) */
+  challenge_id: string;
   /** Map of word index (0-23) to word */
   word_challenges: Record<number, string>;
 }
@@ -428,8 +449,8 @@ export interface CreateWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
   /** Seed phrase words (24 words) - ONLY returned on create */
   seed_phrase: string[];
-  /** Word indices for backup verification challenge */
-  backup_challenge_indices: number[];
+  /** Initial backend-generated backup challenge */
+  backup_challenge: BackupChallenge;
 }
 
 export interface LoadWalletResponse extends VersionedPayload {
@@ -505,6 +526,10 @@ export interface ShieldFundsResponse extends VersionedPayload {
 
 export interface VerifyBackupResponse extends VersionedPayload {
   verified: boolean;
+}
+
+export interface GetBackupChallengeResponse extends VersionedPayload {
+  challenge: BackupChallenge;
 }
 
 export interface RestoreWalletResponse extends VersionedPayload {
@@ -631,6 +656,8 @@ export const ErrorCodes = {
   WALLET_ALREADY_EXISTS: 'E1003',
   INVALID_SEED_PHRASE: 'E1004',
   BACKUP_REQUIRED: 'E1005',
+  BACKUP_CHALLENGE_INVALID: 'E1006',
+  BACKUP_CHALLENGE_EXPIRED: 'E1007',
 
   // Account errors
   ACCOUNT_NOT_FOUND: 'E2001',
@@ -700,6 +727,7 @@ export const Commands = {
   SHIELD_FUNDS: 'zkore_shield_funds',
 
   // Backup
+  GET_BACKUP_CHALLENGE: 'zkore_get_backup_challenge',
   VERIFY_BACKUP: 'zkore_verify_backup',
   RESTORE_WALLET: 'zkore_restore_wallet',
 

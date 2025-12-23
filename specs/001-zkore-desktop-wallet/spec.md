@@ -39,7 +39,8 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 1. **Given** a user launches Zkore for the first time, **When** they select "Create Wallet", **Then** a new wallet is created in under 60 seconds and a shielded receive address is displayed
 2. **Given** a user has created a wallet but not backed up, **When** they view the home screen, **Then** a persistent backup reminder is visible and cannot be dismissed
 3. **Given** a user has created a wallet but not backed up, **When** they attempt to send funds, **Then** they are blocked and prompted to complete backup verification first
-4. **Given** a user is verifying backup, **When** they correctly re-enter specific seed words as requested, **Then** backup is marked complete and spending is enabled
+4. **Given** a user is verifying backup, **When** they correctly re-enter specific seed words requested by a backend-issued challenge, **Then** backup is marked complete and spending is enabled
+5. **Given** a user has previously created a wallet, **When** they restart Zkore, **Then** the most recently opened wallet is loaded and they can resume without re-creating a wallet
 
 ---
 
@@ -251,6 +252,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-006**: System MUST accept an optional approximate first-transaction date during restore to reduce scan time
 - **FR-007**: System MUST display distinct restore phases, progress percentage, and estimated time remaining
 - **FR-008**: System MUST support spend-before-sync for funds discovered during an ongoing restore
+- **FR-008a**: System MUST support reopening an existing wallet after restart (list wallets, load by id, and persist last_opened_at)
 
 **Shielded Transactions (Orchard Only)**
 - **FR-009**: System MUST construct all spends using only Orchard shielded funds
@@ -278,12 +280,12 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-027**: System MUST show verification checklist before broadcast: recipient, amount, fee, memo presence
 - **FR-028**: System MUST NOT include hardware wallet branding or identifiers in QR payloads or exported files
 
-**NEAR Intents (Swaps and Pay)**
+**NEAR Intents (Swaps)**
 - **FR-029**: System MUST support "Swap to ZEC" flow with source asset selection, quote review, and deposit QR
 - **FR-030**: System MUST support "Swap from ZEC" flow with target asset and destination address input
 - **FR-031**: System MUST use shielded ZEC by default for all swap operations
 - **FR-032**: System MUST use ephemeral (non-reused) transparent addresses for any unavoidable transparent interactions
-- **FR-033**: System MUST display swap/pay entries in Activity with real-time status updates
+- **FR-033**: System MUST display swap entries in Activity with real-time status updates
 - **FR-034**: System MUST support state machine: Draft, Awaiting deposit, Pending, Confirming, Completed, Refunded, Failed
 - **FR-035**: System MUST display deadlines and countdown timers for time-sensitive swap actions
 - **FR-036**: System MUST clearly communicate privacy tradeoffs for any transparent interactions in swap flows
@@ -363,7 +365,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - Users have internet connectivity for wallet operations (sync, send, swap)
 - Keystone hardware wallet firmware supports Zcash Orchard and PCZT signing protocol
 - NEAR Intents API is available and provides the required swap functionality
-- NEAR Intents 1Click API is mainnet-only; swap/pay features must be disabled for Testnet wallets
+- NEAR Intents 1Click API is mainnet-only; swap features must be disabled for Testnet wallets
 - CompactTxStreamer-compatible light client server is available for sync operations
 - Tor integration uses embedded Arti-based client from zcash_client_backend
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)

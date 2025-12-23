@@ -90,7 +90,7 @@ Acceptance criteria:
 * User can connect Keystone, see balances, create a send, and complete signing without plugging in a cable.
 * All signing steps clearly indicate what must be verified on the hardware screen.
 
-### 4. DEX integration for swaps and cross chain pay (NEAR Intents)
+### 4. DEX integration for swaps (NEAR Intents)
 
 Users must be able to initiate and complete ZEC related swaps via an integrated flow that feels like Zashi’s NEAR Intents experience.
 
@@ -109,19 +109,17 @@ Required flows:
   * Select target asset, destination address, and amount
   * Show estimated ZEC spent and fees
   * Execute from shielded ZEC
-* Cross chain pay (optional but recommended for parity):
-
-  * Pay flow that lets the user enter the exact output amount in the recipient’s chosen asset, while Zkore spends shielded ZEC under the hood. Zashi describes this as the “Pay” experience powered by NEAR Intents. ([Electric Coin Company][9])
+* Cross-chain pay ("Pay") is out of scope for the initial desktop milestone and can be added later as a separate spec.
 
 State model and UX:
 
-* Swap and pay entries must appear in Activity immediately and auto update status without requiring the user to open the detail view, matching Zashi’s recent UX refinement. ([App Store][8])
+* Swap entries must appear in Activity immediately and auto update status without requiring the user to open the detail view, matching Zashi’s recent UX refinement. ([App Store][8])
 * Use a clear state machine: Draft, Awaiting deposit, Pending, Confirming, Completed, Refunded, Failed with recovery steps.
 * Always show deadlines and timers where user action is time sensitive. Zashi increased swap deadlines to reduce early refunds, indicating deadline handling is a real UX and reliability concern. ([App Store][8])
 
 Privacy and safety requirements:
 
-* ZEC side of the intent flow must be shielded by default. Zashi has moved Swap and Pay to use shielded addresses instead of transparent ones, and Zkore should not regress privacy here. ([App Store][8])
+* ZEC side of the intent flow must be shielded by default. Zashi has moved swaps to use shielded addresses instead of transparent ones, and Zkore should not regress privacy here. ([App Store][8])
 * For any unavoidable transparent interactions:
 
   * Use ephemeral transparent addresses and do not reuse a static transparent address for refunds or receipts.
@@ -244,11 +242,11 @@ Desktop specific:
 
 * As a user, I want a full screen signing mode so the Keystone can scan reliably.
 
-### 4. NEAR Intents swaps and pay
+### 4. NEAR Intents swaps
 
 * As a user, I want to swap into ZEC from another asset by scanning a QR code in my external wallet and then see the result tracked in Zkore. ([Electric Coin Company][4])
 * As a user, I want to swap out of ZEC to another asset by providing a destination address and seeing fees and expected outcomes.
-* As a user, I want swap and pay statuses to update automatically without manually opening each item. ([App Store][8])
+* As a user, I want swap statuses to update automatically without manually opening each item. ([App Store][8])
 * As a privacy conscious user, I want the wallet to avoid transparent ZEC where possible during intents flows and clearly warn me about any privacy tradeoffs. ([App Store][8])
 
 ### 5. Tor transport layer anonymization
