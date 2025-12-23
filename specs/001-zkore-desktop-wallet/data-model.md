@@ -435,6 +435,21 @@ CREATE TABLE wallets (
     last_opened_at INTEGER
 );
 
+-- Wallet encryption metadata (per-wallet)
+CREATE TABLE wallet_encryption (
+    wallet_id TEXT PRIMARY KEY REFERENCES wallets(id),
+    kdf_algorithm TEXT NOT NULL,
+    kdf_version INTEGER NOT NULL,
+    kdf_memory_mib INTEGER NOT NULL,
+    kdf_iterations INTEGER NOT NULL,
+    kdf_parallelism INTEGER NOT NULL,
+    kdf_salt TEXT NOT NULL,
+    wrapped_dek TEXT NOT NULL,
+    aead_scheme TEXT NOT NULL,
+    aead_version INTEGER NOT NULL,
+    aead_nonce TEXT
+);
+
 -- Backup state
 CREATE TABLE backup_status (
     wallet_id TEXT PRIMARY KEY REFERENCES wallets(id),
