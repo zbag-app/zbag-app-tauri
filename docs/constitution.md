@@ -51,7 +51,7 @@ The following are out of scope unless explicitly added through amendment:
 
 These are guarantees the project makes to users and must be preserved through all changes.
 
-1. **Secrets never enter the UI.** The UI must not receive, store, log, or compute with seed phrases or spending keys.
+1. **Secrets never persist in the UI.** The UI must not store, log, or compute with seed phrases or spending keys; mnemonic words may only be displayed/entered in the explicitly permitted flows in Article 3.2.
 2. **Privacy defaults are strong.** Receiving and sending should prioritize shielded behavior without requiring expert configuration.
 3. **No silent privacy downgrade.** If the user enables a privacy mode, the app must not quietly route around it.
 4. **State is explainable.** If funds are unavailable, a transaction is pending, or restore is incomplete, the app provides a clear reason and a next action.
@@ -461,7 +461,7 @@ Amendments must be reviewed and approved by maintainers responsible for security
 
 ### 15.4 Amendment log
 
-* **2025-12-23 — Allow user-initiated "View seed phrase" flow (Status: Proposed)**
+* **2025-12-23 — Allow user-initiated "View seed phrase" flow (Status: Ratified)**
   * **Exact text change**: Article 3.2 permitted mnemonic flows updated to include "View seed phrase" (manual wallet-password re-authentication); related constraint and Appendix A checklist updated accordingly.
   * **Reason**: Allow users to re-check their backup without forcing restore workflows.
   * **Risk analysis**: Increases mnemonic exposure surface if an attacker can access the running UI; mitigate by requiring manual wallet-password re-authentication every time, forbidding OS keychain to satisfy re-auth, and preserving existing no-persist/no-logs/clear-from-memory constraints.

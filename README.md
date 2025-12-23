@@ -7,7 +7,7 @@ A desktop-first shielded Zcash wallet with Orchard-only transactions, hardware w
 Zkore Desktop provides a privacy-focused Zcash experience built on strong security principles:
 
 - **Orchard-only spending** - Transparent funds must be shielded before use
-- **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed during wallet creation and entered during restore, never persisted or logged
+- **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and are never persisted or logged by the UI
 - **Fail-closed Tor** - Network anonymization that blocks rather than silently downgrades
 - **Air-gapped signing** - Keystone hardware wallet support via QR codes
 
@@ -80,8 +80,9 @@ Platform targets: macOS, Windows, Linux
 
 This wallet enforces strict security boundaries. Key principles:
 
-- Seed phrases are generated in the Rust backend and only displayed or entered during create/restore (never persisted or logged)
-- The UI operates on derived, non-sensitive data, except for transient seed phrase display/entry during onboarding/restore
+- Seed phrases are generated in the Rust backend and only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed); never persisted or logged by the UI
+- "View seed phrase" requires manual wallet-password re-authentication
+- The UI operates on derived, non-sensitive data, except for transient mnemonic display/entry during those permitted flows
 - Transparent spending is architecturally impossible
 - All network requests route through backend-controlled transports
 

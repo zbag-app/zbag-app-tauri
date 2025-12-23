@@ -1,16 +1,17 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 0.0.0 -> 1.0.0
-Bump rationale: Initial adoption - MAJOR version for first ratification
+Version change: 1.0.0 -> 1.1.0
+Bump rationale: MINOR - allow user-initiated mnemonic re-display with manual re-auth
 
-Modified principles: N/A (initial creation)
+Modified principles:
+  - I. Secrets Stay in Rust (permitted mnemonic flows expanded)
 
-Added sections:
-  - Preamble
-  - Core Principles (7 principles consolidated from 15 articles)
+Added sections: N/A
+
+Modified sections:
+  - Core Principles -> I. Secrets Stay in Rust
   - Non-Negotiable Checklist
-  - Governance
 
 Templates requiring updates:
   - .specify/templates/plan-template.md: Constitution Check section exists
@@ -38,9 +39,9 @@ For detailed implementation rules, enforcement specifics, and article-by-article
 The Rust backend is the single trust boundary for all secret material. The UI MUST NOT store, log, or compute with spending keys or raw seeds.
 
 **Permitted mnemonic flows (with strict constraints):**
-- Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, and restore entry
+- Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, restore entry, and user-initiated "View seed phrase" (manual wallet-password re-authentication)
 - UI MUST NOT persist mnemonic to durable storage, MUST NOT log it, MUST clear from memory after flow completes
-- Backend MUST NOT re-send mnemonic after initial creation response
+- Backend MUST NOT re-send mnemonic after initial creation response unless the user explicitly initiates the "View seed phrase" flow (manual wallet-password re-authentication required)
 
 **Permitted payload flows:**
 - Raw unsigned/signed payloads MAY cross IPC ONLY for external signing flows (Keystone PCZT)
@@ -117,6 +118,7 @@ Significant changes MUST be documented with problem, options considered, chosen 
 Before merging work that touches wallet, signing, networking, or persistence, confirm:
 
 - [ ] Secrets cannot reach the UI
+- [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
 - [ ] Transparent spending is still impossible
 - [ ] Tor mode cannot silently downgrade
@@ -150,4 +152,4 @@ This constitution follows semantic versioning:
 - **Feature specifications**: `docs/spec.md`
 - **Implementation plan**: `docs/plan.md`
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-21
+**Version**: 1.1.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-23

@@ -95,7 +95,7 @@
 |   - EventBus (push updates to UI)                            |
 |                                                              |
 |  Storage                                                     |
-|   - zcash_client_sqlite wallet DB                            |
+|   - encrypted zcash_client_sqlite wallet DB                  |
 |   - app metadata DB (backup flags, UI prefs, swap records)   |
 +--------------------------------------------------------------+
 
@@ -105,7 +105,7 @@ External dependencies:
 - Optional: pricing / fiat-rate provider (behind Tor when on)
 ```
 
-Key boundary: **the React UI never sees seeds/spending keys**. It only receives derived addresses, balances, transaction summaries, and signer payloads.
+Key boundary: **the React UI never sees spending keys**. It only receives derived addresses, balances, transaction summaries, and signer payloads; mnemonic words may be shown/entered only in explicitly permitted, transient flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
 
 ---
 
@@ -164,7 +164,9 @@ This is how you satisfy:
 
 You will want two stores:
 
-1. **Wallet DB**: managed by `zcash_client_sqlite` ([Docs.rs][2])
+1. **Encrypted Wallet DB**: managed by `zcash_client_sqlite` ([Docs.rs][2])
+   * Encrypted at rest with the wallet password (not readable without unlock)
+   * Memo plaintext must not be written to disk (covered by DB encryption; avoid plaintext caches)
 2. **App DB or metadata store**: for things the wallet DB should not own:
 
 * backup completion state + timestamps
@@ -175,6 +177,15 @@ You will want two stores:
 * server configuration list
 
 SQLite is fine for metadata too; it keeps everything transactionally safe and easy to migrate.
+
+### 4. Wallet security model (lock/unlock + per-action re-auth)
+
+This plan assumes the security posture in `specs/001-zkore-desktop-wallet/spec.md`:
+
+* Spend-capable secret material (mnemonic / spending capability) is encrypted at rest with a user-defined wallet password.
+* Optional OS keychain “remember unlock” may auto-unlock the wallet on app launch, but **must not** satisfy per-action re-auth.
+* Manual wallet-password re-authentication is required for every spending attempt (send, shield, swap-from-ZEC) and for "View seed phrase".
+* Wallets default to locked on restart; prompt for password on launch unless keychain auto-unlock is enabled.
 
 ---
 
@@ -187,24 +198,32 @@ SQLite is fine for metadata too; it keeps everything transactionally safe and ea
 Backend flow:
 
 1. User selects network (mainnet or testnet) during wallet creation.
-2. Generate mnemonic (BIP-39) and seed.
-3. Create new wallet DB in network-specific directory:
+2. User chooses a wallet password (optionally enables “remember unlock on this device” via OS keychain).
+3. Generate mnemonic (BIP-39) and seed.
+4. Create encrypted wallet DB in network-specific directory:
    - Mainnet: `~/.zkore/wallets/mainnet/`
    - Testnet: `~/.zkore/wallets/testnet/`
-4. Derive account keys for **Orchard** on the selected network.
-5. Immediately allow receiving.
-6. Set `backup_required = true` and persist.
+5. Encrypt and store the mnemonic / spending capability at rest using the wallet password (keychain-assisted unlock optional).
+6. Derive account keys for **Orchard** on the selected network.
+7. Immediately allow receiving (wallet remains unlocked for the active session).
+8. Set `backup_required = true` and persist.
 
 UI flow:
 
 * “Fast create” wizard that ends at Home quickly.
 * Persistent banner/widget: “Back up your seed”.
-* Send actions call backend, backend enforces `backup_required == false` before allowing spend.
+* Send actions call backend; backend enforces `backup_required == false` before allowing spend and requires manual wallet-password re-authentication per spending attempt (OS keychain “remember unlock” must not satisfy re-auth).
 
 Backup verification:
 
 * UI asks user to re-enter N words (example: word 3, 11, 19).
 * Backend validates and sets `backup_required = false`.
+
+Seed phrase re-display (“View seed phrase”):
+
+* User initiates “View seed phrase”.
+* UI prompts for wallet password (manual re-authentication; OS keychain must not satisfy).
+* Backend decrypts mnemonic and returns it for display; UI clears from memory after the flow completes and must never persist or log it.
 
 Acceptance checks:
 
@@ -217,6 +236,7 @@ Key requirement: optional “approximate date of first transaction” to reduce 
 
 Implementation:
 
+* Restore wizard collects a wallet password (optionally “remember unlock”) and initializes an encrypted wallet DB; the user-provided mnemonic is encrypted at rest.
 * Maintain a **checkpoint table** mapping date ranges -> approximate Zcash block height.
 * UI date picker -> backend converts to a “birthday height”.
 * SyncService starts scanning from birthday height forward.
@@ -290,6 +310,7 @@ Backend:
   * attach memo if present
 * `TxService.submit(tx_bytes)`
 
+  * require manual wallet-password re-authentication (per spending attempt; OS keychain must not satisfy)
   * broadcast via server gRPC
   * create Activity entry immediately as “Pending”
 
@@ -297,6 +318,7 @@ UI:
 
 * Send form includes optional memo.
 * Confirmation screen includes: amount, recipient, fee, memo presence.
+* Before final submit, prompt for wallet password (manual re-auth) to authorize the spend.
 
 #### B3. Mandatory shielding and “Shield and consolidate”
 
@@ -313,6 +335,7 @@ Backend:
   * gather all transparent UTXOs
   * create transaction spending to wallet’s Orchard address
   * optional: add Orchard self-spend consolidation strategy (configurable thresholds)
+  * require manual wallet-password re-authentication before final submit (per spending attempt; OS keychain must not satisfy)
 
 UI:
 
@@ -419,6 +442,7 @@ Backend:
 
 * Request quote for output chain/asset and destination address.
 * Build and send ZEC spend from **shielded funds** by default.
+* Require manual wallet-password re-authentication for the ZEC spend (per spending attempt; OS keychain must not satisfy).
 * Persist and track until completion/refund.
 
 #### D5. Cross-chain pay (recommended)
@@ -427,6 +451,7 @@ Use “exact output” style quoting when supported:
 
 * User enters “recipient gets X of token Y”
 * Wallet computes required ZEC spend and executes shielded payment.
+* Require manual wallet-password re-authentication for the spend (per spending attempt; OS keychain must not satisfy).
 
 #### D6. Privacy constraints
 

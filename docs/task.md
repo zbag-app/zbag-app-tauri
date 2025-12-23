@@ -133,11 +133,11 @@
 
   * Implement network selection at wallet creation (mainnet/testnet choice)
   * Create wallet directory structure with network separation: `~/.zkore/wallets/mainnet/{wallet-id}/` and `~/.zkore/wallets/testnet/{wallet-id}/`
-  * Create wallet folder and initialize wallet DB
+  * Create wallet folder and initialize encrypted wallet DB
   * Create first Orchard account
   * Store `backup_required = true` in metadata DB
   * Add Network field to ServerConfig and validate network match
-  * Expose `lock_wallet` and `unlock_wallet` interfaces even if first version is no-op (so later adding encryption does not break IPC)
+  * Implement `lock_wallet` / `unlock_wallet` with encrypted-at-rest wallet DB; optional OS keychain “remember unlock” (must not satisfy per-action re-auth)
 * Implement `AddressService`
 
   * Implement `get_fresh_shielded_ua(account_id)` returning UA with only Orchard receiver
@@ -176,13 +176,15 @@
 
 * Implement Tauri command handlers in `zkore-app-tauri`
 
-  * Wallet create (returns seed_phrase for initial display only)
+  * Wallet create (accepts wallet password; returns seed phrase for initial display + backup; supports user-initiated “View seed phrase” behind manual re-auth)
   * Load wallet
+  * Unlock wallet / lock wallet
+  * Re-auth (per spend / view seed) + view seed phrase
   * Get receive addresses
   * Start sync and get progress
   * Get balances and transactions
   * Prepare send (proposal-based, returns proposal_id + summary)
-  * Confirm send (accepts proposal_id, returns txid)
+  * Confirm send (accepts proposal_id + re-auth token, returns txid)
   * Cancel send (clears proposal)
 * Implement event subscription bridge
 

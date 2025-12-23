@@ -40,10 +40,11 @@ The root entity containing seed-derived keys and accounts.
 
 This section clarifies the separation of viewing keys and spending capability, following `zcash_client_backend`'s design.
 
-**zcash_client_sqlite stores (UFVK-based):**
+**Encrypted wallet DB (zcash_client_sqlite-backed):**
 - Unified Full Viewing Keys (UFVKs) per account
 - Scanned wallet state (notes, witnesses, transactions)
 - Address derivation metadata
+- Encrypted at rest with the wallet password; not readable without successful unlock
 
 **Spending capability stored separately:**
 - `zcash_client_backend` does NOT store spending keys - they must be supplied when creating transactions
@@ -61,9 +62,10 @@ This section clarifies the separation of viewing keys and spending capability, f
 5. Spending keys zeroized after use
 
 **Lock/unlock semantics:**
-- `locked`: Mnemonic not in memory, spending operations blocked
-- `unlocked`: Mnemonic accessible, spending operations permitted
-- WatchOnly wallets have no lock state (no spending capability)
+- `locked`: wallet DB not decrypted/open; mnemonic not accessible; spending operations blocked
+- `unlocked`: wallet DB decrypted/open; read-only wallet operations allowed, but spending still requires per-action re-authentication
+- `reauthenticated`: short-lived, per-action authorization granted after manual wallet-password entry (required for send/shield/swap-from-ZEC and "View seed phrase"; OS keychain must not satisfy)
+- WatchOnly wallets still require unlock for the encrypted wallet DB, but have no spending capability
 
 ---
 
@@ -138,7 +140,7 @@ An Orchard shielded transaction record.
 | value | Amount | ZEC amount (zatoshis) | Non-negative |
 | fee | Amount | Transaction fee | Non-negative |
 | memo_present | bool | Whether memo exists | - |
-| memo | Option<String> | Decrypted memo content | Max 512 bytes |
+| memo | Option<String> | Decrypted memo content (in-memory only; encrypted at rest) | Max 512 bytes |
 | status | TransactionStatus | Lifecycle state | Enum value |
 | mined_height | Option<BlockHeight> | Block height if confirmed | > 0 when set |
 | created_at | Timestamp | Detection/creation time | Auto-set |
@@ -166,6 +168,7 @@ An Orchard shielded transaction record.
 **Validation Rules**:
 - Only Orchard transactions can be created (no transparent spends)
 - Memo redacted in logs (constitution requirement)
+- Memo plaintext MUST NOT be written to disk; encryption-at-rest must cover memo contents
 
 ---
 
@@ -361,10 +364,15 @@ Aggregated wallet status for status widget.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| lock_status | LockStatus | Whether wallet DB is locked/unlocked |
 | backup_status | BackupAction | Backup state + action |
 | sync_status | SyncStatus | Sync state + progress |
 | shield_status | ShieldAction | Transparent funds state |
 | privacy_posture | PrivacyPosture | Overall privacy state |
+
+**LockStatus Enum**:
+- `Locked` - Wallet DB locked; prompt user to unlock
+- `Unlocked` - Wallet DB unlocked; normal operations available (spending still requires per-action re-auth)
 
 **BackupAction Enum**:
 - `Required` - Must backup, action: "Back up now"
@@ -410,6 +418,7 @@ TorState ─────── (global singleton)
 - Managed by librustzcash
 - Contains: accounts, addresses, transactions, notes, witnesses
 - Migrations handled by library
+- Encrypted at rest with the wallet password; not readable without successful unlock
 - Directory structure: ~/.zkore/wallets/mainnet/{wallet-id}/ and ~/.zkore/wallets/testnet/{wallet-id}/
 
 ### App Metadata DB (custom SQLite)
@@ -421,6 +430,7 @@ CREATE TABLE wallets (
     directory_path TEXT NOT NULL,  -- Network-specific path: ~/.zkore/wallets/{network}/{wallet-id}/
     wallet_type TEXT NOT NULL,
     network TEXT NOT NULL,  -- IMMUTABLE after creation
+    remember_unlock_enabled INTEGER NOT NULL DEFAULT 0, -- OS keychain-backed auto-unlock (must not satisfy per-action re-auth)
     created_at INTEGER NOT NULL,
     last_opened_at INTEGER
 );

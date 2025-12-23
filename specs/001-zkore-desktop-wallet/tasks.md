@@ -70,7 +70,7 @@
 - [ ] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult
 - [ ] T028a [P] Enforce typed IPC: add `#[serde(deny_unknown_fields)]` to all v1 request structs and implement schema_version validation helper in crates/zkore-core/src/ipc/v1/common.rs
 - [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts
-- [ ] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus request/response types
+- [ ] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus, UnlockWallet, LockWallet, ReauthWallet, ViewSeedPhrase request/response types
 - [ ] T030 [P] Create crates/zkore-core/src/ipc/v1/commands/address.rs with GetReceiveAddress request/response types
 - [ ] T031 [P] Create crates/zkore-core/src/ipc/v1/commands/sync.rs with StartSync, StopSync, GetSyncProgress request/response types
 - [ ] T032 [P] Create crates/zkore-core/src/ipc/v1/commands/balance.rs with GetBalance request/response types
@@ -94,6 +94,9 @@
 - [ ] T042 Create crates/zkore-engine/src/lib.rs with module exports
 - [ ] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
 - [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for mnemonic storage abstraction (OS keychain, encrypted file, memory-only)
+- [ ] T044a Create crates/zkore-engine/src/encryption.rs with wallet password KDF + encryption helpers (for encrypted mnemonic storage and encrypted wallet DB)
+- [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs (wallet DB not readable without unlock; aligns with NFR-015)
+- [ ] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy)
 - [ ] T045 Create crates/zkore-engine/src/birthday.rs with birthday height estimation from date (static checkpoint table per research.md)
 
 ### 2.5: Network Foundation
@@ -115,7 +118,7 @@
 - [ ] T054 Create apps/zkore-app-tauri/src/services/ipc.ts with Tauri invoke wrappers per quickstart.md
 - [ ] T055 Create apps/zkore-app-tauri/src/services/events.ts with Tauri listen wrappers for event channels
 - [ ] T056 Create apps/zkore-app-tauri/src/App.tsx with React Query provider and router setup
-- [ ] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet, fallback to onboarding when none exist
+- [ ] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet, if wallet is locked show unlock UI and call zkore_unlock_wallet, fallback to onboarding when none exist
 - [ ] T057 Create apps/zkore-app-tauri/src/main.tsx with React entry point
 - [ ] T058 [P] Create apps/zkore-app-tauri/src/hooks/useFocusTrap.ts for modal focus management
 - [ ] T059 [P] Create apps/zkore-app-tauri/src/hooks/useKeyboardShortcuts.ts for global keyboard shortcuts
@@ -140,14 +143,16 @@
 
 - [ ] T062 [US1] Implement mnemonic generation in crates/zkore-engine/src/wallet_manager.rs using bip39 crate (24-word English wordlist)
 - [ ] T063 [US1] Implement wallet directory creation with network separation (~/.zkore/wallets/{network}/{wallet-id}/) in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T064 [US1] Implement zcash_client_sqlite WalletDb initialization in crates/zkore-engine/src/wallet_manager.rs
+- [ ] T064 [US1] Implement encrypted zcash_client_sqlite WalletDb initialization in crates/zkore-engine/src/wallet_manager.rs (wallet DB encrypted at rest; requires unlock)
 - [ ] T065 [US1] Implement UFVK derivation from mnemonic and account insertion in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T066 [US1] Implement mnemonic storage via KeyStore trait in crates/zkore-engine/src/wallet_manager.rs
+- [ ] T066 [US1] Implement mnemonic storage via KeyStore trait in crates/zkore-engine/src/wallet_manager.rs (encrypted at rest with wallet password; optional OS keychain remember-unlock)
 - [ ] T067 [US1] Implement backend-issued BackupChallenge generation (challenge_id, 4 word indices, expiry) in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T068 [US1] Implement CreateWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (returns seed_phrase and initial backup_challenge)
+- [ ] T068 [US1] Implement CreateWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (accepts password + remember_unlock; returns seed_phrase and initial backup_challenge)
 - [ ] T068a [US1] Implement ListWallets Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
 - [ ] T068b [US1] Implement LoadWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (updates last_opened_at)
-- [ ] T069 [P] [US1] Create apps/zkore-app-tauri/src/pages/CreateWallet.tsx with network selection (Mainnet/Testnet), wallet name input
+- [ ] T068c [US1] Implement UnlockWallet + LockWallet Tauri commands in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
+- [ ] T068d [US1] Implement ReauthWallet + ViewSeedPhrase Tauri commands in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
+- [ ] T069 [P] [US1] Create apps/zkore-app-tauri/src/pages/CreateWallet.tsx with network selection (Mainnet/Testnet), wallet name input, wallet password + confirmation, and “remember unlock” toggle
 - [ ] T070 [P] [US1] Create apps/zkore-app-tauri/src/pages/SeedDisplay.tsx showing 24 seed words with copy protection, continue to backup challenge
 - [ ] T071 [US1] Create crates/zkore-engine/src/address_service.rs with get_fresh_shielded_ua() using diversifier rotation
 - [ ] T072 [US1] Implement diversifier index tracking in crates/zkore-engine/src/db/rotation_meta.rs (receive_rotation table)
@@ -165,7 +170,9 @@
 - [ ] T081 [US1] Implement balance computation from zcash_client_sqlite in crates/zkore-engine/src/balance.rs
 - [ ] T082 [US1] Implement GetBalance Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/balance.rs
 - [ ] T083 [US1] Create apps/zkore-app-tauri/src/pages/Home.tsx with balance display, sync progress, and persistent backup reminder (undismissable if backup_required)
+- [ ] T083a [P] [US1] Create apps/zkore-app-tauri/src/pages/UnlockWallet.tsx (or modal) prompting for wallet password and invoking UnlockWallet; show on app launch when wallet is locked
 - [ ] T084 [US1] Create apps/zkore-app-tauri/src/components/common/BackupReminder.tsx showing backup status and action button
+- [ ] T084a [US1] Add “View seed phrase” action (manual password re-auth) to apps/zkore-app-tauri/src/components/common/BackupReminder.tsx using ReauthWallet + ViewSeedPhrase
 - [ ] T085 [US1] Implement backup_required check blocking send UI in apps/zkore-app-tauri/src/pages/Home.tsx
 - [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance, verify backup, and spend gate
 
@@ -184,15 +191,16 @@
 - [ ] T086 [US2] Create crates/zkore-engine/src/tx_service.rs with transaction construction module structure
 - [ ] T087 [US2] Implement proposal-based send flow in crates/zkore-engine/src/tx_service.rs: prepare_send() creates proposal, returns proposal_id, summary, fee
 - [ ] T088 [US2] Implement proposal storage (in-memory with expiration) in crates/zkore-engine/src/tx_service.rs
-- [ ] T089 [US2] Implement confirm_send() in crates/zkore-engine/src/tx_service.rs: sign and broadcast from proposal_id
+- [ ] T089 [US2] Implement confirm_send() in crates/zkore-engine/src/tx_service.rs: require valid re-auth token, then sign and broadcast from proposal_id
 - [ ] T090 [US2] Implement cancel_send() in crates/zkore-engine/src/tx_service.rs: remove proposal from memory
 - [ ] T091 [US2] Implement PrepareSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
-- [ ] T092 [US2] Implement ConfirmSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
+- [ ] T092 [US2] Implement ConfirmSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts reauth_token)
 - [ ] T093 [US2] Implement CancelSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
 - [ ] T094 [US2] Implement transaction broadcast via grpc_client in crates/zkore-network/src/grpc_client.rs
 - [ ] T095 [US2] Implement backup_required guard in prepare_send() returning BACKUP_REQUIRED error in crates/zkore-engine/src/tx_service.rs
 - [ ] T096 [P] [US2] Create apps/zkore-app-tauri/src/pages/Send.tsx with recipient address input, amount input, memo textarea (optional)
 - [ ] T097 [P] [US2] Create apps/zkore-app-tauri/src/pages/SendConfirm.tsx showing TransactionSummary (recipient, amount, fee, total_spend, memo_present)
+- [ ] T097a [P] [US2] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/pages/SendConfirm.tsx: call ReauthWallet then ConfirmSend with reauth_token
 - [ ] T098 [US2] Implement ListTransactions Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
 - [ ] T099 [US2] Create apps/zkore-app-tauri/src/pages/Activity.tsx with transaction list displaying txid, type, value, status, memo_present
 - [ ] T100 [US2] Implement TransactionChangedEvent emission on tx state change in crates/zkore-engine/src/tx_service.rs
@@ -211,11 +219,12 @@
 ### Implementation for User Story 3
 
 - [ ] T101 [US3] Implement transparent balance tracking in crates/zkore-engine/src/balance.rs (transparent_total from TransparentUTXOs)
-- [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature with BACKUP_REQUIRED guard
-- [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
+- [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature with BACKUP_REQUIRED guard and valid re-auth token requirement
+- [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts reauth_token)
 - [ ] T104 [US3] Add transparent balance display to apps/zkore-app-tauri/src/pages/Home.tsx with "Needs Shielding" label and Shield Now button
 - [ ] T105 [US3] Implement TRANSPARENT_SPEND_BLOCKED error when attempting direct transparent spend in crates/zkore-engine/src/tx_service.rs
 - [ ] T106 [US3] Create apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx modal for shielding confirmation and fee display
+- [ ] T106b [US3] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx: call ReauthWallet then ShieldFunds with reauth_token
 - [ ] T106a [US3] Add milestone tests: unit (crates/zkore-engine/tests/us3_shielding.rs), integration (tests/integration/us3_shield.rs), e2e (tests/e2e/us3_shield.spec.ts) covering transparent funds not spendable, shielding flow, and TRANSPARENT_SPEND_BLOCKED enforcement
 
 **Checkpoint**: User Story 3 complete - transparent funds shielding functional
@@ -332,7 +341,7 @@
 - [ ] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs
 - [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table
 - [ ] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
-- [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
+- [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token)
 - [ ] T154 [US8] Implement GetSwapStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T155 [US8] Implement ListSwaps Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T156 [P] [US8] Create apps/zkore-app-tauri/src/pages/Swap.tsx with swap type selection, asset selection, amount input
@@ -356,9 +365,10 @@
 
 ### Implementation for User Story 9
 
-- [ ] T161 [US9] Implement swap_from_zec flow in crates/zkore-engine/src/swap_service.rs using shielded ZEC
+- [ ] T161 [US9] Implement swap_from_zec flow in crates/zkore-engine/src/swap_service.rs using shielded ZEC and requiring valid re-auth token
 - [ ] T162 [US9] Implement ephemeral transparent address generation for unavoidable transparent interactions in crates/zkore-engine/src/swap_service.rs
 - [ ] T163 [US9] Create apps/zkore-app-tauri/src/pages/SwapFromZec.tsx with target asset, destination address input
+- [ ] T163a [US9] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/pages/SwapFromZec.tsx: call ReauthWallet then StartSwap with reauth_token
 - [ ] T164 [US9] Create apps/zkore-app-tauri/src/components/swap/PrivacyWarning.tsx explaining transparent interaction tradeoffs
 - [ ] T165 [US9] Add FromZec validation ensuring shielded ZEC spend in crates/zkore-engine/src/swap_service.rs
 - [ ] T165a [US9] Enforce BACKUP_REQUIRED guard for swap_from_zec flows in crates/zkore-engine/src/swap_service.rs

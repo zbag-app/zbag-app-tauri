@@ -36,6 +36,7 @@ export type IpcResult<T> = { ok: T } | { err: IpcError };
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
 export type AccountType = 'Software' | 'WatchOnly' | 'HardwareSigner';
+export type WalletLockStatus = 'Locked' | 'Unlocked';
 
 export interface WalletInfo {
   id: string;
@@ -191,6 +192,7 @@ export type ShieldAction =
 export type PrivacyPosture = 'Optimal' | 'NeedsAction';
 
 export interface WalletStatus {
+  lock_status: WalletLockStatus;
   backup_status: BackupAction;
   sync_status: SyncStatus;
   shield_status: ShieldAction;
@@ -209,6 +211,12 @@ export interface BackupChallenge {
   /** Challenge expiry timestamp (unix seconds) */
   expires_at: number;
 }
+
+// ============================================================================
+// Re-auth Types
+// ============================================================================
+
+export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase';
 
 // ============================================================================
 // Server Types
@@ -257,6 +265,10 @@ export interface SignedResponse {
 export interface CreateWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
+  remember_unlock: boolean;
 }
 
 /** Load an existing wallet */
@@ -270,6 +282,34 @@ export interface ListWalletsRequest extends VersionedPayload {}
 /** Get wallet status for status widget */
 export interface GetWalletStatusRequest extends VersionedPayload {
   wallet_id: string;
+}
+
+/** Unlock an encrypted wallet DB (read-only operations still require unlock) */
+export interface UnlockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  remember_unlock: boolean;
+}
+
+/** Lock a wallet (drops decrypted material from memory) */
+export interface LockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/**
+ * Re-authenticate for a sensitive action (per-action; OS keychain must not satisfy).
+ * Returns a short-lived token that can be used to authorize exactly one action.
+ */
+export interface ReauthWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  purpose: ReauthPurpose;
+}
+
+/** View seed phrase (requires re-auth token with purpose ViewSeedPhrase) */
+export interface ViewSeedPhraseRequest extends VersionedPayload {
+  wallet_id: string;
+  reauth_token: string;
 }
 
 /** Get fresh shielded receive address */
@@ -323,6 +363,8 @@ export interface PrepareSendRequest extends VersionedPayload {
 export interface ConfirmSendRequest extends VersionedPayload {
   /** Proposal ID from PrepareSendResponse */
   proposal_id: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
 }
 
 /**
@@ -336,6 +378,8 @@ export interface CancelSendRequest extends VersionedPayload {
 export interface ShieldFundsRequest extends VersionedPayload {
   account_id: number;
   consolidate: boolean;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
 }
 
 /** Get a fresh backend-generated backup challenge */
@@ -356,6 +400,10 @@ export interface VerifyBackupRequest extends VersionedPayload {
 export interface RestoreWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
+  remember_unlock: boolean;
   seed_phrase: string;
   /** Approximate date of first transaction (unix timestamp) */
   birthday_date: number | null;
@@ -379,6 +427,8 @@ export interface BuildSigningRequestRequest extends VersionedPayload {
 /** Finalize signed response from Keystone */
 export interface FinalizeSigningRequest extends VersionedPayload {
   signed_payload: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
 }
 
 /** Request swap quote */
@@ -394,6 +444,11 @@ export interface RequestSwapQuoteRequest extends VersionedPayload {
 /** Start swap from quote */
 export interface StartSwapRequest extends VersionedPayload {
   quote_id: string;
+  /**
+   * Re-auth token (purpose: Spend).
+   * Required when the quote results in a ZEC spend (e.g. swap-from-ZEC).
+   */
+  reauth_token: string | null;
 }
 
 /** Get swap status */
@@ -447,14 +502,32 @@ export interface GetLogLocationResponse extends VersionedPayload {
 
 export interface CreateWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
-  /** Seed phrase words (24 words) - ONLY returned on create */
+  /** Seed phrase words (24 words) - returned on create (and via ViewSeedPhrase) */
   seed_phrase: string[];
   /** Initial backend-generated backup challenge */
   backup_challenge: BackupChallenge;
 }
 
+export interface UnlockWalletResponse extends VersionedPayload {
+  unlocked: boolean;
+}
+
+export interface LockWalletResponse extends VersionedPayload {
+  locked: boolean;
+}
+
+export interface ReauthWalletResponse extends VersionedPayload {
+  reauth_token: string;
+  expires_at: number;
+}
+
+export interface ViewSeedPhraseResponse extends VersionedPayload {
+  seed_phrase: string[];
+}
+
 export interface LoadWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
+  lock_status: WalletLockStatus;
   accounts: AccountInfo[];
 }
 
@@ -658,6 +731,10 @@ export const ErrorCodes = {
   BACKUP_REQUIRED: 'E1005',
   BACKUP_CHALLENGE_INVALID: 'E1006',
   BACKUP_CHALLENGE_EXPIRED: 'E1007',
+  INVALID_WALLET_PASSWORD: 'E1008',
+  REAUTH_REQUIRED: 'E1009',
+  REAUTH_TOKEN_INVALID: 'E1010',
+  REAUTH_TOKEN_EXPIRED: 'E1011',
 
   // Account errors
   ACCOUNT_NOT_FOUND: 'E2001',
@@ -707,6 +784,10 @@ export const Commands = {
   LOAD_WALLET: 'zkore_load_wallet',
   LIST_WALLETS: 'zkore_list_wallets',
   GET_WALLET_STATUS: 'zkore_get_wallet_status',
+  UNLOCK_WALLET: 'zkore_unlock_wallet',
+  LOCK_WALLET: 'zkore_lock_wallet',
+  REAUTH_WALLET: 'zkore_reauth_wallet',
+  VIEW_SEED_PHRASE: 'zkore_view_seed_phrase',
 
   // Address
   GET_RECEIVE_ADDRESS: 'zkore_get_receive_address',
