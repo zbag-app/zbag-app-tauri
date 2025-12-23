@@ -289,7 +289,7 @@
 
 ## Phase 8: User Story 6 - Keystone Hardware Wallet Watch-Only (Priority: P2)
 
-**Goal**: Import UFVK from Keystone for watch-only account. Balances visible, spending prompts for Keystone signing.
+**Goal**: Import UFVK from Keystone into an existing software wallet, creating a watch-only account. Balances visible, spending prompts for Keystone signing.
 
 **Independent Test**: Import UFVK from Keystone, verify balances appear, confirm send attempt prompts signing flow.
 
@@ -548,7 +548,7 @@
 - **User Story 3 (P1)**: Depends on US1 (wallet creation, balance display)
 - **User Story 4 (P2)**: No dependencies on other stories (restore is alternative to create)
 - **User Story 5 (P2)**: Depends on US1 (address generation foundation)
-- **User Story 6 (P2)**: No dependencies (watch-only is alternative to software wallet)
+- **User Story 6 (P2)**: Depends on US1 (software wallet container for UFVK import)
 - **User Story 7 (P2)**: Depends on US6 (Keystone import)
 - **User Story 8 (P3)**: Depends on US1 (wallet, Activity display)
 - **User Story 9 (P3)**: Depends on US2 and US8 (sending, swap infrastructure)
@@ -576,7 +576,8 @@ US8: T143, T144, T156, T157 (IPC types and pages)
 
 **Across User Stories (after Phase 2)**:
 ```
-US1, US4, US6, US10, US12 can all start in parallel (no inter-story dependencies)
+US1, US4, US10, US12 can all start in parallel (no inter-story dependencies)
+US6 starts after US1
 ```
 
 ---

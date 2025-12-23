@@ -33,6 +33,8 @@ export type IpcResult<T> = { ok: T } | { err: IpcError };
 // Wallet Types
 // ============================================================================
 
+// In v1, watch-only is modeled as an AccountType inside a Software wallet.
+// `WatchOnly` is reserved for future use and should not be created in v1.
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
 export type AccountType = 'Software' | 'WatchOnly' | 'HardwareSigner';
@@ -427,7 +429,7 @@ export interface RestoreWalletRequest extends VersionedPayload {
   birthday_date: number | null;
 }
 
-/** Import UFVK for watch-only */
+/** Import UFVK to create a watch-only account within an existing software wallet */
 export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;

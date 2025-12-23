@@ -358,7 +358,7 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 
 ### Key Entities
 
-- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only). Network (mainnet/testnet) is set at creation and immutable thereafter
+- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. In v1, wallets are software (seed-backed); watch-only is modeled as account types created via UFVK import. Network (mainnet/testnet) is set at creation and immutable thereafter
 - **Account**: A logical grouping within a wallet, supporting Orchard shielded pool. Each account has derived addresses and maintains balance state
 - **Address**: Either a shielded-only Unified Address (default, Orchard receiver only) or a standalone transparent address (compatibility). Shielded addresses rotate on Receive screen access
 - **Transaction**: An Orchard shielded transaction with sender, recipient, amount, optional memo, and lifecycle state (pending/confirmed)
