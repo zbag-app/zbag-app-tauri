@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-zkore-desktop-wallet`
 **Status**: Draft
-**Input**: Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
+**Input**: Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard), Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
 
 ## Clarifications
 
@@ -55,17 +55,17 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 
 ### User Story 2 - Send Shielded Transaction with Memo (Priority: P1)
 
-A user with backed-up wallet and shielded funds sends ZEC to an Orchard-capable recipient address (Unified Address with an Orchard receiver) with an optional memo. The transaction is constructed using Orchard only.
+A user with backed-up wallet and shielded funds sends ZEC to a recipient address (Unified Address, Sapling address, Orchard address, or transparent address) with an optional memo. The wallet prefers shielded receivers (Orchard, then Sapling). Sending to a transparent recipient is allowed but treated as a privacy downgrade that requires explicit user acknowledgment.
 
 **Why this priority**: Core wallet functionality. Sending is as essential as receiving for a functional wallet.
 
-**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to an Orchard-capable recipient address, with and without memo, and verifying the transaction appears in both sender and recipient activity.
+**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to (a) a Unified Address, (b) a Sapling address, (c) an Orchard address, and (d) a transparent address (with privacy acknowledgement), with and without memo where supported, and verifying the transaction appears in both sender and recipient activity.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has shielded funds and completed backup, **When** they enter a valid Orchard-capable recipient address and amount, **Then** they can send the transaction successfully
-2. **Given** a user enters a Sapling-only or transparent-only recipient address, **When** they attempt to proceed, **Then** the wallet blocks the send and shows a clear error that the recipient must support Orchard
-3. **Given** a user is composing a send, **When** they add an optional memo, **Then** the memo is included in the shielded transaction
+1. **Given** a user has shielded funds and completed backup, **When** they enter a valid shielded recipient address (UA, Sapling, or Orchard), amount, and optional memo, **Then** they can send the transaction successfully
+2. **Given** a user enters a Unified Address that contains both Orchard and Sapling receivers, **When** the wallet prepares the send, **Then** it selects the Orchard receiver when available (otherwise Sapling)
+3. **Given** a user enters a transparent recipient address, **When** they attempt to proceed, **Then** the wallet requires an explicit privacy-downgrade acknowledgement before preparing the send (and memos are not allowed)
 4. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
 
 ---
@@ -108,16 +108,16 @@ A returning user restores their wallet using their seed phrase. They can provide
 
 ### User Story 5 - Receive to Fresh Shielded Address (Priority: P2)
 
-A user opens the Receive screen to get an address for incoming funds. The default address is a shielded-only Unified Address without transparent receiver. Each time the screen opens, a fresh address is generated (address rotation).
+A user opens the Receive screen to get an address for incoming funds. The default address is a shielded-only Unified Address (Orchard + Sapling receivers, no transparent receiver). Each time the screen opens, a fresh shielded address is generated (address rotation).
 
 **Why this priority**: Receiving is core functionality, but address rotation and shielded-only defaults are privacy enhancements that build on basic receive capability.
 
-**Independent Test**: Can be fully tested by opening Receive screen multiple times, verifying each shows a different address, and confirming funds sent to any generated address arrive in the same wallet.
+**Independent Test**: Can be fully tested by opening Receive screen multiple times, verifying the shielded receive address changes each time (rotation), verifying the transparent compatibility address stays stable, and confirming funds sent to any generated address arrive in the same wallet.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user opens the Receive screen, **When** the screen loads, **Then** a fresh shielded-only Unified Address is displayed
-2. **Given** a user needs a transparent address for compatibility, **When** they explicitly select the compatibility option, **Then** a transparent address is shown with clear labeling
+2. **Given** a user needs a transparent address for compatibility, **When** they explicitly select the compatibility option, **Then** a transparent address is shown with clear labeling (stable per account in v1; no rotation)
 3. **Given** a user views a receive address, **When** they want to share it, **Then** one-click copy and a large scannable QR code are available
 
 ---
@@ -249,6 +249,8 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
   - The swap transitions to "Refunded" or "Failed" state with clear explanation and any refund outcome surfaced
 - What happens when transparent funds are received while Tor is enabled?
   - The funds are received and displayed as unspendable until shielded; Tor applies to network operations, not on-chain receiving
+- What happens when the user includes a memo while sending to a transparent recipient?
+  - Transparent recipients do not support memos; the UI disables memo entry and the backend rejects non-null memos for transparent sends
 - How does the system handle insufficient transparent balance to cover the shielding fee?
   - The wallet explains that shielding fees are deducted from transparent inputs; if the total is below the minimum, it shows a clear error (including required-minimum amount) and suggests acquiring minimal additional transparent ZEC
 - What happens when there are too many transparent UTXOs to shield in a single transaction?
@@ -270,19 +272,19 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-008a**: System MUST support reopening an existing wallet after restart (list wallets, load by id, and persist last_opened_at)
 - **FR-008b**: System MUST provide a user-initiated "View seed phrase" flow after wallet creation, gated by manual wallet-password re-authentication
 
-**Shielded Transactions (Orchard Only)**
-- **FR-009**: System MUST construct all spends using only Orchard shielded funds
-- **FR-009a**: System MUST validate that recipients are Orchard-capable (Unified Address with Orchard receiver); Sapling-only or transparent-only addresses MUST be rejected
+**Shielded Transactions (Zashi-Style)**
+- **FR-009**: System MUST construct outgoing sends using shielded funds (Orchard preferred; Sapling supported as needed)
+- **FR-009a**: System MUST support recipients that are Unified Addresses (UA), Orchard addresses, Sapling addresses, and transparent addresses; for UA recipients, the wallet MUST select the best available receiver in this order: Orchard, then Sapling; transparent sends (including transparent-only UAs and t-addrs) MUST require explicit user acknowledgement of the privacy downgrade
 - **FR-010**: System MUST NOT allow spending transparent funds directly
 - **FR-011**: System MUST provide a one-click "Shield and Consolidate" action for transparent funds
-- **FR-012**: System MUST support optional memos on shielded sends
+- **FR-012**: System MUST support optional memos on shielded sends; memos MUST NOT be allowed for transparent recipients
 - **FR-013**: System MUST display incoming transactions in "pending" state when detected in mempool
 - **FR-014**: System MUST transition pending transactions to "confirmed" state after mining
 
 **Address Management**
-- **FR-015**: System MUST generate a shielded-only Unified Address (no transparent receiver) as the default receive address
+- **FR-015**: System MUST generate a shielded-only Unified Address (Orchard + Sapling receivers, no transparent receiver) as the default receive address
 - **FR-016**: System MUST rotate to a fresh shielded address each time the Receive screen is opened
-- **FR-017**: System MUST provide a separately accessible transparent address for legacy/exchange compatibility
+- **FR-017**: System MUST provide a separately accessible transparent address (single, non-rotating in v1) for legacy/exchange compatibility
 - **FR-018**: System MUST clearly label the transparent address as a "compatibility" option with explanation of when to use it
 - **FR-019**: System MUST provide one-click copy and large QR code for address sharing
 
@@ -361,9 +363,9 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 ### Key Entities
 
 - **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. In v1, wallets are software (seed-backed); watch-only is modeled as account types created via UFVK import. Network (mainnet/testnet) is set at creation and immutable thereafter
-- **Account**: A logical grouping within a wallet, supporting Orchard shielded pool. Each account has derived addresses and maintains balance state
-- **Address**: Either a shielded-only Unified Address (default, Orchard receiver only) or a standalone transparent address (compatibility). Shielded addresses rotate on Receive screen access
-- **Transaction**: An Orchard shielded transaction with sender, recipient, amount, optional memo, and lifecycle state (pending/confirmed)
+- **Account**: A logical grouping within a wallet, supporting shielded pools (Sapling + Orchard). Each account has derived addresses and maintains balance state
+- **Address**: A shielded-only Unified Address (default, Orchard + Sapling receivers, no transparent) or a standalone transparent address (compatibility, single non-rotating per account in v1). Shielded addresses rotate on Receive screen access
+- **Transaction**: A shielded transaction (Sapling or Orchard) with sender, recipient, amount, optional memo (shielded recipients only), and lifecycle state (pending/confirmed). Sending to a transparent recipient creates a transparent output and is treated as an explicit privacy downgrade
 - **Transparent UTXO**: A transparent fund that has been received but is not spendable until shielded. Tracked separately from spendable balance
 - **Swap Intent**: A NEAR Intents operation with source/target assets, amounts, deadlines, state machine, and lifecycle tracking
 - **Backup Status**: A durable flag tracking whether the user has verified their seed phrase backup

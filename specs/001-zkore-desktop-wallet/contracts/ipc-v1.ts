@@ -63,8 +63,8 @@ export interface AccountInfo {
 export type Zatoshis = string;
 
 export interface Balance {
-  orchard_spendable: Zatoshis;
-  orchard_pending: Zatoshis;
+  shielded_spendable: Zatoshis;
+  shielded_pending: Zatoshis;
   transparent_total: Zatoshis;
   total: Zatoshis;
 }
@@ -88,6 +88,7 @@ export interface AddressInfo {
 
 export type TransactionType = 'Send' | 'Receive' | 'Shield' | 'Consolidate';
 export type TransactionStatus = 'Pending' | 'Confirmed' | 'Expired' | 'Failed';
+export type RecipientKind = 'Orchard' | 'Sapling' | 'Transparent';
 
 export interface TransactionInfo {
   txid: string;
@@ -361,9 +362,15 @@ export interface ListTransactionsRequest extends VersionedPayload {
  */
 export interface PrepareSendRequest extends VersionedPayload {
   account_id: number;
+  /** Recipient address (UA, Sapling, Orchard, or Transparent) */
   recipient: string;
   amount: Zatoshis;
   memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
 }
 
 /**
@@ -598,6 +605,7 @@ export interface PrepareSendResponse extends VersionedPayload {
 /** Transaction summary for user verification before confirming */
 export interface TransactionSummary {
   recipient: string;
+  recipient_kind: RecipientKind;
   amount: Zatoshis;
   fee: Zatoshis;
   memo_present: boolean;
@@ -779,6 +787,8 @@ export const ErrorCodes = {
   PROPOSAL_EXPIRED: 'E3007',
   QUEUED_BROADCAST_NOT_FOUND: 'E3008',
   QUEUED_BROADCAST_EXPIRED: 'E3009',
+  PRIVACY_ACK_REQUIRED: 'E3010',
+  MEMO_NOT_ALLOWED: 'E3011',
 
   // Sync errors
   SYNC_IN_PROGRESS: 'E4001',

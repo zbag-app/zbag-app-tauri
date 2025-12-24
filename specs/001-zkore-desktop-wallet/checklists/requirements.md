@@ -36,7 +36,7 @@
 - 12 measurable success criteria defined
 - Edge cases documented for error handling, network issues, and boundary conditions
 - Assumptions and dependencies clearly stated
-- All requirements align with constitution constraints (Orchard-only, fail-closed Tor, backup gating)
+- All requirements align with constitution constraints (shielded-by-default (Sapling + Orchard), fail-closed Tor, backup gating)
 
 ## Validation Summary
 

@@ -1,17 +1,17 @@
 <!--
-SYNC IMPACT REPORT
-==================
-Version change: 1.0.0 -> 1.1.0
-Bump rationale: MINOR - allow user-initiated mnemonic re-display with manual re-auth
+	SYNC IMPACT REPORT
+	==================
+	Version change: 1.1.0 -> 1.2.0
+	Bump rationale: MINOR - adopt Zashi-style shielded-by-default privacy (Sapling + Orchard) with explicit transparent-recipient acknowledgements (still block transparent-input spends)
 
-Modified principles:
-  - I. Secrets Stay in Rust (permitted mnemonic flows expanded)
+	Modified principles:
+	  - II. Shielded-by-Default Privacy (allows Sapling; transparent recipients require explicit ack)
 
 Added sections: N/A
 
-Modified sections:
-  - Core Principles -> I. Secrets Stay in Rust
-  - Non-Negotiable Checklist
+	Modified sections:
+	  - Core Principles -> II. Shielded-by-Default Privacy
+	  - Non-Negotiable Checklist
 
 Templates requiring updates:
   - .specify/templates/plan-template.md: Constitution Check section exists
@@ -20,8 +20,8 @@ Templates requiring updates:
 
 Source document: docs/constitution.md (15-article detailed version)
 
-Follow-up TODOs: None
-==================
+	Follow-up TODOs: Align docs/constitution.md Principle II wording with this amendment (if/when docs are updated)
+	==================
 -->
 
 # Zkore Desktop Constitution
@@ -53,15 +53,15 @@ The Rust backend is the single trust boundary for all secret material. The UI MU
 - Memory containing secrets MUST use zeroization where feasible
 - Logs MUST redact seeds, keys, full payloads, and raw memos by default
 
-### II. Orchard-Only Privacy
+### II. Shielded-by-Default Privacy
 
-All spending operations MUST use the Orchard shielded pool. Transparent funds MAY be received and displayed but MUST NOT be spent directly.
+All spending operations MUST use shielded pools (Orchard + Sapling). Transparent funds MAY be received and displayed but MUST NOT be spent directly.
 
 **Enforceable rules:**
 - Default receive address MUST NOT include a transparent receiver
 - Transparent funds require explicit shielding before becoming spendable
-- Any privacy downgrade MUST be explicit, scoped, and user-acknowledged
-- No Sapling spending, no transparent spending (receive-only for compatibility)
+- Any privacy downgrade MUST be explicit, scoped, and user-acknowledged (e.g., sending to transparent recipients)
+- No transparent-input spending (transparent funds are receive-only until shielded)
 
 ### III. Fail-Closed Safety
 
@@ -120,7 +120,8 @@ Before merging work that touches wallet, signing, networking, or persistence, co
 - [ ] Secrets cannot reach the UI
 - [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
-- [ ] Transparent spending is still impossible
+- [ ] Transparent-input spending is still impossible (transparent funds must be shielded first)
+- [ ] Sending to transparent recipients requires explicit privacy acknowledgement
 - [ ] Tor mode cannot silently downgrade
 - [ ] IPC types are versioned and validated
 - [ ] Migrations are tested
@@ -152,4 +153,4 @@ This constitution follows semantic versioning:
 - **Feature specifications**: `docs/spec.md`
 - **Implementation plan**: `docs/plan.md`
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-23
+**Version**: 1.2.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-24

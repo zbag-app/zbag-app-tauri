@@ -7,7 +7,7 @@
 
 ## Summary
 
-Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps/pay, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words (BIP-39 24-word English; no passphrase in v1) are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
+Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard shielded pools), Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps/pay, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words (BIP-39 24-word English; no passphrase in v1) are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
 
 ## Technical Context
 
@@ -29,7 +29,7 @@ Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone har
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
-**Constraints**: No spending secrets in UI layer, Orchard-only spending, fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
+**Constraints**: No spending secrets in UI layer, shielded spending only (Sapling + Orchard; no transparent-input spends), fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
 **Scale/Scope**: Single-user desktop wallet, ~15 screens, supports typical wallet sizes up to 1GB database
 **Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zkore/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.
 **Accessibility**: Full keyboard navigation, ARIA labels via radix-ui primitives, visible focus indicators, standard shortcuts (Tab/Enter/Escape/arrows)
@@ -43,7 +43,7 @@ Verify compliance with `.specify/memory/constitution.md` core principles:
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Secrets Stay in Rust | [x] Pass | Spending keys and raw signing payloads handled exclusively in Rust backend. UI receives only derived addresses, balances, transaction summaries. Mnemonic is returned during CreateWallet for backup display, accepted for restore entry, and may be re-displayed only via explicit user action (manual wallet-password re-authentication); mnemonic is never persisted or logged by the UI. Memory zeroization for secret types. Logs redact sensitive data by default. |
-| II. Orchard-Only Privacy | [x] Pass | All spending operations use Orchard shielded pool only. Transparent funds receive-only with mandatory shielding before spend. Default receive address is shielded-only UA without transparent receiver. Transparent address exposed only as labeled compatibility option. |
+| II. Shielded-by-Default Privacy | [x] Pass | Spending uses shielded pools (prefer Orchard; allow Sapling). Transparent funds are receive-only until explicitly shielded; transparent recipients are allowed only with explicit privacy-downgrade acknowledgement. Default receive address is shielded-only UA without transparent receiver. Transparent receive address is a labeled compatibility option (single non-rotating in v1). |
 | III. Fail-Closed Safety | [x] Pass | Tor mode enabled: fails if Tor unhealthy, no silent fallback to direct connections. Actionable error prompts (retry, disable, change endpoint). Wallet state integrity preserved on failures. Beta features (Tor) clearly labeled with defined failure modes. |
 | IV. Typed IPC Contracts | [x] Pass | All IPC commands/events use versioned, strongly typed request/response models in zkore-core. schema_version field in every top-level payload. Strict deserialization rejecting unknown fields. No panics across IPC boundaries. Errors map to stable codes + user-safe messages. |
 | V. Test-Driven Quality | [x] Pass | Unit tests for domain logic and IPC serialization. Integration tests for database/sync boundaries against Zaino + lightwalletd. Regression tests for privacy (fail-open, unintended transparent), key leakage via logs, malformed PCZT payload ingestion. CI covers multiple server implementations. |
@@ -85,10 +85,10 @@ crates/
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── wallet_manager.rs      # Create, load, lock/unlock wallet
-│   │   ├── address_service.rs     # Shielded UA rotation, compat t-addr
+│   │   ├── address_service.rs     # Shielded UA rotation, single compat t-addr
 │   │   ├── sync_service.rs        # CompactTxStreamer sync, progress events
 │   │   ├── tx_service.rs          # Send, shield, consolidate, submit
-│   │   └── balance.rs             # Balance computation (orchard/transparent)
+│   │   └── balance.rs             # Balance computation (shielded/transparent)
 │   └── tests/
 ├── zkore-network/                 # gRPC + HTTP clients, transport abstraction
 │   ├── src/
@@ -174,7 +174,7 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 | Principle | Post-Design Status | Validation |
 |-----------|-------------------|------------|
 | I. Secrets Stay in Rust | Confirmed | IPC contract returns mnemonic for CreateWallet backup display, accepts restore seed input, and supports user-initiated seed re-display gated by manual wallet-password re-authentication; mnemonic is never persisted or logged by the UI. All other commands return derived data only. |
-| II. Orchard-Only Privacy | Confirmed | Data model enforces TransparentUTXO cannot be spent directly. AddressType enum separates ShieldedOnly (default) from Transparent (compatibility). |
+| II. Shielded-by-Default Privacy | Confirmed | Data model enforces transparent UTXOs cannot be spent directly. AddressType enum separates ShieldedOnly (default) from Transparent (compatibility). Send flow supports UA/Sapling/Orchard recipients; transparent recipients require explicit privacy acknowledgement. |
 | III. Fail-Closed Safety | Confirmed | TorState model has explicit Off/Connecting/On/Error states. IPC error codes include TOR_NOT_READY blocking operations when enabled but unhealthy. |
 | IV. Typed IPC Contracts | Confirmed | ipc-v1.ts defines SCHEMA_VERSION=1, VersionedPayload base, and typed request/response for every command. ErrorCodes provide stable codes. |
 | V. Test-Driven Quality | Confirmed | quickstart.md defines cargo test + vitest workflow. Research.md specifies regression tests for privacy, key leakage, malformed PCZT. |
@@ -282,9 +282,9 @@ This section is **non-normative**. It clarifies how the requirements above are i
 #### Spend-before-sync semantics (restore)
 
 - During restore/sync, the wallet MUST distinguish between:
-  - `orchard_spendable`: funds safe to spend with the wallet’s current witness/anchor state
-  - `orchard_pending`: funds detected but not yet safe to spend (e.g., insufficient confirmations, incomplete witness tracking)
-- Spend-before-sync means: **spending is allowed during restore only from `orchard_spendable`**, while restore continues in the background; spending MUST NOT draw from `orchard_pending`.
+  - `shielded_spendable`: funds safe to spend with the wallet’s current witness/anchor state
+  - `shielded_pending`: funds detected but not yet safe to spend (e.g., insufficient confirmations, incomplete witness tracking)
+- Spend-before-sync means: **spending is allowed during restore only from `shielded_spendable`**, while restore continues in the background; spending MUST NOT draw from `shielded_pending`.
 
 ### Network Separation
 - Network selection (mainnet/testnet) required at wallet creation

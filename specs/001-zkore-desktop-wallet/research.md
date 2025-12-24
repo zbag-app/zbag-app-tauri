@@ -145,8 +145,8 @@
 **Implementation Notes**:
 - Store `next_diversifier_index: u64` in app metadata DB
 - Increment on each `get_fresh_shielded_ua()` call
-- Shielded-only UA: Encode with only Orchard receiver
-- Transparent compatibility: Separate derivation path, not embedded in UA
+- Shielded-only UA: Encode with Orchard + Sapling receivers (no transparent receiver)
+- Transparent compatibility: Separate derivation path (not embedded in UA) and a single stable transparent receive address per account (no rotation in v1 to avoid accidental linkage during shielding/restore)
 
 ### 7. Backup Verification Protocol
 
@@ -182,8 +182,8 @@
 
 **Implementation Notes**:
 - Track `scan_frontier_height` and `wallet_tip_height` separately
-- Compute `spendable_orchard` (notes with valid witnesses)
-- Compute `pending_orchard` (detected but not yet spendable)
+- Compute `spendable_shielded` (shielded notes with valid witnesses)
+- Compute `pending_shielded` (detected but not yet spendable)
 - Phase 1: UI shows distinction, backend enforces spendable-only sends
 - Phase 2: Enable actual spend-before-sync when engine supports it
 
@@ -354,7 +354,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Testing | cargo test + vitest + integration tests |
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
-| Constraints | Secrets in Rust only, Orchard-only, fail-closed Tor |
+| Constraints | Secrets in Rust only, shielded-by-default (Sapling + Orchard), fail-closed Tor |
 | Default server | lwd.zec.pro (lightwalletd+Zebra), zec.rocks (regional) |
 | Network selection | Runtime at wallet creation, immutable after |
 | Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |

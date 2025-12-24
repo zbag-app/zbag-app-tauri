@@ -1,12 +1,12 @@
 # Zkore Desktop
 
-A desktop-first shielded Zcash wallet with Orchard-only transactions, hardware wallet support, and integrated DEX functionality.
+A desktop-first privacy-by-design Zcash wallet with hardware wallet support and integrated DEX functionality.
 
 ## Overview
 
 Zkore Desktop provides a privacy-focused Zcash experience built on strong security principles:
 
-- **Orchard-only spending** - Transparent funds must be shielded before use
+- **Shielded spending** - Transparent funds must be shielded before use; sending to transparent recipients is allowed only with explicit acknowledgement
 - **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and are never persisted or logged by the UI
 - **Fail-closed Tor** - Network anonymization that blocks rather than silently downgrades
 - **Air-gapped signing** - Keystone hardware wallet support via QR codes
@@ -38,7 +38,7 @@ apps/
 |---------|-------------|
 | Wallet Management | Create, restore from seed phrase with birthday optimization |
 | Shielded Transactions | Send/receive with optional encrypted memos |
-| Address Rotation | Fresh shielded address on each receive request |
+| Address Rotation | Fresh shielded address on each receive request; single transparent compatibility address |
 | Hardware Signing | Keystone via PCZT (QR or microSD) |
 | DEX Integration | Swap to/from ZEC via NEAR Intents (mainnet only) |
 | Tor Anonymization | Optional network privacy with fail-closed behavior |

@@ -71,6 +71,7 @@ repository = "https://github.com/zkore/zkore-desktop"
 # Using caret constraints for semver-compatible updates
 # Features enabled:
 #   - orchard: Orchard shielded pool support (required)
+#   - Sapling: enabled by default; required for sending to Sapling recipients
 #   - transparent-inputs: Receive transparent funds + shield them (FR-010/FR-011)
 #   - pczt: PCZT signing for Keystone hardware wallet (FR-020-028)
 #   - tor: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)

@@ -56,7 +56,7 @@
 - [ ] T017 [P] Create crates/zkore-core/src/domain/account.rs with Account, AccountType, AccountInfo structs
 - [ ] T018 [P] Create crates/zkore-core/src/domain/address.rs with Address, AddressType, AddressInfo structs
 - [ ] T019 [P] Create crates/zkore-core/src/domain/transaction.rs with Transaction, TransactionType, TransactionStatus, TransactionInfo structs
-- [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (orchard_spendable, orchard_pending, transparent_total, total)
+- [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (shielded_spendable, shielded_pending, transparent_total, total)
 - [ ] T021 [P] Create crates/zkore-core/src/domain/sync.rs with SyncProgress and SyncPhase types
 - [ ] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus and BackupAction types
 - [ ] T023 [P] Create crates/zkore-core/src/domain/transparent_utxo.rs with TransparentUTXO struct
@@ -188,14 +188,16 @@
 
 ## Phase 4: User Story 2 - Send Shielded Transaction with Memo (Priority: P1)
 
-**Goal**: User with backed-up wallet sends ZEC to another shielded address with optional memo using Orchard pool only.
+**Goal**: User with backed-up wallet sends ZEC to a recipient (UA/Sapling/Orchard/Transparent). The wallet prefers Orchard (then Sapling) for UAs. Sending to transparent recipients requires explicit privacy acknowledgement. Memos are supported only for shielded recipients.
 
-**Independent Test**: Send testnet ZEC from funded wallet to shielded address with and without memo, verify transaction appears in Activity.
+**Independent Test**: Send testnet ZEC from funded wallet to (a) UA, (b) Sapling, (c) Orchard, and (d) transparent address (with privacy acknowledgement), with and without memo where supported, and verify the transaction appears in Activity.
 
 ### Implementation for User Story 2
 
 - [ ] T086 [US2] Create crates/zkore-engine/src/tx_service.rs with transaction construction module structure
 - [ ] T087 [US2] Implement proposal-based send flow in crates/zkore-engine/src/tx_service.rs: prepare_send() creates proposal, returns proposal_id, summary, fee
+- [ ] T087a [US2] Implement recipient parsing + receiver selection in prepare_send() in crates/zkore-engine/src/tx_service.rs: support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); set TransactionSummary.recipient_kind accordingly; return INVALID_RECIPIENT for invalid/unsupported recipients
+- [ ] T087b [US2] Enforce privacy downgrade rules in prepare_send() in crates/zkore-engine/src/tx_service.rs: if recipient_kind is Transparent require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED
 - [ ] T088 [US2] Implement proposal storage (in-memory with expiration) in crates/zkore-engine/src/tx_service.rs
 - [ ] T089 [US2] Implement confirm_send() in crates/zkore-engine/src/tx_service.rs: require valid re-auth token, then sign and broadcast from proposal_id
 - [ ] T090 [US2] Implement cancel_send() in crates/zkore-engine/src/tx_service.rs: remove proposal from memory
@@ -207,13 +209,13 @@
 - [ ] T094a [US2] Implement persisted broadcast queue in crates/zkore-engine/src/tx_service.rs for the “disconnect during broadcast” edge case: store signed tx bytes in encrypted wallet storage with minimal metadata (created_at, last_error); never log tx bytes; delete queue entries after successful broadcast or after 7 days; do not silently re-broadcast on startup (explicit user action only); require a valid re-auth token for retry attempts
 - [ ] T094b [US2] Add UI retry prompt for queued broadcasts in apps/zkore-app-tauri/src/pages/Activity.tsx (or transaction details): show last error + “Retry broadcast” action; require manual password re-auth (ReauthWallet) before retry; call RetryBroadcast with txid + reauth_token; do not silently re-broadcast without user intent
 - [ ] T095 [US2] Implement backup_required guard in prepare_send() returning BACKUP_REQUIRED error in crates/zkore-engine/src/tx_service.rs
-- [ ] T096 [P] [US2] Create apps/zkore-app-tauri/src/pages/Send.tsx with recipient address input, amount input, memo textarea (optional)
-- [ ] T097 [P] [US2] Create apps/zkore-app-tauri/src/pages/SendConfirm.tsx showing TransactionSummary (recipient, amount, fee, total_spend, memo_present)
+- [ ] T096 [P] [US2] Create apps/zkore-app-tauri/src/pages/Send.tsx with recipient address input, amount input, memo textarea (optional; disabled for transparent recipients) and transparent-send privacy acknowledgement UX (retry PrepareSend with allow_transparent_recipient=true after PRIVACY_ACK_REQUIRED)
+- [ ] T097 [P] [US2] Create apps/zkore-app-tauri/src/pages/SendConfirm.tsx showing TransactionSummary (recipient, recipient_kind, amount, fee, total_spend, memo_present) and clear warning when recipient_kind is Transparent
 - [ ] T097a [P] [US2] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/pages/SendConfirm.tsx: call ReauthWallet then ConfirmSend with reauth_token
 - [ ] T098 [US2] Implement ListTransactions Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (include last_error + can_retry_broadcast for queued-broadcast failures)
 - [ ] T099 [US2] Create apps/zkore-app-tauri/src/pages/Activity.tsx with transaction list displaying txid, type, value, status, memo_present
 - [ ] T100 [US2] Implement TransactionChangedEvent emission on tx state change in crates/zkore-engine/src/tx_service.rs
-- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, memo handling, backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against both lightwalletd and Zaino in CI)
+- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, recipient parsing + UA receiver selection (Orchard→Sapling), transparent recipient ack requirement (PRIVACY_ACK_REQUIRED), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients), backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against both lightwalletd and Zaino in CI)
 - [ ] T100b [US2] Define and implement TransactionStatus derivation in crates/zkore-engine (source-of-truth): pending on accepted submit, pending on inbound mempool detection, confirmed on chain inclusion via compact block scan; update TransactionChangedEvent accordingly (covers FR-013/FR-014)
 
 **Checkpoint**: User Story 2 complete - sending shielded transactions with memo functional
@@ -259,8 +261,8 @@
 - [ ] T112 [US4] Implement SyncPhase transitions (Idle, Preparing, Downloading, Scanning, Enhancing, CatchingUp) in crates/zkore-engine/src/sync_service.rs
 - [ ] T113 [US4] Implement eta_seconds calculation in sync progress in crates/zkore-engine/src/sync_service.rs
 - [ ] T114 [US4] Create apps/zkore-app-tauri/src/components/wallet/SyncProgressWidget.tsx showing phase name, progress bar, ETA
-- [ ] T115 [US4] Implement spend-before-sync balance distinction (orchard_spendable vs orchard_pending) in crates/zkore-engine/src/balance.rs
-- [ ] T115b [US4] Define and enforce spend-before-sync rules in crates/zkore-engine: spending is allowed during restore only from orchard_spendable; ensure tx construction fails with a stable error if restore is in progress and spendable balance is insufficient (aligns with FR-008 + spec design notes)
+- [ ] T115 [US4] Implement spend-before-sync balance distinction (shielded_spendable vs shielded_pending) in crates/zkore-engine/src/balance.rs
+- [ ] T115b [US4] Define and enforce spend-before-sync rules in crates/zkore-engine: spending is allowed during restore only from shielded_spendable; ensure tx construction fails with a stable error if restore is in progress and spendable balance is insufficient (aligns with FR-008 + spec design notes)
 - [ ] T115a [US4] Add milestone tests: unit (crates/zkore-engine/tests/us4_restore.rs), integration (tests/integration/us4_restore.rs), e2e (tests/e2e/us4_restore.spec.ts) covering seed validation, birthday height estimation, restore progress states, and spend-before-sync gating behavior
 
 **Checkpoint**: User Story 4 complete - wallet restoration with progress tracking functional
@@ -269,15 +271,15 @@
 
 ## Phase 7: User Story 5 - Receive to Fresh Shielded Address (Priority: P2)
 
-**Goal**: Each Receive screen open generates fresh shielded-only UA via diversifier rotation. Transparent address available as separate compatibility option.
+**Goal**: Each Receive screen open generates fresh shielded-only UA via diversifier rotation. Transparent address is available as a separate compatibility option and is a single stable address per account (no rotation in v1).
 
-**Independent Test**: Open Receive screen multiple times, verify different addresses each time, confirm funds to any address arrive in same wallet.
+**Independent Test**: Open Receive screen multiple times, verify shielded addresses rotate each time while the transparent compatibility address remains stable, and confirm funds to any address arrive in same wallet.
 
 ### Implementation for User Story 5
 
 - [ ] T072 [US5] Implement diversifier index tracking in crates/zkore-engine/src/db/rotation_meta.rs (receive_rotation table)
-- [ ] T116 [US5] Implement shielded-only UA generation (Orchard receiver only, no transparent) in crates/zkore-engine/src/address_service.rs
-- [ ] T117 [US5] Implement transparent address derivation (separate from UA) in crates/zkore-engine/src/address_service.rs
+- [ ] T116 [US5] Implement shielded-only UA generation (Orchard + Sapling receivers, no transparent) in crates/zkore-engine/src/address_service.rs
+- [ ] T117 [US5] Implement transparent address derivation (separate from UA; single stable per account, no rotation in v1) in crates/zkore-engine/src/address_service.rs
 - [ ] T118 [US5] Update GetReceiveAddress to support AddressType parameter in crates/zkore-engine/src/address_service.rs
 - [ ] T119 [US5] Add transparent compatibility toggle to apps/zkore-app-tauri/src/pages/Receive.tsx with clear labeling
 - [ ] T120 [US5] Create apps/zkore-app-tauri/src/components/wallet/AddressDisplay.tsx with large QR and one-click copy
@@ -633,4 +635,4 @@ Task: "Create crates/zkore-core/src/ipc/v1/commands/sync.rs"
 - Each user story should be independently completable and testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- Constitution principles enforced: secrets in Rust only, Orchard-only spending, fail-closed Tor, typed IPC
+- Constitution principles enforced: secrets in Rust only, shielded-by-default spending (Sapling + Orchard; no transparent-input spends), fail-closed Tor, typed IPC

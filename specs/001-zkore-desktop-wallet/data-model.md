@@ -72,7 +72,7 @@ This section clarifies the separation of viewing keys and spending capability, f
 
 ### Account
 
-A logical grouping within a wallet for Orchard shielded operations.
+A logical grouping within a wallet for shielded operations (Sapling + Orchard).
 
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
@@ -114,13 +114,13 @@ Derived addresses for receiving funds.
 | created_at | Timestamp | Generation timestamp | Auto-set |
 
 **AddressType Enum**:
-- `ShieldedOnly` - Unified Address with Orchard receiver only (DEFAULT)
-- `Transparent` - Compatibility transparent address (separate)
+- `ShieldedOnly` - Unified Address with Orchard + Sapling receivers (no transparent) (DEFAULT)
+- `Transparent` - Compatibility transparent address (single, non-rotating in v1)
 
 **Validation Rules**:
-- ShieldedOnly addresses MUST NOT include transparent receiver
-- Transparent addresses displayed separately with "compatibility" label
-- Each Receive screen open generates new diversifier_index
+- ShieldedOnly addresses MUST NOT include a transparent receiver
+- ShieldedOnly addresses rotate: each Receive screen open generates a new diversifier_index
+- Transparent address is displayed separately with "compatibility" label and is a single stable address per account (no rotation in v1)
 
 **State Transitions**:
 ```
@@ -131,7 +131,7 @@ Derived addresses for receiving funds.
 
 ### Transaction
 
-An Orchard shielded transaction record.
+A transaction record for wallet activity. Outgoing sends are funded from shielded pools (Sapling/Orchard) and may have shielded or transparent recipients.
 
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
@@ -148,10 +148,10 @@ An Orchard shielded transaction record.
 | confirmed_at | Option<Timestamp> | Confirmation time | Set on confirm |
 
 **TransactionType Enum**:
-- `Send` - Outgoing shielded payment
-- `Receive` - Incoming shielded payment
+- `Send` - Outgoing payment (to shielded or transparent recipient)
+- `Receive` - Incoming payment (shielded or transparent)
 - `Shield` - Transparent to shielded conversion
-- `Consolidate` - Orchard note consolidation
+- `Consolidate` - Shielded note consolidation
 
 **TransactionStatus Enum**:
 - `Pending` - Detected in mempool or just broadcast
@@ -167,7 +167,7 @@ An Orchard shielded transaction record.
 ```
 
 **Validation Rules**:
-- Only Orchard transactions can be created (no transparent spends)
+- Outgoing sends MUST be funded from shielded notes (Sapling/Orchard); transparent UTXOs can only be spent in shielding transactions
 - Memo redacted in logs (constitution requirement)
 - Memo plaintext MUST NOT be written to disk; encryption-at-rest must cover memo contents
 
@@ -347,14 +347,14 @@ Wallet balance breakdown (computed, not persisted).
 | Field | Type | Description |
 |-------|------|-------------|
 | account_id | u32 | Account reference |
-| orchard_spendable | Amount | Immediately spendable |
-| orchard_pending | Amount | Not yet spendable |
+| shielded_spendable | Amount | Immediately spendable |
+| shielded_pending | Amount | Not yet spendable |
 | transparent_total | Amount | Must shield to spend |
 | total | Amount | All funds |
 
 **Display Rules**:
-- `orchard_spendable` shown as "Available"
-- `orchard_pending` shown as "Pending" during restore
+- `shielded_spendable` shown as "Available"
+- `shielded_pending` shown as "Pending" during restore
 - `transparent_total` shown as "Needs Shielding" with action button
 
 ---
