@@ -28,7 +28,7 @@ Zkore Desktop provides a desktop-first experience for shielded Zcash usage with 
 Included:
 
 * Wallet creation and restoration from mnemonic
-* Orchard-only spending and shielded receives
+* Shielded-by-default spending (Orchard + Sapling) and shielded receives
 * Sync over CompactTxStreamer gRPC
 * Activity tracking for transactions and swap/pay flows
 * Air-gapped signing (QR and removable media)
@@ -39,8 +39,7 @@ Included:
 
 The following are out of scope unless explicitly added through amendment:
 
-* Transparent spending
-* Sapling spending
+* Transparent-input spending (spending UTXOs directly)
 * Custodial services
 * Browser-extension support
 * Any design that requires the UI to handle seeds or spending keys
@@ -120,10 +119,10 @@ These are guarantees the project makes to users and must be preserved through al
 
 ## Article 4: Privacy posture and transaction rules
 
-### 4.1 Orchard-only spending
+### 4.1 Shielded spending (Orchard + Sapling)
 
-* The wallet must construct spends only from Orchard.
-* Transparent funds may be received and displayed, but they must not be spent directly.
+* The wallet must construct spends only from shielded pools (Orchard preferred; Sapling supported as needed).
+* Transparent funds may be received and displayed, but they must not be spent directly (no transparent-input spending).
 
 ### 4.2 Mandatory shielding
 
@@ -145,6 +144,13 @@ When an integration forces behavior that reduces privacy, the UI must show:
 * what changes (example: a transparent deposit address is required)
 * the scope (one-time, per intent)
 * how the app limits harm (example: no reuse)
+
+### 4.5 Transparent recipients
+
+Sending to transparent recipients is a privacy downgrade and is allowed only with explicit user acknowledgement.
+
+* The UI must require explicit acknowledgement before allowing a send to a transparent recipient.
+* Memos must not be allowed for transparent recipients; the UI must disable memo entry and the backend must reject non-null memos for transparent sends.
 
 ---
 

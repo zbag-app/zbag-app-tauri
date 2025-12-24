@@ -3,7 +3,7 @@
 ## Scope and platform assumptions
 
 * Desktop first UI: keyboard and mouse primary, large screen layouts, copy/paste workflows, multi window support for QR workflows and hardware wallet signing.
-* Zcash support target: Orchard shielded pool only for shielded funds. Transparent pool supported only as a compatibility rail for receiving, and for shielding into Orchard.
+* Zcash support target: shielded-by-default spending using Orchard + Sapling (Orchard preferred; Sapling supported as needed). Transparent pool supported only as a compatibility rail for receiving, and for shielding into shielded funds.
 * Privacy by default: the default path should avoid exposing transparent addresses or encouraging transparent spending, consistent with Zashi’s shielded storage posture. ([Zcash Community Forum][1])
 
 ## Requirements
@@ -34,9 +34,9 @@ Acceptance criteria:
 * Backup completion is verifiable by re entering specific words.
 * Network selection is explicit during creation and clearly displayed throughout the app.
 
-### 2. Shielded Zcash transactions with optional memos (Orchard only)
+### 2. Shielded Zcash transactions with optional memos (Orchard preferred; Sapling supported)
 
-Users must be able to send and receive shielded Zcash transactions using Orchard, with an optional memo when sending.
+Users must be able to send and receive shielded Zcash transactions using shielded pools (Orchard preferred; Sapling supported as needed), with an optional memo when sending to shielded recipients.
 
 Zashi aligned privacy defaults:
 
@@ -54,11 +54,12 @@ Receive address UX (critical update):
 Transaction UX:
 
 * Optional memo on shielded sends.
+* Transparent recipients are allowed only with explicit privacy acknowledgement; memos must be disabled/rejected for transparent recipients.
 * Show incoming transactions quickly (include mempool detection as a UX goal so “incoming” appears as soon as broadcast, then transitions to confirmed). ([Electric Coin Company][4])
 
 Acceptance criteria:
 
-* User can send Orchard transaction with optional memo.
+* User can send shielded transactions (Orchard preferred; Sapling supported) with optional memo to shielded recipients.
 * Transparent funds are visible but not spendable until shielded.
 * Receive screen defaults to shielded only address and makes transparent address an explicit secondary option.
 
@@ -221,7 +222,7 @@ Desktop specific:
 * As a desktop user, I want seed entry to support paste, word autocomplete, and full keyboard navigation.
 * As a user, I want the network (testnet/mainnet) to be clearly displayed so I never confuse which network I am using.
 
-### 2. Shielded Zcash transactions with optional memos (Orchard only)
+### 2. Shielded Zcash transactions with optional memos (Orchard preferred; Sapling supported)
 
 * As a privacy focused user, I want shielded sending and receiving to be the default path.
 * As a user, I want to add an optional memo to a shielded payment.
@@ -269,8 +270,8 @@ Desktop specific:
 
 ## Explicit constraints and out of scope (for now)
 
-* No Sapling pool support in Zkore’s shielded operations.
-* No transparent spending (transparent is receive only, must shield to spend), aligning with Zashi’s shielded storage behavior. ([Zcash Community Forum][1])
+* No transparent-input spending (transparent is receive only, must shield to spend), aligning with Zashi’s shielded storage behavior. ([Zcash Community Forum][1])
+* Transparent recipients are allowed only with explicit privacy acknowledgement; memos are not allowed for transparent recipients.
 * No claims of Tor protection unless Tor is actually active and connected.
 
 

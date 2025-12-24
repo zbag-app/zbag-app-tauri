@@ -304,7 +304,8 @@
 
 * Unit tests
 
-  * Reject transparent recipient sends
+  * Require explicit privacy acknowledgement for transparent recipients
+  * Reject memos for transparent recipients
   * Memo presence reflected correctly
   * Shield-all builds only Orchard outputs for the wallet
 * Integration test
@@ -321,7 +322,7 @@
 
   * Generate BIP-39 mnemonic on wallet creation
   * Store UFVK (viewing key) in zcash_client_sqlite wallet database
-  * Store mnemonic in secure store (OS keychain preferred, encrypted file fallback)
+  * Persist mnemonic only as an encrypted blob protected by the wallet password; OS keychain “remember unlock” stores unlock material (e.g., DEK), never plaintext mnemonic
   * Spending keys are NOT stored - derived on-demand from mnemonic when needed
   * See data-model.md "Key Storage Architecture" section for full design
 * Implement backup gating
@@ -607,7 +608,7 @@
   * Backup gating
   * No transparent spending
   * Tor fail-closed when enabled
-  * Recipient validation for Orchard-only
+  * Recipient validation for UA/Orchard/Sapling/transparent (Orchard preferred; Sapling supported; transparent recipients require explicit ack; memos disallowed)
 * Add fuzz or property tests for parsing inputs
 
   * Address parsing

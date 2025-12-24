@@ -165,7 +165,7 @@
 - Challenge: Request 4 words at random indices (e.g., words 3, 7, 15, 22)
 - Validation: Backend compares submitted words against stored mnemonic
 - State update: Set `backup_required = false`, `backup_completed_at = now()`
-- UI: Never display full seed phrase after initial creation
+- UI: Display the full seed phrase only in permitted mnemonic flows (CreateWallet display, RestoreWallet entry, and user-initiated ViewSeedPhrase behind manual wallet-password re-auth). Otherwise never display, persist, or log it; clear UI state after the flow completes.
 
 ### 8. Spend-Before-Sync Implementation
 

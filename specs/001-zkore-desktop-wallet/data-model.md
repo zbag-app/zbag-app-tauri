@@ -4,6 +4,12 @@
 **Status**: Complete
 **Purpose**: Define entities, relationships, validation rules, and state transitions
 
+## Conventions
+
+### Timestamp
+
+`Timestamp` values are Unix epoch timestamps in **milliseconds (UTC)**. In SQLite schemas they are stored as `INTEGER`; over IPC they are serialized as `number`.
+
 ## Entity Definitions
 
 ### Wallet
@@ -50,14 +56,18 @@ This section clarifies the separation of viewing keys and spending capability, f
 **Spending capability stored separately:**
 - `zcash_client_backend` does NOT store spending keys - they must be supplied when creating transactions
 - Spending keys derived on-demand from mnemonic when transaction construction is needed
-- Mnemonic storage options (choose one per deployment):
-  1. **OS Keychain** (preferred): macOS Keychain, Windows Credential Manager, Linux Secret Service
-  2. **Encrypted file**: User-password-protected file in wallet directory
-  3. **Memory-only mode**: Mnemonic kept in memory only, user must re-enter on each app launch
+
+**Mnemonic persistence (v1):**
+- If the mnemonic is persisted anywhere, it MUST be encrypted using the user-defined wallet password (per the v1 key hierarchy in plan.md: wallet password → Argon2id KEK → unwrap per-wallet DEK).
+- OS keychain "remember unlock" is OPTIONAL and stores only unlock material (e.g., DEK or a wrapping secret), never plaintext mnemonic; it MUST NOT be the sole protection for the mnemonic and MUST NOT satisfy per-action re-authentication.
+
+**Mnemonic storage modes:**
+1. **Encrypted blob on disk (default):** Store an encrypted mnemonic blob in backend-controlled storage (e.g., wallet directory). Decrypt requires wallet password unless auto-unlock is enabled via keychain-stored unlock material.
+2. **Memory-only mode (optional):** Do not persist mnemonic at rest; user must re-enter it on each app launch.
 
 **Key derivation flow:**
-1. User unlocks wallet (provides password or OS unlocks keychain)
-2. Backend retrieves mnemonic from secure store
+1. User unlocks wallet (provides password, or OS keychain supplies stored unlock material if enabled)
+2. Backend decrypts mnemonic from secure storage
 3. Backend derives spending keys as needed for transaction construction
 4. Spending keys held in memory only for duration of operation
 5. Spending keys zeroized after use
@@ -529,7 +539,7 @@ CREATE TABLE _app_migrations (
 | Wallet | Valid path, enum values |
 | Account | Sequential index, type matches wallet |
 | Address | Shielded-only default, transparent separate |
-| Transaction | Orchard only, memo redacted in logs |
+| Transaction | Shielded (Orchard preferred; Sapling supported), memo redacted in logs |
 | TransparentUTXO | Cannot be spent directly |
 | SwapIntent | Shielded ZEC for FromZec, ephemeral transparent |
 | BackupStatus | Blocks spending when required |

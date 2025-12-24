@@ -29,6 +29,13 @@ export interface IpcError {
 /** Result type for IPC commands */
 export type IpcResult<T> = { ok: T } | { err: IpcError };
 
+/**
+ * Unix epoch timestamp in milliseconds (UTC).
+ *
+ * NOTE: All timestamp fields in this IPC contract use milliseconds unless explicitly stated otherwise.
+ */
+export type UnixTimestampMs = number;
+
 // ============================================================================
 // Wallet Types
 // ============================================================================
@@ -45,8 +52,8 @@ export interface WalletInfo {
   name: string;
   wallet_type: WalletType;
   network: Network;
-  created_at: number;
-  last_opened_at: number | null;
+  created_at: UnixTimestampMs;
+  last_opened_at: UnixTimestampMs | null;
 }
 
 export interface AccountInfo {
@@ -103,8 +110,8 @@ export interface TransactionInfo {
   /** True if user can retry broadcasting this tx (e.g., queued after broadcast failure) */
   can_retry_broadcast: boolean;
   mined_height: number | null;
-  created_at: number;
-  confirmed_at: number | null;
+  created_at: UnixTimestampMs;
+  confirmed_at: UnixTimestampMs | null;
 }
 
 // ============================================================================
@@ -153,10 +160,10 @@ export interface SwapInfo {
   destination_address: string | null;
   refund_address: string | null;
   state: SwapState;
-  deadline: number | null;
+  deadline: UnixTimestampMs | null;
   last_error: string | null;
-  created_at: number;
-  updated_at: number;
+  created_at: UnixTimestampMs;
+  updated_at: UnixTimestampMs;
 }
 
 export interface SwapQuote {
@@ -166,7 +173,7 @@ export interface SwapQuote {
   output_amount: string;
   fee_amount: string;
   fee_asset: string;
-  deadline: number;
+  deadline: UnixTimestampMs;
   rate: string;
 }
 
@@ -215,8 +222,8 @@ export interface BackupChallenge {
   challenge_id: string;
   /** Seed word indices requested for verification (exactly 4; 1..=24, 1-based word numbers) */
   indices: number[];
-  /** Challenge expiry timestamp (unix seconds) */
-  expires_at: number;
+  /** Challenge expiry timestamp */
+  expires_at: UnixTimestampMs;
 }
 
 // ============================================================================
@@ -235,7 +242,7 @@ export interface ServerInfo {
   grpc_url: string;
   network: Network;
   is_default: boolean;
-  last_success_at: number | null;
+  last_success_at: UnixTimestampMs | null;
 }
 
 // ============================================================================
@@ -278,7 +285,12 @@ export interface CreateWalletRequest extends VersionedPayload {
   remember_unlock: boolean;
 }
 
-/** Load an existing wallet and set it as the active wallet for account-scoped requests/events */
+/**
+ * Load an existing wallet and set it as the active wallet for account-scoped requests/events.
+ *
+ * Loading MAY attempt OS keychain auto-unlock (if enabled for the wallet). `LoadWalletResponse.lock_status`
+ * reflects the post-attempt state; if still `Locked`, the UI should call `UnlockWallet`.
+ */
 export interface LoadWalletRequest extends VersionedPayload {
   wallet_id: string;
 }
@@ -432,8 +444,8 @@ export interface RestoreWalletRequest extends VersionedPayload {
   /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
   remember_unlock: boolean;
   seed_phrase: string;
-  /** Approximate date of first transaction (unix timestamp) */
-  birthday_date: number | null;
+  /** Approximate date of first transaction (unix timestamp, ms) */
+  birthday_date: UnixTimestampMs | null;
 }
 
 /** Import UFVK to create a watch-only account within an existing software wallet */
@@ -545,7 +557,7 @@ export interface LockWalletResponse extends VersionedPayload {
 
 export interface ReauthWalletResponse extends VersionedPayload {
   reauth_token: string;
-  expires_at: number;
+  expires_at: UnixTimestampMs;
 }
 
 export interface ViewSeedPhraseResponse extends VersionedPayload {
@@ -599,7 +611,7 @@ export interface PrepareSendResponse extends VersionedPayload {
   /** Summary for user verification */
   summary: TransactionSummary;
   /** Proposal expiration timestamp (proposals auto-expire after ~5 minutes) */
-  expires_at: number;
+  expires_at: UnixTimestampMs;
 }
 
 /** Transaction summary for user verification before confirming */
@@ -804,6 +816,7 @@ export const ErrorCodes = {
   QUOTE_EXPIRED: 'E6001',
   SWAP_FAILED: 'E6002',
   INVALID_ASSET: 'E6003',
+  SWAP_UNSUPPORTED_NETWORK: 'E6004',
 
   // Tor errors
   TOR_NOT_READY: 'E7001',

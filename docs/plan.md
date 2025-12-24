@@ -32,7 +32,7 @@
 
   * `zcash_client_backend` for sync, scanning, transaction construction, and features like **pczt** and **tor** (feature-flag driven). ([Docs.rs][1])
   * `zcash_client_sqlite` for the standard SQLite wallet database implementation (avoid inventing a new wallet DB format). ([Docs.rs][2])
-  * **Orchard-only shielded operations** (no Sapling spending, no transparent spending).
+  * **Shielded-by-default operations** (Orchard preferred; Sapling supported as needed; transparent-input spending forbidden; transparent recipients require explicit acknowledgement).
 
 ### Light client server connectivity
 
@@ -77,7 +77,7 @@
 |  React UI (TypeScript)                                       |
 |   - Home + Status Widget                                     |
 |   - Receive (rotating shielded-only UA)                      |
-|   - Send (Orchard only, memo, shield-required)               |
+|   - Send (shielded-by-default, memo, shield-required)        |
 |   - Activity (tx + swaps + pay, live updates)                |
 |   - Keystone signing full-screen window (QR + camera)        |
 |   - Settings (server, Tor, advanced)                         |
@@ -123,7 +123,7 @@ Create a workspace to keep responsibilities clear:
 * `zkore-engine`
 
   * Wrapper around `zcash_client_backend` + `zcash_client_sqlite` ([Docs.rs][1])
-  * Orchard-only send, transparent-receive visibility, shielding rules
+  * Shielded send (Orchard preferred; Sapling supported), transparent-receive visibility, shielding rules
 
 * `zkore-network`
 
@@ -274,7 +274,7 @@ If full implementation is too risky early:
 
 ---
 
-### Feature B: Shielded Zcash transactions with optional memos (Orchard only)
+### Feature B: Shielded Zcash transactions with optional memos (Orchard preferred; Sapling supported)
 
 #### B1. Address model: rotating shielded-only UA by default
 
@@ -289,7 +289,7 @@ Backend:
 * `AddressService.get_fresh_shielded_ua()`
 
   * derive next diversifier
-  * encode UA containing only the Orchard receiver
+  * encode UA containing Orchard + Sapling receivers (no transparent receiver)
 * `AddressService.get_compat_transparent_address()`
 
   * derive a transparent address (but do not embed it in UA)
@@ -299,15 +299,15 @@ UI:
 * Receive screen opens -> requests fresh UA -> renders large QR and copy button.
 * A secondary tab or disclosure shows the transparent compatibility address with a clear explanation.
 
-#### B2. Transaction construction: Orchard send + optional memo
+#### B2. Transaction construction: shielded send + optional memo
 
 Backend:
 
-* `TxService.build_send(recipient_ua_or_zaddr, amount, memo_opt, fee_policy)`
+* `TxService.build_send(recipient_address, amount, memo_opt, fee_policy)`
 
-  * validate recipient supports Orchard receiver
-  * create Orchard output
-  * attach memo if present
+  * parse recipient and select receiver (for UA: Orchard then Sapling; transparent requires explicit privacy acknowledgement)
+  * create Orchard or Sapling output as selected (or transparent output when explicitly acknowledged)
+  * attach memo only for shielded recipients (memos are not allowed for transparent recipients)
 * `TxService.submit(tx_bytes)`
 
   * require manual wallet-password re-authentication (per spending attempt; OS keychain must not satisfy)
@@ -557,7 +557,7 @@ This makes camera workflows smoother and matches desktop multi-tasking patterns.
 
 ## Implementation roadmap (milestones)
 
-### Milestone 1: Wallet foundation (Orchard only, privacy defaults)
+### Milestone 1: Wallet foundation (shielded-by-default, privacy defaults)
 
 * Tauri app scaffold + IPC
 * Wallet create + receive screen:
@@ -571,7 +571,7 @@ Deliverable: can receive shielded funds and see them after sync.
 
 ### Milestone 2: Send + memo + mandatory shielding
 
-* Orchard send + optional memo
+* Shielded send (Orchard preferred; Sapling supported) + optional memo (shielded recipients only)
 * Transparent funds visible but unspendable
 * “Shield and consolidate” action + status widget integration
 * Broadcast + pending status for outgoing tx

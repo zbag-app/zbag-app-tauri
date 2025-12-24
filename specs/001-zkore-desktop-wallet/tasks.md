@@ -95,7 +95,8 @@
 
 - [ ] T042 Create crates/zkore-engine/src/lib.rs with module exports
 - [ ] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
-- [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for mnemonic storage abstraction (OS keychain, encrypted file, memory-only)
+- [ ] T043a Implement OS keychain auto-unlock on wallet load/open in crates/zkore-engine/src/wallet_manager.rs: when “remember unlock” is enabled, attempt keychain-backed unlock during LoadWallet and return the post-attempt lock_status
+- [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock, memory-only mode)
 - [ ] T044a Create crates/zkore-engine/src/encryption.rs implementing the v1 key hierarchy per spec.md: Argon2id KDF (m=64MiB, t=3, p=1; per-wallet salt) + AEAD wrap/unwrap for a per-wallet DEK (used for encrypted mnemonic storage and as the raw SQLCipher key for the wallet DB)
 - [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
 - [ ] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
@@ -125,7 +126,7 @@
 - [ ] T054 Create apps/zkore-app-tauri/src/services/ipc.ts with Tauri invoke wrappers per quickstart.md
 - [ ] T055 Create apps/zkore-app-tauri/src/services/events.ts with Tauri listen wrappers for event channels
 - [ ] T056 Create apps/zkore-app-tauri/src/App.tsx with React Query provider and router setup
-- [ ] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet, if wallet is locked show unlock UI and call zkore_unlock_wallet, fallback to onboarding when none exist
+- [ ] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet (may keychain-auto-unlock), if wallet is still locked show unlock UI and call zkore_unlock_wallet, fallback to onboarding when none exist
 - [ ] T057 Create apps/zkore-app-tauri/src/main.tsx with React entry point
 - [ ] T058 [P] Create apps/zkore-app-tauri/src/hooks/useFocusTrap.ts for modal focus management
 - [ ] T059 [P] Create apps/zkore-app-tauri/src/hooks/useKeyboardShortcuts.ts for global keyboard shortcuts
@@ -366,7 +367,7 @@
 - [ ] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment
 - [ ] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent
 - [ ] T160 [US8] Implement SwapChangedEvent emission in crates/zkore-engine/src/swap_service.rs on state transitions
-- [ ] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error
+- [ ] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error code `SWAP_UNSUPPORTED_NETWORK` (mainnet-only 1Click API)
 - [ ] T160b [US8] Disable Swap UI for Testnet wallets with clear explanation in apps/zkore-app-tauri/src/pages/Swap.tsx and apps/zkore-app-tauri/src/pages/SwapFromZec.tsx
 - [ ] T160c [US8] Add milestone tests: unit (crates/zkore-network/tests/us8_near_intents.rs), integration (tests/integration/us8_swaps_to_zec.rs), e2e (tests/e2e/us8_swap_to_zec.spec.ts) using mocked 1Click API and verifying state transitions/events
 
