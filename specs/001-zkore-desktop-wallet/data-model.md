@@ -297,12 +297,13 @@ Current Tor connection state.
 ### ServerConfig
 
 Light client server configuration.
+Stored in the app metadata DB globally per network (shared across wallets).
 
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
 | id | UUID | Server identifier | Auto-generated |
 | name | String | Display name | 1-50 chars |
-| grpc_url | String | gRPC endpoint URL | Valid URL |
+| grpc_url | String | gRPC endpoint URL | Valid URL (scheme required) |
 | network | Network | Mainnet or Testnet | Enum value, must match wallet network |
 | is_default | bool | Whether selected | Only one default per network |
 | last_success_at | Option<Timestamp> | Last successful connection | - |
@@ -313,6 +314,7 @@ Light client server configuration.
 - Testnet: https://lwd.testnet.zec.pro (default)
 
 **Validation Rules**:
+- `grpc_url` MUST include scheme (defaults use https://)
 - Server network MUST match wallet network when connecting
 - Only servers matching the wallet's network are available for selection
 

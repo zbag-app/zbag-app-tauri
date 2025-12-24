@@ -50,8 +50,8 @@ Rust 1.92.0+ (backend), TypeScript 5.x (frontend): Follow standard conventions
 
 ## Default Server
 
-- Mainnet: lwd.zec.pro (default), zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
-- Testnet: lwd.testnet.zec.pro (default)
+- Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
+- Testnet: https://lwd.testnet.zec.pro (default)
 - Custom servers supported with validation
 
 ## Recent Changes

@@ -38,7 +38,7 @@
 
 * **CompactTxStreamer gRPC** to a remote server
 
-  * **Default server**: lwd.zec.pro (primary), zec.rocks with regional endpoints (fallback)
+  * **Default server**: https://lwd.zec.pro (primary), https://zec.rocks with regional endpoints (fallback)
   * **Custom server support**: Users can configure alternative lightwalletd-compatible servers with security warnings
   * **Server configuration**: `ServerConfig` includes a `network` field (mainnet/testnet) that must match the wallet's network
   * Keep the client **server-agnostic**: "lightwalletd API compatible" first, Zaino-specific additions optional later ([GitHub][3])

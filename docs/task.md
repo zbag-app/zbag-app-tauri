@@ -214,9 +214,9 @@
 
 * Implement server list and selection
 
-  * Default: lwd.zec.pro (primary), zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, me.zec.rocks, sa.zec.rocks)
+  * Default: https://lwd.zec.pro (primary), https://zec.rocks with regional options (e.g., https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
   * Allow adding custom endpoint with security warning dialog
-  * Persist selection in metadata DB
+  * Persist selection in metadata DB (one default per network)
 * Implement connection test action
 
   * Ping gRPC endpoint and show status

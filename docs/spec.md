@@ -187,7 +187,7 @@ Users must be able to configure custom lightwalletd or Zaino server URLs for bot
 
 Server configuration requirements:
 
-* Default server: lwd.zec.pro (primary), zec.rocks with regional options (na.zec.rocks, eu.zec.rocks, etc.).
+* Default server: https://lwd.zec.pro (primary), https://zec.rocks with regional options (e.g., https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks).
 * Users can add custom server URLs for advanced use cases.
 * Display security warning when configuring custom servers: "Custom servers can see your IP address and transaction patterns. Only use servers you trust."
 * Connection test required before saving server configuration to validate reachability and protocol compatibility.

@@ -266,11 +266,11 @@
 
 **Mainnet servers (production)**:
 - Primary: `https://lwd.zec.pro` (team lightwalletd + Zebra)
-- Regional: `https://zec.rocks`, `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+- Regional: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
 - Note: Zaino migration is in progress but not yet complete on all endpoints
 
 **Testnet servers**:
-- Default: `lwd.testnet.zec.pro` (team lightwalletd + Zebra)
+- Default: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
 - Fallback: `https://testnet.zec.rocks` (community endpoint, check Hosh for status)
 
 **Zaino endpoints (experimental)**:
@@ -278,7 +278,7 @@
 - Constitution requires testing against multiple server implementations (Zaino + lightwalletd)
 
 **Development Configuration**:
-- Default testnet: `lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
+- Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
 - Configure override via environment variable: `ZKORE_GRPC_URL`
 
@@ -286,7 +286,7 @@
 - Call `GetLightdInfo` before saving server config
 - Server network validation: Must match wallet network (mainnet/testnet)
 - Security warning: Display when user configures non-default server
-- Server stored in app metadata DB per wallet
+- Server list stored in app metadata DB globally per network (shared across wallets; one default per network)
 
 **References**:
 - [zec.rocks Zcashd Deprecation Timeline](https://forum.zcashcommunity.com/t/zec-rocks-zcashd-deprecation-timeline/50907)
@@ -355,7 +355,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
 | Constraints | Secrets in Rust only, shielded-by-default (Sapling + Orchard), fail-closed Tor |
-| Default server | lwd.zec.pro (lightwalletd+Zebra), zec.rocks (regional) |
+| Default server | https://lwd.zec.pro (lightwalletd+Zebra), https://zec.rocks (regional) |
 | Network selection | Runtime at wallet creation, immutable after |
 | Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |
 

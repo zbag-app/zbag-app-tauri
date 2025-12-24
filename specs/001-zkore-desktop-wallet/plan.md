@@ -295,9 +295,9 @@ This section is **non-normative**. It clarifies how the requirements above are i
 ### Server Configuration
 - **Default Servers**: lightwalletd + Zebra infrastructure (CompactTxStreamer gRPC)
   - Primary endpoint: `https://lwd.zec.pro` (team)
-  - Regional endpoints: `zec.rocks`, `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
+  - Regional endpoints: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
   - Note: Zaino migration in progress - not yet complete on all production endpoints
-- **Testnet**: `lwd.testnet.zec.pro` (team lightwalletd + Zebra)
+- **Testnet**: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
   - SSL via reverse proxy recommended for production-like testing
   - Configure via `ZKORE_GRPC_URL` environment variable
 - **Custom Server**: User can configure alternative lightwalletd/Zaino endpoint
