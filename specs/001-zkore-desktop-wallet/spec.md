@@ -55,17 +55,18 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 
 ### User Story 2 - Send Shielded Transaction with Memo (Priority: P1)
 
-A user with backed-up wallet and shielded funds sends ZEC to another shielded address with an optional memo. The transaction is constructed using Orchard only.
+A user with backed-up wallet and shielded funds sends ZEC to an Orchard-capable recipient address (Unified Address with an Orchard receiver) with an optional memo. The transaction is constructed using Orchard only.
 
 **Why this priority**: Core wallet functionality. Sending is as essential as receiving for a functional wallet.
 
-**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to a shielded address, with and without memo, and verifying the transaction appears in both sender and recipient activity.
+**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to an Orchard-capable recipient address, with and without memo, and verifying the transaction appears in both sender and recipient activity.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has shielded funds and completed backup, **When** they enter a valid shielded address and amount, **Then** they can send the transaction successfully
-2. **Given** a user is composing a send, **When** they add an optional memo, **Then** the memo is included in the shielded transaction
-3. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
+1. **Given** a user has shielded funds and completed backup, **When** they enter a valid Orchard-capable recipient address and amount, **Then** they can send the transaction successfully
+2. **Given** a user enters a Sapling-only or transparent-only recipient address, **When** they attempt to proceed, **Then** the wallet blocks the send and shows a clear error that the recipient must support Orchard
+3. **Given** a user is composing a send, **When** they add an optional memo, **Then** the memo is included in the shielded transaction
+4. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
 
 ---
 
@@ -271,6 +272,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 
 **Shielded Transactions (Orchard Only)**
 - **FR-009**: System MUST construct all spends using only Orchard shielded funds
+- **FR-009a**: System MUST validate that recipients are Orchard-capable (Unified Address with Orchard receiver); Sapling-only or transparent-only addresses MUST be rejected
 - **FR-010**: System MUST NOT allow spending transparent funds directly
 - **FR-011**: System MUST provide a one-click "Shield and Consolidate" action for transparent funds
 - **FR-012**: System MUST support optional memos on shielded sends
