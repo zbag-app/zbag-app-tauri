@@ -33,15 +33,10 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 
 ### Encryption Prerequisites
 
-- Wallet DB encryption requires SQLCipher. Pick one build strategy and keep it consistent across `rusqlite` and `zcash_client_sqlite`:
-  - **Bundled SQLCipher (recommended)**: use the `rusqlite` `bundled-sqlcipher` feature.
-  - **System SQLCipher**: install SQLCipher and enable the matching `rusqlite` feature (e.g., `sqlcipher`).
+- Wallet DB encryption uses **SQLCipher** via `rusqlite` `bundled-sqlcipher` (**required**). Ensure feature unification so the transitive `rusqlite` used by `zcash_client_sqlite` also builds with SQLCipher.
 - KDF crate: `argon2` configured for **Argon2id**.
 - AEAD crate: `chacha20poly1305` for **XChaCha20-Poly1305** wrapping.
-- System SQLCipher packages:
-  - macOS: `brew install sqlcipher`
-  - Ubuntu/Debian: `sudo apt install libsqlcipher-dev`
-  - Windows: prefer `bundled-sqlcipher` or install SQLCipher via vcpkg.
+- Zkore does not support a “system SQLCipher” build path; developers and end users do not install SQLCipher separately.
 
 ## Project Setup
 
