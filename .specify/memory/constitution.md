@@ -1,16 +1,16 @@
 <!--
 	SYNC IMPACT REPORT
 	==================
-	Version change: 1.1.0 -> 1.2.0
-	Bump rationale: MINOR - adopt Zashi-style shielded-by-default privacy (Sapling + Orchard) with explicit transparent-recipient acknowledgements (still block transparent-input spends)
+	Version change: 1.2.0 -> 1.3.0
+	Bump rationale: MINOR - require CI to validate against multiple independent lightwalletd deployments (primary + secondary)
 
 	Modified principles:
-	  - II. Shielded-by-Default Privacy (allows Sapling; transparent recipients require explicit ack)
+	  - V. Test-Driven Quality (CI coverage requirement)
 
 Added sections: N/A
 
 	Modified sections:
-	  - Core Principles -> II. Shielded-by-Default Privacy
+	  - Core Principles -> V. Test-Driven Quality
 	  - Non-Negotiable Checklist
 
 Templates requiring updates:
@@ -89,7 +89,7 @@ Every milestone MUST include unit tests for domain logic, integration tests for 
 - Privacy regressions (fail-open, unintended transparent usage) MUST have regression tests
 - Key leakage via logs or serialization MUST have regression tests
 - Malformed payload ingestion in signing flows MUST have regression tests
-- CI MUST cover at least two server implementations (Zaino + lightwalletd)
+- CI MUST cover at least two independent lightwalletd deployments (primary + secondary) to catch server-side behavior differences and regressions
 
 ### VI. Data Minimization
 
@@ -123,6 +123,7 @@ Before merging work that touches wallet, signing, networking, or persistence, co
 - [ ] Tor mode cannot silently downgrade
 - [ ] IPC types are versioned and validated
 - [ ] Migrations are tested
+- [ ] CI covers integration tests against at least two independent lightwalletd deployments (primary + secondary)
 - [ ] Failure modes are user-explainable and safe
 
 ## Governance
@@ -160,4 +161,4 @@ This constitution follows semantic versioning:
 - Acknowledge reports promptly and track remediation steps internally.
 - Public disclosure timing must balance user safety with transparency.
 
-**Version**: 1.2.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-24
+**Version**: 1.3.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-25

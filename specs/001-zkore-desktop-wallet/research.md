@@ -253,7 +253,6 @@
 
 **Rationale**:
 - Default production endpoints use lightwalletd + Zebra (CompactTxStreamer gRPC)
-- Zaino (Rust-native indexer) is available on experimental endpoints
 - Regional endpoints improve latency and reliability
 - Custom server support enables enterprise and privacy-focused deployments
 - Connection test prevents invalid configurations
@@ -268,15 +267,13 @@
 **Mainnet servers (production)**:
 - Primary: `https://lwd.zec.pro` (team lightwalletd + Zebra)
 - Regional: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
-- Note: Zaino migration is in progress but not yet complete on all endpoints
 
 **Testnet servers**:
 - Default: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
 - Fallback: `https://testnet.zec.rocks` (community endpoint, check Hosh for status)
 
-**Zaino endpoints (experimental)**:
-- Available for testing Zaino compatibility: check zec.rocks announcements
-- Constitution requires testing against multiple server implementations (Zaino + lightwalletd)
+**Testing**:
+- CI should validate against at least two independent lightwalletd deployments (primary + secondary)
 
 **Development Configuration**:
 - Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
@@ -402,6 +399,5 @@ We follow the same approach as Zashi (zcash-light-client-ffi):
 - [NEAR Intents 1Click API](https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api)
 - [Tauri v2 documentation](https://v2.tauri.app)
 - [Arti (Tor implementation in Rust)](https://gitlab.torproject.org/tpo/core/arti)
-- [Zaino GitHub](https://github.com/zingolabs/zaino)
 - [Zashi 2.1 Tor announcement](https://electriccoin.co/blog/zashi-2-1-enhanced-privacy-with-tor-beta/)
 - [zec.rocks infrastructure](https://zec.rocks)

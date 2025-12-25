@@ -25,7 +25,7 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
     - `~/.zkore/wallets/testnet/{wallet-id}/` (testnet wallets)
   - Network selection at wallet creation (immutable after creation)
   - Separate database files per network
-**Testing**: cargo test (Rust), vitest/jest (TypeScript), integration tests against Zaino/lightwalletd endpoints
+**Testing**: cargo test (Rust), vitest/jest (TypeScript), integration tests against lightwalletd endpoints (at least two independent deployments in CI)
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
@@ -46,7 +46,7 @@ Verify compliance with `.specify/memory/constitution.md` core principles:
 | II. Shielded-by-Default Privacy | [x] Pass | Spending uses shielded pools (prefer Orchard; allow Sapling). Transparent funds are receive-only until explicitly shielded; transparent recipients are allowed only with explicit privacy-downgrade acknowledgement. Default receive address is shielded-only UA without transparent receiver. Transparent receive address is a labeled compatibility option (single non-rotating in v1). |
 | III. Fail-Closed Safety | [x] Pass | Tor mode enabled: fails if Tor unhealthy, no silent fallback to direct connections. Actionable error prompts (retry, disable, change endpoint). Wallet state integrity preserved on failures. Beta features (Tor) clearly labeled with defined failure modes. |
 | IV. Typed IPC Contracts | [x] Pass | All IPC commands/events use versioned, strongly typed request/response models in zkore-core. schema_version field in every top-level payload. Strict deserialization rejecting unknown fields. Command boundary uses IpcResult<T> (no thrown errors across IPC). Events are emitted on fixed channels: sync, balance, tx, swap, tor, wallet-status. |
-| V. Test-Driven Quality | [x] Pass | Unit tests for domain logic and IPC serialization. Integration tests for database/sync boundaries against Zaino + lightwalletd. Regression tests for privacy (fail-open, unintended transparent), key leakage via logs, malformed PCZT payload ingestion. CI covers multiple server implementations. |
+| V. Test-Driven Quality | [x] Pass | Unit tests for domain logic and IPC serialization. Integration tests for database/sync boundaries against lightwalletd endpoints (at least two independent deployments in CI). Regression tests for privacy (fail-open, unintended transparent), key leakage via logs, malformed PCZT payload ingestion. CI covers multiple independent lightwalletd deployments. |
 | VI. Data Minimization | [x] Pass | Wallet state in encrypted zcash_client_sqlite wallet DB. App state (prefs, backup flags, swap records, server config) in separate SQLite store. No raw payloads, memo bodies in logs, or hardware wallet identifiers stored. Schema changes require forward migration + rollback strategy + tests. |
 | VII. Decision Traceability | [x] Pass | Architectural decisions documented with ADR/RFC format. Security-sensitive reviews require maintainer familiar with key management, tx construction, networking, signing. Every milestone links implementation, tests, acceptance criteria. Changelog highlights privacy/security impacts. |
 
@@ -261,7 +261,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
 #### Transaction state source-of-truth (pending/confirmed)
 
 - “Pending” and “Confirmed” are derived from two sources:
-  - **Mempool detection** from the configured light client server (lightwalletd and Zaino) via CompactTxStreamer mempool APIs (to satisfy FR-013 for incoming transactions)
+  - **Mempool detection** from the configured lightwalletd server via CompactTxStreamer mempool APIs (to satisfy FR-013 for incoming transactions, where supported)
   - **Chain inclusion** from compact block scanning (to satisfy FR-014)
 - Outgoing transactions MUST be shown as **pending** once submission is accepted (even if mempool detection is delayed), and MUST transition to **confirmed** once mined; reorg handling may transition confirmed → pending again.
 
@@ -296,14 +296,13 @@ This section is **non-normative**. It clarifies how the requirements above are i
 - **Default Servers**: lightwalletd + Zebra infrastructure (CompactTxStreamer gRPC)
   - Primary endpoint: `https://lwd.zec.pro` (team)
   - Regional endpoints: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
-  - Note: Zaino migration in progress - not yet complete on all production endpoints
 - **Testnet**: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
   - SSL via reverse proxy recommended for production-like testing
   - Configure via `ZKORE_GRPC_URL` environment variable
-- **Custom Server**: User can configure alternative lightwalletd/Zaino endpoint
+- **Custom Server**: User can configure alternative lightwalletd endpoint
   - Security warning displayed when using custom servers
   - Validation of server connectivity and network match before saving
-- **Compatibility testing**: CI must test against both lightwalletd and Zaino endpoints
+- **Compatibility testing**: CI must test against at least two independent lightwalletd deployments (primary + secondary)
 
 ### Privacy / Telemetry
 - No remote telemetry or crash reporting: audit dependencies and build config to ensure nothing transmits telemetry/crash reports by default; only local logs are produced (see NFR-002).

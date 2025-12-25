@@ -329,7 +329,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-049**: System MUST NOT allow changing network after wallet creation
 - **FR-050**: System MUST use separate database directories for mainnet and testnet wallets
 - **FR-051**: System MUST visually distinguish mainnet and testnet wallets (color coding, badges)
-- **FR-052**: System MUST allow users to configure custom lightwalletd/Zaino server URLs
+- **FR-052**: System MUST allow users to configure custom lightwalletd server URLs
 - **FR-053**: System MUST display security warning when configuring custom servers
 - **FR-054**: System MUST test server connection before saving custom server configuration
 - **FR-055**: System MUST validate that server network matches wallet network
@@ -370,7 +370,7 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 - **Swap Intent**: A NEAR Intents operation with source/target assets, amounts, deadlines, state machine, and lifecycle tracking
 - **Backup Status**: A durable flag tracking whether the user has verified their seed phrase backup
 - **Tor State**: Current state of Tor connection: Off, Connecting, On, or Error
-- **ServerConfig**: Configuration for lightwalletd/Zaino server including URL and network field. Must match wallet network
+- **ServerConfig**: Configuration for lightwalletd server including URL and network field. Must match wallet network
 
 ## Success Criteria *(mandatory)*
 
@@ -408,7 +408,6 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 
 - librustzcash ecosystem (zcash_client_backend, zcash_client_sqlite) for wallet engine
 - CompactTxStreamer gRPC protocol for light client sync
-- Zaino (Rust indexer, lightwalletd-compatible) as alternative to lightwalletd
 - Keystone SDK for hardware wallet integration
 - NEAR Intents 1Click API for swap operations
 - Arti-based Tor client for anonymized networking

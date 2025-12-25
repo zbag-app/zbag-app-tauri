@@ -58,7 +58,8 @@
 - [ ] T019 [P] Create crates/zkore-core/src/domain/transaction.rs with Transaction, TransactionType, TransactionStatus, TransactionInfo structs
 - [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (shielded_spendable, shielded_pending, transparent_total, total)
 - [ ] T021 [P] Create crates/zkore-core/src/domain/sync.rs with SyncProgress and SyncPhase types
-- [ ] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus and BackupAction types
+- [ ] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus type (and backup verification metadata types, if needed); do not define BackupAction here
+- [ ] T022a [P] Create crates/zkore-core/src/domain/wallet_status.rs with WalletStatus, BackupAction, SyncStatus, ShieldAction, PrivacyPosture types (matches contracts/ipc-v1.ts WalletStatus)
 - [ ] T023 [P] Create crates/zkore-core/src/domain/transparent_utxo.rs with TransparentUTXO struct
 - [ ] T024 [P] Create crates/zkore-core/src/domain/server.rs with ServerConfig and ServerInfo structs
 - [ ] T025 Create crates/zkore-core/src/errors.rs with stable error codes matching ErrorCodes in ipc-v1.ts
@@ -111,7 +112,7 @@
 - [ ] T046 Create crates/zkore-network/src/lib.rs with module exports
 - [ ] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
 - [ ] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
-- [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs (stream or polling, depending on server support) to enable pending-transaction detection (FR-013) on both lightwalletd and Zaino
+- [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs (stream or polling, depending on lightwalletd server support) to enable pending-transaction detection (FR-013)
 
 ### 2.6: Tauri App Shell
 
@@ -176,12 +177,14 @@
 - [ ] T080 [US1] Implement SyncProgress event emission to zkore://sync channel in crates/zkore-engine/src/sync_service.rs
 - [ ] T081 [US1] Implement balance computation from zcash_client_sqlite in crates/zkore-engine/src/balance.rs
 - [ ] T082 [US1] Implement GetBalance Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/balance.rs
-- [ ] T083 [US1] Create apps/zkore-app-tauri/src/pages/Home.tsx with balance display, sync progress, and persistent backup reminder (undismissable if backup_required)
+- [ ] T082a [US1] Implement compute_wallet_status() baseline in crates/zkore-engine/src/wallet_manager.rs returning WalletStatus with at minimum: lock_status, backup_status (Required/Complete), sync_status (Synced/Syncing), shield_status=None, privacy_posture derived from backup_status
+- [ ] T082b [US1] Implement GetWalletStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs and return status from compute_wallet_status()
+- [ ] T083 [US1] Create apps/zkore-app-tauri/src/pages/Home.tsx with balance display, sync progress, and persistent backup reminder driven by GetWalletStatus (undismissable when status.backup_status === 'Required')
 - [ ] T083a [P] [US1] Create apps/zkore-app-tauri/src/pages/UnlockWallet.tsx (or modal) prompting for wallet password and invoking UnlockWallet; show on app launch when wallet is locked
-- [ ] T084 [US1] Create apps/zkore-app-tauri/src/components/common/BackupReminder.tsx showing backup status and action button
+- [ ] T084 [US1] Create apps/zkore-app-tauri/src/components/common/BackupReminder.tsx showing status.backup_status and action button; refresh status via GetWalletStatus after VerifyBackup succeeds
 - [ ] T084a [US1] Add “View seed phrase” action (manual password re-auth) to apps/zkore-app-tauri/src/components/common/BackupReminder.tsx using ReauthWallet + ViewSeedPhrase
-- [ ] T085 [US1] Implement backup_required check blocking send UI in apps/zkore-app-tauri/src/pages/Home.tsx
-- [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance (4 distinct 1-based indices, 10-min expiry), verify backup, spend gate, expiry handling, invalidation after 5 failed attempts (requires new challenge), and restart invalidation (challenges are in-memory only)
+- [ ] T085 [US1] Implement backup-required check blocking send UI in apps/zkore-app-tauri/src/pages/Home.tsx based on GetWalletStatus (status.backup_status === 'Required')
+- [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance (4 distinct 1-based indices, 10-min expiry), verify backup, spend gate, GetWalletStatus backup_status (Required→Complete), expiry handling, invalidation after 5 failed attempts (requires new challenge), and restart invalidation (challenges are in-memory only)
 
 **Checkpoint**: User Story 1 complete - wallet creation, receiving, and backup verification functional
 
@@ -216,7 +219,7 @@
 - [ ] T098 [US2] Implement ListTransactions Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (include last_error + can_retry_broadcast for queued-broadcast failures)
 - [ ] T099 [US2] Create apps/zkore-app-tauri/src/pages/Activity.tsx with transaction list displaying txid, type, value, status, memo_present
 - [ ] T100 [US2] Implement TransactionChangedEvent emission on tx state change in crates/zkore-engine/src/tx_service.rs
-- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, recipient parsing + UA receiver selection (Orchard→Sapling), transparent recipient ack requirement (PRIVACY_ACK_REQUIRED), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients), backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against both lightwalletd and Zaino in CI)
+- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, recipient parsing + UA receiver selection (Orchard→Sapling), transparent recipient ack requirement (PRIVACY_ACK_REQUIRED), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients), backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against at least two independent lightwalletd deployments in CI: primary + secondary)
 - [ ] T100b [US2] Define and implement TransactionStatus derivation in crates/zkore-engine (source-of-truth): pending on accepted submit, pending on inbound mempool detection, confirmed on chain inclusion via compact block scan; update TransactionChangedEvent accordingly (covers FR-013/FR-014)
 
 **Checkpoint**: User Story 2 complete - sending shielded transactions with memo functional
@@ -437,9 +440,8 @@
 
 ### Implementation for User Story 11
 
- - [ ] T182 [US11] Create crates/zkore-core/src/domain/wallet_status.rs with WalletStatus, BackupAction, SyncStatus, ShieldAction, PrivacyPosture types
-- [ ] T183 [US11] Implement compute_wallet_status() in crates/zkore-engine/src/wallet_manager.rs aggregating all status fields
-- [ ] T184 [US11] Implement GetWalletStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
+- [ ] T183 [US11] Enhance compute_wallet_status() in crates/zkore-engine/src/wallet_manager.rs to fully populate WalletStatus fields now that US1-US3 are implemented (shield_status, privacy_posture rules, sync error states)
+- [ ] T184 [US11] Extend GetWalletStatus behavior (and any mapping) to reflect enhanced compute_wallet_status() outputs
 - [ ] T185 [US11] Implement WalletStatusEvent emission on any status component change in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T186 [US11] Create apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx with backup, sync, shield, privacy status cards
 - [ ] T187 [US11] Implement real-time status updates via WalletStatusEvent subscription in apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx
@@ -527,7 +529,7 @@
 ### CI (Constitution V / NFR-016)
 
 - [ ] T216a Add CI workflow configuration (e.g., .github/workflows/ci.yml) that runs Rust + frontend tests and enforces required gates (cargo test --workspace, bun test, bun test:a11y where applicable)
-- [ ] T216b Add CI matrix coverage for both light client servers: run integration tests against **lightwalletd** and **Zaino** (Constitution V) using an explicit matrix and fail if either backend fails
+- [ ] T216b Add CI matrix coverage across at least two independent lightwalletd deployments (primary + secondary) and fail if either backend fails
 - [ ] T216c Add CI gate for migration tests: run app metadata DB migration tests + wallet DB migration safety tests on every PR (forward + rollback paths)
 
 ---
@@ -564,7 +566,7 @@
 **Within Phase 2 (Foundational)**:
 ```
 T002, T003, T004, T005, T006 (all crate Cargo.toml files)
-T015, T016, T017, T018, T019, T020, T021, T022, T023, T024 (domain types)
+T015, T016, T017, T018, T019, T020, T021, T022, T022a, T023, T024 (domain types)
 T028, T028a, T028b, T029, T030, T031, T032, T033, T034, T035 (IPC contracts)
 T058, T059 (React hooks)
 ```

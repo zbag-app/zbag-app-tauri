@@ -28,7 +28,7 @@ Zkore Desktop provides a desktop-first experience for shielded Zcash usage with 
 
 ### Server interoperability
 
-- The client MUST remain compatible with the CompactTxStreamer gRPC API used by light client servers (lightwalletd-class servers, Zaino-class servers).
+- The client MUST remain compatible with the CompactTxStreamer gRPC API used by lightwalletd-class servers.
 - Server-specific extensions MUST be optional and MUST NOT break baseline compatibility.
 
 ### Backend-owned networking
