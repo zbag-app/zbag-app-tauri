@@ -657,11 +657,11 @@ components = ["rustfmt", "clippy"]
 
 ## Next Steps
 
-1. **Milestone 1**: Implement wallet creation, receive addresses, sync, and balance display
-2. **Milestone 2**: Add send functionality, memo support, shielding
-3. **Milestone 3**: Backup verification, restore with birthday
-4. **Milestone 4**: Keystone integration
-5. **Milestone 5**: NEAR Intents swaps
-6. **Milestone 6**: Tor integration
+1. **Milestone 1**: Setup + Foundational + US1 (create wallet, receive address display, backup challenge + verification, lock/unlock, basic sync + balance)
+2. **Milestone 2**: US2 + US3 (send with memo, broadcast retry queue, shield and consolidate)
+3. **Milestone 3**: US4 + US5 (restore with birthday + progress, address rotation)
+4. **Milestone 4**: US6 + US7 (Keystone UFVK import + air-gapped signing)
+5. **Milestone 5**: US8 + US9 (swaps)
+6. **Milestone 6**: US10 (Tor)
 
 Refer to `tasks.md` for detailed implementation tasks per milestone.

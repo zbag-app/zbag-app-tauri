@@ -78,7 +78,7 @@
 - [ ] T033 [P] Create crates/zkore-core/src/ipc/v1/commands/transaction.rs with ListTransactions, PrepareSend, ConfirmSend, CancelSend, RetryBroadcast, ShieldFunds request/response types
 - [ ] T034 [P] Create crates/zkore-core/src/ipc/v1/commands/backup.rs with GetBackupChallenge, VerifyBackup (challenge_id), RestoreWallet request/response types
 - [ ] T035 [P] Create crates/zkore-core/src/ipc/v1/events/mod.rs with SyncProgressEvent, BalanceChangedEvent, TransactionChangedEvent, WalletStatusEvent (re-export event structs)
-- [ ] T035a [P] Create crates/zkore-core/src/ipc/v1/commands/keystone.rs with ImportUfvk, BuildSigningRequest, FinalizeSigning request/response types
+- [ ] T035a [P] Create crates/zkore-core/src/ipc/v1/commands/keystone.rs with ImportUfvk, BuildSigningRequest (request includes allow_transparent_recipient; SigningSummary includes recipient_kind), FinalizeSigning request/response types
 - [ ] T035b [P] Create crates/zkore-core/src/ipc/v1/commands/server.rs with AddServer, SetDefaultServer, TestServer, ListServers request/response types (update commands/mod.rs re-exports)
 
 ### 2.3: App Metadata Database
@@ -202,7 +202,7 @@
 - [ ] T086 [US2] Create crates/zkore-engine/src/tx_service.rs with transaction construction module structure
 - [ ] T087 [US2] Implement proposal-based send flow in crates/zkore-engine/src/tx_service.rs: prepare_send() creates proposal, returns proposal_id, summary, fee
 - [ ] T087a [US2] Implement recipient parsing + receiver selection in prepare_send() in crates/zkore-engine/src/tx_service.rs: support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); set TransactionSummary.recipient_kind accordingly; return INVALID_RECIPIENT for invalid/unsupported recipients
-- [ ] T087b [US2] Enforce privacy downgrade rules in prepare_send() in crates/zkore-engine/src/tx_service.rs: if recipient_kind is Transparent require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED
+- [ ] T087b [US2] Enforce privacy downgrade rules in prepare_send() in crates/zkore-engine/src/tx_service.rs: if recipient_kind is Transparent require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED; reject memos exceeding 512 bytes (UTF-8) with MEMO_TOO_LONG
 - [ ] T088 [US2] Implement proposal storage (in-memory with expiration) in crates/zkore-engine/src/tx_service.rs
 - [ ] T089 [US2] Implement confirm_send() in crates/zkore-engine/src/tx_service.rs: require valid re-auth token, then sign and broadcast from proposal_id
 - [ ] T090 [US2] Implement cancel_send() in crates/zkore-engine/src/tx_service.rs: remove proposal from memory
@@ -220,7 +220,7 @@
 - [ ] T098 [US2] Implement ListTransactions Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (include last_error + can_retry_broadcast for queued-broadcast failures)
 - [ ] T099 [US2] Create apps/zkore-app-tauri/src/pages/Activity.tsx with transaction list displaying txid, type, value, status, memo_present
 - [ ] T100 [US2] Implement TransactionChangedEvent emission on tx state change in crates/zkore-engine/src/tx_service.rs
-- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, recipient parsing + UA receiver selection (Orchard→Sapling), transparent recipient ack requirement (PRIVACY_ACK_REQUIRED), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients), backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against at least two independent lightwalletd deployments in CI: primary + secondary)
+- [ ] T100a [US2] Add milestone tests: unit (crates/zkore-engine/tests/us2_send_proposals.rs), integration (tests/integration/us2_send.rs), e2e (tests/e2e/us2_send.spec.ts) covering proposal prepare/confirm/cancel, recipient parsing + UA receiver selection (Orchard→Sapling), transparent recipient ack requirement (PRIVACY_ACK_REQUIRED), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), backup-required gating, broadcast-queue retry (requires re-auth; persists across restart; no auto retry), retention/cleanup (deleted after success or 7 days), said queue entries never leak tx bytes into logs, and pending→confirmed transitions (run against at least two independent lightwalletd deployments in CI: primary + secondary)
 - [ ] T100b [US2] Define and implement TransactionStatus derivation in crates/zkore-engine (source-of-truth): pending on accepted submit, pending on inbound mempool detection, confirmed on chain inclusion via compact block scan; update TransactionChangedEvent accordingly (covers FR-013/FR-014)
 
 **Checkpoint**: User Story 2 complete - sending shielded transactions with memo functional
@@ -306,7 +306,7 @@
 - [ ] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
 - [ ] T126 [US6] Add watch-only badge to account display in apps/zkore-app-tauri/src/pages/Home.tsx
-- [ ] T127 [US6] Implement WATCH_ONLY_CANNOT_SPEND check redirecting to signing flow in apps/zkore-app-tauri/src/pages/Send.tsx
+- [ ] T127 [US6] Implement WATCH_ONLY_CANNOT_SPEND check redirecting to signing flow in apps/zkore-app-tauri/src/pages/Send.tsx; for HardwareSigner accounts, handle PRIVACY_ACK_REQUIRED by prompting the user and retrying BuildSigningRequest with allow_transparent_recipient=true (same semantics/UX as PrepareSend)
 - [ ] T127a [US6] Add milestone tests: unit (crates/zkore-keystone/tests/us6_ufvk.rs), integration (tests/integration/us6_import_ufvk.rs), e2e (tests/e2e/us6_import_keystone.spec.ts) covering UFVK validation and watch-only behavior
 
 **Checkpoint**: User Story 6 complete - Keystone watch-only import functional
@@ -323,19 +323,19 @@
 
 - [ ] T128 [US7] Create crates/zkore-keystone/src/pczt.rs with PCZT building helpers using pczt feature
 - [ ] T129 [US7] Create crates/zkore-keystone/src/payload.rs with QR frame encoding using @keystonehq/animated-qr compatible format
-- [ ] T130 [US7] Implement build_signing_request() in crates/zkore-engine/src/tx_service.rs returning SigningRequest with qr_frames and summary
+- [ ] T130 [US7] Implement build_signing_request() in crates/zkore-engine/src/tx_service.rs using the same recipient parsing + receiver selection + privacy downgrade rules as prepare_send(): support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); if Transparent recipient require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED; reject memos exceeding 512 bytes (UTF-8) with MEMO_TOO_LONG; return SigningRequest with summary including recipient_kind
 - [ ] T131 [US7] Implement BuildSigningRequest Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T132 [US7] Create apps/zkore-app-tauri/src/pages/Signing.tsx full-screen signing window with animated QR display
 - [ ] T133 [US7] Create apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx using @keystonehq/animated-qr
 - [ ] T134 [US7] Create apps/zkore-app-tauri/src/components/signing/QRScanner.tsx for webcam-based animated QR scanning
-- [ ] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT
+- [ ] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT; enforce BACKUP_REQUIRED guard (FR-004) before broadcast and require a valid re-auth token
 - [ ] T136 [US7] Implement FinalizeSigning Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
-- [ ] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, amount, fee, memo_present for confirmation
+- [ ] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, recipient_kind, amount, fee, memo_present for confirmation (including transparent-recipient privacy warnings)
 - [ ] T138 [US7] Implement microSD fallback: file export (.pczt) in crates/zkore-keystone/src/payload.rs with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028)
 - [ ] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import
 - [ ] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
 - [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
-- [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, and broadcast
+- [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, broadcast, transparent recipient privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_recipient=true), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), SigningSummary includes recipient_kind, and spending blocked until backup verified (BACKUP_REQUIRED)
 - [ ] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs
 - [ ] T141c [US7] Add FR-028 regression tests asserting exported `.pczt` filenames and exported/QR payload wrappers contain no hardware-wallet branding strings or device identifiers (including any wrapper metadata/comments)
 

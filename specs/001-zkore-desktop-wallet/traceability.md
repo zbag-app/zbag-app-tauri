@@ -6,7 +6,7 @@ This document provides an explicit, review-friendly mapping from requirements in
 
 | User Story | Related FR IDs |
 |---|---|
-| **US1** Create New Wallet and Receive Funds | FR-001, FR-002, FR-003, FR-004, FR-008a, FR-008b |
+| **US1** Create New Wallet and Receive Funds | FR-001, FR-002, FR-003, FR-004, FR-008a, FR-008b, FR-015 |
 | **US2** Send Shielded Transaction with Memo | FR-009, FR-009a, FR-012, FR-013, FR-014 |
 | **US3** Shield Transparent Funds | FR-010, FR-011 |
 | **US4** Restore Wallet from Seed Phrase | FR-005, FR-006, FR-007, FR-008 |

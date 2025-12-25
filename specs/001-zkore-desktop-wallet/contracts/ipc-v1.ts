@@ -263,6 +263,7 @@ export interface SigningRequest {
 
 export interface SigningSummary {
   recipient: string;
+  recipient_kind: RecipientKind;
   amount: Zatoshis;
   fee: Zatoshis;
   memo_present: boolean;
@@ -468,6 +469,11 @@ export interface BuildSigningRequestRequest extends VersionedPayload {
   recipient: string;
   amount: Zatoshis;
   memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
 }
 
 /** Finalize signed response from Keystone */
