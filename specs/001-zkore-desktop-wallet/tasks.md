@@ -3,7 +3,7 @@
 **Input**: Design documents from `/specs/001-zkore-desktop-wallet/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/ipc-v1.ts
 
-**Tests**: Tests are REQUIRED (see `docs/constitution.md` Article 11). Each checkpoint must include unit + integration + (where applicable) e2e coverage for the functionality delivered.
+**Tests**: Tests are REQUIRED (see `.specify/memory/constitution.md` Principle V). Each checkpoint must include unit + integration + (where applicable) e2e coverage for the functionality delivered.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 

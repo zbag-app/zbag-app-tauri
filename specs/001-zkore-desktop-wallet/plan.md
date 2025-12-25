@@ -50,7 +50,7 @@ Verify compliance with `.specify/memory/constitution.md` core principles:
 | VI. Data Minimization | [x] Pass | Wallet state in encrypted zcash_client_sqlite wallet DB. App state (prefs, backup flags, swap records, server config) in separate SQLite store. No raw payloads, memo bodies in logs, or hardware wallet identifiers stored. Schema changes require forward migration + rollback strategy + tests. |
 | VII. Decision Traceability | [x] Pass | Architectural decisions documented with ADR/RFC format. Security-sensitive reviews require maintainer familiar with key management, tx construction, networking, signing. Every milestone links implementation, tests, acceptance criteria. Changelog highlights privacy/security impacts. |
 
-For detailed rules, see `docs/constitution.md`.
+For detailed rules, see `.specify/memory/constitution.md`.
 
 ## Project Structure
 

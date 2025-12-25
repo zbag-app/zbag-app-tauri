@@ -53,7 +53,7 @@ Platform targets: macOS, Windows, Linux
 
 | Document | Description |
 |----------|-------------|
-| [Constitution](docs/constitution.md) | Non-negotiable principles governing development |
+| [Constitution](.specify/memory/constitution.md) | Non-negotiable principles governing development |
 | [Feature Specification](specs/001-zkore-desktop-wallet/spec.md) | User stories and requirements |
 | [Implementation Plan](specs/001-zkore-desktop-wallet/plan.md) | Architecture and project structure |
 | [Data Model](specs/001-zkore-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
@@ -86,4 +86,4 @@ This wallet enforces strict security boundaries. Key principles:
 - Transparent spending is architecturally impossible
 - All network requests route through backend-controlled transports
 
-For vulnerability reports, please use private disclosure. See the [Constitution](docs/constitution.md#article-14-security-reporting-and-incident-response) for the incident response policy.
+For vulnerability reports, please use private disclosure. See the [Constitution](.specify/memory/constitution.md#security-reporting-and-incident-response) for the incident response policy.

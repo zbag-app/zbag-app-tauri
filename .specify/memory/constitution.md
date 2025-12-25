@@ -18,9 +18,7 @@ Templates requiring updates:
   - .specify/templates/spec-template.md: No constitution references found
   - .specify/templates/tasks-template.md: No constitution references found
 
-Source document: docs/constitution.md (15-article detailed version)
-
-	Follow-up TODOs: Align docs/constitution.md Principle II wording with this amendment (if/when docs are updated)
+Source document: (formerly) detailed constitution (removed; this file is canonical)
 	==================
 -->
 
@@ -28,9 +26,7 @@ Source document: docs/constitution.md (15-article detailed version)
 
 ## Preamble
 
-This document defines the non-negotiable principles governing Zkore Desktop development. These principles are consolidated from the detailed 15-article constitution in `docs/constitution.md`. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
-
-For detailed implementation rules, enforcement specifics, and article-by-article guidance, refer to the full constitution at `docs/constitution.md`.
+This document defines the non-negotiable principles governing Zkore Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
 
 ## Core Principles
 
@@ -149,8 +145,17 @@ This constitution follows semantic versioning:
 
 ### Reference Documents
 
-- **Detailed constitution**: `docs/constitution.md` (full 15-article version with implementation specifics)
-- **Feature specifications**: `docs/spec.md`
-- **Implementation plan**: `docs/plan.md`
+- **Feature specification**: `specs/001-zkore-desktop-wallet/spec.md`
+- **Implementation plan**: `specs/001-zkore-desktop-wallet/plan.md`
+- **Data model**: `specs/001-zkore-desktop-wallet/data-model.md`
+- **Research**: `specs/001-zkore-desktop-wallet/research.md`
+- **Quickstart**: `specs/001-zkore-desktop-wallet/quickstart.md`
+- **Tasks**: `specs/001-zkore-desktop-wallet/tasks.md`
+
+## Security Reporting and Incident Response
+
+- Provide a private channel for vulnerability reports.
+- Acknowledge reports promptly and track remediation steps internally.
+- Public disclosure timing must balance user safety with transparency.
 
 **Version**: 1.2.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-24

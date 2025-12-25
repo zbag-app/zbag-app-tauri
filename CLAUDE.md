@@ -26,7 +26,6 @@ tests/
   e2e/                           # End-to-end Tauri tests
 specs/
   001-zkore-desktop-wallet/      # Feature specification and design docs
-docs/                            # Project-wide documentation
 ```
 
 ## Commands

@@ -30,7 +30,7 @@
 
 ## Notes
 
-- Specification derived from comprehensive existing documentation (docs/spec.md, docs/constitution.md)
+- Specification derived from consolidated design docs in `specs/001-zkore-desktop-wallet/` and `.specify/memory/constitution.md`
 - 12 user stories covering all 6 major requirement areas from the original spec
 - 55 functional requirements mapped from original acceptance criteria
 - 12 measurable success criteria defined

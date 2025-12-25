@@ -598,4 +598,4 @@ components = ["rustfmt", "clippy"]
 5. **Milestone 5**: NEAR Intents swaps
 6. **Milestone 6**: Tor integration
 
-Refer to `docs/task.md` for detailed implementation tasks per milestone.
+Refer to `tasks.md` for detailed implementation tasks per milestone.
