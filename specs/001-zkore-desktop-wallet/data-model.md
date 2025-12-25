@@ -95,8 +95,8 @@ A logical grouping within a wallet for shielded operations (Sapling + Orchard).
 
 **AccountType Enum**:
 - `Software` - Full keys, can spend
-- `WatchOnly` - Viewing key only, cannot spend
-- `HardwareSigner` - Watch-only with Keystone signing capability
+- `WatchOnly` - Reserved for future generic viewing-key accounts (MUST NOT be created in v1)
+- `HardwareSigner` - Watch-only with Keystone signing capability (created via UFVK import; spends via Keystone signing flow)
 
 **Relationships**:
 - Belongs to `Wallet` (N:1)
@@ -107,7 +107,7 @@ A logical grouping within a wallet for shielded operations (Sapling + Orchard).
 **Constraints**:
 - Account 0 always exists after wallet creation
 - In v1, `wallet_type` MUST be `Software`; watch-only is represented by `AccountType`
-- Wallets MAY contain `Software`, `WatchOnly`, or `HardwareSigner` accounts
+- In v1, wallets MAY contain `Software` and `HardwareSigner` accounts; `WatchOnly` is reserved for future
 
 ---
 

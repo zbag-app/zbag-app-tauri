@@ -298,16 +298,45 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import * as IPC from '../types/ipc';
 
+// All IPC request/response payloads include `schema_version`.
+function versioned<T extends object>(request: T): T & IPC.VersionedPayload {
+  return { ...request, schema_version: IPC.SCHEMA_VERSION };
+}
+
+export async function listWallets(): Promise<
+  IPC.IpcResult<IPC.ListWalletsResponse>
+> {
+  return invoke(IPC.Commands.LIST_WALLETS, {
+    request: versioned({}),
+  });
+}
+
+export async function loadWallet(
+  request: Omit<IPC.LoadWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.LoadWalletResponse>> {
+  return invoke(IPC.Commands.LOAD_WALLET, {
+    request: versioned(request),
+  });
+}
+
+export async function unlockWallet(
+  request: Omit<IPC.UnlockWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.UnlockWalletResponse>> {
+  return invoke(IPC.Commands.UNLOCK_WALLET, {
+    request: versioned(request),
+  });
+}
+
 export async function createWallet(
-  request: IPC.CreateWalletRequest
+  request: Omit<IPC.CreateWalletRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.CreateWalletResponse>> {
-  return invoke(IPC.Commands.CREATE_WALLET, { request });
+  return invoke(IPC.Commands.CREATE_WALLET, { request: versioned(request) });
 }
 
 export async function getBalance(
-  request: IPC.GetBalanceRequest
+  request: Omit<IPC.GetBalanceRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
-  return invoke(IPC.Commands.GET_BALANCE, { request });
+  return invoke(IPC.Commands.GET_BALANCE, { request: versioned(request) });
 }
 
 // Event subscriptions
@@ -341,7 +370,24 @@ export function onWalletStatus(
 >
 > `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet (equivalent to `LoadWallet`), otherwise call `LoadWallet` before issuing account-scoped requests.
 >
+> If `LoadWalletResponse.lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty list.
+> After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+>
 > Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`.
+
+### App startup: reopen + unlock + reload
+
+On startup, reopen the most recent wallet and handle the “accounts are empty when locked” rule:
+
+```typescript
+const wallets = await listWallets();
+// pick most recent, then:
+const load1 = await loadWallet({ wallet_id });
+if (load1.ok?.lock_status === 'Locked') {
+  await unlockWallet({ wallet_id, password, remember_unlock });
+  const load2 = await loadWallet({ wallet_id }); // load again to get accounts
+}
+```
 
 ## Development Workflow
 

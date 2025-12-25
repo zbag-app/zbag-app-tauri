@@ -40,10 +40,13 @@ export type UnixTimestampMs = number;
 // Wallet Types
 // ============================================================================
 
-// In v1, watch-only is modeled as an AccountType inside a Software wallet.
-// `WatchOnly` is reserved for future use and should not be created in v1.
+// In v1, wallets are always `Software`; watch-only behavior is modeled at the account level.
+// `WatchOnly` wallet type is reserved for future use and MUST NOT be created in v1.
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
+
+// In v1, Keystone UFVK import creates `HardwareSigner` accounts (watch-only; spend via signing flow).
+// `WatchOnly` account type is reserved for future generic viewing-key accounts and MUST NOT be created in v1.
 export type AccountType = 'Software' | 'WatchOnly' | 'HardwareSigner';
 export type WalletLockStatus = 'Locked' | 'Unlocked';
 
@@ -289,7 +292,11 @@ export interface CreateWalletRequest extends VersionedPayload {
  * Load an existing wallet and set it as the active wallet for account-scoped requests/events.
  *
  * Loading MAY attempt OS keychain auto-unlock (if enabled for the wallet). `LoadWalletResponse.lock_status`
- * reflects the post-attempt state; if still `Locked`, the UI should call `UnlockWallet`.
+ * reflects the post-attempt state.
+ *
+ * Accounts are available only when the encrypted wallet DB is unlocked:
+ * - If `lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty array.
+ * - After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
  */
 export interface LoadWalletRequest extends VersionedPayload {
   wallet_id: string;
@@ -448,7 +455,7 @@ export interface RestoreWalletRequest extends VersionedPayload {
   birthday_date: UnixTimestampMs | null;
 }
 
-/** Import UFVK to create a watch-only account within an existing software wallet */
+/** Import UFVK (Keystone) to create a HardwareSigner account (watch-only; spends via signing flow) within an existing software wallet */
 export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;
@@ -567,6 +574,12 @@ export interface ViewSeedPhraseResponse extends VersionedPayload {
 export interface LoadWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
   lock_status: WalletLockStatus;
+
+  /**
+   * Accounts are available only when the wallet DB is unlocked.
+   * If `lock_status` is `Locked`, this MUST be an empty array.
+   * After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+   */
   accounts: AccountInfo[];
 }
 
