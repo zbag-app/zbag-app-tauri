@@ -183,6 +183,36 @@ A transaction record for wallet activity. Outgoing sends are funded from shielde
 
 ---
 
+### QueuedBroadcast
+
+Persisted broadcast retry queue entry for the “disconnect during broadcast” edge case.
+
+| Field | Type | Description | Validation |
+|-------|------|-------------|------------|
+| txid | TxId | Transaction hash | 32 bytes |
+| wallet_id | UUID | Parent wallet reference | FK to Wallet |
+| account_id | u32 | Associated account | FK to Account |
+| created_at | Timestamp | When the entry was queued | Auto-set |
+| last_error | Option<String> | Last broadcast failure reason | User-safe string |
+| encrypted_tx_bytes_path | String | Location of the encrypted signed transaction bytes | Within wallet directory |
+
+**Storage**:
+- Signed tx bytes MUST be encrypted-at-rest (AEAD under the wallet DEK or equivalent) and stored under the wallet directory, e.g. `~/.zkore/wallets/{network}/{wallet-id}/queued_broadcasts/{txid}.bin`.
+- Metadata is intentionally minimal; no plaintext tx bytes are persisted.
+
+**Constraints**:
+- MUST NOT silently re-broadcast on startup; retry is explicit user action only and requires manual wallet-password re-authentication.
+- Entries MUST be deleted after successful broadcast or after **7 days** (whichever comes first).
+- Logs MUST NOT include signed tx bytes (or other raw payloads) for queued broadcasts.
+
+**State Transitions**:
+```
+[Broadcast failed] -> Queued -> (Retry success) Deleted
+                        \-> (Retention expiry) Deleted
+```
+
+---
+
 ### TransparentUTXO
 
 A transparent fund that must be shielded before spending.
@@ -434,6 +464,10 @@ TorState ─────── (global singleton)
 - Encrypted at rest with the wallet password; not readable without successful unlock
 - Directory structure: ~/.zkore/wallets/mainnet/{wallet-id}/ and ~/.zkore/wallets/testnet/{wallet-id}/
 
+### Wallet Directory (encrypted auxiliary blobs)
+- Stored under: `~/.zkore/wallets/{network}/{wallet-id}/`
+- `queued_broadcasts/`: AEAD-encrypted signed tx bytes for broadcast retry queue entries (7-day retention; deleted on success; user-initiated retry only)
+
 ### App Metadata DB (custom SQLite)
 ```sql
 -- Wallet metadata
@@ -540,6 +574,7 @@ CREATE TABLE _app_migrations (
 | Account | Sequential index, type matches wallet |
 | Address | Shielded-only default, transparent separate |
 | Transaction | Shielded (Orchard preferred; Sapling supported), memo redacted in logs |
+| QueuedBroadcast | Encrypted-at-rest tx bytes, retention cleanup, user-initiated retry only |
 | TransparentUTXO | Cannot be spent directly |
 | SwapIntent | Shielded ZEC for FromZec, ephemeral transparent |
 | BackupStatus | Blocks spending when required |

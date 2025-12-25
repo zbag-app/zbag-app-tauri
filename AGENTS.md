@@ -28,5 +28,6 @@
 
 ## Security & Configuration Tips
 - Follow the Constitution in `.specify/memory/constitution.md`, especially for private disclosure.
-- For local config in implementation phases, use `.env.development` with `ZKORE_GRPC_URL`, `ZKORE_NETWORK`, and `RUST_LOG` (see Quickstart).
+- For local config in implementation phases, use `.env.development` with `ZKORE_GRPC_URL` and `RUST_LOG` (see Quickstart); wallet network is selected at creation and is immutable.
+- Frontend logging hygiene: avoid `console.log` of IPC payloads that may contain sensitive data (memos, seed words, signing frames); treat UI logs as potentially user-accessible and keep secrets in Rust (Constitution Principle I).
 - Production builds should use `cargo build --release --locked` and commit `Cargo.lock`.

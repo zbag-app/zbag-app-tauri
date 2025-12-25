@@ -337,7 +337,9 @@ export function onWalletStatus(
 ```
 
 > **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
-> currently loaded wallet set by `LoadWallet`; call `LoadWallet` before using them.
+> currently loaded wallet set by `LoadWallet`.
+>
+> `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet (equivalent to `LoadWallet`), otherwise call `LoadWallet` before issuing account-scoped requests.
 >
 > Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`.
 
@@ -485,8 +487,8 @@ Create `.env.development`:
 # Light client server
 # Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
 # Testnet: https://lwd.testnet.zec.pro (default)
+# Note: this override does NOT set wallet network. Wallet network is selected at wallet creation and is immutable.
 ZKORE_GRPC_URL=https://lwd.testnet.zec.pro
-ZKORE_NETWORK=testnet
 
 # Logging
 RUST_LOG=info,zkore=debug
@@ -581,6 +583,12 @@ Add these to the CI pipeline:
 # .github/workflows/ci.yml
 - name: Security audit
   run: cargo audit
+
+- name: Integration tests (lightwalletd matrix)
+  run: |
+    # Constitution Principle V: validate against at least two independent deployments.
+    ZKORE_GRPC_URL=https://lwd.zec.pro cargo test --workspace
+    ZKORE_GRPC_URL=https://zec.rocks cargo test --workspace
 
 - name: Build with lock verification
   run: cargo build --release --locked

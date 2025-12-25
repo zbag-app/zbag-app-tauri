@@ -28,7 +28,7 @@ Source document: (formerly) detailed constitution (removed; this file is canonic
 
 This document defines the non-negotiable principles governing Zkore Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
 
-This file is the canonical constitution for Zkore Desktop. Additional non-negotiable rules that were present in the prior long-form constitution but are not currently captured elsewhere in the repo are preserved in `docs/constitution.md` (supplement). That supplement intentionally avoids restating the core principles defined here.
+This file is the canonical constitution for Zkore Desktop.
 
 ## Core Principles
 
