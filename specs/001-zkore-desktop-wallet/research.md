@@ -49,6 +49,7 @@
 - Maximum QR frame size: 2953 bytes (version 40, L error correction)
 - Animated QR frame rate: 10 fps default, 3 fps for "slow mode"
 - File fallback: Export as `.pczt` binary file for microSD transfer
+- **FR-028 hygiene**: Do not include hardware-wallet branding or identifiers anywhere in exported files or QR payloads (including filenames, wrapper metadata/comments, or extra non-protocol fields).
 
 ### 3. NEAR Intents 1Click API Integration
 
@@ -68,7 +69,7 @@
 - API Version: v0 (current production version)
 - Endpoints:
   - `GET /v0/quote` - Get swap quote with parameters
-  - `POST /v0/deposit/submit` - Submit deposit intent after user sends funds
+  - `POST /v0/deposit/submit` - Create/register a deposit intent and return deposit instructions (used by `StartSwap`)
   - `GET /v0/status?depositAddress={addr}` - Poll swap status (optional `depositMemo`)
   - `GET /v0/tokens` - List supported tokens and chains
 - Query parameters for quote:
@@ -76,15 +77,22 @@
   - `defuse_asset_identifier_out` - Target asset (e.g., "zcash:mainnet:native")
   - `exact_amount_in` or `exact_amount_out` - Amount specification
   - `dry=true` for quote-only without commitment
+- **Swap sequence (Zkore integration)**:
+  1. **Quote**: UI calls `RequestSwapQuote`; backend calls `GET /v0/quote?dry=true` and returns `SwapQuote` + `quote_id`.
+  2. **StartSwap / deposit intent**: UI calls `StartSwap(quote_id)`; backend calls `POST /v0/deposit/submit` to create/register the swap and obtain deposit instructions (e.g., `deposit_address`, optional `depositMemo`, and a provider `remote_id`).
+  3. **AwaitingDeposit**: backend persists the swap and returns `SwapInfo` populated with deposit details for UI to render as a QR.
+  4. **Polling**: backend polls `GET /v0/status?depositAddress=...` (and `depositMemo` if applicable) to drive subsequent state transitions and emit `SwapChangedEvent`.
+  - **IPC contract note**: `ipc-v1.ts` models deposit details as coming from `StartSwap` (`StartSwapResponse.swap.deposit_address`). If deposit instructions are moved to the quote response in the future, update the contract to include them on `SwapQuote`.
 - Poll interval: 5 seconds for active swaps, exponential backoff on errors
 - Timeout: 30 seconds per request
 - **Status mapping (v0 API statuses)**:
   - `PENDING_DEPOSIT` -> `AwaitingDeposit` (waiting for user to send)
   - `PROCESSING` -> `Pending` (swap in progress)
-  - `SUCCESS` -> `Completed` (swap successful)
+  - `SUCCESS` -> `Confirming` (provider indicates success; wallet still awaits on-chain confirmation)
   - `INCOMPLETE_DEPOSIT` -> `Failed` (partial deposit, needs action)
   - `REFUNDED` -> `Refunded` (swap failed, funds returned)
   - `FAILED` -> `Failed` (swap failed)
+  - **Local completion rule**: transition `Confirming -> Completed` only after the wallet observes the corresponding Zcash transaction as confirmed (incoming payout for ToZec, outgoing deposit for FromZec). Prefer a provider-supplied txid if available; otherwise fall back to a best-effort correlation (expected amount + time window).
 - **Testnet caveat**: NEAR Intents has no testnet deployment; swaps are mainnet-only
 - Rate limiting: Respect API rate limits, implement client-side throttling
 - See: https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api
@@ -344,7 +352,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 
 | Original Unknown | Resolution |
 |-----------------|------------|
-| Rust version | 1.92.0+ (pinned development toolchain; librustzcash requires Rust ≥1.85.1) |
+| Rust version | 1.92.0 (pinned toolchain; workspace MSRV enforced via Cargo `rust-version`; librustzcash requires Rust ≥1.85.1) |
 | Rust edition | 2024 (aligned with librustzcash/Zashi) |
 | Package manager | bun 1.3.5+ |
 | Primary dependencies | zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+, Arti |
@@ -365,7 +373,7 @@ We use Rust edition 2024 because:
 3. **Production-proven**: Stable since Rust 1.85.0, used in Zcash infrastructure
 4. **Future-ready**: Prepared for generators and better async ergonomics
 
-We target Rust 1.92.0 as the development toolchain. librustzcash requires Rust ≥1.85.1, but Zkore does not promise a project MSRV unless it is explicitly enforced in CI.
+Zkore pins and enforces Rust **1.92.0** (edition 2024) via `rust-toolchain.toml` and the workspace `rust-version` to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 Key migration considerations:
 - RPIT lifetime capture has new semantics (may need `use<..>` bounds)

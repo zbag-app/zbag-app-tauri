@@ -61,9 +61,9 @@ This section clarifies the separation of viewing keys and spending capability, f
 - If the mnemonic is persisted anywhere, it MUST be encrypted using the user-defined wallet password (per the v1 key hierarchy in plan.md: wallet password → Argon2id KEK → unwrap per-wallet DEK).
 - OS keychain "remember unlock" is OPTIONAL and stores only unlock material (e.g., DEK or a wrapping secret), never plaintext mnemonic; it MUST NOT be the sole protection for the mnemonic and MUST NOT satisfy per-action re-authentication.
 
-**Mnemonic storage modes:**
-1. **Encrypted blob on disk (default):** Store an encrypted mnemonic blob in backend-controlled storage (e.g., wallet directory). Decrypt requires wallet password unless auto-unlock is enabled via keychain-stored unlock material.
-2. **Memory-only mode (optional):** Do not persist mnemonic at rest; user must re-enter it on each app launch.
+**Mnemonic storage mode (v1):**
+- **Encrypted blob on disk (default):** Store an encrypted mnemonic blob in backend-controlled storage (e.g., wallet directory). Decrypt requires wallet password unless auto-unlock is enabled via keychain-stored unlock material.
+> Note: A “memory-only mnemonic” option (re-enter seed phrase on each app launch) is out of scope for v1 because it changes restart/unlock semantics and complicates the post-creation “View seed phrase” requirement (FR-008b).
 
 **Key derivation flow:**
 1. User unlocks wallet (provides password, or OS keychain supplies stored unlock material if enabled)

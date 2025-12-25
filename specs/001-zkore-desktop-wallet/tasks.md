@@ -97,7 +97,7 @@
 - [ ] T042 Create crates/zkore-engine/src/lib.rs with module exports
 - [ ] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
 - [ ] T043a Implement OS keychain auto-unlock on wallet load/open in crates/zkore-engine/src/wallet_manager.rs: when “remember unlock” is enabled, attempt keychain-backed unlock during LoadWallet and return the post-attempt lock_status
-- [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock, memory-only mode)
+- [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock)
 - [ ] T044a Create crates/zkore-engine/src/encryption.rs implementing the v1 key hierarchy per spec.md: Argon2id KDF (m=64MiB, t=3, p=1; per-wallet salt) + AEAD wrap/unwrap for a per-wallet DEK (used for encrypted mnemonic storage and as the raw SQLCipher key for the wallet DB)
 - [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
 - [ ] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
@@ -331,12 +331,13 @@
 - [ ] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT
 - [ ] T136 [US7] Implement FinalizeSigning Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, amount, fee, memo_present for confirmation
-- [ ] T138 [US7] Implement microSD fallback: file export (.pczt) in crates/zkore-keystone/src/payload.rs
+- [ ] T138 [US7] Implement microSD fallback: file export (.pczt) in crates/zkore-keystone/src/payload.rs with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028)
 - [ ] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import
 - [ ] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
 - [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
 - [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, and broadcast
 - [ ] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs
+- [ ] T141c [US7] Add FR-028 regression tests asserting exported `.pczt` filenames and exported/QR payload wrappers contain no hardware-wallet branding strings or device identifiers (including any wrapper metadata/comments)
 
 **Checkpoint**: User Story 7 complete - full Keystone air-gapped signing functional
 
@@ -351,14 +352,18 @@
 ### Implementation for User Story 8
 
  - [ ] T142 [US8] Create crates/zkore-core/src/domain/swap.rs with SwapIntent, SwapType, SwapState, SwapInfo, SwapQuote structs
+ - [ ] T142a [US8] Update crates/zkore-core/src/domain/mod.rs to export the swap domain module
  - [ ] T143 [P] [US8] Create crates/zkore-core/src/ipc/v1/commands/swap.rs with RequestSwapQuote, StartSwap, GetSwapStatus, ListSwaps request/response types
+ - [ ] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
  - [ ] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
+ - [ ] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
  - [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest
 - [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status)
 - [ ] T147 [US8] Implement request_swap_quote() in crates/zkore-engine/src/swap_service.rs calling NEAR Intents quote endpoint
-- [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs transitioning Draft to AwaitingDeposit
+- [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
 - [ ] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error)
-- [ ] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs
+- [ ] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs (map remote `SUCCESS` -> local `Confirming`)
+- [ ] T150a [US8] Implement `Confirming -> Completed` transition in crates/zkore-engine/src/swap_service.rs by correlating provider success with wallet confirmation of the relevant Zcash tx (incoming payout for ToZec, outgoing deposit for FromZec)
 - [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table
 - [ ] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token)
@@ -408,8 +413,11 @@
 
  - [ ] T166 [US10] Create crates/zkore-tor/src/lib.rs with module structure
  - [ ] T167 [US10] Create crates/zkore-core/src/domain/tor.rs with TorState and TorStatus types
+ - [ ] T167a [US10] Update crates/zkore-core/src/domain/mod.rs to export the tor domain module
  - [ ] T168 [P] [US10] Create crates/zkore-core/src/ipc/v1/commands/tor.rs with SetTorEnabled, GetTorState request/response types
+ - [ ] T168a [P] [US10] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export Tor commands
  - [ ] T169 [P] [US10] Create crates/zkore-core/src/ipc/v1/events/tor.rs with TorStatusEvent
+ - [ ] T169a [P] [US10] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export TorStatusEvent
 - [ ] T170 [US10] Create crates/zkore-tor/src/manager.rs with Tor state machine (Off, Connecting, On, Error) using Arti via zcash_client_backend tor feature
 - [ ] T171 [US10] Implement circuit establishment with 60s timeout in crates/zkore-tor/src/manager.rs
 - [ ] T172 [US10] Implement health check before marking status as On in crates/zkore-tor/src/manager.rs
@@ -517,7 +525,7 @@
 - [ ] T210 Implement memory zeroization for mnemonic and spending keys using zeroize crate in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T210a Clear sensitive UI state after use (seed words, backup word inputs, signing payloads/frames) in apps/zkore-app-tauri/src/pages and components
 - [ ] T211 Remove hardware wallet identifiers from PCZT payloads in crates/zkore-keystone/src/pczt.rs
-- [ ] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
+- [ ] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, wallet passwords, reauth tokens, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
 
 ### Validation
 

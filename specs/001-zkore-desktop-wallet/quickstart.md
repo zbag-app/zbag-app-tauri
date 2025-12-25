@@ -7,11 +7,11 @@
 
 ### Required Tools
 
-- **Rust**: 1.92.0+ (edition 2024, with rustup)
+- **Rust**: 1.92.0 (edition 2024, with rustup)
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2 (installed as dev dependency via `@tauri-apps/cli`, not global)
 
-> **Note**: We pin the development toolchain to Rust 1.92.0 (edition 2024) to align with librustzcash/Zashi. librustzcash currently requires Rust ≥1.85.1, but Zkore does not promise an MSRV unless it is explicitly enforced in CI.
+> **Note**: Zkore pins and enforces Rust **1.92.0** for builds (via `rust-toolchain.toml` and the workspace `rust-version`) to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 ### Platform-Specific
 
@@ -524,6 +524,8 @@ Edit `apps/zkore-app-tauri/src-tauri/tauri.conf.json`:
   }
 }
 ```
+
+> **CSP note**: The example CSP above is intentionally strict. If you see a blank window or missing assets in Tauri v2, loosen CSP to include the Tauri asset protocols (commonly `asset:` / `tauri:` and sometimes `blob:`) per the Tauri v2 docs, then tighten again.
 
 ### Environment Configuration
 
