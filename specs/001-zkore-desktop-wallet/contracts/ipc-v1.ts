@@ -160,6 +160,7 @@ export interface SwapInfo {
   output_asset: string;
   output_amount: string | null;
   deposit_address: string | null;
+  deposit_memo: string | null;
   destination_address: string | null;
   refund_address: string | null;
   state: SwapState;

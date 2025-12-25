@@ -79,10 +79,10 @@
   - `dry=true` for quote-only without commitment
 - **Swap sequence (Zkore integration)**:
   1. **Quote**: UI calls `RequestSwapQuote`; backend calls `GET /v0/quote?dry=true` and returns `SwapQuote` + `quote_id`.
-  2. **StartSwap / deposit intent**: UI calls `StartSwap(quote_id)`; backend calls `POST /v0/deposit/submit` to create/register the swap and obtain deposit instructions (e.g., `deposit_address`, optional `depositMemo`, and a provider `remote_id`).
+  2. **StartSwap / deposit intent**: UI calls `StartSwap(quote_id)`; backend calls `POST /v0/deposit/submit` to create/register the swap and obtain deposit instructions (e.g., `deposit_address`, optional `depositMemo`, and a provider `remote_id`). If `depositMemo` is provided, persist it and surface it to the UI via `SwapInfo.deposit_memo`.
   3. **AwaitingDeposit**: backend persists the swap and returns `SwapInfo` populated with deposit details for UI to render as a QR.
   4. **Polling**: backend polls `GET /v0/status?depositAddress=...` (and `depositMemo` if applicable) to drive subsequent state transitions and emit `SwapChangedEvent`.
-  - **IPC contract note**: `ipc-v1.ts` models deposit details as coming from `StartSwap` (`StartSwapResponse.swap.deposit_address`). If deposit instructions are moved to the quote response in the future, update the contract to include them on `SwapQuote`.
+  - **IPC contract note**: `ipc-v1.ts` models deposit details as coming from `StartSwap` (`StartSwapResponse.swap.deposit_address` / `StartSwapResponse.swap.deposit_memo`). If deposit instructions are moved to the quote response in the future, update the contract to include them on `SwapQuote`.
 - Poll interval: 5 seconds for active swaps, exponential backoff on errors
 - Timeout: 30 seconds per request
 - **Status mapping (v0 API statuses)**:

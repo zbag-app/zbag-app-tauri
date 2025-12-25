@@ -11,7 +11,7 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
 
 ## Technical Context
 
-**Language/Version**: Rust 1.92.0+ with edition 2024 (backend), TypeScript 5.x (frontend)
+**Language/Version**: Rust 1.92.0 with edition 2024 (backend), TypeScript 5.x (frontend)
 **Primary Dependencies**:
 - Backend: zcash_client_backend 0.21+ (pczt, tor features), zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+ (gRPC)
 - Frontend: React 18+, @keystonehq/animated-qr, @keystonehq/keystone-sdk, bun 1.3.5+ (package manager)

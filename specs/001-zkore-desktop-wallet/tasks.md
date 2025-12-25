@@ -36,7 +36,7 @@
 - [ ] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
 - [ ] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
 - [ ] T010 [P] Create .env.development with ZKORE_GRPC_URL and RUST_LOG configuration (network is selected per-wallet at creation; do not use a global env var to override wallet network)
-- [ ] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, @radix-ui/*, @tanstack/react-query, react-hotkeys-hook
+- [ ] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
 - [ ] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
 - [ ] T013 Create tests/integration/ and tests/e2e/ directory structure
 
@@ -357,22 +357,22 @@
  - [ ] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
  - [ ] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
  - [ ] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
- - [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest
-- [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status)
+- [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest
+- [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status; include optional depositMemo where required)
 - [ ] T147 [US8] Implement request_swap_quote() in crates/zkore-engine/src/swap_service.rs calling NEAR Intents quote endpoint
-- [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
-- [ ] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error)
+- [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.deposit_memo`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
+- [ ] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error; include deposit memo/tag in status requests when applicable)
 - [ ] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs (map remote `SUCCESS` -> local `Confirming`)
 - [ ] T150a [US8] Implement `Confirming -> Completed` transition in crates/zkore-engine/src/swap_service.rs by correlating provider success with wallet confirmation of the relevant Zcash tx (incoming payout for ToZec, outgoing deposit for FromZec)
-- [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table
+- [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table (including deposit_memo)
 - [ ] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token)
 - [ ] T154 [US8] Implement GetSwapStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T155 [US8] Implement ListSwaps Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T156 [P] [US8] Create apps/zkore-app-tauri/src/pages/Swap.tsx with swap type selection, asset selection (for v1: populate from a static supported-tokens list, e.g., apps/zkore-app-tauri/src/data/supportedTokens.ts), amount input
 - [ ] T157 [P] [US8] Create apps/zkore-app-tauri/src/pages/SwapQuote.tsx showing quote details, fees, deadline countdown
-- [ ] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment
-- [ ] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent
+- [ ] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment; display deposit address and optional memo/tag (`SwapInfo.deposit_memo`) with copy actions, show deadline + countdown during AwaitingDeposit, and handle expiration UX when deadline is reached
+- [ ] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent; show deadline/countdown when relevant (especially AwaitingDeposit) and handle expiration UX when deadline is reached
 - [ ] T160 [US8] Implement SwapChangedEvent emission in crates/zkore-engine/src/swap_service.rs on state transitions
 - [ ] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error code `SWAP_UNSUPPORTED_NETWORK` (mainnet-only 1Click API)
 - [ ] T160b [US8] Disable Swap UI for Testnet wallets with clear explanation in apps/zkore-app-tauri/src/pages/Swap.tsx and apps/zkore-app-tauri/src/pages/SwapFromZec.tsx
@@ -536,7 +536,7 @@
 
 ### CI (Constitution V / NFR-016)
 
-- [ ] T216a Add CI workflow configuration (e.g., .github/workflows/ci.yml) that runs Rust + frontend tests and enforces required gates (cargo test --workspace, bun test, bun test:a11y where applicable)
+- [ ] T216a Add CI workflow configuration (e.g., .github/workflows/ci.yml) that runs required gates: cargo audit, cargo test --workspace (see T216b for multi-lightwalletd matrix), cargo build --release --locked, cargo clippy -- -D warnings, bun test, bun test:a11y where applicable
 - [ ] T216b Add CI matrix coverage across at least two independent lightwalletd deployments (primary + secondary) and fail if either backend fails
 - [ ] T216c Add CI gate for migration tests: run app metadata DB migration tests + wallet DB migration safety tests on every PR (forward + rollback paths)
 

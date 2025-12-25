@@ -10,6 +10,10 @@
 
 `Timestamp` values are Unix epoch timestamps in **milliseconds (UTC)**. In SQLite schemas they are stored as `INTEGER`; over IPC they are serialized as `number`.
 
+### Amounts
+
+ZEC amounts in zatoshis are stored as integer types in SQLite/wallet DBs, but over IPC they are serialized as `string` to avoid JS overflow/precision issues (matches `contracts/ipc-v1.ts` `Zatoshis = string`, similar to `diversifier_index` stringification).
+
 ## Entity Definitions
 
 ### Wallet
@@ -254,6 +258,7 @@ A NEAR Intents swap operation.
 | output_asset | String | Target asset symbol | Non-empty |
 | output_amount | Option<String> | Target amount if known | Decimal string |
 | deposit_address | Option<String> | Where to send deposit | Valid address |
+| deposit_memo | Option<String> | Deposit memo/tag if required by provider | - |
 | destination_address | Option<String> | Where to receive output | Valid address |
 | refund_address | Option<String> | Refund address if failed | Valid address |
 | state | SwapState | Current state | Enum value |
@@ -541,6 +546,7 @@ CREATE TABLE swaps (
     output_asset TEXT NOT NULL,
     output_amount TEXT,
     deposit_address TEXT,
+    deposit_memo TEXT,
     destination_address TEXT,
     refund_address TEXT,
     state TEXT NOT NULL DEFAULT 'Draft',
