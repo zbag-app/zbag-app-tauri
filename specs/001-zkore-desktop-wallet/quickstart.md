@@ -11,7 +11,7 @@
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2 (installed as dev dependency via `@tauri-apps/cli`, not global)
 
-> **Note**: We use Rust 1.92.0 with edition 2024 to align with the librustzcash ecosystem. While librustzcash MSRV is 1.85.1, we target 1.92.0 for the development toolchain to leverage the latest improvements. Edition 2024 provides improved safety semantics and is production-proven in Zcash infrastructure.
+> **Note**: We pin the development toolchain to Rust 1.92.0 (edition 2024) to align with librustzcash/Zashi. librustzcash currently requires Rust ≥1.85.1, but Zkore does not promise an MSRV unless it is explicitly enforced in CI.
 
 ### Platform-Specific
 
@@ -265,7 +265,7 @@ pub struct AppState {
 pub async fn zkore_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
-) -> Result<CreateWalletResponse, IpcError> {
+) -> IpcResult<CreateWalletResponse> {
     // Implementation in Milestone 1
     todo!()
 }
@@ -274,7 +274,7 @@ pub async fn zkore_create_wallet(
 pub async fn zkore_get_balance(
     state: State<'_, AppState>,
     request: GetBalanceRequest,
-) -> Result<GetBalanceResponse, IpcError> {
+) -> IpcResult<GetBalanceResponse> {
     // Implementation in Milestone 1
     todo!()
 }
@@ -300,13 +300,13 @@ import * as IPC from '../types/ipc';
 
 export async function createWallet(
   request: IPC.CreateWalletRequest
-): Promise<IPC.CreateWalletResponse> {
+): Promise<IPC.IpcResult<IPC.CreateWalletResponse>> {
   return invoke(IPC.Commands.CREATE_WALLET, { request });
 }
 
 export async function getBalance(
   request: IPC.GetBalanceRequest
-): Promise<IPC.GetBalanceResponse> {
+): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
   return invoke(IPC.Commands.GET_BALANCE, { request });
 }
 
@@ -326,10 +326,20 @@ export function onSyncProgress(
     callback(event.payload as IPC.SyncProgressEvent);
   });
 }
+
+export function onWalletStatus(
+  callback: (event: IPC.WalletStatusEvent) => void
+): Promise<UnlistenFn> {
+  return listen(IPC.EventChannels.WALLET_STATUS, (event) => {
+    callback(event.payload as IPC.WalletStatusEvent);
+  });
+}
 ```
 
 > **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
 > currently loaded wallet set by `LoadWallet`; call `LoadWallet` before using them.
+>
+> Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`.
 
 ## Development Workflow
 

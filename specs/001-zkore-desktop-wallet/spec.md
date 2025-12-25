@@ -1,7 +1,7 @@
 # Feature Specification: Zkore Desktop Wallet
 
 **Feature Branch**: `001-zkore-desktop-wallet`
-**Status**: Draft
+**Status**: Complete
 **Input**: Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard), Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
 
 ## Clarifications

@@ -35,7 +35,7 @@
 - [ ] T007 Create apps/zkore-app-tauri directory structure using bun create tauri-app template (React TypeScript)
 - [ ] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
 - [ ] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
-- [ ] T010 [P] Create .env.development with ZKORE_GRPC_URL and RUST_LOG configuration
+- [ ] T010 [P] Create .env.development with ZKORE_GRPC_URL, ZKORE_NETWORK, and RUST_LOG configuration
 - [ ] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, @radix-ui/*, @tanstack/react-query, react-hotkeys-hook
 - [ ] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
 - [ ] T013 Create tests/integration/ and tests/e2e/ directory structure
@@ -67,9 +67,9 @@
 
 - [ ] T026 Create crates/zkore-core/src/ipc/mod.rs with version modules
 - [ ] T027 Create crates/zkore-core/src/ipc/v1/mod.rs with command and event submodules
-- [ ] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult
+- [ ] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult (command boundary convention: all Tauri commands return IpcResult<Response> and frontend wrappers return IpcResult<T>; no thrown errors across IPC)
 - [ ] T028a [P] Enforce typed IPC: add `#[serde(deny_unknown_fields)]` to all v1 request structs and implement schema_version validation helper in crates/zkore-core/src/ipc/v1/common.rs
-- [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts; ALSO add a regression check that IPC payloads never include mnemonic/seed/spending keys/tx bytes except in explicitly permitted mnemonic flows (CreateWallet, RestoreWallet, ViewSeedPhrase), and that IpcError.details never includes secrets
+- [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts; ALSO add a regression check that IPC payloads never include mnemonic/seed/spending keys/tx bytes except in explicitly permitted seed-word flows (CreateWallet, RestoreWallet, ViewSeedPhrase, VerifyBackup.word_challenges), that seed words never appear in any backend-to-UI payloads except CreateWalletResponse and ViewSeedPhraseResponse, and that IpcError.details never includes secrets
 - [ ] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus, UnlockWallet, LockWallet, ReauthWallet, ViewSeedPhrase request/response types
 - [ ] T030 [P] Create crates/zkore-core/src/ipc/v1/commands/address.rs with GetReceiveAddress request/response types
 - [ ] T031 [P] Create crates/zkore-core/src/ipc/v1/commands/sync.rs with StartSync, StopSync, GetSyncProgress request/response types
@@ -162,7 +162,7 @@
 - [ ] T068d [US1] Implement ReauthWallet + ViewSeedPhrase Tauri commands in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
 - [ ] T069 [P] [US1] Create apps/zkore-app-tauri/src/pages/CreateWallet.tsx with network selection (Mainnet/Testnet), wallet name input, wallet password + confirmation, and “remember unlock” toggle
 - [ ] T070 [P] [US1] Create apps/zkore-app-tauri/src/pages/SeedDisplay.tsx showing 24 seed words with copy protection, continue to backup challenge
-- [ ] T071 [US1] Create crates/zkore-engine/src/address_service.rs with minimal shielded receive address support (no rotation yet; US5 adds diversifier rotation and AddressType handling)
+- [ ] T071 [US1] Create crates/zkore-engine/src/address_service.rs with shielded-only Unified Address support: for AddressType::ShieldedOnly generate an Orchard+Sapling UA with no transparent receiver; for US1 reject AddressType::Transparent with a stable error (e.g., INVALID_REQUEST); no rotation yet (US5 adds diversifier rotation + Transparent support)
 - [ ] T073 [US1] Implement GetReceiveAddress Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/address.rs
 - [ ] T074 [P] [US1] Create apps/zkore-app-tauri/src/pages/Receive.tsx with shielded address display, QR code (qrcode.react), one-click copy
 - [ ] T075 [US1] Implement backup verification in crates/zkore-engine/src/wallet_manager.rs: verify only indices issued by active challenge_id; reject expired/unknown challenges; do not reveal which word is wrong; increment failed-attempt counter on failure and invalidate after 5 failures (require new GetBackupChallenge)
@@ -234,7 +234,7 @@
 - [ ] T101 [US3] Implement transparent balance tracking in crates/zkore-engine/src/balance.rs (transparent_total from TransparentUTXOs)
 - [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature; implement “Shield and Consolidate” per spec.md by sweeping all spendable TransparentUTXOs into a fresh internal Orchard output (no transparent change; fee deducted from transparent inputs) and auto-batching into multiple shielding transactions when the input set exceeds tx size/limit constraints; enforce BACKUP_REQUIRED guard and require a valid re-auth token for the shielding operation
 - [ ] T102a [US3] Handle “insufficient transparent balance to cover shielding fee” edge case in crates/zkore-engine/src/tx_service.rs: return a stable error code + required-minimum amount and surface actionable guidance (covers spec edge case)
-- [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts reauth_token)
+- [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts account_id, consolidate, reauth_token; in v1 UI sets consolidate=true for “Shield and Consolidate”)
 - [ ] T104 [US3] Add transparent balance display to apps/zkore-app-tauri/src/pages/Home.tsx with "Needs Shielding" label and Shield Now button
 - [ ] T105 [US3] Implement TRANSPARENT_SPEND_BLOCKED error when attempting direct transparent spend in crates/zkore-engine/src/tx_service.rs
 - [ ] T106 [US3] Create apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx modal for shielding confirmation and fee display (fee deducted from transparent inputs); if batching is required, show “shielding in progress” status/progress
@@ -281,7 +281,7 @@
 - [ ] T072 [US5] Implement diversifier index tracking in crates/zkore-engine/src/db/rotation_meta.rs (receive_rotation table)
 - [ ] T116 [US5] Implement shielded-only UA generation (Orchard + Sapling receivers, no transparent) in crates/zkore-engine/src/address_service.rs
 - [ ] T117 [US5] Implement transparent address derivation (separate from UA; single stable per account, no rotation in v1) in crates/zkore-engine/src/address_service.rs
-- [ ] T118 [US5] Update GetReceiveAddress to support AddressType parameter in crates/zkore-engine/src/address_service.rs
+- [ ] T118 [US5] Implement Transparent address support + diversifier rotation in crates/zkore-engine/src/address_service.rs (previously only ShieldedOnly was supported)
 - [ ] T119 [US5] Add transparent compatibility toggle to apps/zkore-app-tauri/src/pages/Receive.tsx with clear labeling
 - [ ] T120 [US5] Create apps/zkore-app-tauri/src/components/wallet/AddressDisplay.tsx with large QR and one-click copy
 - [ ] T120a [US5] Add milestone tests: unit (crates/zkore-engine/tests/us5_address_rotation.rs), integration (tests/integration/us5_addresses.rs), e2e (tests/e2e/us5_receive_addresses.spec.ts) covering rotation, address types, and labeling
