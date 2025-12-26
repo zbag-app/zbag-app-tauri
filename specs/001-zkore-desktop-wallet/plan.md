@@ -95,7 +95,15 @@ crates/
 │   │   ├── sync_service.rs        # CompactTxStreamer sync, progress events
 │   │   ├── tx_service.rs          # Send, shield, consolidate, submit
 │   │   ├── swap_service.rs        # Swap orchestration (NEAR Intents)
-│   │   ├── db/                    # App metadata + wallet meta CRUD
+│   │   ├── db/
+│   │   │   ├── mod.rs
+│   │   │   ├── schema.rs
+│   │   │   ├── migrations.rs
+│   │   │   ├── wallet_meta.rs
+│   │   │   ├── account_meta.rs    # CRUD for account name/type
+│   │   │   ├── backup_meta.rs
+│   │   │   ├── server_meta.rs
+│   │   │   └── tor_meta.rs
 │   │   └── balance.rs             # Balance computation (shielded/transparent)
 │   └── tests/
 ├── zkore-network/                 # gRPC + HTTP clients, transport abstraction
@@ -137,6 +145,7 @@ apps/
 │       │   ├── wallet/            # Wallet-specific components
 │       │   └── signing/           # Keystone QR components
 │       ├── pages/
+│       │   ├── Wallets.tsx        # Wallet list + open/switch
 │       │   ├── Home.tsx           # Status widget, balance overview
 │       │   ├── Receive.tsx        # Address display, QR, rotation
 │       │   ├── Send.tsx           # Send form, confirmation
@@ -270,10 +279,14 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - upgrade from at least one older schema fixture → current schema
   - rollback path (restore snapshot) when a migration/validation step fails
 
+#### Wallet Database Migration Strategy (app metadata DB)
+
+- App metadata DB tables (v1): wallets, accounts, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations.
+
 #### Transaction state source-of-truth (pending/confirmed)
 
 - “Pending” and “Confirmed” are derived from two sources:
-  - **Mempool detection** from the configured lightwalletd server via CompactTxStreamer mempool APIs (to satisfy FR-013 for incoming transactions, where supported)
+  - **Mempool detection** from the configured lightwalletd server via CompactTxStreamer mempool APIs (required to satisfy FR-013; AddServer MUST reject servers that do not implement the required mempool methods)
   - **Chain inclusion** from compact block scanning (to satisfy FR-014)
 - Outgoing transactions MUST be shown as **pending** once submission is accepted (even if mempool detection is delayed), and MUST transition to **confirmed** once mined; reorg handling may transition confirmed → pending again.
 
@@ -313,7 +326,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - Development/CI only: configure default server override via `ZKORE_GRPC_URL` environment variable; production builds should rely on persisted server configuration and MUST NOT silently override user-selected servers via environment variables
 - **Custom Server**: User can configure alternative lightwalletd endpoint
   - Security warning displayed when using custom servers
-  - Validation of server connectivity and network match before saving
+  - Validation of server connectivity, required RPC capabilities (including mempool APIs needed for FR-013), and network match before saving
 - **Compatibility testing**: CI must test against at least two independent lightwalletd deployments (primary + secondary)
 
 ### Privacy / Telemetry

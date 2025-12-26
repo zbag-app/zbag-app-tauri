@@ -84,14 +84,15 @@
 ### 2.3: App Metadata Database
 
 - [ ] T036 Create crates/zkore-engine/src/db/mod.rs with app metadata database module structure
-- [ ] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations); include per-wallet encryption metadata (wrapped_dek, KDF params/salt, AEAD scheme/version) in wallet_encryption
-- [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version)
+- [ ] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, accounts, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations); include per-wallet encryption metadata (wrapped_dek, KDF params/salt, AEAD scheme/version) in wallet_encryption
+- [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version) and the accounts table (account name/type keyed by (wallet_id, account_id))
 - [ ] T038a Add rollback strategy for app metadata DB migrations in crates/zkore-engine/src/db/migrations.rs: create pre-migration snapshot of the DB file, run forward migrations, validate, and restore snapshot on failure (document rollback limits)
 - [ ] T038b Add automated migration tests for app metadata DB in crates/zkore-engine/tests/app_db_migrations.rs using fixtures under tests/fixtures/app_db/ to exercise migrate-up + rollback-on-failure paths (aligns with NFR-016)
 - [ ] T038c Seed shipped default lightwalletd servers into the servers table in the initial app metadata DB migration: insert Mainnet `https://lwd.zec.pro` (default) plus `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks` (non-default), and Testnet `https://lwd.testnet.zec.pro` (default); enforce exactly one `is_default=1` per network (unique index) and keep the migration idempotent
 - [ ] T039 Create crates/zkore-engine/src/db/wallet_meta.rs with CRUD operations for wallet metadata table
 - [ ] T040 Create crates/zkore-engine/src/db/backup_meta.rs with CRUD operations for backup_status table
 - [ ] T041 Create crates/zkore-engine/src/db/server_meta.rs with CRUD operations for servers table
+- [ ] T041a Create crates/zkore-engine/src/db/account_meta.rs with CRUD operations for accounts table (wallet-scoped account name + account_type)
 
 ### 2.4: Wallet Engine Foundation
 
@@ -114,7 +115,7 @@
 - [ ] T046 Create crates/zkore-network/src/lib.rs with module exports
 - [ ] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
 - [ ] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
-- [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs (stream or polling, depending on lightwalletd server support) to enable pending-transaction detection (FR-013)
+- [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs (stream or polling) to enable pending-transaction detection (FR-013); mempool API support is required and must be enforced via AddServer probing/validation (T193/T200a)
 - [ ] T048b Create crates/zkore-engine/src/server_resolver.rs (or extend crates/zkore-engine/src/db/server_meta.rs) with “resolve active server endpoint” logic for an active wallet network: precedence is (1) dev/CI override via `ZKORE_GRPC_URL` (when allowed), (2) persisted default server for the wallet’s network from the servers table, (3) stable error if none exists
 - [ ] T048c Enforce dev/CI-only semantics for `ZKORE_GRPC_URL`: gate the override so it is never applied in production/release builds (e.g., `cfg(debug_assertions)` or a feature flag); add unit tests covering resolver precedence and confirming the override is ignored when not allowed
 
@@ -157,12 +158,12 @@
 - [ ] T062 [US1] Implement mnemonic generation in crates/zkore-engine/src/wallet_manager.rs using bip39 crate (24-word English wordlist)
 - [ ] T063 [US1] Implement wallet directory creation with network separation (~/.zkore/wallets/{network}/{wallet-id}/) in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T064 [US1] Implement encrypted zcash_client_sqlite WalletDb initialization in crates/zkore-engine/src/wallet_manager.rs (wallet DB encrypted at rest; requires unlock)
-- [ ] T065 [US1] Implement UFVK derivation from mnemonic and account insertion in crates/zkore-engine/src/wallet_manager.rs
+- [ ] T065 [US1] Implement UFVK derivation from mnemonic and account insertion in crates/zkore-engine/src/wallet_manager.rs; also insert app metadata accounts row for (wallet_id, account_id=0) with name = wallet name and account_type=Software
 - [ ] T066 [US1] Implement mnemonic storage via KeyStore trait in crates/zkore-engine/src/wallet_manager.rs (encrypted at rest with wallet password; optional OS keychain remember-unlock)
 - [ ] T067 [US1] Implement backend-issued BackupChallenge generation in crates/zkore-engine/src/wallet_manager.rs: challenge_id + exactly 4 distinct 1-based word indices (1..=24) + expires_at (10 minutes) + attempt counter (max 5 failed attempts); store challenges in-memory only (restart invalidates outstanding challenges)
 - [ ] T068 [US1] Implement CreateWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (accepts password + remember_unlock; returns seed_phrase and initial backup_challenge; sets the created wallet as the active wallet equivalent to LoadWallet)
 - [ ] T068a [US1] Implement ListWallets Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
-- [ ] T068b [US1] Implement LoadWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (updates last_opened_at)
+- [ ] T068b [US1] Implement LoadWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs (updates last_opened_at; when unlocked, build AccountInfo[] by joining wallet DB accounts with app DB accounts metadata; fallback if metadata missing: name = "Account {account_id + 1}" and account_type inferred by comparing wallet-derived UFVK to stored account UFVK (match => Software, else HardwareSigner); must not panic)
 - [ ] T068c [US1] Implement UnlockWallet + LockWallet Tauri commands in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
 - [ ] T068d [US1] Implement ReauthWallet + ViewSeedPhrase Tauri commands in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs
 - [ ] T069 [P] [US1] Create apps/zkore-app-tauri/src/pages/CreateWallet.tsx with network selection (Mainnet/Testnet), wallet name input, wallet password + confirmation, and “remember unlock” toggle
@@ -265,7 +266,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation; on successful restore, persist backup status as complete (`backup_required=false`, `backup_completed_at=now`, `verification_method="restore_seed_phrase"`), so spending is not blocked by BACKUP_REQUIRED for restored wallets
+- [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation; on successful restore, persist backup status as complete (`backup_required=false`, `backup_completed_at=now`, `verification_method="restore_seed_phrase"`), so spending is not blocked by BACKUP_REQUIRED for restored wallets; also insert app metadata accounts row for (wallet_id, account_id=0) with name = wallet name and account_type=Software
 - [ ] T108 [US4] Implement birthday height lookup from date in crates/zkore-engine/src/birthday.rs (checkpoint table lookup)
 - [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet)
 - [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx to collect RestoreWalletRequest fields (excluding birthday_date, handled in T111): wallet name input, network selection (Mainnet/Testnet), wallet password + confirmation, “remember unlock” toggle, and seed phrase entry (textarea with word autocomplete + paste); on continue, navigate to RestoreBirthday.tsx while retaining captured values (router state or a restore-flow store)
@@ -310,7 +311,7 @@
 
  - [ ] T121 [US6] Create crates/zkore-keystone/src/lib.rs with module structure
 - [ ] T122 [US6] Create crates/zkore-keystone/src/ufvk.rs with UFVK parsing and validation (including extracting/validating the UFVK network)
-- [ ] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account; reject UFVK network mismatches vs the wallet’s network and return `INVALID_UFVK`
+- [ ] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account; persist app metadata accounts row for the new account_id with name from request and account_type=HardwareSigner; reject UFVK network mismatches vs the wallet’s network and return `INVALID_UFVK`
 - [ ] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
 - [ ] T126 [US6] Add watch-only badge to account display in apps/zkore-app-tauri/src/pages/Home.tsx
@@ -479,9 +480,11 @@
 - [ ] T188 [US12] Add network field immutability enforcement in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T189 [US12] Implement network-aware address prefix validation in crates/zkore-engine/src/address_service.rs
 - [ ] T190 [US12] Add network badge/color coding to apps/zkore-app-tauri/src/pages/Home.tsx header
+- [ ] T190a [US12] Create apps/zkore-app-tauri/src/pages/Wallets.tsx to list wallets (ListWallets), show network badge per wallet, and open/switch wallets (LoadWallet); include entry points to CreateWallet/RestoreWallet flows so users can create/restore additional wallets after onboarding
+- [ ] T190b [US12] Add a persistent navigation entry or header wallet switcher/dropdown to reach apps/zkore-app-tauri/src/pages/Wallets.tsx and switch wallets (LoadWallet)
 - [ ] T191 [US12] Create apps/zkore-app-tauri/src/components/common/NetworkBadge.tsx with Mainnet (green) and Testnet (orange) styling
 - [ ] T192 [US12] Add network display (read-only) to apps/zkore-app-tauri/src/pages/Settings.tsx
-- [ ] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators; ALSO assert wallet DB directories are separated by network root (Mainnet under `~/.zkore/wallets/mainnet/{wallet-id}/` and Testnet under `~/.zkore/wallets/testnet/{wallet-id}/`, with no shared directory)
+- [ ] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators; ALSO cover wallet list/switch UX (ListWallets shows per-wallet network badges; LoadWallet switches active wallet); ALSO assert wallet DB directories are separated by network root (Mainnet under `~/.zkore/wallets/mainnet/{wallet-id}/` and Testnet under `~/.zkore/wallets/testnet/{wallet-id}/`, with no shared directory)
 
 **Checkpoint**: User Story 12 complete - network selection and visual distinction functional
 
@@ -491,7 +494,7 @@
 
 **Purpose**: Custom server support with validation and security warnings (supports multiple user stories)
 
-- [ ] T193 Implement server connection test via GetLightdInfo in crates/zkore-network/src/grpc_client.rs
+- [ ] T193 Implement server probing in crates/zkore-network/src/grpc_client.rs via GetLightdInfo + required capability checks (including CompactTxStreamer mempool methods needed for FR-013); AddServer MUST fail if required methods are missing (e.g., UNIMPLEMENTED)
 - [ ] T194 Implement server network validation (must match wallet network) in crates/zkore-engine/src/wallet_manager.rs
 - [ ] T195 Implement AddServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
 - [ ] T196 Implement SetDefaultServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
@@ -499,7 +502,7 @@
 - [ ] T198 Implement ListServers Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
 - [ ] T199 Create apps/zkore-app-tauri/src/pages/ServerSettings.tsx with server list, add custom, set default
 - [ ] T200 Create apps/zkore-app-tauri/src/components/settings/ServerSecurityWarning.tsx for custom server warning
-- [ ] T200a Add milestone tests: unit + integration + e2e for custom server flows covering AddServer probing (fail if probing fails), security warning on non-default servers, SetDefaultServer sets exactly one default per network, network mismatch rejection when selecting/using a server for an active wallet (FR-055), TestServer returns success/latency or stable error, and ListServers UI filtering by active wallet network
+- [ ] T200a Add milestone tests: unit + integration + e2e for custom server flows covering AddServer probing (fail if probing fails OR if required capabilities like mempool APIs are missing), security warning on non-default servers, SetDefaultServer sets exactly one default per network, network mismatch rejection when selecting/using a server for an active wallet (FR-055), TestServer returns success/latency or stable error, and ListServers UI filtering by active wallet network
 
 ---
 

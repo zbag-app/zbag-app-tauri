@@ -107,7 +107,7 @@
 - Arti version: 0.35+ (latest in librustzcash)
 - Zashi 2.1 uses this in production (beta feature)
 - Proven fail-closed behavior in production
-- Routes: tx submit, tx fetch, swap APIs, rate APIs
+- Routes: tx submit, tx fetch, swap APIs (and any other third-party HTTP APIs added in the future)
 
 **Alternatives Considered**:
 - System Tor daemon: Rejected for deployment complexity and platform differences

@@ -76,7 +76,7 @@ repository = "https://github.com/zkore/zkore-desktop"
 #   - pczt: PCZT signing for Keystone hardware wallet (FR-020-028)
 #   - tor: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)
 zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.19", features = ["transparent-inputs"] }
+zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs"] }
 zcash_primitives = { version = "0.26" }
 zcash_protocol = { version = "0.7" }
 
@@ -370,7 +370,7 @@ export function onWalletStatus(
 ```
 
 > **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
-> currently loaded wallet set by `LoadWallet`.
+> currently active wallet set by `LoadWallet`, `CreateWallet` (on success), and `RestoreWallet` (on success).
 >
 > `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet in the backend. In other cases, call `LoadWallet` before issuing account-scoped requests. The UI MAY call `LoadWallet` after create/restore to retrieve `accounts` and `lock_status`.
 >

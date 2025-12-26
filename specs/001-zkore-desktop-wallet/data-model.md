@@ -96,13 +96,18 @@ A logical grouping within a wallet for shielded operations (Sapling + Orchard).
 | wallet_id | UUID | Parent wallet reference | FK to Wallet |
 | account_type | AccountType | Spending capability | Enum value |
 | name | String | User-defined account name | 1-30 chars |
-| diversifier_index | u64 | Next address diversifier | >= 0 |
+| diversifier_index | u64 | Derived: next address diversifier (source of truth is `receive_rotation`) | >= 0 |
 | created_at | Timestamp | Creation timestamp | Auto-set |
 
 **AccountType Enum**:
 - `Software` - Full keys, can spend
 - `WatchOnly` - Reserved for future generic viewing-key accounts (MUST NOT be created in v1)
 - `HardwareSigner` - Watch-only with Keystone signing capability (created via UFVK import; spends via Keystone signing flow)
+
+**Persistence (v1)**:
+- Account UFVK and scan state live in wallet DB (zcash_client_sqlite).
+- Account display name and account_type live in app metadata DB `accounts` table (encrypted wallet DB remains source of scan state).
+- Address rotation state (next diversifier_index) is persisted in app metadata DB `receive_rotation` table; `Account.diversifier_index` is derived from it.
 
 **Relationships**:
 - Belongs to `Wallet` (N:1)
@@ -457,6 +462,9 @@ Wallet (1) ─────── (*) Account (1) ─────── (*) Trans
    │
    └─── (1) BackupStatus
 
+Wallet (1) ─────── (*) AccountMeta (app DB: accounts; keyed by (wallet_id, account_id))
+Wallet (1) ─────── (*) QueuedBroadcast (file-based: wallet directory)
+
 SwapIntent ─────── (references) ─────── Wallet
 
 ServerConfig (global, one default per network) ─────── (used by matching network) ─────── Wallet
@@ -476,6 +484,7 @@ TorState ─────── (global singleton)
 ### Wallet Directory (encrypted auxiliary blobs)
 - Stored under: `~/.zkore/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - `queued_broadcasts/`: AEAD-encrypted signed tx bytes for broadcast retry queue entries (7-day retention; deleted on success; user-initiated retry only)
+  - Entries are discovered by scanning `queued_broadcasts/` on wallet load/startup; there is no SQL index in v1.
 
 ### App Metadata DB (custom SQLite)
 ```sql
@@ -489,6 +498,16 @@ CREATE TABLE wallets (
     remember_unlock_enabled INTEGER NOT NULL DEFAULT 0, -- OS keychain-backed auto-unlock (must not satisfy per-action re-auth)
     created_at INTEGER NOT NULL,
     last_opened_at INTEGER
+);
+
+-- Account metadata (wallet-scoped)
+CREATE TABLE accounts (
+    wallet_id TEXT NOT NULL REFERENCES wallets(id),
+    account_id INTEGER NOT NULL, -- ZIP-32 account index
+    name TEXT NOT NULL,
+    account_type TEXT NOT NULL,  -- Software | HardwareSigner (WatchOnly reserved for future)
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (wallet_id, account_id)
 );
 
 -- Wallet encryption metadata (per-wallet)

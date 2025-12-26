@@ -282,7 +282,11 @@ export interface SignedResponse {
 // Command Requests
 // ============================================================================
 
-/** Create a new wallet */
+/**
+ * Create a new wallet.
+ *
+ * On success, this sets the created wallet as the active wallet (equivalent to `LoadWallet`).
+ */
 export interface CreateWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
@@ -351,8 +355,14 @@ export interface ViewSeedPhraseRequest extends VersionedPayload {
 }
 
 /**
- * Account-scoped requests (those with account_id) operate on the currently loaded wallet
- * set by LoadWallet; account_id values are wallet-local.
+ * Account-scoped requests (those with account_id) operate on the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * account_id values are wallet-local to the active wallet.
  */
 /** Get fresh shielded receive address */
 export interface GetReceiveAddressRequest extends VersionedPayload {
@@ -454,7 +464,11 @@ export interface VerifyBackupRequest extends VersionedPayload {
   word_challenges: Record<number, string>;
 }
 
-/** Restore wallet from seed */
+/**
+ * Restore wallet from seed.
+ *
+ * On success, this sets the restored wallet as the active wallet (equivalent to `LoadWallet`).
+ */
 export interface RestoreWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
@@ -520,7 +534,7 @@ export interface GetSwapStatusRequest extends VersionedPayload {
 }
 
 /**
- * List swaps for the currently loaded wallet only.
+ * List swaps for the currently active wallet only.
  *
  * Note: SwapInfo does not include a wallet_id, so this call is wallet-scoped.
  */
@@ -538,6 +552,7 @@ export interface GetTorStateRequest extends VersionedPayload {}
  * Add a custom lightwalletd server configuration.
  *
  * The backend MUST probe `grpc_url` to determine and persist the server's `network` (see ServerInfo.network).
+ * Probing MUST also validate required server capabilities for v1 (including CompactTxStreamer mempool APIs used to satisfy FR-013).
  * If probing fails, the request MUST fail rather than guessing.
  */
 export interface AddServerRequest extends VersionedPayload {
@@ -770,8 +785,14 @@ export interface ListSwapsResponse extends VersionedPayload {
 // ============================================================================
 
 /**
- * Events are emitted for the currently loaded wallet set by LoadWallet.
- * Any account_id values are wallet-local to that wallet.
+ * Events are emitted for the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * Any account_id values are wallet-local to the active wallet.
  */
 /** Sync progress update */
 export interface SyncProgressEvent extends VersionedPayload {
