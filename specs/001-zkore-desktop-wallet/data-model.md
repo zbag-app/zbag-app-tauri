@@ -24,9 +24,10 @@ The root entity containing seed-derived keys and accounts.
 |-------|------|-------------|------------|
 | id | UUID | Unique wallet identifier | Auto-generated |
 | name | String | User-defined wallet name | 1-50 chars, non-empty |
-| directory_path | String | Filesystem path to wallet data (network-specific: ~/.zkore/wallets/{network}/{wallet-id}/) | Valid path, writable |
+| directory_path | String | Filesystem path to wallet data (network-specific: `~/.zkore/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`) | Valid path, writable |
 | wallet_type | WalletType | Software (v1); WatchOnly reserved for future | Enum value |
 | network | Network | Mainnet or Testnet (IMMUTABLE after creation) | Enum value |
+| remember_unlock_enabled | bool | OS keychain-backed auto-unlock preference (stores unlock material, never satisfies per-action re-auth) | Default false |
 | created_at | Timestamp | Creation timestamp | Auto-set |
 | last_opened_at | Timestamp | Last access timestamp | Updated on open |
 
@@ -35,8 +36,8 @@ The root entity containing seed-derived keys and accounts.
 - `WatchOnly` - Reserved for future (watch-only is modeled via AccountType in v1)
 
 **Network Enum**:
-- `Mainnet` - Production Zcash network (addresses start with u1, zs, t1/t3)
-- `Testnet` - Test network (addresses start with utest, ztestsapling, tm)
+- `Mainnet` - Production Zcash network (addresses start with `u1...`, `zs1...`, `t1...`/`t3...`)
+- `Testnet` - Test network (addresses start with `utest1...`, `ztestsapling1...`, `tm...`)
 
 **Relationships**:
 - Has many `Account` (1:N)
@@ -45,6 +46,7 @@ The root entity containing seed-derived keys and accounts.
 **Notes**:
 - Seed phrase NEVER stored in app metadata DB
 - Network field is IMMUTABLE after wallet creation
+- `remember_unlock_enabled` persists the OS keychain-backed auto-unlock preference (stores unlock material, never satisfies per-action re-auth)
 - In v1, `wallet_type` is always `Software`; watch-only behavior is represented by `AccountType`
 
 ### Key Storage Architecture
@@ -336,7 +338,7 @@ Current Tor connection state.
 - `Error` - Failed, requires action
 
 **Fail-Closed Behavior**:
-- When `enabled = true` and `status != On`, block sensitive operations
+- When `enabled = true` and `status != On`, block all operations that require network access (sync, transaction submission, transaction fetching/enhancement, swap HTTP calls); local/offline UI operations that do not require network may still work
 - Never silently fallback to direct connections
 
 ---
@@ -344,7 +346,7 @@ Current Tor connection state.
 ### ServerConfig
 
 Light client server configuration.
-Stored in the app metadata DB globally per network (shared across wallets).
+Stored in the app metadata DB globally per network (shared across wallets). Selection is global per network (one default per network), not per wallet.
 
 | Field | Type | Description | Validation |
 |-------|------|-------------|------------|
@@ -363,7 +365,7 @@ Stored in the app metadata DB globally per network (shared across wallets).
 **Validation Rules**:
 - `grpc_url` MUST include scheme (defaults use https://)
 - Server network MUST match wallet network when connecting
-- Only servers matching the wallet's network are available for selection
+- Only servers matching a given network can be selected as the default for that network (UI SHOULD filter by the active wallet's network when presenting selectable servers)
 
 ---
 
@@ -457,7 +459,7 @@ Wallet (1) ─────── (*) Account (1) ─────── (*) Trans
 
 SwapIntent ─────── (references) ─────── Wallet
 
-ServerConfig ─────── (selected) ─────── Wallet
+ServerConfig (global, one default per network) ─────── (used by matching network) ─────── Wallet
 
 TorState ─────── (global singleton)
 ```
@@ -472,7 +474,7 @@ TorState ─────── (global singleton)
 - Directory structure: ~/.zkore/wallets/mainnet/{wallet-id}/ and ~/.zkore/wallets/testnet/{wallet-id}/
 
 ### Wallet Directory (encrypted auxiliary blobs)
-- Stored under: `~/.zkore/wallets/{network}/{wallet-id}/`
+- Stored under: `~/.zkore/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - `queued_broadcasts/`: AEAD-encrypted signed tx bytes for broadcast retry queue entries (7-day retention; deleted on success; user-initiated retry only)
 
 ### App Metadata DB (custom SQLite)
@@ -481,7 +483,7 @@ TorState ─────── (global singleton)
 CREATE TABLE wallets (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    directory_path TEXT NOT NULL,  -- Network-specific path: ~/.zkore/wallets/{network}/{wallet-id}/
+    directory_path TEXT NOT NULL,  -- Network-specific path: ~/.zkore/wallets/{network}/{wallet-id}/ (lowercase: mainnet/testnet)
     wallet_type TEXT NOT NULL,
     network TEXT NOT NULL,  -- IMMUTABLE after creation
     remember_unlock_enabled INTEGER NOT NULL DEFAULT 0, -- OS keychain-backed auto-unlock (must not satisfy per-action re-auth)

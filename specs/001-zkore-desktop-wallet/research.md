@@ -251,7 +251,7 @@
 **Implementation Notes**:
 - Network selection during wallet creation flow
 - Store network in wallet metadata (immutable field)
-- Database path includes network: `wallets/{network}/{wallet-id}/`
+- Database path includes network: `wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - UI clearly indicates network in wallet list and detail screens
 - No UI affordance for changing network after creation
 
@@ -278,7 +278,7 @@
 
 **Testnet servers**:
 - Default: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
-- Fallback: `https://testnet.zec.rocks` (community endpoint, check Hosh for status)
+- Optional community endpoint (not shipped as a default): `https://testnet.zec.rocks` (may be added via Custom Servers; check Hosh for status)
 
 **Testing**:
 - CI should validate against at least two independent lightwalletd deployments (primary + secondary)

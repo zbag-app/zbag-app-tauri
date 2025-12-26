@@ -7,7 +7,7 @@
 
 ## Summary
 
-Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard shielded pools), Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps/pay, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words (BIP-39 24-word English; no passphrase in v1) are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
+Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard shielded pools), Keystone hardware wallet support via air-gapped PCZT signing, NEAR Intents DEX integration for swaps, and optional Tor anonymization. Built on Tauri (Rust backend + React TypeScript frontend) with strict trust boundaries ensuring spending secrets never reach the UI layer; mnemonic words (BIP-39 24-word English; no passphrase in v1) are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and must never be persisted or logged by the UI.
 
 ## Technical Context
 
@@ -133,7 +133,8 @@ apps/
 │       │   ├── Send.tsx           # Send form, confirmation
 │       │   ├── Activity.tsx       # Transaction + swap list
 │       │   ├── Swap.tsx           # NEAR Intents swap flows
-│       │   ├── Settings.tsx       # Server, Tor, backup
+│       │   ├── Settings.tsx       # Tor, backup, logs, security; links to ServerSettings
+│       │   ├── ServerSettings.tsx # Server list, add custom, set default
 │       │   └── Signing.tsx        # Full-screen Keystone signing
 │       ├── services/
 │       │   ├── ipc.ts             # Tauri IPC wrapper
@@ -189,6 +190,7 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Spend-capable secret material (mnemonic / spending capability) encrypted at rest with a user-defined wallet password; optional OS keychain “remember unlock” for convenience.
 - Wallet defaults to locked on restart; prompt for wallet password on app launch unless keychain auto-unlock is enabled.
 - Manual wallet-password re-authentication required for every spending attempt (send, shield, swap-from-ZEC) and for "View seed phrase"; OS keychain “remember unlock” MUST NOT satisfy per-action re-auth.
+- “View seed phrase” UI entry point lives in Settings > Security and MUST remain reachable even after backup completion and for restored wallets (still gated by manual re-auth).
 - Wallet DB encrypted at rest; transaction history, balances, addresses, and note metadata must not be readable without successful unlock.
 - Memos treated as sensitive: memo plaintext must not be written to disk; encryption-at-rest must cover memo contents.
 - Wallet DB key hierarchy (v1): wallet password → Argon2id KEK → unwrap per-wallet DEK; the DEK is the raw SQLCipher key for the wallet DB. Store only `wrapped_dek` + KDF params/salt in app metadata; prefer storing DEK (not password) in OS keychain for “remember unlock”.

@@ -102,6 +102,8 @@ export type RecipientKind = 'Orchard' | 'Sapling' | 'Transparent';
 
 export interface TransactionInfo {
   txid: string;
+  /** Wallet-local account index (ZIP-32) */
+  account_id: number;
   tx_type: TransactionType;
   value: Zatoshis;
   fee: Zatoshis;
@@ -670,7 +672,16 @@ export interface RetryBroadcastResponse extends VersionedPayload {
 }
 
 export interface ShieldFundsResponse extends VersionedPayload {
+  /**
+   * Txid of the shielding transaction created by this call.
+   *
+   * Note: Shielding may batch into multiple transactions when the transparent input
+   * set is too large to fit in a single transaction; in that case this `txid`
+   * refers to the first transaction in the batch. Additional shielding txids are
+   * observable via `tx.changed` events and `ListTransactions`.
+   */
   txid: string;
+  /** Fee (zatoshis) for the transaction identified by `txid` */
   fee: Zatoshis;
 }
 
