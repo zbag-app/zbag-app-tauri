@@ -103,6 +103,7 @@ A returning user restores their wallet using their seed phrase. They can provide
 2. **Given** restore is in progress, **When** the user views the home screen, **Then** they see distinct phases, progress percentage, and estimated time remaining
 3. **Given** funds are discovered during restore, **When** spend-before-sync is available, **Then** the user can spend discovered funds before full sync completes
 4. **Given** seed entry is in progress, **When** the user types seed words, **Then** word autocomplete and paste from clipboard are supported
+5. **Given** a user successfully restores a wallet using a valid seed phrase, **When** the wallet is created/restored, **Then** backup is considered complete (no persistent backup reminder) and spending is enabled subject to normal unlock and per-spend re-authentication
 
 ---
 
@@ -264,7 +265,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-001**: System MUST create a new wallet with BIP-39 24-word English mnemonic generation in under 60 seconds (no BIP-39 passphrase support in v1)
 - **FR-002**: System MUST allow receiving funds before backup is completed
 - **FR-003**: System MUST display a persistent, undismissable backup reminder until backup is verified
-- **FR-004**: System MUST block all spending until backup verification is complete (re-entering 4 specific seed words requested by a backend-issued challenge)
+- **FR-004**: System MUST block all spending until the user has proven possession of the wallet seed phrase. For newly created wallets, this is satisfied by backup verification via a backend-issued 4-word challenge. For restored wallets (FR-005), successful restore using the full 24-word seed phrase MUST mark backup as complete immediately.
 - **FR-005**: System MUST support wallet restoration from a BIP-39 24-word English mnemonic with word autocomplete and paste support (no BIP-39 passphrase support in v1)
 - **FR-006**: System MUST accept an optional approximate first-transaction date during restore to reduce scan time
 - **FR-007**: System MUST display distinct restore phases, progress percentage, and estimated time remaining
@@ -382,7 +383,7 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 - **SC-003**: For 95% of outgoing shielded sends, the wallet receives a successful broadcast acknowledgment from the configured server within 10 seconds of user confirmation (assuming server connectivity)
 - **SC-004**: Users can complete the full Keystone signing flow (create transaction, scan to device, sign, scan back, broadcast) in under 3 minutes
 - **SC-005**: Wallet status widget correctly reflects current state within 2 seconds of any state change
-- **SC-006**: No user can spend funds without completing backup verification (100% enforcement)
+- **SC-006**: No user can spend funds without having proven possession of the seed phrase (either via backup verification for newly created wallets or via successful restore from seed phrase) (100% enforcement)
 - **SC-007**: No transparent funds can be spent directly (100% enforcement of shield-first policy)
 - **SC-008**: When Tor is enabled and fails, 100% of network operations fail (zero silent fallback)
 - **SC-009**: Swap status updates appear in Activity within 5 seconds of state changes

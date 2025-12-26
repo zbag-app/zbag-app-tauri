@@ -308,11 +308,13 @@ Tracks seed phrase backup state per wallet.
 **Constraints**:
 - All spending blocked while `backup_required = true`
 - Cannot be unset once `backup_required = false`
+- Restored wallets: On successful `RestoreWallet`, set `backup_required = false`, set `backup_completed_at = now()`, and set `verification_method = "restore_seed_phrase"`
 
 **State Transitions**:
 ```
 [Created] -> Required -> Verified (spending enabled)
 ```
+Restored wallets transition directly to `Verified` on successful restore.
 
 ---
 

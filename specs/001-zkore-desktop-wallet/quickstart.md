@@ -368,7 +368,7 @@ export function onWalletStatus(
 > **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
 > currently loaded wallet set by `LoadWallet`.
 >
-> `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet (equivalent to `LoadWallet`), otherwise call `LoadWallet` before issuing account-scoped requests.
+> `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet in the backend. In other cases, call `LoadWallet` before issuing account-scoped requests. The UI MAY call `LoadWallet` after create/restore to retrieve `accounts` and `lock_status`.
 >
 > If `LoadWalletResponse.lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty list.
 > After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
@@ -536,6 +536,7 @@ Create `.env.development`:
 # Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
 # Testnet: https://lwd.testnet.zec.pro (default)
 # Note: this override does NOT set wallet network. Wallet network is selected at wallet creation and is immutable.
+# Note: this is for local development/CI only; release builds should rely on persisted server configuration and must not silently override user-selected servers via environment variables.
 ZKORE_GRPC_URL=https://lwd.testnet.zec.pro
 
 # Logging

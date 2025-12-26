@@ -286,7 +286,7 @@
 **Development Configuration**:
 - Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
-- Configure override via environment variable: `ZKORE_GRPC_URL`
+- Development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint for developer workflows and CI. Production builds should rely on persisted server configuration (FR-052 through FR-055) and MUST NOT silently override user-selected servers via environment variables.
 
 **Connection validation**:
 - Call `GetLightdInfo` before saving server config

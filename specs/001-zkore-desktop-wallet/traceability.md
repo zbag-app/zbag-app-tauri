@@ -9,7 +9,7 @@ This document provides an explicit, review-friendly mapping from requirements in
 | **US1** Create New Wallet and Receive Funds | FR-001, FR-002, FR-003, FR-004, FR-008a, FR-008b, FR-015 |
 | **US2** Send Shielded Transaction with Memo | FR-009, FR-009a, FR-012, FR-013, FR-014 |
 | **US3** Shield Transparent Funds | FR-010, FR-011 |
-| **US4** Restore Wallet from Seed Phrase | FR-005, FR-006, FR-007, FR-008 |
+| **US4** Restore Wallet from Seed Phrase | FR-004, FR-005, FR-006, FR-007, FR-008 |
 | **US5** Receive to Fresh Shielded Address | FR-015, FR-016, FR-017, FR-018, FR-019 |
 | **US6** Keystone Hardware Wallet Watch-Only | FR-020, FR-021 |
 | **US7** Keystone Air-Gapped Signing | FR-022, FR-023, FR-024, FR-025, FR-026, FR-027, FR-028 |
@@ -18,7 +18,7 @@ This document provides an explicit, review-friendly mapping from requirements in
 | **US10** Enable Tor Anonymization | FR-037, FR-038, FR-039, FR-040, FR-041 |
 | **US11** Wallet Status Widget | FR-042, FR-043, FR-044, FR-045, FR-046, FR-047 |
 | **US12** Network Selection | FR-048, FR-049, FR-050, FR-051 |
-| **Cross-story** Custom Servers | FR-052, FR-053, FR-054, FR-055 |
+| **Cross-story** Custom Servers | FR-052, FR-053, FR-054, FR-055 (tests: T200a) |
 
 ## Non-Functional Requirements (NFR) → Tasks
 

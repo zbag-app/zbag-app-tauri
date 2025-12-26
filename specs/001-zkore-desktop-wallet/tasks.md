@@ -35,7 +35,7 @@
 - [ ] T007 Create apps/zkore-app-tauri directory structure using bun create tauri-app template (React TypeScript)
 - [ ] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
 - [ ] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
-- [ ] T010 [P] Create .env.development with ZKORE_GRPC_URL and RUST_LOG configuration (network is selected per-wallet at creation; do not use a global env var to override wallet network)
+- [ ] T010 [P] Create `.env.development` with `ZKORE_GRPC_URL` and `RUST_LOG` configuration (development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint; it MUST NOT override wallet network or silently override user-selected persisted server configuration in release builds)
 - [ ] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
 - [ ] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
 - [ ] T013 Create tests/integration/ and tests/e2e/ directory structure
@@ -237,12 +237,12 @@
 
 - [ ] T101 [US3] Implement transparent balance tracking in crates/zkore-engine/src/balance.rs (transparent_total from TransparentUTXOs)
 - [ ] T102 [US3] Implement shield_funds() in crates/zkore-engine/src/tx_service.rs using transparent-inputs feature; implement “Shield and Consolidate” per spec.md by sweeping all spendable TransparentUTXOs into a fresh internal Orchard output (no transparent change; fee deducted from transparent inputs) and auto-batching into multiple shielding transactions when the input set exceeds tx size/limit constraints; enforce BACKUP_REQUIRED guard and require a valid re-auth token for the shielding operation
-- [ ] T102a [US3] Handle “insufficient transparent balance to cover shielding fee” edge case in crates/zkore-engine/src/tx_service.rs: return a stable error code + required-minimum amount and surface actionable guidance (covers spec edge case)
+- [ ] T102a [US3] Handle “insufficient transparent balance to cover shielding fee” edge case in crates/zkore-engine/src/tx_service.rs: return `INSUFFICIENT_FUNDS` with `IpcError.details` keys `required_minimum_zatoshis`, `available_zatoshis`, `estimated_fee_zatoshis` (string zatoshis) and surface actionable guidance (covers spec edge case)
 - [ ] T103 [US3] Implement ShieldFunds Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts account_id, consolidate, reauth_token; in v1 UI sets consolidate=true for “Shield and Consolidate”)
 - [ ] T104 [US3] Add transparent balance display to apps/zkore-app-tauri/src/pages/Home.tsx with "Needs Shielding" label and Shield Now button
 - [ ] T105 [US3] Implement TRANSPARENT_SPEND_BLOCKED error when attempting direct transparent spend in crates/zkore-engine/src/tx_service.rs
 - [ ] T106 [US3] Create apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx modal for shielding confirmation and fee display (fee deducted from transparent inputs); if batching is required, show “shielding in progress” status/progress
-- [ ] T106c [US3] Add explicit UX for insufficient shielding-fee case in apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx (copy + next steps: acquire minimal transparent ZEC, retry)
+- [ ] T106c [US3] Add explicit UX for insufficient shielding-fee case in apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx: render `IpcError.details.required_minimum_zatoshis`, `available_zatoshis`, and `estimated_fee_zatoshis` (when present) and provide clear next steps (acquire minimal transparent ZEC, retry)
 - [ ] T106b [US3] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/components/wallet/ShieldPrompt.tsx: call ReauthWallet then ShieldFunds with reauth_token
 - [ ] T106a [US3] Add milestone tests: unit (crates/zkore-engine/tests/us3_shielding.rs), integration (tests/integration/us3_shield.rs), e2e (tests/e2e/us3_shield.spec.ts) covering: retrieving a transparent compatibility address from the Receive flow; sending to that address results in `transparent_total > 0`; transparent funds are not spendable (TRANSPARENT_SPEND_BLOCKED); “shield and consolidate” sweep-all semantics (all spendable TransparentUTXOs); batching behavior; fee deduction from transparent inputs; and insufficient-shielding-fee UX
 
@@ -258,7 +258,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation
+- [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation; on successful restore, persist backup status as complete (`backup_required=false`, `backup_completed_at=now`, `verification_method="restore_seed_phrase"`), so spending is not blocked by BACKUP_REQUIRED for restored wallets
 - [ ] T108 [US4] Implement birthday height lookup from date in crates/zkore-engine/src/birthday.rs (checkpoint table lookup)
 - [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet)
 - [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx with seed phrase textarea, word autocomplete, paste support
@@ -268,7 +268,7 @@
 - [ ] T114 [US4] Create apps/zkore-app-tauri/src/components/wallet/SyncProgressWidget.tsx showing phase name, progress bar, ETA
 - [ ] T115 [US4] Implement spend-before-sync balance distinction (shielded_spendable vs shielded_pending) in crates/zkore-engine/src/balance.rs
 - [ ] T115b [US4] Define and enforce spend-before-sync rules in crates/zkore-engine: spending is allowed during restore only from shielded_spendable; ensure tx construction fails with a stable error if restore is in progress and spendable balance is insufficient (aligns with FR-008 + spec design notes)
-- [ ] T115a [US4] Add milestone tests: unit (crates/zkore-engine/tests/us4_restore.rs), integration (tests/integration/us4_restore.rs), e2e (tests/e2e/us4_restore.spec.ts) covering seed validation, birthday height estimation, restore progress states, and spend-before-sync gating behavior
+- [ ] T115a [US4] Add milestone tests: unit (crates/zkore-engine/tests/us4_restore.rs), integration (tests/integration/us4_restore.rs), e2e (tests/e2e/us4_restore.spec.ts) covering seed validation, birthday height estimation, restore progress states, and spend-before-sync gating behavior; ALSO assert restored wallets have `GetWalletStatus.backup_status === "Complete"` immediately after successful restore and that spend attempts during restore are not blocked by BACKUP_REQUIRED (they may still fail for "insufficient spendable" or restore-in-progress spendable rules)
 
 **Checkpoint**: User Story 4 complete - wallet restoration with progress tracking functional
 
@@ -472,7 +472,7 @@
 - [ ] T190 [US12] Add network badge/color coding to apps/zkore-app-tauri/src/pages/Home.tsx header
 - [ ] T191 [US12] Create apps/zkore-app-tauri/src/components/common/NetworkBadge.tsx with Mainnet (green) and Testnet (orange) styling
 - [ ] T192 [US12] Add network display (read-only) to apps/zkore-app-tauri/src/pages/Settings.tsx
-- [ ] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators
+- [ ] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators; ALSO assert wallet DB directories are separated by network root (Mainnet under `~/.zkore/wallets/mainnet/{wallet-id}/` and Testnet under `~/.zkore/wallets/testnet/{wallet-id}/`, with no shared directory)
 
 **Checkpoint**: User Story 12 complete - network selection and visual distinction functional
 
@@ -490,6 +490,7 @@
 - [ ] T198 Implement ListServers Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
 - [ ] T199 Create apps/zkore-app-tauri/src/pages/ServerSettings.tsx with server list, add custom, set default
 - [ ] T200 Create apps/zkore-app-tauri/src/components/settings/ServerSecurityWarning.tsx for custom server warning
+- [ ] T200a Add milestone tests: unit + integration + e2e for custom server flows covering AddServer probing (fail if probing fails), security warning on non-default servers, SetDefaultServer sets exactly one default per network, network mismatch rejection when selecting/using a server for an active wallet (FR-055), TestServer returns success/latency or stable error, and ListServers UI filtering by active wallet network
 
 ---
 

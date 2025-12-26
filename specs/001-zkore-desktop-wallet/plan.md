@@ -298,7 +298,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - Regional endpoints: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
 - **Testnet**: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
   - SSL via reverse proxy recommended for production-like testing
-  - Configure via `ZKORE_GRPC_URL` environment variable
+  - Development/CI only: configure default server override via `ZKORE_GRPC_URL` environment variable; production builds should rely on persisted server configuration and MUST NOT silently override user-selected servers via environment variables
 - **Custom Server**: User can configure alternative lightwalletd endpoint
   - Security warning displayed when using custom servers
   - Validation of server connectivity and network match before saving
