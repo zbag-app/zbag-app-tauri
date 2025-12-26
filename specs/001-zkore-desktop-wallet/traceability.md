@@ -35,7 +35,7 @@ This document provides an explicit, review-friendly mapping from requirements in
 | **NFR-009** Encrypt spend-capable secrets at rest | T044, T044a, T066 |
 | **NFR-010** Optional OS keychain “remember unlock” | T043a, T044d, T044e, T069 |
 | **NFR-011** Locked on restart / unlock prompt | T043a, T056a |
-| **NFR-012** Manual per-spend re-auth | T044c, T092, T097a, T103, T106b, T153, T163a |
+| **NFR-012** Manual per-spend re-auth | T044c, T092, T093a, T094a, T094b, T097a, T103, T106b, T135, T136, T153, T163a |
 | **NFR-013** Manual re-auth to view seed phrase | T044c, T068d, T084a, T084b |
 | **NFR-014** Memo protection at rest / no memo leakage | T044b, T207, T212 |
 | **NFR-015** Encrypt entire wallet DB at rest | T044b, T044b2 |

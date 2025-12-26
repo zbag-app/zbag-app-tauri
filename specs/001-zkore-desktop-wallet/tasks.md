@@ -88,6 +88,7 @@
 - [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version)
 - [ ] T038a Add rollback strategy for app metadata DB migrations in crates/zkore-engine/src/db/migrations.rs: create pre-migration snapshot of the DB file, run forward migrations, validate, and restore snapshot on failure (document rollback limits)
 - [ ] T038b Add automated migration tests for app metadata DB in crates/zkore-engine/tests/app_db_migrations.rs using fixtures under tests/fixtures/app_db/ to exercise migrate-up + rollback-on-failure paths (aligns with NFR-016)
+- [ ] T038c Seed shipped default lightwalletd servers into the servers table in the initial app metadata DB migration: insert Mainnet `https://lwd.zec.pro` (default) plus `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks` (non-default), and Testnet `https://lwd.testnet.zec.pro` (default); enforce exactly one `is_default=1` per network (unique index) and keep the migration idempotent
 - [ ] T039 Create crates/zkore-engine/src/db/wallet_meta.rs with CRUD operations for wallet metadata table
 - [ ] T040 Create crates/zkore-engine/src/db/backup_meta.rs with CRUD operations for backup_status table
 - [ ] T041 Create crates/zkore-engine/src/db/server_meta.rs with CRUD operations for servers table
@@ -113,6 +114,8 @@
 - [ ] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
 - [ ] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
 - [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs (stream or polling, depending on lightwalletd server support) to enable pending-transaction detection (FR-013)
+- [ ] T048b Create crates/zkore-engine/src/server_resolver.rs (or extend crates/zkore-engine/src/db/server_meta.rs) with “resolve active server endpoint” logic for an active wallet network: precedence is (1) dev/CI override via `ZKORE_GRPC_URL` (when allowed), (2) persisted default server for the wallet’s network from the servers table, (3) stable error if none exists
+- [ ] T048c Enforce dev/CI-only semantics for `ZKORE_GRPC_URL`: gate the override so it is never applied in production/release builds (e.g., `cfg(debug_assertions)` or a feature flag); add unit tests covering resolver precedence and confirming the override is ignored when not allowed
 
 ### 2.6: Tauri App Shell
 
@@ -171,7 +174,7 @@
 - [ ] T076 [US1] Implement VerifyBackup Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs
 - [ ] T076a [US1] Implement GetBackupChallenge Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (issues a new 4-word, 10-minute challenge; invalidates any prior active challenge)
 - [ ] T077 [US1] Create apps/zkore-app-tauri/src/pages/BackupChallenge.tsx using backend-issued 1-based indices (GetBackupChallenge) and submitting challenge_id to VerifyBackup; show “word #N” prompts for 4 indices and handle invalid/expired/too-many-attempts errors by requesting a new challenge
-- [ ] T078 [US1] Create crates/zkore-engine/src/sync_service.rs with sync_wallet() skeleton using CompactTxStreamer
+- [ ] T078 [US1] Create crates/zkore-engine/src/sync_service.rs with sync_wallet() skeleton using CompactTxStreamer; resolve the active lightwalletd endpoint via crates/zkore-engine/src/server_resolver.rs (T048b) based on the loaded wallet’s network (no hardcoded gRPC URL)
 - [ ] T079 [US1] Implement StartSync Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/sync.rs
 - [ ] T079a [US1] Implement StopSync Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/sync.rs
 - [ ] T079b [US1] Implement GetSyncProgress Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/sync.rs
@@ -182,9 +185,10 @@
 - [ ] T082b [US1] Implement GetWalletStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/wallet.rs and return status from compute_wallet_status()
 - [ ] T083 [US1] Create apps/zkore-app-tauri/src/pages/Home.tsx with balance display, sync progress, and persistent backup reminder driven by GetWalletStatus (undismissable when status.backup_status === 'Required')
 - [ ] T083a [P] [US1] Create apps/zkore-app-tauri/src/pages/UnlockWallet.tsx (or modal) prompting for wallet password and invoking UnlockWallet; show on app launch when wallet is locked
+- [ ] T083b [US1] Create apps/zkore-app-tauri/src/pages/Settings.tsx (minimal shell) with a “Security” section placeholder and wire a `/settings` route in apps/zkore-app-tauri/src/App.tsx (router created in T056); add a persistent navigation entry so Settings is reachable after onboarding (later user stories extend this page)
 - [ ] T084 [US1] Create apps/zkore-app-tauri/src/components/common/BackupReminder.tsx showing status.backup_status and action button; refresh status via GetWalletStatus after VerifyBackup succeeds
 - [ ] T084a [US1] Add “View seed phrase” action (manual password re-auth) to apps/zkore-app-tauri/src/components/common/BackupReminder.tsx using ReauthWallet + ViewSeedPhrase; this is NOT the only entry point (see T084b)
-- [ ] T084b [US1] Add a persistent “View seed phrase” entry point in apps/zkore-app-tauri/src/pages/Settings.tsx (or a dedicated Security section/page) that is available even when backup_status === "Complete" and for restored wallets; gate with ReauthWallet(purpose=ViewSeedPhrase) then ViewSeedPhrase; clear UI state after closing (ties into T210a)
+- [ ] T084b [US1] Add a persistent “View seed phrase” entry point in apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) that is available even when backup_status === "Complete" and for restored wallets; gate with ReauthWallet(purpose=ViewSeedPhrase) then ViewSeedPhrase; clear UI state after closing (ties into T210a)
 - [ ] T085 [US1] Implement backup-required check blocking send UI in apps/zkore-app-tauri/src/pages/Home.tsx based on GetWalletStatus (status.backup_status === 'Required')
 - [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance (4 distinct 1-based indices, 10-min expiry), verify backup, spend gate, GetWalletStatus backup_status (Required→Complete), expiry handling, invalidation after 5 failed attempts (requires new challenge), and restart invalidation (challenges are in-memory only); ALSO assert `LoadWalletResponse.accounts.length === 0` when the wallet is locked and that after successful unlock + re-LoadWallet `accounts.length >= 1`
 
@@ -211,7 +215,7 @@
 - [ ] T092 [US2] Implement ConfirmSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts reauth_token)
 - [ ] T093 [US2] Implement CancelSend Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs
 - [ ] T093a [US2] Implement RetryBroadcast Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/transaction.rs (accepts txid + reauth_token; retries queued broadcast)
-- [ ] T094 [US2] Implement transaction broadcast via grpc_client in crates/zkore-network/src/grpc_client.rs
+- [ ] T094 [US2] Implement transaction broadcast via grpc_client in crates/zkore-network/src/grpc_client.rs using the active server endpoint resolved via crates/zkore-engine/src/server_resolver.rs (T048b) (no hardcoded gRPC URL)
 - [ ] T094a [US2] Implement persisted broadcast queue in crates/zkore-engine/src/tx_service.rs for the “disconnect during broadcast” edge case: store signed tx bytes as AEAD-encrypted blobs under the wallet directory (e.g., `~/.zkore/wallets/{network}/{wallet-id}/queued_broadcasts/{txid}.bin`) with minimal persisted metadata (created_at, last_error); never log tx bytes; delete queue entries after successful broadcast or after 7 days; do not silently re-broadcast on startup (explicit user action only); require a valid re-auth token for retry attempts; add tests asserting retention cleanup
 - [ ] T094b [US2] Add UI retry prompt for queued broadcasts in apps/zkore-app-tauri/src/pages/Activity.tsx (or transaction details): show last error + “Retry broadcast” action; require manual password re-auth (ReauthWallet) before retry; call RetryBroadcast with txid + reauth_token; do not silently re-broadcast without user intent
 - [ ] T095 [US2] Implement backup_required guard in prepare_send() returning BACKUP_REQUIRED error in crates/zkore-engine/src/tx_service.rs
@@ -262,8 +266,8 @@
 - [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation; on successful restore, persist backup status as complete (`backup_required=false`, `backup_completed_at=now`, `verification_method="restore_seed_phrase"`), so spending is not blocked by BACKUP_REQUIRED for restored wallets
 - [ ] T108 [US4] Implement birthday height lookup from date in crates/zkore-engine/src/birthday.rs (checkpoint table lookup)
 - [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet)
-- [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx with seed phrase textarea, word autocomplete, paste support
-- [ ] T111 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreBirthday.tsx with optional date picker for first transaction date
+- [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx to collect RestoreWalletRequest fields (excluding birthday_date, handled in T111): wallet name input, network selection (Mainnet/Testnet), wallet password + confirmation, “remember unlock” toggle, and seed phrase entry (textarea with word autocomplete + paste); on continue, navigate to RestoreBirthday.tsx while retaining captured values (router state or a restore-flow store)
+- [ ] T111 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreBirthday.tsx with optional date picker for first transaction date; on confirm/skip, invoke zkore_restore_wallet using values captured in T110 plus birthday_date (or null) and then navigate to Home (sync begins)
 - [ ] T112 [US4] Implement SyncPhase transitions (Idle, Preparing, Downloading, Scanning, Enhancing, CatchingUp) in crates/zkore-engine/src/sync_service.rs
 - [ ] T113 [US4] Implement eta_seconds calculation in sync progress in crates/zkore-engine/src/sync_service.rs
 - [ ] T114 [US4] Create apps/zkore-app-tauri/src/components/wallet/SyncProgressWidget.tsx showing phase name, progress bar, ETA
@@ -302,8 +306,8 @@
 ### Implementation for User Story 6
 
  - [ ] T121 [US6] Create crates/zkore-keystone/src/lib.rs with module structure
-- [ ] T122 [US6] Create crates/zkore-keystone/src/ufvk.rs with UFVK parsing and validation
-- [ ] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account
+- [ ] T122 [US6] Create crates/zkore-keystone/src/ufvk.rs with UFVK parsing and validation (including extracting/validating the UFVK network)
+- [ ] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account; reject UFVK network mismatches vs the wallet’s network and return `INVALID_UFVK`
 - [ ] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
 - [ ] T126 [US6] Add watch-only badge to account display in apps/zkore-app-tauri/src/pages/Home.tsx
@@ -431,7 +435,7 @@
 - [ ] T176 [US10] Implement SetTorEnabled Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
 - [ ] T177 [US10] Implement GetTorState Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
 - [ ] T178 [US10] Implement TorStatusEvent emission on state changes in crates/zkore-tor/src/manager.rs
-- [ ] T179 [P] [US10] Create apps/zkore-app-tauri/src/pages/Settings.tsx with Tor toggle, beta label, status indicator
+- [ ] T179 [P] [US10] Extend apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) with Tor toggle, beta label, status indicator
 - [ ] T180 [US10] Create apps/zkore-app-tauri/src/components/common/TorStatusBadge.tsx showing Off/Connecting/On/Error
 - [ ] T180a [US10] Render TorStatusBadge in persistent app chrome (e.g., shared layout / header) so it is visible on all pages; initialize via GetTorState on startup and subscribe to TorStatusEvent for real-time updates (covers FR-038)
 - [ ] T181 [US10] Create apps/zkore-app-tauri/src/components/common/TorErrorDialog.tsx with retry and disable options
@@ -567,7 +571,7 @@
 - **User Story 7 (P2)**: Depends on US6 (Keystone import)
 - **User Story 8 (P3)**: Depends on US1 (wallet, Activity display)
 - **User Story 9 (P3)**: Depends on US2 and US8 (sending, swap infrastructure)
-- **User Story 10 (P3)**: No dependencies (Tor is independent infrastructure)
+- **User Story 10 (P3)**: Depends on US1 for Settings page shell/routing (T083b); Tor backend infrastructure itself is independent
 - **User Story 11 (P2)**: Depends on US1-US3 (status aggregation needs backup, sync, shielding)
 - **User Story 12 (P2)**: Included in US1 (network selection at creation)
 
@@ -591,7 +595,7 @@ US8: T143, T144, T156, T157 (IPC types and pages)
 
 **Across User Stories (after Phase 2)**:
 ```
-US1, US4, US10, US12 can all start in parallel (no inter-story dependencies)
+US1, US4, US12 can start in parallel; US10 depends on US1 for Settings page shell/routing (T083b)
 US6 starts after US1
 ```
 

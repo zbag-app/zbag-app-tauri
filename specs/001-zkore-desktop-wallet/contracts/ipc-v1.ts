@@ -288,7 +288,10 @@ export interface CreateWalletRequest extends VersionedPayload {
   network: Network;
   /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
   password: string;
-  /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
+  /**
+   * Persist the wallet's OS keychain-backed auto-unlock preference and store unlock material in the OS keychain.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
   remember_unlock: boolean;
 }
 
@@ -318,6 +321,11 @@ export interface GetWalletStatusRequest extends VersionedPayload {
 export interface UnlockWalletRequest extends VersionedPayload {
   wallet_id: string;
   password: string;
+  /**
+   * Updates the wallet's persisted OS keychain-backed auto-unlock preference.
+   * If true, ensure keychain unlock material is stored/updated; if false, disable and remove any stored keychain entry.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
   remember_unlock: boolean;
 }
 
