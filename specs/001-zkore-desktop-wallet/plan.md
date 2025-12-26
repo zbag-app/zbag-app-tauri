@@ -233,7 +233,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - Output: **32 bytes** (KEK)
   - KDF parameters and salt are stored per-wallet and are **versioned** to allow future tuning/migration
 - **AEAD for wrapping**:
-  - Wrap/unwrap the DEK using an AEAD (e.g., **XChaCha20-Poly1305**) with associated data binding to `(wallet_id, network, schema_version)` to prevent cross-wallet swapping
+  - Wrap/unwrap the DEK using an AEAD (e.g., **XChaCha20-Poly1305**) with associated data binding to `(wallet_id, network, aead_scheme, aead_version)` (persisted per wallet) to prevent cross-wallet swapping
 - **Unlock validation**:
   - The wallet password is validated by deriving the KEK and successfully unwrapping the DEK; there is no separate password hash stored
 

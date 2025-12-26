@@ -65,6 +65,7 @@ This section clarifies the separation of viewing keys and spending capability, f
 
 **Mnemonic persistence (v1):**
 - If the mnemonic is persisted anywhere, it MUST be encrypted using the user-defined wallet password (per the v1 key hierarchy in plan.md: wallet password → Argon2id KEK → unwrap per-wallet DEK).
+- DEK wrap/unwrap MUST bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted per wallet in the `wallet_encryption` table).
 - OS keychain "remember unlock" is OPTIONAL and stores only unlock material (e.g., DEK or a wrapping secret), never plaintext mnemonic; it MUST NOT be the sole protection for the mnemonic and MUST NOT satisfy per-action re-authentication.
 
 **Mnemonic storage mode (v1):**
