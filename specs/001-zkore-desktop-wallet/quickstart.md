@@ -234,6 +234,7 @@ mod backup;
 mod balance;
 mod server;
 mod sync;
+mod wallet_status;
 mod transaction;
 mod transparent_utxo;
 
@@ -244,9 +245,12 @@ pub use backup::*;
 pub use balance::*;
 pub use server::*;
 pub use sync::*;
+pub use wallet_status::*;
 pub use transaction::*;
 pub use transparent_utxo::*;
 ```
+
+Note: Additional domain modules (e.g., `swap`, `tor`) are added in later steps as needed by their user stories.
 
 ### Step 2: Tauri Commands Skeleton
 
@@ -407,6 +411,8 @@ cargo test --workspace
 # TypeScript tests
 cd apps/zkore-app-tauri && bun test
 ```
+
+TypeScript tests use Bun's built-in test runner (`bun test`) in v1.
 
 ### Accessibility Testing
 

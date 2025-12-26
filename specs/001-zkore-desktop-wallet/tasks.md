@@ -103,6 +103,7 @@
 - [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
 - [ ] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
 - [ ] T044b2 Add automated tests for wallet DB encryption + migration safety in crates/zkore-engine/tests/wallet_db_encryption_and_migrations.rs (wrong password fails, unlock opens, migration snapshot rollback works)
+- [ ] T210 Implement secret memory zeroization early using the zeroize crate in crates/zkore-engine (at minimum: zeroize mnemonic buffers immediately after encryption/storage; zeroize decrypted DEK material on lock/unload; zeroize any derived secret key material after use where feasible)
 - [ ] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy)
 - [ ] T044d Implement OS keychain backend for “remember unlock” in crates/zkore-engine/src/key_store_keychain.rs (macOS Keychain / Windows Credential Manager / Linux Secret Service via a cross-platform crate); store DEK (preferred) or a wrapping secret keyed by (wallet_id, network)
 - [ ] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests); ALSO add a regression test that reusing the same `reauth_token` twice fails with `REAUTH_TOKEN_INVALID`
@@ -188,9 +189,10 @@
 - [ ] T083b [US1] Create apps/zkore-app-tauri/src/pages/Settings.tsx (minimal shell) with a “Security” section placeholder and wire a `/settings` route in apps/zkore-app-tauri/src/App.tsx (router created in T056); add a persistent navigation entry so Settings is reachable after onboarding (later user stories extend this page)
 - [ ] T084 [US1] Create apps/zkore-app-tauri/src/components/common/BackupReminder.tsx showing status.backup_status and action button; refresh status via GetWalletStatus after VerifyBackup succeeds
 - [ ] T084a [US1] Add “View seed phrase” action (manual password re-auth) to apps/zkore-app-tauri/src/components/common/BackupReminder.tsx using ReauthWallet + ViewSeedPhrase; this is NOT the only entry point (see T084b)
-- [ ] T084b [US1] Add a persistent “View seed phrase” entry point in apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) that is available even when backup_status === "Complete" and for restored wallets; gate with ReauthWallet(purpose=ViewSeedPhrase) then ViewSeedPhrase; clear UI state after closing (ties into T210a)
+- [ ] T084b [US1] Add a persistent “View seed phrase” entry point in apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) that is available even when backup_status === "Complete" and for restored wallets; gate with ReauthWallet(purpose=ViewSeedPhrase) then ViewSeedPhrase; clear UI state after closing (see T084c)
+- [ ] T084c [US1] Clear sensitive UI state after seed-word flows: ensure SeedDisplay.tsx, BackupChallenge.tsx, and any ViewSeedPhrase UI clears all seed words / word inputs from React state and any in-memory arrays on navigation/unmount/close
 - [ ] T085 [US1] Implement backup-required check blocking send UI in apps/zkore-app-tauri/src/pages/Home.tsx based on GetWalletStatus (status.backup_status === 'Required')
-- [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance (4 distinct 1-based indices, 10-min expiry), verify backup, spend gate, GetWalletStatus backup_status (Required→Complete), expiry handling, invalidation after 5 failed attempts (requires new challenge), and restart invalidation (challenges are in-memory only); ALSO assert `LoadWalletResponse.accounts.length === 0` when the wallet is locked and that after successful unlock + re-LoadWallet `accounts.length >= 1`
+- [ ] T085a [US1] Add milestone tests: unit (crates/zkore-engine/tests/us1_backup_challenge.rs), integration (tests/integration/us1_onboarding.rs), e2e (tests/e2e/us1_onboarding.spec.ts) covering create wallet, backup challenge issuance (4 distinct 1-based indices, 10-min expiry), verify backup, spend gate, GetWalletStatus backup_status (Required→Complete), expiry handling, invalidation after 5 failed attempts (requires new challenge), and restart invalidation (challenges are in-memory only); ALSO assert `LoadWalletResponse.accounts.length === 0` when the wallet is locked and that after successful unlock + re-LoadWallet `accounts.length >= 1`; ALSO add a non-flaky timing measurement for CreateWallet end-to-end duration (release mode; not a CI gate by default) and record/validate the <60s target (FR-001/SC-001) in a controlled environment
 
 **Checkpoint**: User Story 1 complete - wallet creation, receiving, and backup verification functional
 
@@ -268,6 +270,7 @@
 - [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet)
 - [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx to collect RestoreWalletRequest fields (excluding birthday_date, handled in T111): wallet name input, network selection (Mainnet/Testnet), wallet password + confirmation, “remember unlock” toggle, and seed phrase entry (textarea with word autocomplete + paste); on continue, navigate to RestoreBirthday.tsx while retaining captured values (router state or a restore-flow store)
 - [ ] T111 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreBirthday.tsx with optional date picker for first transaction date; on confirm/skip, invoke zkore_restore_wallet using values captured in T110 plus birthday_date (or null) and then navigate to Home (sync begins)
+- [ ] T111a [US4] Clear sensitive UI state after restore: ensure RestoreWallet.tsx/RestoreBirthday.tsx clear seed phrase inputs and any restore-flow in-memory state after restore completes or the flow is abandoned
 - [ ] T112 [US4] Implement SyncPhase transitions (Idle, Preparing, Downloading, Scanning, Enhancing, CatchingUp) in crates/zkore-engine/src/sync_service.rs
 - [ ] T113 [US4] Implement eta_seconds calculation in sync progress in crates/zkore-engine/src/sync_service.rs
 - [ ] T114 [US4] Create apps/zkore-app-tauri/src/components/wallet/SyncProgressWidget.tsx showing phase name, progress bar, ETA
@@ -336,8 +339,9 @@
 - [ ] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT; enforce BACKUP_REQUIRED guard (FR-004) before broadcast and require a valid re-auth token
 - [ ] T136 [US7] Implement FinalizeSigning Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [ ] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, recipient_kind, amount, fee, memo_present for confirmation (including transparent-recipient privacy warnings)
-- [ ] T138 [US7] Implement microSD fallback: file export (.pczt) in crates/zkore-keystone/src/payload.rs with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028)
-- [ ] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import
+- [ ] T138 [US7] Implement microSD fallback export in the UI in apps/zkore-app-tauri/src/pages/Signing.tsx: decode `SigningRequest.pczt_payload` (base64) to bytes and save as a `.pczt` file with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028); the backend does not write files for this path
+- [ ] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import: read `.pczt` bytes, base64-encode, and pass into `FinalizeSigningRequest.signed_payload`
+- [ ] T139a [US7] Clear sensitive UI state after signing: ensure Signing.tsx and signing components clear in-memory payloads/QR frames/file bytes after signing completes or the signing window closes
 - [ ] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
 - [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
 - [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, broadcast, transparent recipient privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_recipient=true), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), SigningSummary includes recipient_kind, and spending blocked until backup verified (BACKUP_REQUIRED)
@@ -362,8 +366,8 @@
  - [ ] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
  - [ ] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
  - [ ] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
-- [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest
-- [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status; include optional depositMemo where required)
+- [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest (30s timeout per request)
+- [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status; include optional depositMemo where required); handle basic rate limiting/throttling (e.g., do not overlap polls; respect 429 Retry-After when present)
 - [ ] T147 [US8] Implement request_swap_quote() in crates/zkore-engine/src/swap_service.rs calling NEAR Intents quote endpoint
 - [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.deposit_memo`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
 - [ ] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error; include deposit memo/tag in status requests when applicable)
@@ -528,8 +532,7 @@
 
 ### Security
 
-- [ ] T210 Implement memory zeroization for mnemonic and spending keys using zeroize crate in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T210a Clear sensitive UI state after use (seed words, backup word inputs, signing payloads/frames) in apps/zkore-app-tauri/src/pages and components
+- [ ] T210a Audit and enforce sensitive UI state clearing across all pages/components (seed words, backup word inputs, signing payloads/frames); add regression tests
 - [ ] T211 Remove hardware wallet identifiers from PCZT payloads in crates/zkore-keystone/src/pczt.rs
 - [ ] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, wallet passwords, reauth tokens, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
 

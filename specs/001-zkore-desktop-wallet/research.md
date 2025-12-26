@@ -49,6 +49,7 @@
 - Maximum QR frame size: 2953 bytes (version 40, L error correction)
 - Animated QR frame rate: 10 fps default, 3 fps for "slow mode"
 - File fallback: Export as `.pczt` binary file for microSD transfer
+- Implementation: UI exports/imports binary `.pczt` using the base64 payload fields (`SigningRequest.pczt_payload`, `FinalizeSigningRequest.signed_payload`); no dedicated IPC command required.
 - **FR-028 hygiene**: Do not include hardware-wallet branding or identifiers anywhere in exported files or QR payloads (including filenames, wrapper metadata/comments, or extra non-protocol fields).
 
 ### 3. NEAR Intents 1Click API Integration
@@ -72,6 +73,7 @@
   - `POST /v0/deposit/submit` - Create/register a deposit intent and return deposit instructions (used by `StartSwap`)
   - `GET /v0/status?depositAddress={addr}` - Poll swap status (optional `depositMemo`)
   - `GET /v0/tokens` - List supported tokens and chains
+- Token discovery (v1): Use a bundled supported-token list in the UI and do not call `GET /v0/tokens` at runtime; the endpoint remains available for a future enhancement.
 - Query parameters for quote:
   - `defuse_asset_identifier_in` - Source asset (e.g., "near:mainnet:native")
   - `defuse_asset_identifier_out` - Target asset (e.g., "zcash:mainnet:native")
@@ -231,7 +233,8 @@
 **Implementation Notes**:
 - Wallet DB: Managed by zcash_client_sqlite, location per wallet directory
 - App DB: Separate SQLite with custom migration runner
-- App DB tables: `wallets`, `backup_status`, `servers`, `tor_settings`, `swaps`, `receive_rotation`, `_app_migrations`
+- App DB tables: `wallets`, `wallet_encryption`, `backup_status`, `servers`, `tor_settings`, `swaps`, `receive_rotation`, `_app_migrations`
+- `wallet_encryption` stores per-wallet KDF parameters and `wrapped_dek` metadata
 - Migration version table: `_app_migrations(version, applied_at)`
 
 ### 11. Network Selection Strategy
@@ -357,7 +360,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Package manager | bun 1.3.5+ |
 | Primary dependencies | zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+, Arti |
 | Storage | Dual SQLite (wallet + app metadata) |
-| Testing | cargo test + vitest + integration tests |
+| Testing | cargo test + bun test + integration tests |
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
 | Constraints | Secrets in Rust only, shielded-by-default (Sapling + Orchard), fail-closed Tor |

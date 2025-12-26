@@ -25,7 +25,7 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
     - `~/.zkore/wallets/testnet/{wallet-id}/` (testnet wallets)
   - Network selection at wallet creation (immutable after creation)
   - Separate database files per network
-**Testing**: cargo test (Rust), vitest/jest (TypeScript), integration tests against lightwalletd endpoints (at least two independent deployments in CI)
+**Testing**: cargo test (Rust), bun test (TypeScript), integration tests against lightwalletd endpoints (at least two independent deployments in CI)
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
@@ -75,6 +75,8 @@ crates/
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── domain/                # Wallet, Account, Transaction, Swap models
+│   │   │   ├── mod.rs
+│   │   │   └── wallet_status.rs   # Wallet status aggregation types
 │   │   ├── ipc/
 │   │   │   └── v1/
 │   │   │       ├── commands/      # Request/response structs per command
@@ -85,9 +87,15 @@ crates/
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── wallet_manager.rs      # Create, load, lock/unlock wallet
+│   │   ├── encryption.rs          # KDF + AEAD wrap/unwrap for DEK
+│   │   ├── key_store.rs           # Secret storage abstraction (mnemonic, unlock material)
+│   │   ├── reauth.rs              # Per-action re-auth token issuance/validation
 │   │   ├── address_service.rs     # Shielded UA rotation, single compat t-addr
+│   │   ├── birthday.rs            # Birthday height estimation
 │   │   ├── sync_service.rs        # CompactTxStreamer sync, progress events
 │   │   ├── tx_service.rs          # Send, shield, consolidate, submit
+│   │   ├── swap_service.rs        # Swap orchestration (NEAR Intents)
+│   │   ├── db/                    # App metadata + wallet meta CRUD
 │   │   └── balance.rs             # Balance computation (shielded/transparent)
 │   └── tests/
 ├── zkore-network/                 # gRPC + HTTP clients, transport abstraction
@@ -95,6 +103,7 @@ crates/
 │   │   ├── lib.rs
 │   │   ├── grpc_client.rs         # CompactTxStreamer gRPC client
 │   │   ├── http_client.rs         # NEAR Intents 1Click HTTP client
+│   │   ├── near_intents.rs        # 1Click typed API client
 │   │   └── transport.rs           # Tor-aware transport abstraction
 │   └── tests/
 ├── zkore-keystone/                # Hardware wallet integration
@@ -133,6 +142,7 @@ apps/
 │       │   ├── Send.tsx           # Send form, confirmation
 │       │   ├── Activity.tsx       # Transaction + swap list
 │       │   ├── Swap.tsx           # NEAR Intents swap flows
+│       │   ├── SwapFromZec.tsx    # Off-ramp flow
 │       │   ├── Settings.tsx       # Tor, backup, logs, security; links to ServerSettings
 │       │   ├── ServerSettings.tsx # Server list, add custom, set default
 │       │   └── Signing.tsx        # Full-screen Keystone signing
@@ -178,7 +188,7 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 | II. Shielded-by-Default Privacy | Confirmed | Data model enforces transparent UTXOs cannot be spent directly. AddressType enum separates ShieldedOnly (default) from Transparent (compatibility). Send flow supports UA/Sapling/Orchard recipients; transparent recipients require explicit privacy acknowledgement. |
 | III. Fail-Closed Safety | Confirmed | TorState model has explicit Off/Connecting/On/Error states. IPC error codes include TOR_NOT_READY blocking operations when enabled but unhealthy. |
 | IV. Typed IPC Contracts | Confirmed | ipc-v1.ts defines SCHEMA_VERSION=1, VersionedPayload base, and typed request/response for every command. Command boundary uses IpcResult<T> (no thrown errors across IPC). Events are emitted on fixed channels: sync, balance, tx, swap, tor, wallet-status. ErrorCodes provide stable codes. |
-| V. Test-Driven Quality | Confirmed | quickstart.md defines cargo test + vitest workflow. Research.md specifies regression tests for privacy, key leakage, malformed PCZT. |
+| V. Test-Driven Quality | Confirmed | quickstart.md defines cargo test + bun test workflow. Research.md specifies regression tests for privacy, key leakage, malformed PCZT. |
 | VI. Data Minimization | Confirmed | data-model.md defines encrypted Wallet DB (zcash_client_sqlite) and separate App Metadata DB (custom SQLite). No raw payloads stored. |
 | VII. Decision Traceability | Confirmed | research.md documents all technology decisions with rationale and alternatives considered. Plan links to spec.md for acceptance criteria. |
 
