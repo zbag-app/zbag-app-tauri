@@ -484,6 +484,8 @@ TorState ─────── (global singleton)
 ### Wallet Directory (encrypted auxiliary blobs)
 - Stored under: `~/.zkore/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - `queued_broadcasts/`: AEAD-encrypted signed tx bytes for broadcast retry queue entries (7-day retention; deleted on success; user-initiated retry only)
+  - `{txid}.bin`: AEAD-encrypted signed tx bytes
+  - `{txid}.json`: minimal user-safe metadata (plaintext JSON), including `created_at` (Unix ms) and `last_error` (string | null)
   - Entries are discovered by scanning `queued_broadcasts/` on wallet load/startup; there is no SQL index in v1.
 
 ### App Metadata DB (custom SQLite)
@@ -583,7 +585,7 @@ CREATE TABLE swaps (
 CREATE TABLE receive_rotation (
     account_id INTEGER NOT NULL,
     wallet_id TEXT NOT NULL REFERENCES wallets(id),
-    diversifier_index INTEGER NOT NULL,
+    diversifier_index INTEGER NOT NULL, -- u64 in the model; must fit within signed 64-bit (SQLite INTEGER); IPC uses string
     created_at INTEGER NOT NULL,
     PRIMARY KEY (wallet_id, account_id)
 );

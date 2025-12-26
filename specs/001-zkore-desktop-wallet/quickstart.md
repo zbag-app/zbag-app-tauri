@@ -388,6 +388,10 @@ const wallets = await listWallets();
 // pick most recent, then:
 const load1 = await loadWallet({ wallet_id });
 if (load1.ok?.lock_status === 'Locked') {
+  // Default to the persisted preference so we don't disable keychain unlock accidentally.
+  // UI may override this with a toggle value.
+  const persistedRememberUnlock = load1.ok.wallet.remember_unlock_enabled;
+  const remember_unlock = rememberUnlockOverride ?? persistedRememberUnlock;
   await unlockWallet({ wallet_id, password, remember_unlock });
   const load2 = await loadWallet({ wallet_id }); // load again to get accounts
 }

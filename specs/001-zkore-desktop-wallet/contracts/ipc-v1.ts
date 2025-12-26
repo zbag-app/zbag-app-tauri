@@ -55,6 +55,11 @@ export interface WalletInfo {
   name: string;
   wallet_type: WalletType;
   network: Network;
+  /**
+   * Persisted OS keychain-backed auto-unlock preference.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
+  remember_unlock_enabled: boolean;
   created_at: UnixTimestampMs;
   last_opened_at: UnixTimestampMs | null;
 }
