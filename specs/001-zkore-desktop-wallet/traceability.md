@@ -13,8 +13,8 @@ This document provides an explicit, review-friendly mapping from requirements in
 | **US5** Receive to Fresh Shielded Address | FR-015, FR-016, FR-017, FR-018, FR-019 |
 | **US6** Keystone Hardware Wallet Watch-Only | FR-020, FR-021 |
 | **US7** Keystone Air-Gapped Signing | FR-022, FR-023, FR-024, FR-025, FR-026, FR-027, FR-028 |
-| **US8** Swap To ZEC via NEAR Intents | FR-029, FR-033, FR-034, FR-035, FR-036 |
-| **US9** Swap From ZEC via NEAR Intents | FR-030, FR-031, FR-032, FR-033, FR-034, FR-035, FR-036 |
+| **US8** Swap To ZEC via NEAR Intents | FR-029, FR-033, FR-034, FR-035, FR-036, FR-036a |
+| **US9** Swap From ZEC via NEAR Intents | FR-030, FR-031, FR-032, FR-033, FR-034, FR-035, FR-036, FR-036a |
 | **US10** Enable Tor Anonymization | FR-037, FR-038, FR-039, FR-040, FR-041 |
 | **US11** Wallet Status Widget | FR-042, FR-043, FR-044, FR-045, FR-046, FR-047 |
 | **US12** Network Selection | FR-048, FR-049, FR-050, FR-051 |

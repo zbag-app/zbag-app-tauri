@@ -155,7 +155,7 @@ A transaction record for wallet activity. Outgoing sends are funded from shielde
 | value | Amount | ZEC amount (zatoshis) | Non-negative |
 | fee | Amount | Transaction fee | Non-negative |
 | memo_present | bool | Whether memo exists | - |
-| memo | Option<String> | Decrypted memo content (in-memory only; encrypted at rest) | Max 512 bytes |
+| memo | Option<String> | Decrypted memo content (held in memory when needed; persisted only within encrypted-at-rest wallet storage) | Max 512 bytes |
 | status | TransactionStatus | Lifecycle state | Enum value |
 | mined_height | Option<BlockHeight> | Block height if confirmed | > 0 when set |
 | created_at | Timestamp | Detection/creation time | Auto-set |

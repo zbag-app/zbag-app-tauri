@@ -509,7 +509,11 @@ export interface GetSwapStatusRequest extends VersionedPayload {
   swap_id: string;
 }
 
-/** List swaps */
+/**
+ * List swaps for the currently loaded wallet only.
+ *
+ * Note: SwapInfo does not include a wallet_id, so this call is wallet-scoped.
+ */
 export interface ListSwapsRequest extends VersionedPayload {}
 
 /** Set Tor enabled */
@@ -520,7 +524,12 @@ export interface SetTorEnabledRequest extends VersionedPayload {
 /** Get current Tor state */
 export interface GetTorStateRequest extends VersionedPayload {}
 
-/** Add server */
+/**
+ * Add a custom lightwalletd server configuration.
+ *
+ * The backend MUST probe `grpc_url` to determine and persist the server's `network` (see ServerInfo.network).
+ * If probing fails, the request MUST fail rather than guessing.
+ */
 export interface AddServerRequest extends VersionedPayload {
   name: string;
   grpc_url: string;
@@ -536,7 +545,11 @@ export interface TestServerRequest extends VersionedPayload {
   server_id: string;
 }
 
-/** List configured servers */
+/**
+ * List all configured servers (Mainnet + Testnet).
+ *
+ * UI SHOULD filter by the active wallet's network when presenting selectable servers.
+ */
 export interface ListServersRequest extends VersionedPayload {}
 
 /** Get log file location for support */

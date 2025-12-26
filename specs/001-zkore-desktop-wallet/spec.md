@@ -308,6 +308,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-034**: System MUST support state machine: Draft, Awaiting deposit, Pending, Confirming, Completed, Refunded, Failed
 - **FR-035**: System MUST display deadlines and countdown timers for time-sensitive swap actions
 - **FR-036**: System MUST clearly communicate privacy tradeoffs for any transparent interactions in swap flows
+- **FR-036a**: System MUST disable swap functionality for Testnet wallets; swap requests on Testnet MUST fail with a clear error
 
 **Tor Anonymization**
 - **FR-037**: System MUST provide opt-in Tor toggle in settings, marked as Beta

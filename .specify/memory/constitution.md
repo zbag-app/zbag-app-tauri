@@ -1,16 +1,16 @@
 <!--
 	SYNC IMPACT REPORT
 	==================
-	Version change: 1.2.0 -> 1.3.0
-	Bump rationale: MINOR - require CI to validate against multiple independent lightwalletd deployments (primary + secondary)
+	Version change: 1.3.0 -> 1.3.1
+	Bump rationale: PATCH - clarify transparent-input policy for explicit shielding transactions
 
 	Modified principles:
-	  - V. Test-Driven Quality (CI coverage requirement)
+	  - II. Shielded-by-Default Privacy (clarify shielding exception)
 
 Added sections: N/A
 
 	Modified sections:
-	  - Core Principles -> V. Test-Driven Quality
+	  - Core Principles -> II. Shielded-by-Default Privacy
 	  - Non-Negotiable Checklist
 
 Templates requiring updates:
@@ -53,13 +53,13 @@ The Rust backend is the single trust boundary for all secret material. The UI MU
 
 ### II. Shielded-by-Default Privacy
 
-All spending operations MUST use shielded pools (Orchard + Sapling). Transparent funds MAY be received and displayed but MUST NOT be spent directly.
+All user-initiated payments MUST be funded from shielded pools (Orchard + Sapling). Transparent funds MAY be received and displayed but MUST NOT be used for payments until shielded.
 
 **Enforceable rules:**
 - Default receive address MUST NOT include a transparent receiver
 - Transparent funds require explicit shielding before becoming spendable
 - Any privacy downgrade MUST be explicit, scoped, and user-acknowledged (e.g., sending to transparent recipients)
-- No transparent-input spending (transparent funds are receive-only until shielded)
+- Transparent inputs MAY be spent only in explicit shielding transactions that move funds into shielded pools. Transparent inputs MUST NOT be used for user-initiated payments.
 
 ### III. Fail-Closed Safety
 
@@ -118,7 +118,7 @@ Before merging work that touches wallet, signing, networking, or persistence, co
 - [ ] Secrets cannot reach the UI
 - [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
-- [ ] Transparent-input spending is still impossible (transparent funds must be shielded first)
+- [ ] Transparent funds still cannot be used for payments; transparent inputs are only permitted for explicit shielding transactions (transparent -> shielded)
 - [ ] Sending to transparent recipients requires explicit privacy acknowledgement
 - [ ] Tor mode cannot silently downgrade
 - [ ] IPC types are versioned and validated
@@ -161,4 +161,4 @@ This constitution follows semantic versioning:
 - Acknowledge reports promptly and track remediation steps internally.
 - Public disclosure timing must balance user safety with transparency.
 
-**Version**: 1.3.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-25
+**Version**: 1.3.1 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-26

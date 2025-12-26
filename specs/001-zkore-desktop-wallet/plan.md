@@ -29,7 +29,7 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
 **Target Platform**: macOS, Windows, Linux (desktop)
 **Project Type**: Desktop application with Rust backend and web frontend (Tauri)
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
-**Constraints**: No spending secrets in UI layer, shielded spending only (Sapling + Orchard; no transparent-input spends), fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
+**Constraints**: No spending secrets in UI layer, payments funded from shielded pools (Sapling + Orchard; transparent inputs allowed only for explicit shielding transactions), fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
 **Scale/Scope**: Single-user desktop wallet, ~15 screens, supports typical wallet sizes up to 1GB database
 **Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zkore/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.
 **Accessibility**: Full keyboard navigation, ARIA labels via radix-ui primitives, visible focus indicators, standard shortcuts (Tab/Enter/Escape/arrows)

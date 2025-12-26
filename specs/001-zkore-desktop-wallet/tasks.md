@@ -104,7 +104,7 @@
 - [ ] T044b2 Add automated tests for wallet DB encryption + migration safety in crates/zkore-engine/tests/wallet_db_encryption_and_migrations.rs (wrong password fails, unlock opens, migration snapshot rollback works)
 - [ ] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy)
 - [ ] T044d Implement OS keychain backend for “remember unlock” in crates/zkore-engine/src/key_store_keychain.rs (macOS Keychain / Windows Credential Manager / Linux Secret Service via a cross-platform crate); store DEK (preferred) or a wrapping secret keyed by (wallet_id, network)
-- [ ] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests)
+- [ ] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests); ALSO add a regression test that reusing the same `reauth_token` twice fails with `REAUTH_TOKEN_INVALID`
 - [ ] T045 Create crates/zkore-engine/src/birthday.rs with birthday height estimation from date (static checkpoint table per research.md)
 
 ### 2.5: Network Foundation
@@ -646,4 +646,4 @@ Task: "Create crates/zkore-core/src/ipc/v1/commands/sync.rs"
 - Each user story should be independently completable and testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- Constitution principles enforced: secrets in Rust only, shielded-by-default spending (Sapling + Orchard; no transparent-input spends), fail-closed Tor, typed IPC
+- Constitution principles enforced: secrets in Rust only, shielded-by-default payments (Sapling + Orchard; transparent inputs allowed only for explicit shielding transactions), fail-closed Tor, typed IPC
