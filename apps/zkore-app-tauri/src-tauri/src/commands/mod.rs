@@ -1,5 +1,8 @@
-#[tauri::command]
-pub fn greet(name: &str) -> String {
-    format!("Hello, {name}! You've been greeted from Rust!")
-}
+pub mod address;
+pub mod backup;
+pub mod balance;
+pub mod sync;
+pub mod wallet;
+
+mod util;
 

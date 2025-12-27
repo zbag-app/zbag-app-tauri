@@ -155,7 +155,8 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
     let password = "correct horse battery staple";
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, password, false)
-        .expect("create wallet");
+        .expect("create wallet")
+        .wallet;
 
     let db_path = wallet_db_path(&wallets_root, Network::Testnet, wallet.id);
     assert!(db_path.exists(), "wallet db file should exist");
@@ -216,7 +217,9 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
     let password = "pw";
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, password, false)
-        .expect("create wallet");
+        .expect("create wallet")
+        .wallet;
+    mgr.lock_wallet(wallet.id).expect("lock wallet");
 
     let meta = wallet_encryption_meta::get_wallet_encryption(mgr.app_db().conn(), wallet.id)
         .expect("load wallet encryption meta")
@@ -280,10 +283,12 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         )
         .expect("create wallet manager");
 
-        let wallet = mgr
+        let wallet_id = mgr
             .create_wallet("Test Wallet", Network::Testnet, password, true)
-            .expect("create wallet");
-        wallet.id
+            .expect("create wallet")
+            .wallet
+            .id;
+        wallet_id
     };
 
     let mut mgr = WalletManager::new_with_wallets_root(

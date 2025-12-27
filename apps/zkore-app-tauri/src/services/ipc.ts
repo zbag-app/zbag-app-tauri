@@ -27,6 +27,30 @@ export async function createWallet(
   return invoke(IPC.Commands.CREATE_WALLET, { request: versioned(request) });
 }
 
+export async function getWalletStatus(
+  request: Omit<IPC.GetWalletStatusRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetWalletStatusResponse>> {
+  return invoke(IPC.Commands.GET_WALLET_STATUS, { request: versioned(request) });
+}
+
+export async function lockWallet(
+  request: Omit<IPC.LockWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.LockWalletResponse>> {
+  return invoke(IPC.Commands.LOCK_WALLET, { request: versioned(request) });
+}
+
+export async function reauthWallet(
+  request: Omit<IPC.ReauthWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ReauthWalletResponse>> {
+  return invoke(IPC.Commands.REAUTH_WALLET, { request: versioned(request) });
+}
+
+export async function viewSeedPhrase(
+  request: Omit<IPC.ViewSeedPhraseRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ViewSeedPhraseResponse>> {
+  return invoke(IPC.Commands.VIEW_SEED_PHRASE, { request: versioned(request) });
+}
+
 export async function getBalance(
   request: Omit<IPC.GetBalanceRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
@@ -39,3 +63,32 @@ export async function getReceiveAddress(
   return invoke(IPC.Commands.GET_RECEIVE_ADDRESS, { request: versioned(request) });
 }
 
+export async function getBackupChallenge(
+  request: Omit<IPC.GetBackupChallengeRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetBackupChallengeResponse>> {
+  return invoke(IPC.Commands.GET_BACKUP_CHALLENGE, { request: versioned(request) });
+}
+
+export async function verifyBackup(
+  request: Omit<IPC.VerifyBackupRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.VerifyBackupResponse>> {
+  return invoke(IPC.Commands.VERIFY_BACKUP, { request: versioned(request) });
+}
+
+export async function startSync(
+  request: Omit<IPC.StartSyncRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.StartSyncResponse>> {
+  return invoke(IPC.Commands.START_SYNC, { request: versioned(request) });
+}
+
+export async function stopSync(
+  request: Omit<IPC.StopSyncRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.StopSyncResponse>> {
+  return invoke(IPC.Commands.STOP_SYNC, { request: versioned(request) });
+}
+
+export async function getSyncProgress(
+  request: Omit<IPC.GetSyncProgressRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetSyncProgressResponse>> {
+  return invoke(IPC.Commands.GET_SYNC_PROGRESS, { request: versioned(request) });
+}
