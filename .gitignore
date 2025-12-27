@@ -2,3 +2,29 @@
 .codex
 .claude
 changes.md
+
+# Editor/OS noise
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node.js / frontend
+node_modules/
+dist/
+build/
+coverage/
+
+# Rust / backend
+target/
+**/*.rs.bk
+
+# Env files (keep development/example files tracked)
+.env*
+!.env.development
+!.env.example

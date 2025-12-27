@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/zkore-core",
+  "crates/zkore-engine",
+  "crates/zkore-network",
+  "crates/zkore-keystone",
+  "crates/zkore-tor",
+  "apps/zkore-app-tauri/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92.0"
+license = "MIT"
+repository = "https://github.com/zkore/zkore-desktop"
+
+[workspace.dependencies]
+# Zcash libraries (aligned with librustzcash/Zashi)
+zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor"] }
+zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs"] }
+zcash_primitives = { version = "0.26" }
+zcash_protocol = { version = "0.7" }
+
+# Modules relocated from zcash_primitives in 0.20+
+zip32 = "0.2"
+
+# Mnemonic + randomness
+bip39 = "2"
+rand = "0.8"
+
+# Crypto (KDF + AEAD)
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Encoding
+base64 = "0.22"
+
+# gRPC
+tonic = "0.14"
+prost = "0.14"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# Database
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Zeroization
+zeroize = { version = "1", features = ["derive"] }
+secrecy = "0.8"
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }

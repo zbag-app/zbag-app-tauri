@@ -1,0 +1,16 @@
+[package]
+name = "zkore-network"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tonic.workspace = true
+prost.workspace = true
+reqwest.workspace = true

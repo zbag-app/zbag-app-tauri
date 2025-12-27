@@ -27,18 +27,19 @@
 **Purpose**: Project initialization, workspace structure, and toolchain configuration
 
 - [ ] T001 Create Cargo.toml workspace manifest at repository root with workspace members and dependencies per quickstart.md
-- [ ] T002 [P] Create crates/zkore-core/Cargo.toml with workspace package inheritance
-- [ ] T003 [P] Create crates/zkore-engine/Cargo.toml with zcash_client_backend and zcash_client_sqlite dependencies
-- [ ] T004 [P] Create crates/zkore-network/Cargo.toml with tonic and reqwest dependencies
-- [ ] T005 [P] Create crates/zkore-keystone/Cargo.toml with pczt feature dependencies
-- [ ] T006 [P] Create crates/zkore-tor/Cargo.toml with tor feature dependencies
-- [ ] T007 Create apps/zkore-app-tauri directory structure using bun create tauri-app template (React TypeScript)
-- [ ] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
-- [ ] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
-- [ ] T010 [P] Create `.env.development` with `ZKORE_GRPC_URL` and `RUST_LOG` configuration (development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint; it MUST NOT override wallet network or silently override user-selected persisted server configuration in release builds)
-- [ ] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
-- [ ] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
-- [ ] T013 Create tests/integration/ and tests/e2e/ directory structure
+- [X] T001 Create Cargo.toml workspace manifest at repository root with workspace members and dependencies per quickstart.md
+- [X] T002 [P] Create crates/zkore-core/Cargo.toml with workspace package inheritance
+- [X] T003 [P] Create crates/zkore-engine/Cargo.toml with zcash_client_backend and zcash_client_sqlite dependencies
+- [X] T004 [P] Create crates/zkore-network/Cargo.toml with tonic and reqwest dependencies
+- [X] T005 [P] Create crates/zkore-keystone/Cargo.toml with pczt feature dependencies
+- [X] T006 [P] Create crates/zkore-tor/Cargo.toml with tor feature dependencies
+- [X] T007 Create apps/zkore-app-tauri directory structure using bun create tauri-app template (React TypeScript)
+- [X] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
+- [X] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
+- [X] T010 [P] Create `.env.development` with `ZKORE_GRPC_URL` and `RUST_LOG` configuration (development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint; it MUST NOT override wallet network or silently override user-selected persisted server configuration in release builds)
+- [X] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
+- [X] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
+- [X] T013 Create tests/integration/ and tests/e2e/ directory structure
 
 ---
 
@@ -50,100 +51,100 @@
 
 ### 2.1: Domain Types (zkore-core)
 
-- [ ] T014 Create crates/zkore-core/src/lib.rs with module exports for domain, ipc, and errors
-- [ ] T015 [P] Create crates/zkore-core/src/domain/mod.rs with submodule exports
-- [ ] T016 [P] Create crates/zkore-core/src/domain/wallet.rs with Wallet, WalletType, Network, WalletInfo structs
-- [ ] T017 [P] Create crates/zkore-core/src/domain/account.rs with Account, AccountType, AccountInfo structs
-- [ ] T018 [P] Create crates/zkore-core/src/domain/address.rs with Address, AddressType, AddressInfo structs
-- [ ] T019 [P] Create crates/zkore-core/src/domain/transaction.rs with Transaction, TransactionType, TransactionStatus, TransactionInfo structs (TransactionInfo includes account_id)
-- [ ] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (shielded_spendable, shielded_pending, transparent_total, total)
-- [ ] T021 [P] Create crates/zkore-core/src/domain/sync.rs with SyncProgress and SyncPhase types
-- [ ] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus type (and backup verification metadata types, if needed); do not define BackupAction here
-- [ ] T022a [P] Create crates/zkore-core/src/domain/wallet_status.rs with WalletStatus, BackupAction, SyncStatus, ShieldAction, PrivacyPosture types (matches contracts/ipc-v1.ts WalletStatus)
-- [ ] T023 [P] Create crates/zkore-core/src/domain/transparent_utxo.rs with TransparentUTXO struct
-- [ ] T024 [P] Create crates/zkore-core/src/domain/server.rs with ServerConfig and ServerInfo structs
-- [ ] T025 Create crates/zkore-core/src/errors.rs with stable error codes matching ErrorCodes in ipc-v1.ts
+- [X] T014 Create crates/zkore-core/src/lib.rs with module exports for domain, ipc, and errors
+- [X] T015 [P] Create crates/zkore-core/src/domain/mod.rs with submodule exports
+- [X] T016 [P] Create crates/zkore-core/src/domain/wallet.rs with Wallet, WalletType, Network, WalletInfo structs
+- [X] T017 [P] Create crates/zkore-core/src/domain/account.rs with Account, AccountType, AccountInfo structs
+- [X] T018 [P] Create crates/zkore-core/src/domain/address.rs with Address, AddressType, AddressInfo structs
+- [X] T019 [P] Create crates/zkore-core/src/domain/transaction.rs with Transaction, TransactionType, TransactionStatus, TransactionInfo structs (TransactionInfo includes account_id)
+- [X] T020 [P] Create crates/zkore-core/src/domain/balance.rs with Balance struct (shielded_spendable, shielded_pending, transparent_total, total)
+- [X] T021 [P] Create crates/zkore-core/src/domain/sync.rs with SyncProgress and SyncPhase types
+- [X] T022 [P] Create crates/zkore-core/src/domain/backup.rs with BackupStatus type (and backup verification metadata types, if needed); do not define BackupAction here
+- [X] T022a [P] Create crates/zkore-core/src/domain/wallet_status.rs with WalletStatus, BackupAction, SyncStatus, ShieldAction, PrivacyPosture types (matches contracts/ipc-v1.ts WalletStatus)
+- [X] T023 [P] Create crates/zkore-core/src/domain/transparent_utxo.rs with TransparentUTXO struct
+- [X] T024 [P] Create crates/zkore-core/src/domain/server.rs with ServerConfig and ServerInfo structs
+- [X] T025 Create crates/zkore-core/src/errors.rs with stable error codes matching ErrorCodes in ipc-v1.ts
 
 ### 2.2: IPC Contracts (zkore-core)
 
-- [ ] T026 Create crates/zkore-core/src/ipc/mod.rs with version modules
-- [ ] T027 Create crates/zkore-core/src/ipc/v1/mod.rs with command and event submodules
-- [ ] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult (command boundary convention: all Tauri commands return IpcResult<Response> and frontend wrappers return IpcResult<T>; no thrown errors across IPC)
-- [ ] T028a [P] Enforce typed IPC: add `#[serde(deny_unknown_fields)]` to all v1 request structs and implement schema_version validation helper in crates/zkore-core/src/ipc/v1/common.rs
-- [ ] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts; ALSO add a regression check that for software-wallet flows IPC payloads never include mnemonic/seed/spending keys/raw tx bytes except in explicitly permitted seed-word flows (CreateWallet, RestoreWallet, ViewSeedPhrase, VerifyBackup.word_challenges); Keystone external signing flows are an explicit exception and MAY include signing payloads/QR frames in: `BuildSigningRequestResponse.signing_request.pczt_payload`, `BuildSigningRequestResponse.signing_request.qr_frames`, `FinalizeSigningRequest.signed_payload`; keep the guard that seed words never appear in any backend-to-UI payloads except CreateWalletResponse and ViewSeedPhraseResponse, and that IpcError.details never includes secrets
-- [ ] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus, UnlockWallet, LockWallet, ReauthWallet, ViewSeedPhrase request/response types
-- [ ] T030 [P] Create crates/zkore-core/src/ipc/v1/commands/address.rs with GetReceiveAddress request/response types
-- [ ] T031 [P] Create crates/zkore-core/src/ipc/v1/commands/sync.rs with StartSync, StopSync, GetSyncProgress request/response types
-- [ ] T032 [P] Create crates/zkore-core/src/ipc/v1/commands/balance.rs with GetBalance request/response types
-- [ ] T033 [P] Create crates/zkore-core/src/ipc/v1/commands/transaction.rs with ListTransactions, PrepareSend, ConfirmSend, CancelSend, RetryBroadcast, ShieldFunds request/response types
-- [ ] T034 [P] Create crates/zkore-core/src/ipc/v1/commands/backup.rs with GetBackupChallenge, VerifyBackup (challenge_id), RestoreWallet request/response types
-- [ ] T035 [P] Create crates/zkore-core/src/ipc/v1/events/mod.rs with SyncProgressEvent, BalanceChangedEvent, TransactionChangedEvent, WalletStatusEvent (re-export event structs; TransactionChangedEvent includes TransactionInfo with account_id)
-- [ ] T035a [P] Create crates/zkore-core/src/ipc/v1/commands/keystone.rs with ImportUfvk, BuildSigningRequest (request includes allow_transparent_recipient; SigningSummary includes recipient_kind), FinalizeSigning request/response types
-- [ ] T035b [P] Create crates/zkore-core/src/ipc/v1/commands/server.rs with AddServer, SetDefaultServer, TestServer, ListServers request/response types (update commands/mod.rs re-exports)
+- [X] T026 Create crates/zkore-core/src/ipc/mod.rs with version modules
+- [X] T027 Create crates/zkore-core/src/ipc/v1/mod.rs with command and event submodules
+- [X] T028 [P] Create crates/zkore-core/src/ipc/v1/common.rs with SCHEMA_VERSION, VersionedPayload, IpcError, IpcResult (command boundary convention: all Tauri commands return IpcResult<Response> and frontend wrappers return IpcResult<T>; no thrown errors across IPC)
+- [X] T028a [P] Enforce typed IPC: add `#[serde(deny_unknown_fields)]` to all v1 request structs and implement schema_version validation helper in crates/zkore-core/src/ipc/v1/common.rs
+- [X] T028b [P] Add IPC contract serialization tests in crates/zkore-core/tests/ipc_v1_contract_json.rs verifying schema_version enforcement, unknown-field rejection, and enum JSON shapes match specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts; ALSO add a regression check that for software-wallet flows IPC payloads never include mnemonic/seed/spending keys/raw tx bytes except in explicitly permitted seed-word flows (CreateWallet, RestoreWallet, ViewSeedPhrase, VerifyBackup.word_challenges); Keystone external signing flows are an explicit exception and MAY include signing payloads/QR frames in: `BuildSigningRequestResponse.signing_request.pczt_payload`, `BuildSigningRequestResponse.signing_request.qr_frames`, `FinalizeSigningRequest.signed_payload`; keep the guard that seed words never appear in any backend-to-UI payloads except CreateWalletResponse and ViewSeedPhraseResponse, and that IpcError.details never includes secrets
+- [X] T029 [P] Create crates/zkore-core/src/ipc/v1/commands/wallet.rs with CreateWallet, LoadWallet, ListWallets, GetWalletStatus, UnlockWallet, LockWallet, ReauthWallet, ViewSeedPhrase request/response types
+- [X] T030 [P] Create crates/zkore-core/src/ipc/v1/commands/address.rs with GetReceiveAddress request/response types
+- [X] T031 [P] Create crates/zkore-core/src/ipc/v1/commands/sync.rs with StartSync, StopSync, GetSyncProgress request/response types
+- [X] T032 [P] Create crates/zkore-core/src/ipc/v1/commands/balance.rs with GetBalance request/response types
+- [X] T033 [P] Create crates/zkore-core/src/ipc/v1/commands/transaction.rs with ListTransactions, PrepareSend, ConfirmSend, CancelSend, RetryBroadcast, ShieldFunds request/response types
+- [X] T034 [P] Create crates/zkore-core/src/ipc/v1/commands/backup.rs with GetBackupChallenge, VerifyBackup (challenge_id), RestoreWallet request/response types
+- [X] T035 [P] Create crates/zkore-core/src/ipc/v1/events/mod.rs with SyncProgressEvent, BalanceChangedEvent, TransactionChangedEvent, WalletStatusEvent (re-export event structs; TransactionChangedEvent includes TransactionInfo with account_id)
+- [X] T035a [P] Create crates/zkore-core/src/ipc/v1/commands/keystone.rs with ImportUfvk, BuildSigningRequest (request includes allow_transparent_recipient; SigningSummary includes recipient_kind), FinalizeSigning request/response types
+- [X] T035b [P] Create crates/zkore-core/src/ipc/v1/commands/server.rs with AddServer, SetDefaultServer, TestServer, ListServers request/response types (update commands/mod.rs re-exports)
 
 ### 2.3: App Metadata Database
 
-- [ ] T036 Create crates/zkore-engine/src/db/mod.rs with app metadata database module structure
-- [ ] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, accounts, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations); include per-wallet encryption metadata (wrapped_dek, KDF params/salt, AEAD scheme/version) in wallet_encryption
-- [ ] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version) and the accounts table (account name/type keyed by (wallet_id, account_id))
-- [ ] T038a Add rollback strategy for app metadata DB migrations in crates/zkore-engine/src/db/migrations.rs: create pre-migration snapshot of the DB file, run forward migrations, validate, and restore snapshot on failure (document rollback limits)
-- [ ] T038b Add automated migration tests for app metadata DB in crates/zkore-engine/tests/app_db_migrations.rs using fixtures under tests/fixtures/app_db/ to exercise migrate-up + rollback-on-failure paths (aligns with NFR-016)
-- [ ] T038c Seed shipped default lightwalletd servers into the servers table in the initial app metadata DB migration: insert Mainnet `https://lwd.zec.pro` (default) plus `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks` (non-default), and Testnet `https://lwd.testnet.zec.pro` (default); enforce exactly one `is_default=1` per network (unique index) and keep the migration idempotent
-- [ ] T039 Create crates/zkore-engine/src/db/wallet_meta.rs with CRUD operations for wallet metadata table
-- [ ] T040 Create crates/zkore-engine/src/db/backup_meta.rs with CRUD operations for backup_status table
-- [ ] T041 Create crates/zkore-engine/src/db/server_meta.rs with CRUD operations for servers table
-- [ ] T041a Create crates/zkore-engine/src/db/account_meta.rs with CRUD operations for accounts table (wallet-scoped account name + account_type)
+- [X] T036 Create crates/zkore-engine/src/db/mod.rs with app metadata database module structure
+- [X] T037 Create crates/zkore-engine/src/db/schema.rs with SQLite table definitions per data-model.md (wallets, accounts, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations); include per-wallet encryption metadata (wrapped_dek, KDF params/salt, AEAD scheme/version) in wallet_encryption
+- [X] T038 Create crates/zkore-engine/src/db/migrations.rs with migration runner and version tracking; ensure initial migration includes the wallet_encryption table (wrapped_dek, KDF params/salt, AEAD scheme/version) and the accounts table (account name/type keyed by (wallet_id, account_id))
+- [X] T038a Add rollback strategy for app metadata DB migrations in crates/zkore-engine/src/db/migrations.rs: create pre-migration snapshot of the DB file, run forward migrations, validate, and restore snapshot on failure (document rollback limits)
+- [X] T038b Add automated migration tests for app metadata DB in crates/zkore-engine/tests/app_db_migrations.rs using fixtures under tests/fixtures/app_db/ to exercise migrate-up + rollback-on-failure paths (aligns with NFR-016)
+- [X] T038c Seed shipped default lightwalletd servers into the servers table in the initial app metadata DB migration: insert Mainnet `https://lwd.zec.pro` (default) plus `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks` (non-default), and Testnet `https://lwd.testnet.zec.pro` (default); enforce exactly one `is_default=1` per network (unique index) and keep the migration idempotent
+- [X] T039 Create crates/zkore-engine/src/db/wallet_meta.rs with CRUD operations for wallet metadata table
+- [X] T040 Create crates/zkore-engine/src/db/backup_meta.rs with CRUD operations for backup_status table
+- [X] T041 Create crates/zkore-engine/src/db/server_meta.rs with CRUD operations for servers table
+- [X] T041a Create crates/zkore-engine/src/db/account_meta.rs with CRUD operations for accounts table (wallet-scoped account name + account_type)
 
 ### 2.4: Wallet Engine Foundation
 
-- [ ] T042 Create crates/zkore-engine/src/lib.rs with module exports
-- [ ] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
+- [X] T042 Create crates/zkore-engine/src/lib.rs with module exports
+- [X] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
 - [ ] T043a Implement OS keychain auto-unlock on wallet load/open in crates/zkore-engine/src/wallet_manager.rs: when “remember unlock” is enabled, attempt keychain-backed unlock during LoadWallet and return the post-attempt lock_status
-- [ ] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock)
-- [ ] T044a Create crates/zkore-engine/src/encryption.rs implementing the v1 key hierarchy per spec.md: Argon2id KDF (m=64MiB, t=3, p=1; per-wallet salt) + AEAD wrap/unwrap for a per-wallet DEK (used for encrypted mnemonic storage and as the raw SQLCipher key for the wallet DB); bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted in `wallet_encryption`)
+- [X] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock)
+- [X] T044a Create crates/zkore-engine/src/encryption.rs implementing the v1 key hierarchy per spec.md: Argon2id KDF (m=64MiB, t=3, p=1; per-wallet salt) + AEAD wrap/unwrap for a per-wallet DEK (used for encrypted mnemonic storage and as the raw SQLCipher key for the wallet DB); bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted in `wallet_encryption`)
 - [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
 - [ ] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
 - [ ] T044b2 Add automated tests for wallet DB encryption + migration safety in crates/zkore-engine/tests/wallet_db_encryption_and_migrations.rs (wrong password fails, unlock opens, migration snapshot rollback works)
 - [ ] T210 Implement secret memory zeroization early using the zeroize crate in crates/zkore-engine (at minimum: zeroize mnemonic buffers immediately after encryption/storage; zeroize decrypted DEK material on lock/unload; zeroize any derived secret key material after use where feasible)
-- [ ] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy): tokens MUST be single-use, purpose-bound, and expire after 2 minutes (expired -> `REAUTH_TOKEN_EXPIRED`, invalid/reused -> `REAUTH_TOKEN_INVALID`)
+- [X] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy): tokens MUST be single-use, purpose-bound, and expire after 2 minutes (expired -> `REAUTH_TOKEN_EXPIRED`, invalid/reused -> `REAUTH_TOKEN_INVALID`)
 - [ ] T044d Implement OS keychain backend for “remember unlock” in crates/zkore-engine/src/key_store_keychain.rs (macOS Keychain / Windows Credential Manager / Linux Secret Service via a cross-platform crate); store DEK (preferred) or a wrapping secret keyed by (wallet_id, network)
 - [ ] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests); ALSO add regression tests that (a) reusing the same `reauth_token` twice fails with `REAUTH_TOKEN_INVALID` and (b) tokens older than 2 minutes fail with `REAUTH_TOKEN_EXPIRED` (use a controllable clock to avoid flakiness)
 - [ ] T045 Create crates/zkore-engine/src/birthday.rs with birthday height estimation from date (static checkpoint table per research.md)
 
 ### 2.5: Network Foundation
 
-- [ ] T046 Create crates/zkore-network/src/lib.rs with module exports
-- [ ] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
-- [ ] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
+- [X] T046 Create crates/zkore-network/src/lib.rs with module exports
+- [X] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
+- [X] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
 - [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs using `CompactTxStreamer.GetMempoolStream` to enable pending-transaction detection (FR-013); mempool support is required and must be enforced via AddServer probing/validation (T193/T200a)
-- [ ] T048b Create crates/zkore-engine/src/server_resolver.rs (or extend crates/zkore-engine/src/db/server_meta.rs) with “resolve active server endpoint” logic for an active wallet network: precedence is (1) dev/CI override via `ZKORE_GRPC_URL` (when allowed), (2) persisted default server for the wallet’s network from the servers table, (3) stable error if none exists
-- [ ] T048c Enforce dev/CI-only semantics for `ZKORE_GRPC_URL`: gate the override so it is never applied in production/release builds (e.g., `cfg(debug_assertions)` or a feature flag); add unit tests covering resolver precedence and confirming the override is ignored when not allowed
+- [X] T048b Create crates/zkore-engine/src/server_resolver.rs (or extend crates/zkore-engine/src/db/server_meta.rs) with “resolve active server endpoint” logic for an active wallet network: precedence is (1) dev/CI override via `ZKORE_GRPC_URL` (when allowed), (2) persisted default server for the wallet’s network from the servers table, (3) stable error if none exists
+- [X] T048c Enforce dev/CI-only semantics for `ZKORE_GRPC_URL`: gate the override so it is never applied in production/release builds (e.g., `cfg(debug_assertions)` or a feature flag); add unit tests covering resolver precedence and confirming the override is ignored when not allowed
 
 ### 2.6: Tauri App Shell
 
-- [ ] T049 Create apps/zkore-app-tauri/src-tauri/src/main.rs with Tauri app setup, state management, and command registration
-- [ ] T050 Create apps/zkore-app-tauri/src-tauri/src/state.rs with AppState struct holding WalletManager and service references
-- [ ] T051 Create apps/zkore-app-tauri/src-tauri/src/commands/mod.rs with command module structure
-- [ ] T052 Create apps/zkore-app-tauri/src-tauri/src/events.rs with event emission helpers for zkore:// channels
+- [X] T049 Create apps/zkore-app-tauri/src-tauri/src/main.rs with Tauri app setup, state management, and command registration
+- [X] T050 Create apps/zkore-app-tauri/src-tauri/src/state.rs with AppState struct holding WalletManager and service references
+- [X] T051 Create apps/zkore-app-tauri/src-tauri/src/commands/mod.rs with command module structure
+- [X] T052 Create apps/zkore-app-tauri/src-tauri/src/events.rs with event emission helpers for zkore:// channels
 
 ### 2.7: Frontend Foundation
 
-- [ ] T053 Copy specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts to apps/zkore-app-tauri/src/types/ipc.ts
-- [ ] T054 Create apps/zkore-app-tauri/src/services/ipc.ts with Tauri invoke wrappers per quickstart.md
-- [ ] T055 Create apps/zkore-app-tauri/src/services/events.ts with Tauri listen wrappers for event channels
-- [ ] T056 Create apps/zkore-app-tauri/src/App.tsx with React Query provider and router setup
-- [ ] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet (may keychain-auto-unlock); if lock_status is still Locked (accounts will be empty) show unlock UI and call zkore_unlock_wallet; after unlock succeeds call zkore_load_wallet again to obtain accounts (then proceed with account-scoped calls); fallback to onboarding when none exist
-- [ ] T056b [P] Create apps/zkore-app-tauri/src/hooks/useActiveAccount.ts (or context) implementing active-account selection for the active wallet: default selection prefers persisted last-selected (keyed by wallet_id), otherwise account_id=0 if present, otherwise lowest account_id; persist selection UI-locally (e.g., localStorage)
-- [ ] T056c [P] Create apps/zkore-app-tauri/src/components/wallet/AccountSelector.tsx and wire it into the app chrome so Home/Receive/Send/Activity can switch the active account (label HardwareSigner accounts as watch-only)
-- [ ] T057 Create apps/zkore-app-tauri/src/main.tsx with React entry point
-- [ ] T058 [P] Create apps/zkore-app-tauri/src/hooks/useFocusTrap.ts for modal focus management
-- [ ] T059 [P] Create apps/zkore-app-tauri/src/hooks/useKeyboardShortcuts.ts for global keyboard shortcuts
+- [X] T053 Copy specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts to apps/zkore-app-tauri/src/types/ipc.ts
+- [X] T054 Create apps/zkore-app-tauri/src/services/ipc.ts with Tauri invoke wrappers per quickstart.md
+- [X] T055 Create apps/zkore-app-tauri/src/services/events.ts with Tauri listen wrappers for event channels
+- [X] T056 Create apps/zkore-app-tauri/src/App.tsx with React Query provider and router setup
+- [X] T056a Implement wallet reopen on startup in apps/zkore-app-tauri/src/App.tsx: call zkore_list_wallets, auto-load most recent wallet via zkore_load_wallet (may keychain-auto-unlock); if lock_status is still Locked (accounts will be empty) show unlock UI and call zkore_unlock_wallet; after unlock succeeds call zkore_load_wallet again to obtain accounts (then proceed with account-scoped calls); fallback to onboarding when none exist
+- [X] T056b [P] Create apps/zkore-app-tauri/src/hooks/useActiveAccount.ts (or context) implementing active-account selection for the active wallet: default selection prefers persisted last-selected (keyed by wallet_id), otherwise account_id=0 if present, otherwise lowest account_id; persist selection UI-locally (e.g., localStorage)
+- [X] T056c [P] Create apps/zkore-app-tauri/src/components/wallet/AccountSelector.tsx and wire it into the app chrome so Home/Receive/Send/Activity can switch the active account (label HardwareSigner accounts as watch-only)
+- [X] T057 Create apps/zkore-app-tauri/src/main.tsx with React entry point
+- [X] T058 [P] Create apps/zkore-app-tauri/src/hooks/useFocusTrap.ts for modal focus management
+- [X] T059 [P] Create apps/zkore-app-tauri/src/hooks/useKeyboardShortcuts.ts for global keyboard shortcuts
 
 ### 2.8: Logging Infrastructure
 
-- [ ] T060 Create crates/zkore-engine/src/logging.rs with tracing + tracing-appender setup per research.md (daily rotation, 7 days retained, ~/.zkore/logs/)
-- [ ] T060a Implement safe logging guardrails early in crates/zkore-engine/src/logging.rs (redaction utilities + wrapper macros) to prevent accidental secret logging during development
-- [ ] T061 Create crates/zkore-core/src/ipc/v1/commands/logs.rs with GetLogLocation request/response types
+- [X] T060 Create crates/zkore-engine/src/logging.rs with tracing + tracing-appender setup per research.md (daily rotation, 7 days retained, ~/.zkore/logs/)
+- [X] T060a Implement safe logging guardrails early in crates/zkore-engine/src/logging.rs (redaction utilities + wrapper macros) to prevent accidental secret logging during development
+- [X] T061 Create crates/zkore-core/src/ipc/v1/commands/logs.rs with GetLogLocation request/response types
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
