@@ -527,6 +527,12 @@ export interface RequestSwapQuoteRequest extends VersionedPayload {
 export interface StartSwapRequest extends VersionedPayload {
   quote_id: string;
   /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the swap requires transparent interaction (for example, a transparent recipient,
+   * transparent refund path, or generating/using a transparent address).
+   */
+  allow_transparent_interaction: boolean;
+  /**
    * Re-auth token (purpose: Spend).
    * Required when the quote results in a ZEC spend (e.g. swap-from-ZEC).
    */

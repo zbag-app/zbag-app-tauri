@@ -184,7 +184,7 @@ A user wants to convert shielded ZEC to another cryptocurrency. They select targ
 
 1. **Given** a user initiates "Swap from ZEC", **When** they enter target asset and destination address, **Then** estimated ZEC cost and fees are displayed
 2. **Given** a swap from ZEC is executed, **When** the transaction is constructed, **Then** it uses shielded ZEC (not transparent)
-3. **Given** ephemeral transparent interaction is required, **When** displayed to user, **Then** privacy tradeoffs are clearly explained
+3. **Given** ephemeral transparent interaction is required, **When** the user attempts to proceed, **Then** privacy tradeoffs are clearly explained and the user MUST explicitly acknowledge before the swap can start
 
 ---
 
@@ -308,7 +308,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-033**: System MUST display swap entries in Activity with real-time status updates
 - **FR-034**: System MUST support state machine: Draft, Awaiting deposit, Pending, Confirming, Completed, Refunded, Failed
 - **FR-035**: System MUST display deadlines and countdown timers for time-sensitive swap actions
-- **FR-036**: System MUST clearly communicate privacy tradeoffs for any transparent interactions in swap flows
+- **FR-036**: System MUST clearly communicate privacy tradeoffs and require explicit user acknowledgement before proceeding when transparent interactions are required in swap flows
 - **FR-036a**: System MUST disable swap functionality for Testnet wallets; swap requests on Testnet MUST fail with a clear error
 
 **Tor Anonymization**

@@ -300,7 +300,6 @@ Create `apps/zkore-app-tauri/src/services/ipc.ts`:
 
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import * as IPC from '../types/ipc';
 
 // All IPC request/response payloads include `schema_version`.
@@ -343,6 +342,13 @@ export async function getBalance(
 ): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
   return invoke(IPC.Commands.GET_BALANCE, { request: versioned(request) });
 }
+```
+
+Create `apps/zkore-app-tauri/src/services/events.ts`:
+
+```typescript
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import * as IPC from '../types/ipc';
 
 // Event subscriptions
 export function onBalanceChanged(
@@ -471,6 +477,8 @@ bun run tauri build
 │       │   ├── components/
 │       │   ├── pages/
 │       │   ├── services/
+│       │   │   ├── ipc.ts
+│       │   │   └── events.ts
 │       │   └── types/
 │       │       └── ipc.ts
 │       └── package.json

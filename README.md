@@ -83,7 +83,7 @@ This wallet enforces strict security boundaries. Key principles:
 - Seed phrases are generated in the Rust backend and only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed); never persisted or logged by the UI
 - "View seed phrase" requires manual wallet-password re-authentication
 - The UI operates on derived, non-sensitive data, except for transient mnemonic display/entry during those permitted flows
-- Transparent spending is architecturally impossible
+- Spending transparent funds (using transparent inputs) is architecturally impossible; transparent funds must be shielded before they can fund payments
 - All network requests route through backend-controlled transports
 
 For vulnerability reports, please use private disclosure. See the [Constitution](.specify/memory/constitution.md#security-reporting-and-incident-response) for the incident response policy.

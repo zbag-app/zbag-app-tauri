@@ -270,7 +270,7 @@
 
 - [ ] T107 [US4] Implement restore_wallet() in crates/zkore-engine/src/wallet_manager.rs with BIP-39 24-word English seed phrase validation (no passphrase in v1) and birthday height estimation; on successful restore, persist backup status as complete (`backup_required=false`, `backup_completed_at=now`, `verification_method="restore_seed_phrase"`), so spending is not blocked by BACKUP_REQUIRED for restored wallets; also insert app metadata accounts row for (wallet_id, account_id=0) with name = wallet name and account_type=Software
 - [ ] T108 [US4] Implement birthday height lookup from date in crates/zkore-engine/src/birthday.rs (checkpoint table lookup)
-- [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet)
+- [ ] T109 [US4] Implement RestoreWallet Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/backup.rs (sets the restored wallet as the active wallet equivalent to LoadWallet; return RestoreWalletResponse including required birthday_height)
 - [ ] T110 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreWallet.tsx to collect RestoreWalletRequest fields (excluding birthday_date, handled in T111): wallet name input, network selection (Mainnet/Testnet), wallet password + confirmation, “remember unlock” toggle, and seed phrase entry (textarea with word autocomplete + paste); on continue, navigate to RestoreBirthday.tsx while retaining captured values (router state or a restore-flow store)
 - [ ] T111 [P] [US4] Create apps/zkore-app-tauri/src/pages/RestoreBirthday.tsx with optional date picker for first transaction date; on confirm/skip, invoke zkore_restore_wallet using values captured in T110 plus birthday_date (or null) and then navigate to Home (sync begins)
 - [ ] T111a [US4] Clear sensitive UI state after restore: ensure RestoreWallet.tsx/RestoreBirthday.tsx clear seed phrase inputs and any restore-flow in-memory state after restore completes or the flow is abandoned
@@ -365,7 +365,7 @@
 
  - [ ] T142 [US8] Create crates/zkore-core/src/domain/swap.rs with SwapIntent, SwapType, SwapState, SwapInfo, SwapQuote structs
  - [ ] T142a [US8] Update crates/zkore-core/src/domain/mod.rs to export the swap domain module
- - [ ] T143 [P] [US8] Create crates/zkore-core/src/ipc/v1/commands/swap.rs with RequestSwapQuote, StartSwap, GetSwapStatus, ListSwaps request/response types
+ - [ ] T143 [P] [US8] Create crates/zkore-core/src/ipc/v1/commands/swap.rs with RequestSwapQuote, StartSwap, GetSwapStatus, ListSwaps request/response types (ensure StartSwapRequest includes allow_transparent_interaction for fail-closed privacy acknowledgement)
  - [ ] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
  - [ ] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
  - [ ] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
@@ -378,7 +378,7 @@
 - [ ] T150a [US8] Implement `Confirming -> Completed` transition in crates/zkore-engine/src/swap_service.rs by correlating provider success with wallet confirmation of the relevant Zcash tx (incoming payout for ToZec, outgoing deposit for FromZec)
 - [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table (including deposit_memo)
 - [ ] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
-- [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token)
+- [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token and allow_transparent_interaction; pass through to engine and propagate PRIVACY_ACK_REQUIRED)
 - [ ] T154 [US8] Implement GetSwapStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T155 [US8] Implement ListSwaps Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
 - [ ] T156 [P] [US8] Create apps/zkore-app-tauri/src/pages/Swap.tsx with swap type selection, asset selection (for v1: populate from a static supported-tokens list, e.g., apps/zkore-app-tauri/src/data/supportedTokens.ts), amount input
@@ -396,20 +396,20 @@
 
 ## Phase 11: User Story 9 - Swap From ZEC via NEAR Intents (Priority: P3)
 
-**Goal**: Convert shielded ZEC to external crypto. Uses shielded ZEC by default. Privacy tradeoffs explained for transparent interactions.
+**Goal**: Convert shielded ZEC to external crypto. Uses shielded ZEC by default. Transparent interactions (if unavoidable) must be explicitly user-acknowledged (fail-closed).
 
 **Independent Test**: Use mocked 1Click API responses to run the off-ramp flow end-to-end (quote, execution, status polling/state transitions), verify shielded spend enforcement, and track completion in Activity; optionally run a manual mainnet small-amount swap smoke test.
 
 ### Implementation for User Story 9
 
-- [ ] T161 [US9] Implement swap_from_zec flow in crates/zkore-engine/src/swap_service.rs using shielded ZEC and requiring valid re-auth token
-- [ ] T162 [US9] Implement ephemeral transparent address generation for unavoidable transparent interactions in crates/zkore-engine/src/swap_service.rs
+- [ ] T161 [US9] Implement swap_from_zec flow in crates/zkore-engine/src/swap_service.rs using shielded ZEC and requiring valid re-auth token; enforce privacy downgrade acknowledgement via allow_transparent_interaction (return PRIVACY_ACK_REQUIRED when transparent interaction is required and not acknowledged)
+- [ ] T162 [US9] Implement ephemeral transparent address generation for unavoidable transparent interactions in crates/zkore-engine/src/swap_service.rs (only when allow_transparent_interaction=true; otherwise fail with PRIVACY_ACK_REQUIRED per T161)
 - [ ] T163 [US9] Create apps/zkore-app-tauri/src/pages/SwapFromZec.tsx with target asset, destination address input
-- [ ] T163a [US9] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/pages/SwapFromZec.tsx: call ReauthWallet then StartSwap with reauth_token
-- [ ] T164 [US9] Create apps/zkore-app-tauri/src/components/swap/PrivacyWarning.tsx explaining transparent interaction tradeoffs
+- [ ] T163a [US9] Add password prompt (manual re-auth) to apps/zkore-app-tauri/src/pages/SwapFromZec.tsx: call ReauthWallet then StartSwap with reauth_token and allow_transparent_interaction=false; on PRIVACY_ACK_REQUIRED show explicit acknowledgement UX then retry StartSwap with allow_transparent_interaction=true
+- [ ] T164 [US9] Create apps/zkore-app-tauri/src/components/swap/PrivacyWarning.tsx explaining transparent interaction tradeoffs and requiring explicit acknowledgement (checkbox or confirm) before retrying StartSwap with allow_transparent_interaction=true
 - [ ] T165 [US9] Add FromZec validation ensuring shielded ZEC spend in crates/zkore-engine/src/swap_service.rs
 - [ ] T165a [US9] Enforce BACKUP_REQUIRED guard for swap_from_zec flows in crates/zkore-engine/src/swap_service.rs
-- [ ] T165b [US9] Add milestone tests: unit (crates/zkore-engine/tests/us9_swap_from_zec.rs), integration (tests/integration/us9_swaps_from_zec.rs), e2e (tests/e2e/us9_swap_from_zec.spec.ts) using mocked 1Click API responses; cover shielded-only enforcement, privacy warnings, and expected state transitions/events
+- [ ] T165b [US9] Add milestone tests: unit (crates/zkore-engine/tests/us9_swap_from_zec.rs), integration (tests/integration/us9_swaps_from_zec.rs), e2e (tests/e2e/us9_swap_from_zec.spec.ts) using mocked 1Click API responses; cover shielded-only enforcement, fail-closed privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_interaction=true when required), and expected state transitions/events (no silent transparent downgrade paths)
 
 **Checkpoint**: User Story 9 complete - Swap from ZEC via NEAR Intents functional
 
