@@ -1,6 +1,7 @@
 use zkore_core::ipc::v1::events::{
     BalanceChangedEvent, SyncProgressEvent, TransactionChangedEvent, WalletStatusEvent,
 };
+use tauri::Emitter;
 
 pub const CHANNEL_SYNC: &str = "zkore://sync";
 pub const CHANNEL_BALANCE: &str = "zkore://balance";
@@ -31,4 +32,3 @@ pub fn emit_wallet_status(
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_WALLET_STATUS, event)
 }
-

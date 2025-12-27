@@ -8,7 +8,6 @@ use zkore_core::domain::Network;
 use zkore_engine::key_store::KeyStore;
 use zkore_engine::wallet_manager::WalletManager;
 
-#[derive(Debug)]
 pub struct AppState {
     pub wallet_manager: Mutex<WalletManager>,
 }
@@ -31,8 +30,8 @@ fn default_app_db_path() -> anyhow::Result<PathBuf> {
 
 #[derive(Debug, Default)]
 struct InMemoryKeyStore {
-    encrypted_mnemonics: Mutex<HashMap<(Uuid, Network), Vec<u8>>>,
-    keychain: Mutex<HashMap<(Uuid, Network), Vec<u8>>>,
+    encrypted_mnemonics: Mutex<HashMap<(Uuid, u8), Vec<u8>>>,
+    keychain: Mutex<HashMap<(Uuid, u8), Vec<u8>>>,
 }
 
 impl KeyStore for InMemoryKeyStore {
@@ -45,7 +44,7 @@ impl KeyStore for InMemoryKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network), encrypted_mnemonic.to_vec());
+            .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
         Ok(())
     }
 
@@ -58,7 +57,7 @@ impl KeyStore for InMemoryKeyStore {
             .encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .get(&(wallet_id, network))
+            .get(&(wallet_id, network_key(network)))
             .cloned())
     }
 
@@ -66,7 +65,7 @@ impl KeyStore for InMemoryKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .remove(&(wallet_id, network));
+            .remove(&(wallet_id, network_key(network)));
         Ok(())
     }
 
@@ -79,7 +78,7 @@ impl KeyStore for InMemoryKeyStore {
         self.keychain
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network), unlock_material.to_vec());
+            .insert((wallet_id, network_key(network)), unlock_material.to_vec());
         Ok(())
     }
 
@@ -92,7 +91,7 @@ impl KeyStore for InMemoryKeyStore {
             .keychain
             .lock()
             .expect("mutex poisoned")
-            .get(&(wallet_id, network))
+            .get(&(wallet_id, network_key(network)))
             .cloned())
     }
 
@@ -104,8 +103,14 @@ impl KeyStore for InMemoryKeyStore {
         self.keychain
             .lock()
             .expect("mutex poisoned")
-            .remove(&(wallet_id, network));
+            .remove(&(wallet_id, network_key(network)));
         Ok(())
     }
 }
 
+fn network_key(network: Network) -> u8 {
+    match network {
+        Network::Mainnet => 0,
+        Network::Testnet => 1,
+    }
+}

@@ -38,6 +38,12 @@ pub struct WalletAeadParams {
 #[zeroize(drop)]
 pub struct Dek(pub [u8; 32]);
 
+impl std::fmt::Debug for Dek {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Dek([REDACTED])")
+    }
+}
+
 #[derive(Zeroize)]
 #[zeroize(drop)]
 struct Kek([u8; 32]);

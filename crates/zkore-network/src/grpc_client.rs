@@ -1,4 +1,11 @@
+use std::time::Duration;
+
 use anyhow::Context as _;
+use tonic::transport::{Channel, Endpoint};
+use tonic::Code;
+
+use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
+use zcash_client_backend::proto::service::Empty;
 
 /// CompactTxStreamer gRPC client wrapper.
 ///
@@ -19,18 +26,29 @@ impl GrpcClient {
         &self.endpoint
     }
 
-    pub async fn connect(&self) -> anyhow::Result<()> {
-        // TODO(T048): Build tonic channel and service client bindings for CompactTxStreamer.
-        Err(anyhow::anyhow!(
-            "grpc client not implemented (endpoint={})",
-            self.endpoint
-        ))
+    pub async fn connect(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
+        let endpoint = Endpoint::from_shared(self.endpoint.clone())
+            .context("invalid gRPC endpoint URL")?
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10));
+
+        let channel = endpoint.connect().await.context("failed to connect")?;
+        Ok(CompactTxStreamerClient::new(channel))
     }
 
     pub async fn probe_mempool_support(&self) -> anyhow::Result<()> {
-        // TODO(T048a): Call CompactTxStreamer.GetMempoolStream and fail if UNIMPLEMENTED.
-        self.connect().await.context("failed to connect")?;
-        Ok(())
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(Empty {});
+        req.set_timeout(Duration::from_secs(2));
+
+        match client.get_mempool_stream(req).await {
+            Ok(_stream) => Ok(()),
+            Err(status) if status.code() == Code::Unimplemented => {
+                Err(anyhow::anyhow!("server missing GetMempoolStream capability"))
+            }
+            Err(status) if status.code() == Code::DeadlineExceeded => Ok(()),
+            Err(status) => Err(anyhow::anyhow!(status)).context("mempool probe failed"),
+        }
     }
 }
-

@@ -8,6 +8,7 @@ pub mod backup_meta;
 pub mod migrations;
 pub mod schema;
 pub mod server_meta;
+pub mod wallet_encryption_meta;
 pub mod wallet_meta;
 
 #[derive(Debug)]

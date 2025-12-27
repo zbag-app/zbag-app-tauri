@@ -25,6 +25,7 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+keyring.workspace = true
 zkore-core = { path = "../zkore-core" }
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true

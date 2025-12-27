@@ -26,7 +26,7 @@
 
 **Purpose**: Project initialization, workspace structure, and toolchain configuration
 
-- [ ] T001 Create Cargo.toml workspace manifest at repository root with workspace members and dependencies per quickstart.md
+- [X] T001 Create Cargo.toml workspace manifest at repository root with workspace members and dependencies per quickstart.md
 - [X] T001 Create Cargo.toml workspace manifest at repository root with workspace members and dependencies per quickstart.md
 - [X] T002 [P] Create crates/zkore-core/Cargo.toml with workspace package inheritance
 - [X] T003 [P] Create crates/zkore-engine/Cargo.toml with zcash_client_backend and zcash_client_sqlite dependencies
@@ -99,24 +99,24 @@
 
 - [X] T042 Create crates/zkore-engine/src/lib.rs with module exports
 - [X] T043 Create crates/zkore-engine/src/wallet_manager.rs with WalletManager struct skeleton (create, load, list, lock/unlock)
-- [ ] T043a Implement OS keychain auto-unlock on wallet load/open in crates/zkore-engine/src/wallet_manager.rs: when “remember unlock” is enabled, attempt keychain-backed unlock during LoadWallet and return the post-attempt lock_status
+- [X] T043a Implement OS keychain auto-unlock on wallet load/open in crates/zkore-engine/src/wallet_manager.rs: when “remember unlock” is enabled, attempt keychain-backed unlock during LoadWallet and return the post-attempt lock_status
 - [X] T044 Create crates/zkore-engine/src/key_store.rs with KeyStore trait for encrypted mnemonic + unlock material handling (encrypted-on-disk blob default, keychain-backed remember_unlock)
 - [X] T044a Create crates/zkore-engine/src/encryption.rs implementing the v1 key hierarchy per spec.md: Argon2id KDF (m=64MiB, t=3, p=1; per-wallet salt) + AEAD wrap/unwrap for a per-wallet DEK (used for encrypted mnemonic storage and as the raw SQLCipher key for the wallet DB); bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted in `wallet_encryption`)
-- [ ] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
-- [ ] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
-- [ ] T044b2 Add automated tests for wallet DB encryption + migration safety in crates/zkore-engine/tests/wallet_db_encryption_and_migrations.rs (wrong password fails, unlock opens, migration snapshot rollback works)
-- [ ] T210 Implement secret memory zeroization early using the zeroize crate in crates/zkore-engine (at minimum: zeroize mnemonic buffers immediately after encryption/storage; zeroize decrypted DEK material on lock/unload; zeroize any derived secret key material after use where feasible)
+- [X] T044b Implement encrypted wallet DB open/create in crates/zkore-engine/src/wallet_manager.rs using SQLCipher + a per-wallet DEK (wallet DB not readable without unlock; aligns with NFR-015); persist `wrapped_dek` + KDF params/salt + scheme version in app metadata DB
+- [X] T044b1 Wrap wallet DB schema migrations with rollback safety in crates/zkore-engine/src/wallet_manager.rs: create pre-migration snapshot of the wallet DB file, run forward migrations, validate open, restore snapshot on failure (aligns with NFR-016)
+- [X] T044b2 Add automated tests for wallet DB encryption + migration safety in crates/zkore-engine/tests/wallet_db_encryption_and_migrations.rs (wrong password fails, unlock opens, migration snapshot rollback works)
+- [X] T210 Implement secret memory zeroization early using the zeroize crate in crates/zkore-engine (at minimum: zeroize mnemonic buffers immediately after encryption/storage; zeroize decrypted DEK material on lock/unload; zeroize any derived secret key material after use where feasible)
 - [X] T044c Create crates/zkore-engine/src/reauth.rs implementing per-action re-auth token issuance/validation (send/shield/swap-from-ZEC + "View seed phrase"; OS keychain must not satisfy): tokens MUST be single-use, purpose-bound, and expire after 2 minutes (expired -> `REAUTH_TOKEN_EXPIRED`, invalid/reused -> `REAUTH_TOKEN_INVALID`)
-- [ ] T044d Implement OS keychain backend for “remember unlock” in crates/zkore-engine/src/key_store_keychain.rs (macOS Keychain / Windows Credential Manager / Linux Secret Service via a cross-platform crate); store DEK (preferred) or a wrapping secret keyed by (wallet_id, network)
-- [ ] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests); ALSO add regression tests that (a) reusing the same `reauth_token` twice fails with `REAUTH_TOKEN_INVALID` and (b) tokens older than 2 minutes fail with `REAUTH_TOKEN_EXPIRED` (use a controllable clock to avoid flakiness)
-- [ ] T045 Create crates/zkore-engine/src/birthday.rs with birthday height estimation from date (static checkpoint table per research.md)
+- [X] T044d Implement OS keychain backend for “remember unlock” in crates/zkore-engine/src/key_store_keychain.rs (macOS Keychain / Windows Credential Manager / Linux Secret Service via a cross-platform crate); store DEK (preferred) or a wrapping secret keyed by (wallet_id, network)
+- [X] T044e Add tests validating keychain does not satisfy per-action re-auth: auto-unlock may occur on launch, but ReauthWallet MUST still require password input (use a mock keychain in unit tests); ALSO add regression tests that (a) reusing the same `reauth_token` twice fails with `REAUTH_TOKEN_INVALID` and (b) tokens older than 2 minutes fail with `REAUTH_TOKEN_EXPIRED` (use a controllable clock to avoid flakiness)
+- [X] T045 Create crates/zkore-engine/src/birthday.rs with birthday height estimation from date (static checkpoint table per research.md)
 
 ### 2.5: Network Foundation
 
 - [X] T046 Create crates/zkore-network/src/lib.rs with module exports
 - [X] T047 Create crates/zkore-network/src/transport.rs with Transport trait abstraction (direct vs Tor)
 - [X] T048 Create crates/zkore-network/src/grpc_client.rs with CompactTxStreamer gRPC client skeleton
-- [ ] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs using `CompactTxStreamer.GetMempoolStream` to enable pending-transaction detection (FR-013); mempool support is required and must be enforced via AddServer probing/validation (T193/T200a)
+- [X] T048a Add CompactTxStreamer mempool support in crates/zkore-network/src/grpc_client.rs using `CompactTxStreamer.GetMempoolStream` to enable pending-transaction detection (FR-013); mempool support is required and must be enforced via AddServer probing/validation (T193/T200a)
 - [X] T048b Create crates/zkore-engine/src/server_resolver.rs (or extend crates/zkore-engine/src/db/server_meta.rs) with “resolve active server endpoint” logic for an active wallet network: precedence is (1) dev/CI override via `ZKORE_GRPC_URL` (when allowed), (2) persisted default server for the wallet’s network from the servers table, (3) stable error if none exists
 - [X] T048c Enforce dev/CI-only semantics for `ZKORE_GRPC_URL`: gate the override so it is never applied in production/release builds (e.g., `cfg(debug_assertions)` or a feature flag); add unit tests covering resolver precedence and confirming the override is ignored when not allowed
 
@@ -159,8 +159,8 @@
 ### Implementation for User Story 1
 
 - [ ] T062 [US1] Implement mnemonic generation in crates/zkore-engine/src/wallet_manager.rs using bip39 crate (24-word English wordlist)
-- [ ] T063 [US1] Implement wallet directory creation with network separation (~/.zkore/wallets/{network}/{wallet-id}/) in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T064 [US1] Implement encrypted zcash_client_sqlite WalletDb initialization in crates/zkore-engine/src/wallet_manager.rs (wallet DB encrypted at rest; requires unlock)
+- [X] T063 [US1] Implement wallet directory creation with network separation (~/.zkore/wallets/{network}/{wallet-id}/) in crates/zkore-engine/src/wallet_manager.rs
+- [X] T064 [US1] Implement encrypted zcash_client_sqlite WalletDb initialization in crates/zkore-engine/src/wallet_manager.rs (wallet DB encrypted at rest; requires unlock)
 - [ ] T065 [US1] Implement UFVK derivation from mnemonic and account insertion in crates/zkore-engine/src/wallet_manager.rs; also insert app metadata accounts row for (wallet_id, account_id=0) with name = wallet name and account_type=Software
 - [ ] T066 [US1] Implement mnemonic storage via KeyStore trait in crates/zkore-engine/src/wallet_manager.rs (encrypted at rest with wallet password; optional OS keychain remember-unlock)
 - [ ] T067 [US1] Implement backend-issued BackupChallenge generation in crates/zkore-engine/src/wallet_manager.rs: challenge_id + exactly 4 distinct 1-based word indices (1..=24) + expires_at (10 minutes) + attempt counter (max 5 failed attempts); store challenges in-memory only (restart invalidates outstanding challenges)
