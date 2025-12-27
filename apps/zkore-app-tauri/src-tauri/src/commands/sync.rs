@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::path::PathBuf;
 
 use tauri::State;
 
@@ -31,12 +32,39 @@ pub fn zkore_start_sync(
             return Err(zkore_engine::error::ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         }
 
-        let handler = Arc::new(move |event| {
-            let _ = events::emit_sync_progress(&app, event);
-        });
+        let wallet_db_path = zkore_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+            .map_err(|e| anyhow::anyhow!(e))?
+            .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
+            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"))?;
+
+        let wallet_dek = mgr.unlocked_wallet_dek(wallet.id)?;
+        let account_ids = mgr.list_wallet_db_account_ids(wallet.id)?;
+
+        let progress_handler = {
+            let app = app.clone();
+            Arc::new(move |event| {
+                let _ = events::emit_sync_progress(&app, event);
+            })
+        };
+
+        let balance_handler = {
+            let app = app.clone();
+            Arc::new(move |event| {
+                let _ = events::emit_balance_changed(&app, event);
+            })
+        };
         state
             .sync_service
-            .start_sync(mgr.app_db(), wallet.id, wallet.network, Some(handler))?;
+            .start_sync(
+                mgr.app_db(),
+                wallet.id,
+                wallet.network,
+                wallet_db_path,
+                wallet_dek,
+                account_ids,
+                Some(progress_handler),
+                Some(balance_handler),
+            )?;
 
         Ok(StartSyncResponse {
             schema_version: SCHEMA_VERSION,

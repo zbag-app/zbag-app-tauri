@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
 import { BackupReminder } from '../components/common/BackupReminder';
 import { AccountSelector } from '../components/wallet/AccountSelector';
-import { onSyncProgress } from '../services/events';
+import { onBalanceChanged, onSyncProgress } from '../services/events';
 import { getBalance, getSyncProgress, getWalletStatus, startSync } from '../services/ipc';
 
 export function Home(props: {
@@ -85,6 +85,22 @@ export function Home(props: {
     };
   }, []);
 
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    onBalanceChanged((evt) => {
+      if (activeAccountId === null) return;
+      if (evt.account_id !== activeAccountId) return;
+      setBalance(evt.balance);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, [activeAccountId]);
+
   const start = async () => {
     const res = await startSync({ wallet_id: wallet.id });
     if ('err' in res) {
@@ -142,4 +158,3 @@ export function Home(props: {
     </div>
   );
 }
-

@@ -401,6 +401,22 @@ impl WalletManager {
         self.issue_backup_challenge(wallet_id)
     }
 
+    pub fn unlocked_wallet_dek(&self, wallet_id: Uuid) -> anyhow::Result<Dek> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
+        }
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(dek) = active.dek.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        Ok(Dek(dek.0))
+    }
+
     pub fn verify_backup(
         &mut self,
         wallet_id: Uuid,

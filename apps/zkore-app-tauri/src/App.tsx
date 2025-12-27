@@ -1,10 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { HashRouter, Route, Routes } from 'react-router-dom';
+import { HashRouter, Link, Route, Routes } from 'react-router-dom';
 import type * as IPC from './types/ipc';
 import { AccountSelector } from './components/wallet/AccountSelector';
 import { useActiveAccount } from './hooks/useActiveAccount';
 import { listWallets, loadWallet, unlockWallet } from './services/ipc';
+import { BackupChallenge } from './pages/BackupChallenge';
+import { CreateWallet } from './pages/CreateWallet';
+import { Home } from './pages/Home';
+import { Receive } from './pages/Receive';
+import { SeedDisplay } from './pages/SeedDisplay';
+import { Settings } from './pages/Settings';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -29,6 +35,7 @@ function pickMostRecentWallet(wallets: IPC.WalletInfo[]): IPC.WalletInfo {
 function AppInner() {
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
   const [accounts, setAccounts] = useState<IPC.AccountInfo[]>([]);
+  const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
 
   const activeWalletId = useMemo(() => {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
@@ -82,10 +89,32 @@ function AppInner() {
 
   if (startup.kind === 'error') return <div>Error: {startup.message}</div>;
 
-  if (startup.kind === 'no-wallets') return <div>No wallets found. Go to onboarding.</div>;
+  if (startup.kind === 'no-wallets') {
+    return (
+      <CreateWallet
+        onCreated={(args) => {
+          setSeedPhrase(args.seedPhrase);
+          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+          setAccounts(args.accounts);
+        }}
+      />
+    );
+  }
 
   if (startup.kind === 'locked') {
-    return <UnlockGate wallet={startup.wallet} onUnlocked={(a) => setStartup(a)} />;
+    return (
+      <UnlockGate
+        wallet={startup.wallet}
+        onUnlocked={(a) => {
+          setStartup(a);
+          if (a.kind === 'ready') {
+            setAccounts(a.accounts);
+          } else {
+            setAccounts([]);
+          }
+        }}
+      />
+    );
   }
 
   return (
@@ -97,10 +126,40 @@ function AppInner() {
           activeAccountId={activeAccountId}
           onChange={setActiveAccountId}
         />
+        <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Link to="/">Home</Link>
+          <Link to="/receive">Receive</Link>
+          <Link to="/settings">Settings</Link>
+        </nav>
       </header>
 
       <Routes>
-        <Route path="/" element={<div>Home</div>} />
+        <Route
+          path="/"
+          element={
+            <Home
+              wallet={startup.wallet}
+              accounts={accounts}
+              activeAccountId={activeAccountId}
+              onChangeAccount={setActiveAccountId}
+            />
+          }
+        />
+        <Route path="/receive" element={<Receive activeAccountId={activeAccountId} />} />
+        <Route path="/settings" element={<Settings wallet={startup.wallet} />} />
+        <Route
+          path="/seed"
+          element={
+            <SeedDisplay
+              seedPhrase={seedPhrase ?? []}
+              onCleared={() => setSeedPhrase(null)}
+            />
+          }
+        />
+        <Route
+          path="/backup"
+          element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
+        />
       </Routes>
     </div>
   );
