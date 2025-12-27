@@ -21,6 +21,7 @@ repository = "https://github.com/zkore/zkore-desktop"
 zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor", "lightwalletd-tonic"] }
 zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs"] }
 zcash_primitives = { version = "0.26" }
+zcash_proofs = { version = "0.26", features = ["bundled-prover"], default-features = false }
 zcash_protocol = { version = "0.7" }
 
 # Modules relocated from zcash_primitives in 0.20+

@@ -12,4 +12,5 @@ pub mod logging;
 pub mod reauth;
 pub mod server_resolver;
 pub mod sync_service;
+pub mod tx_service;
 pub mod wallet_manager;

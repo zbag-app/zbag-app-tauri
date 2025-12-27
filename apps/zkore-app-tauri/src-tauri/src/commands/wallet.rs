@@ -74,20 +74,7 @@ pub fn zkore_load_wallet(
 
     map_anyhow((|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let (wallet, lock_status) = mgr.load_wallet(request.wallet_id)?;
-
-        let accounts = if lock_status == WalletLockStatus::Locked {
-            vec![]
-        } else {
-            load_accounts_for_wallet(&mut mgr, wallet.id)?
-        };
-
-        Ok(LoadWalletResponse {
-            schema_version: SCHEMA_VERSION,
-            wallet,
-            lock_status,
-            accounts,
-        })
+        build_load_wallet_response(&mut mgr, request.wallet_id)
     })())
 }
 
@@ -221,4 +208,170 @@ fn load_accounts_for_wallet(
     }
 
     Ok(out)
+}
+
+fn build_load_wallet_response(
+    mgr: &mut zkore_engine::wallet_manager::WalletManager,
+    wallet_id: uuid::Uuid,
+) -> anyhow::Result<LoadWalletResponse> {
+    let (wallet, lock_status) = mgr.load_wallet(wallet_id)?;
+
+    let accounts = if lock_status == WalletLockStatus::Locked {
+        vec![]
+    } else {
+        load_accounts_for_wallet(mgr, wallet.id)?
+    };
+
+    Ok(LoadWalletResponse {
+        schema_version: SCHEMA_VERSION,
+        wallet,
+        lock_status,
+        accounts,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    use uuid::Uuid;
+
+    use zkore_core::domain::Network;
+    use zkore_engine::key_store::KeyStore;
+    use zkore_engine::wallet_manager::WalletManager;
+
+    use super::*;
+
+    #[derive(Debug, Default, Clone)]
+    struct TestKeyStore {
+        encrypted_mnemonics: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
+        keychain: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
+    }
+
+    impl KeyStore for TestKeyStore {
+        fn store_encrypted_mnemonic(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+            encrypted_mnemonic: &[u8],
+        ) -> anyhow::Result<()> {
+            self.encrypted_mnemonics
+                .lock()
+                .expect("mutex poisoned")
+                .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+            Ok(())
+        }
+
+        fn load_encrypted_mnemonic(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            Ok(self
+                .encrypted_mnemonics
+                .lock()
+                .expect("mutex poisoned")
+                .get(&(wallet_id, network_key(network)))
+                .cloned())
+        }
+
+        fn delete_encrypted_mnemonic(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+        ) -> anyhow::Result<()> {
+            self.encrypted_mnemonics
+                .lock()
+                .expect("mutex poisoned")
+                .remove(&(wallet_id, network_key(network)));
+            Ok(())
+        }
+
+        fn store_keychain_unlock_material(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+            unlock_material: &[u8],
+        ) -> anyhow::Result<()> {
+            self.keychain
+                .lock()
+                .expect("mutex poisoned")
+                .insert((wallet_id, network_key(network)), unlock_material.to_vec());
+            Ok(())
+        }
+
+        fn load_keychain_unlock_material(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            Ok(self
+                .keychain
+                .lock()
+                .expect("mutex poisoned")
+                .get(&(wallet_id, network_key(network)))
+                .cloned())
+        }
+
+        fn delete_keychain_unlock_material(
+            &self,
+            wallet_id: Uuid,
+            network: Network,
+        ) -> anyhow::Result<()> {
+            self.keychain
+                .lock()
+                .expect("mutex poisoned")
+                .remove(&(wallet_id, network_key(network)));
+            Ok(())
+        }
+    }
+
+    fn network_key(network: Network) -> u8 {
+        match network {
+            Network::Mainnet => 0,
+            Network::Testnet => 1,
+        }
+    }
+
+    fn temp_root(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        root
+    }
+
+    #[test]
+    fn load_wallet_returns_empty_accounts_when_locked_then_accounts_after_unlock() {
+        let root = temp_root("us1_load_wallet_accounts");
+        let app_db_path = root.join("app.db");
+        let wallets_root = root.join("wallets");
+
+        let key_store = TestKeyStore::default();
+        let mut mgr = WalletManager::new_with_wallets_root(
+            app_db_path,
+            wallets_root,
+            Box::new(key_store),
+        )
+        .expect("create wallet manager");
+
+        let created = mgr
+            .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+            .expect("create wallet");
+        mgr.lock_wallet(created.wallet.id).expect("lock wallet");
+
+        let resp = build_load_wallet_response(&mut mgr, created.wallet.id).expect("load wallet");
+        assert_eq!(resp.lock_status, WalletLockStatus::Locked);
+        assert_eq!(resp.accounts.len(), 0);
+
+        mgr.unlock_wallet(created.wallet.id, "pw", false)
+            .expect("unlock wallet");
+        let resp = build_load_wallet_response(&mut mgr, created.wallet.id)
+            .expect("load wallet after unlock");
+        assert_eq!(resp.lock_status, WalletLockStatus::Unlocked);
+        assert!(
+            !resp.accounts.is_empty(),
+            "expected at least one account after unlock"
+        );
+    }
 }
