@@ -66,7 +66,8 @@ A user with backed-up wallet and shielded funds sends ZEC to a recipient address
 1. **Given** a user has shielded funds and completed backup, **When** they enter a valid shielded recipient address (UA, Sapling, or Orchard), amount, and optional memo, **Then** they can send the transaction successfully
 2. **Given** a user enters a Unified Address that contains both Orchard and Sapling receivers, **When** the wallet prepares the send, **Then** it selects the Orchard receiver when available (otherwise Sapling)
 3. **Given** a user enters a transparent recipient address, **When** they attempt to proceed, **Then** the wallet requires an explicit privacy-downgrade acknowledgement before preparing the send (and memos are not allowed)
-4. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
+4. **Given** a user has only transparent funds, **When** they attempt to send ZEC, **Then** the wallet blocks the send and prompts them to shield first (transparent funds are receive-only until explicitly shielded)
+5. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
 
 ---
 
@@ -136,6 +137,7 @@ A user imports a Unified Full Viewing Key from their Keystone hardware wallet. Z
 1. **Given** a user initiates Keystone import, **When** they scan or enter the UFVK, **Then** a watch-only account is created and clearly labeled as such
 2. **Given** a watch-only account exists, **When** the user views balances, **Then** balances and transaction history are displayed
 3. **Given** a watch-only account exists, **When** the user attempts to send, **Then** the wallet initiates the air-gapped signing flow
+4. **Given** a wallet has multiple accounts, **When** the user switches the active account, **Then** Home/Receive/Send/Activity reflect the selected account
 
 ---
 

@@ -117,7 +117,7 @@ export interface TransactionInfo {
   status: TransactionStatus;
   /** Last error message for failed/queued broadcasts (user-safe, redacted) */
   last_error: string | null;
-  /** True if user can retry broadcasting this tx (e.g., queued after broadcast failure) */
+  /** True if user can retry broadcasting this tx (i.e., signed bytes were queued after a broadcast failure) */
   can_retry_broadcast: boolean;
   mined_height: number | null;
   created_at: UnixTimestampMs;
@@ -563,7 +563,7 @@ export interface GetTorStateRequest extends VersionedPayload {}
  * Add a custom lightwalletd server configuration.
  *
  * The backend MUST probe `grpc_url` to determine and persist the server's `network` (see ServerInfo.network).
- * Probing MUST also validate required server capabilities for v1 (including CompactTxStreamer mempool APIs used to satisfy FR-013).
+ * Probing MUST also validate required server capabilities for v1, including CompactTxStreamer mempool support for FR-013 (`GetMempoolStream` MUST be supported; reject `UNIMPLEMENTED`).
  * If probing fails, the request MUST fail rather than guessing.
  */
 export interface AddServerRequest extends VersionedPayload {
@@ -620,6 +620,7 @@ export interface LockWalletResponse extends VersionedPayload {
 
 export interface ReauthWalletResponse extends VersionedPayload {
   reauth_token: string;
+  /** Token expiry timestamp (v1: expires_at = issued_at + 120 seconds) */
   expires_at: UnixTimestampMs;
 }
 
@@ -679,7 +680,7 @@ export interface PrepareSendResponse extends VersionedPayload {
   fee: Zatoshis;
   /** Summary for user verification */
   summary: TransactionSummary;
-  /** Proposal expiration timestamp (proposals auto-expire after ~5 minutes) */
+  /** Proposal expiration timestamp (v1: proposals auto-expire after 5 minutes) */
   expires_at: UnixTimestampMs;
 }
 

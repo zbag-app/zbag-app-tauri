@@ -176,19 +176,20 @@ A transaction record for wallet activity. Outgoing sends are funded from shielde
 - `Consolidate` - Shielded note consolidation
 
 **TransactionStatus Enum**:
-- `Pending` - Detected in mempool or just broadcast
-- `Confirmed` - Mined in a block
-- `Expired` - Expired without confirmation
-- `Failed` - Failed to broadcast
+- `Pending` - Not yet confirmed: observed in mempool **or** (for outgoing txs) broadcast was accepted but mempool detection may be delayed
+- `Confirmed` - Mined in a block (chain inclusion observed via compact block scan)
+- `Expired` - Outgoing tx expiry height has passed without confirmation (derived from the tx metadata/expiry height in wallet DB)
+- `Failed` - Outgoing tx broadcast failed (user-safe `last_error` is available; may be retryable if a QueuedBroadcast entry exists)
 
 **State Transitions**:
 ```
 [Created] -> Pending -> Confirmed
                     \-> Expired
-                    \-> Failed
+                    \-> Failed -> Pending (on user retry success)
 ```
 
 **Validation Rules**:
+- Incoming transactions MUST NOT transition to `Failed` (and `Expired` is defined only for outgoing transactions).
 - Outgoing sends MUST be funded from shielded notes (Sapling/Orchard); transparent UTXOs can only be spent in shielding transactions
 - Memo redacted in logs (constitution requirement)
 - Memo plaintext MUST NOT be written to disk; encryption-at-rest must cover memo contents

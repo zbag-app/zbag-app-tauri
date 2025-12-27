@@ -215,6 +215,11 @@ The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justifie
 - Wallet DB key hierarchy (v1): wallet password → Argon2id KEK → unwrap per-wallet DEK; the DEK is the raw SQLCipher key for the wallet DB. Store only `wrapped_dek` + KDF params/salt in app metadata; prefer storing DEK (not password) in OS keychain for “remember unlock”.
 - Migration safety (v1): before applying any app metadata DB or wallet DB migration, create a pre-migration DB snapshot; on failure, rollback by restoring the snapshot; migration tests are required and run in CI.
 
+### Account Selection (multi-account UI)
+- All account-scoped IPC commands require an `account_id`; the UI MUST maintain a single “active account” for the active wallet and use it consistently across Home/Receive/Send/Activity/Shielding/Swaps.
+- Default selection: on wallet load/unlock, if a previously selected account for that `wallet_id` exists (UI-local persistence), use it; otherwise prefer `account_id=0` when present; otherwise use the lowest available `account_id`.
+- UI MUST provide an account selector (name + account_type badge) and clearly label HardwareSigner accounts as watch-only.
+
 ### Security & Persistence Design Notes (v1)
 
 This section is **non-normative**. It clarifies how the requirements above are intended to be met so implementation tasks and tests can be unambiguous.
@@ -245,6 +250,11 @@ This section is **non-normative**. It clarifies how the requirements above are i
 - **Per-action re-auth** is always password-based:
   - Every spend (send, shield, swap-from-ZEC) and every “View seed phrase” MUST require the user to enter the wallet password to obtain a short-lived reauth token.
   - Keychain auto-unlock MUST NOT satisfy per-action re-auth and MUST NOT mint reauth tokens without explicit password entry.
+
+#### TTLs: re-auth tokens and send proposals (v1)
+
+- `ReauthWallet` tokens MUST be **single-use** and MUST expire after **2 minutes** (`REAUTH_TOKEN_EXPIRES_AT = issued_at + 120s`); an expired token MUST fail with `REAUTH_TOKEN_EXPIRED`.
+- `PrepareSend` proposals MUST be in-memory only and MUST expire after **5 minutes** (`PROPOSAL_EXPIRES_AT = created_at + 300s`); an expired proposal MUST fail with `PROPOSAL_EXPIRED`.
 
 #### Backup verification challenge semantics (v1)
 
@@ -283,12 +293,16 @@ This section is **non-normative**. It clarifies how the requirements above are i
 
 - App metadata DB tables (v1): wallets, accounts, wallet_encryption, backup_status, servers, tor_settings, swaps, receive_rotation, _app_migrations.
 
-#### Transaction state source-of-truth (pending/confirmed)
+#### Transaction state source-of-truth (pending/confirmed/failed/expired)
 
-- “Pending” and “Confirmed” are derived from two sources:
-  - **Mempool detection** from the configured lightwalletd server via CompactTxStreamer mempool APIs (required to satisfy FR-013; AddServer MUST reject servers that do not implement the required mempool methods)
-  - **Chain inclusion** from compact block scanning (to satisfy FR-014)
-- Outgoing transactions MUST be shown as **pending** once submission is accepted (even if mempool detection is delayed), and MUST transition to **confirmed** once mined; reorg handling may transition confirmed → pending again.
+- Transaction status is derived from:
+  - **Mempool detection** from the configured lightwalletd server (FR-013) using `CompactTxStreamer.GetMempoolStream` (required capability; AddServer MUST reject servers where this method is missing/`UNIMPLEMENTED`)
+  - **Chain inclusion** from compact block scanning (FR-014)
+- Status derivation rules (v1):
+  - `Pending`: inbound tx observed in mempool; outbound tx immediately after broadcast is accepted (even if mempool detection is delayed)
+  - `Confirmed`: chain inclusion observed via scan; reorg may transition Confirmed → Pending
+  - `Failed`: outbound broadcast failed; populate `TransactionInfo.last_error` and set `can_retry_broadcast=true` only when the tx bytes were persisted to the queued-broadcast store
+  - `Expired`: outbound tx expiry height has passed without confirmation; `can_retry_broadcast` MUST be false and any queued-broadcast entry for the tx MUST be deleted
 
 #### Broadcast retry queue (disconnect during broadcast)
 
@@ -299,6 +313,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
 
 #### Shield-and-consolidate semantics (transparent → Orchard)
 
+- Transparent inputs are allowed only for explicit shielding transactions. All other transaction construction paths (software send, swap-from-ZEC spend, signing-request build/finalize) MUST NOT select transparent inputs and MUST return `TRANSPARENT_SPEND_BLOCKED` when a spend would require transparent UTXOs (e.g., transparent-only balance).
 - The one-click “Shield and Consolidate” action MUST spend **all spendable** transparent UTXOs for the wallet/account; v1 does not provide manual UTXO selection.
 - Fees are paid from transparent inputs: the Orchard output value = sum(transparent inputs) − fee. The transaction MUST NOT create a transparent change output.
 - If the transparent input set cannot fit into a single transaction due to size/limit constraints, the wallet MUST automatically batch into multiple shielding transactions and surface progress; the operation completes when no spendable transparent UTXOs remain.
