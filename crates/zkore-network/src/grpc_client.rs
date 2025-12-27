@@ -6,6 +6,7 @@ use tonic::Code;
 
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 use zcash_client_backend::proto::service::Empty;
+use zcash_client_backend::proto::service::RawTransaction;
 
 /// CompactTxStreamer gRPC client wrapper.
 ///
@@ -50,5 +51,32 @@ impl GrpcClient {
             Err(status) if status.code() == Code::DeadlineExceeded => Ok(()),
             Err(status) => Err(anyhow::anyhow!(status)).context("mempool probe failed"),
         }
+    }
+
+    pub async fn send_transaction(&self, tx_bytes: Vec<u8>) -> anyhow::Result<()> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(RawTransaction {
+            data: tx_bytes,
+            height: 0,
+        });
+        req.set_timeout(Duration::from_secs(10));
+
+        let response = client
+            .send_transaction(req)
+            .await
+            .map_err(|status| anyhow::anyhow!(status))
+            .context("SendTransaction RPC failed")?
+            .into_inner();
+
+        if response.error_code != 0 {
+            return Err(anyhow::anyhow!(
+                "broadcast rejected (code {}): {}",
+                response.error_code,
+                response.error_message
+            ));
+        }
+
+        Ok(())
     }
 }

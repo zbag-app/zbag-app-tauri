@@ -27,6 +27,12 @@ fn main() {
             zkore_app_tauri_lib::commands::sync::zkore_get_sync_progress,
             // Balance
             zkore_app_tauri_lib::commands::balance::zkore_get_balance,
+            // Transactions
+            zkore_app_tauri_lib::commands::transaction::zkore_list_transactions,
+            zkore_app_tauri_lib::commands::transaction::zkore_prepare_send,
+            zkore_app_tauri_lib::commands::transaction::zkore_confirm_send,
+            zkore_app_tauri_lib::commands::transaction::zkore_cancel_send,
+            zkore_app_tauri_lib::commands::transaction::zkore_retry_broadcast,
             // Backup
             zkore_app_tauri_lib::commands::backup::zkore_get_backup_challenge,
             zkore_app_tauri_lib::commands::backup::zkore_verify_backup,

@@ -92,3 +92,33 @@ export async function getSyncProgress(
 ): Promise<IPC.IpcResult<IPC.GetSyncProgressResponse>> {
   return invoke(IPC.Commands.GET_SYNC_PROGRESS, { request: versioned(request) });
 }
+
+export async function listTransactions(
+  request: Omit<IPC.ListTransactionsRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ListTransactionsResponse>> {
+  return invoke(IPC.Commands.LIST_TRANSACTIONS, { request: versioned(request) });
+}
+
+export async function prepareSend(
+  request: Omit<IPC.PrepareSendRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.PrepareSendResponse>> {
+  return invoke(IPC.Commands.PREPARE_SEND, { request: versioned(request) });
+}
+
+export async function confirmSend(
+  request: Omit<IPC.ConfirmSendRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ConfirmSendResponse>> {
+  return invoke(IPC.Commands.CONFIRM_SEND, { request: versioned(request) });
+}
+
+export async function cancelSend(
+  request: Omit<IPC.CancelSendRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.CancelSendResponse>> {
+  return invoke(IPC.Commands.CANCEL_SEND, { request: versioned(request) });
+}
+
+export async function retryBroadcast(
+  request: Omit<IPC.RetryBroadcastRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.RetryBroadcastResponse>> {
+  return invoke(IPC.Commands.RETRY_BROADCAST, { request: versioned(request) });
+}

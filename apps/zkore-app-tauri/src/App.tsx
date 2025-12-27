@@ -10,7 +10,10 @@ import { CreateWallet } from './pages/CreateWallet';
 import { Home } from './pages/Home';
 import { Receive } from './pages/Receive';
 import { SeedDisplay } from './pages/SeedDisplay';
+import { Send } from './pages/Send';
+import { SendConfirm } from './pages/SendConfirm';
 import { Settings } from './pages/Settings';
+import { Activity } from './pages/Activity';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -129,6 +132,8 @@ function AppInner() {
         <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Link to="/">Home</Link>
           <Link to="/receive">Receive</Link>
+          <Link to="/send">Send</Link>
+          <Link to="/activity">Activity</Link>
           <Link to="/settings">Settings</Link>
         </nav>
       </header>
@@ -146,6 +151,12 @@ function AppInner() {
           }
         />
         <Route path="/receive" element={<Receive activeAccountId={activeAccountId} />} />
+        <Route path="/send" element={<Send activeAccountId={activeAccountId} />} />
+        <Route path="/send/confirm" element={<SendConfirm walletId={startup.wallet.id} />} />
+        <Route
+          path="/activity"
+          element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
+        />
         <Route path="/settings" element={<Settings wallet={startup.wallet} />} />
         <Route
           path="/seed"

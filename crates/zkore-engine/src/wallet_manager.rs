@@ -25,7 +25,9 @@ use crate::error::ipc_err;
 use crate::encryption::{Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek};
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
+use crate::tx_service::{TxEventHandler, TxService};
 use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use zkore_core::ipc::v1::commands::transaction::{ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 
 pub struct WalletManager {
@@ -34,6 +36,7 @@ pub struct WalletManager {
     wallets_root: PathBuf,
     active_wallet: Option<ActiveWallet>,
     reauth: ReauthManager,
+    tx_service: TxService<SystemClock>,
     backup_challenges: HashMap<Uuid, BackupChallengeState>,
     wallet_db_force_validate_fail: bool,
 }
@@ -41,6 +44,7 @@ pub struct WalletManager {
 #[derive(Debug)]
 struct ActiveWallet {
     wallet: WalletInfo,
+    wallet_dir: PathBuf,
     lock_status: WalletLockStatus,
     dek: Option<Dek>,
     wallet_db: Option<rusqlite::Connection>,
@@ -78,6 +82,7 @@ impl WalletManager {
             wallets_root,
             active_wallet: None,
             reauth: ReauthManager::new(SystemClock),
+            tx_service: TxService::new(SystemClock),
             backup_challenges: HashMap::new(),
             wallet_db_force_validate_fail: false,
         })
@@ -139,10 +144,15 @@ impl WalletManager {
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
+            wallet_dir: directory_path.clone(),
             lock_status,
             dek,
             wallet_db,
         });
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet.id, &directory_path)
+            .context("failed to scan queued broadcasts")?;
 
         Ok((wallet, lock_status))
     }
@@ -293,10 +303,15 @@ impl WalletManager {
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
+            wallet_dir: wallet_dir.clone(),
             lock_status: WalletLockStatus::Unlocked,
             dek: Some(dek),
             wallet_db: Some(conn),
         });
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet.id, &wallet_dir)
+            .context("failed to scan queued broadcasts")?;
 
         Ok(CreateWalletResult {
             wallet,
@@ -352,10 +367,15 @@ impl WalletManager {
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
+            wallet_dir: directory_path.clone(),
             lock_status: WalletLockStatus::Unlocked,
             dek: Some(dek),
             wallet_db: Some(conn),
         });
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet.id, &directory_path)
+            .context("failed to scan queued broadcasts")?;
 
         Ok(WalletLockStatus::Unlocked)
     }
@@ -676,6 +696,199 @@ impl WalletManager {
         crate::balance::get_balance(conn, wallet.network, account_id)
     }
 
+    pub fn prepare_send(
+        &mut self,
+        account_id: u32,
+        recipient: &str,
+        amount_zat: &str,
+        memo: Option<&str>,
+        allow_transparent_recipient: bool,
+    ) -> anyhow::Result<PrepareSendResponse> {
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.prepare_send(
+            app_db,
+            active.wallet.id,
+            active.wallet.network,
+            conn,
+            account_id,
+            recipient,
+            amount_zat,
+            memo,
+            allow_transparent_recipient,
+        )
+    }
+
+    pub fn confirm_send(
+        &mut self,
+        proposal_id: &str,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<ConfirmSendResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        let wallet_id = active.wallet.id;
+        let wallet_network = active.wallet.network;
+        let wallet_dir = active.wallet_dir.clone();
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        let proposal_account_id = self
+            .tx_service
+            .proposal_account_id(proposal_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.confirm_send(
+            app_db,
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            &wallet_dek,
+            conn,
+            &grpc_url,
+            proposal_id,
+            spending_key,
+            on_tx_changed,
+        )
+    }
+
+    pub fn cancel_send(&mut self, proposal_id: &str) -> bool {
+        self.tx_service.cancel_send(proposal_id)
+    }
+
+    pub fn retry_broadcast(
+        &mut self,
+        txid: &str,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<String> {
+        let Some(active_wallet_id) = self.active_wallet.as_ref().map(|w| w.wallet.id) else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        self.consume_reauth_token(active_wallet_id, reauth_token, ReauthPurpose::Spend)?;
+        let (wallet_id, wallet_network, wallet_dir) = {
+            let Some(active) = self.active_wallet.as_ref() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+            (active.wallet.id, active.wallet.network, active.wallet_dir.clone())
+        };
+
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.retry_broadcast(
+            app_db,
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            &wallet_dek,
+            conn,
+            &grpc_url,
+            txid,
+            on_tx_changed,
+        )
+    }
+
+    pub fn list_transactions(
+        &mut self,
+        account_id: u32,
+        limit: u32,
+        offset: u32,
+    ) -> anyhow::Result<ListTransactionsResponse> {
+        let (wallet_id, wallet_network, wallet_dir) = {
+            let Some(active) = self.active_wallet.as_ref() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+            (active.wallet.id, active.wallet.network, active.wallet_dir.clone())
+        };
+
+        let WalletManager {
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.list_transactions(wallet_id, wallet_network, &wallet_dir, conn, account_id, limit, offset)
+    }
+
     pub fn key_store(&self) -> &dyn KeyStore {
         self.key_store.as_ref()
     }
@@ -912,6 +1125,24 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         Ok((active.wallet.clone(), conn))
+    }
+
+    fn require_active_unlocked_wallet_context(
+        &mut self,
+    ) -> anyhow::Result<(WalletInfo, PathBuf, Dek, &mut rusqlite::Connection)> {
+        let Some(active) = self.active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        let Some(dek) = active.dek.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        Ok((active.wallet.clone(), active.wallet_dir.clone(), Dek(dek.0), conn))
     }
 
     fn decrypt_mnemonic(
