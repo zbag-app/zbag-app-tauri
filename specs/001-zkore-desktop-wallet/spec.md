@@ -259,6 +259,51 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - What happens when there are too many transparent UTXOs to shield in a single transaction?
   - The wallet automatically batches shielding into multiple transactions and shows progress until all spendable transparent UTXOs are shielded
 
+### High-Impact Edge Case Clarifications *(normative)*
+
+This section is normative. It clarifies edge-case behavior that would otherwise drift across user stories and tests.
+
+#### C1: Transparent funds spend policy (shielded-by-default)
+
+- The wallet MUST NOT construct, sign, or broadcast a payment transaction that consumes transparent UTXOs.
+- Transparent UTXOs MAY only be spent as part of an explicit shielding operation (`ShieldFunds` / “Shield and Consolidate”) that sends funds to a shielded address controlled by the same wallet and `account_id`.
+- `PrepareSend` and `ConfirmSend` MUST select inputs only from shielded spendable funds for the specified `account_id` (transparent balance is receive-only until explicitly shielded).
+
+**Error behavior (send)**:
+- If the requested amount could only be satisfied by spending transparent funds (i.e., shielded spendable is insufficient but total funds including transparent would be sufficient), `PrepareSend` MUST fail with `TRANSPARENT_SPEND_BLOCKED` and instruct the user to shield first.
+- If total funds are insufficient (shielded + transparent), `PrepareSend` MUST fail with `INSUFFICIENT_FUNDS`.
+
+#### U1: Transaction status semantics (Activity)
+
+- `Pending`: Not yet confirmed. This includes outbound transactions once submission is accepted (even if mempool detection is delayed) and inbound/outbound transactions observed in mempool.
+- `Confirmed`: Mined in a block (best-chain inclusion observed via compact block scan). Reorg handling may transition Confirmed → Pending.
+- `Failed`: Outbound broadcast failed. `TransactionInfo.last_error` MUST be populated. `TransactionInfo.can_retry_broadcast` MUST be true only when the signed bytes were persisted for explicit user retry.
+- `Expired`: Outbound tx expiry height has passed without confirmation. In this state `can_retry_broadcast` MUST be false and any queued-broadcast bytes for the tx MUST be deleted.
+
+Incoming transactions MUST NOT transition to `Failed` or `Expired`.
+
+**Outgoing tx lifecycle (simplified)**:
+```
+Prepared -> Pending -> Confirmed
+          \-> Failed --(RetryBroadcast succeeds)-> Pending
+          \-> Expired
+```
+
+#### U2: TTLs (reauth tokens and send proposals)
+
+- `ReauthWallet` tokens MUST be single-use and MUST expire after 2 minutes (`expires_at` is returned over IPC).
+- `PrepareSend` proposals MUST be in-memory only and MUST expire after 5 minutes (`expires_at` is returned over IPC).
+
+#### U3: Required mempool capability (FR-013)
+
+- To satisfy FR-013, the configured lightwalletd server MUST support `CompactTxStreamer.GetMempoolStream` for mempool detection.
+- `AddServer` MUST probe for this capability and reject servers that return `UNIMPLEMENTED` for the method.
+
+#### U4: Account selection and spending scope
+
+- The UI MUST maintain an explicit active `account_id` for the active wallet and use it consistently across Home/Receive/Send/Activity.
+- Spend-authorizing operations MUST act on exactly one account (the explicitly provided `account_id`) and MUST NOT aggregate inputs across accounts.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
