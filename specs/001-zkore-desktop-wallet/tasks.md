@@ -336,7 +336,7 @@
 ### Implementation for User Story 7
 
 - [X] T128 [US7] Create crates/zkore-keystone/src/pczt.rs with PCZT building helpers using pczt feature
-- [ ] T129 [US7] Create crates/zkore-keystone/src/payload.rs with QR frame encoding using @keystonehq/animated-qr compatible format
+- [X] T129 [US7] Create crates/zkore-keystone/src/payload.rs with QR frame encoding using @keystonehq/animated-qr compatible format
 - [X] T130 [US7] Implement build_signing_request() in crates/zkore-engine/src/tx_service.rs using the same recipient parsing + receiver selection + privacy downgrade rules as prepare_send(): support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); if Transparent recipient require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED; reject memos exceeding 512 bytes (UTF-8) with MEMO_TOO_LONG; before constructing the signing request enforce BACKUP_REQUIRED (if backup is required return BACKUP_REQUIRED); MUST fund from shielded notes only and return `TRANSPARENT_SPEND_BLOCKED` when only transparent funds are available; return SigningRequest with summary including recipient_kind
 - [X] T131 [US7] Implement BuildSigningRequest Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [X] T132 [US7] Create apps/zkore-app-tauri/src/pages/Signing.tsx full-screen signing window with animated QR display
@@ -349,10 +349,10 @@
 - [X] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import: read `.pczt` bytes, base64-encode, and pass into `FinalizeSigningRequest.signed_payload`
 - [X] T139a [US7] Clear sensitive UI state after signing: ensure Signing.tsx and signing components clear in-memory payloads/QR frames/file bytes after signing completes or the signing window closes
 - [X] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
-- [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
-- [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, broadcast, transparent recipient privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_recipient=true), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), SigningSummary includes recipient_kind, and spending blocked until backup verified (BACKUP_REQUIRED)
-- [ ] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs
-- [ ] T141c [US7] Add FR-028 regression tests asserting exported `.pczt` filenames and exported/QR payload wrappers contain no hardware-wallet branding strings or device identifiers (including any wrapper metadata/comments)
+- [X] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
+- [X] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, broadcast, transparent recipient privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_recipient=true), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), SigningSummary includes recipient_kind, and spending blocked until backup verified (BACKUP_REQUIRED)
+- [X] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs
+- [X] T141c [US7] Add FR-028 regression tests asserting exported `.pczt` filenames and exported/QR payload wrappers contain no hardware-wallet branding strings or device identifiers (including any wrapper metadata/comments)
 
 **Checkpoint**: User Story 7 complete - full Keystone air-gapped signing functional
 
@@ -366,32 +366,32 @@
 
 ### Implementation for User Story 8
 
- - [ ] T142 [US8] Create crates/zkore-core/src/domain/swap.rs with SwapIntent, SwapType, SwapState, SwapInfo, SwapQuote structs
- - [ ] T142a [US8] Update crates/zkore-core/src/domain/mod.rs to export the swap domain module
- - [ ] T143 [P] [US8] Create crates/zkore-core/src/ipc/v1/commands/swap.rs with RequestSwapQuote, StartSwap, GetSwapStatus, ListSwaps request/response types (ensure StartSwapRequest includes allow_transparent_interaction for fail-closed privacy acknowledgement)
- - [ ] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
- - [ ] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
- - [ ] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
-- [ ] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest (30s timeout per request)
-- [ ] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status; include optional depositMemo where required); handle basic rate limiting/throttling (e.g., do not overlap polls; respect 429 Retry-After when present)
-- [ ] T147 [US8] Implement request_swap_quote() in crates/zkore-engine/src/swap_service.rs calling NEAR Intents quote endpoint
-- [ ] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.deposit_memo`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
-- [ ] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error; include deposit memo/tag in status requests when applicable)
-- [ ] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs (map remote `SUCCESS` -> local `Confirming`)
+- [X] T142 [US8] Create crates/zkore-core/src/domain/swap.rs with SwapIntent, SwapType, SwapState, SwapInfo, SwapQuote structs
+- [X] T142a [US8] Update crates/zkore-core/src/domain/mod.rs to export the swap domain module
+- [X] T143 [P] [US8] Create crates/zkore-core/src/ipc/v1/commands/swap.rs with RequestSwapQuote, StartSwap, GetSwapStatus, ListSwaps request/response types (ensure StartSwapRequest includes allow_transparent_interaction for fail-closed privacy acknowledgement)
+- [X] T143a [P] [US8] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export swap commands
+- [X] T144 [P] [US8] Create crates/zkore-core/src/ipc/v1/events/swap.rs with SwapChangedEvent
+- [X] T144a [P] [US8] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export SwapChangedEvent
+- [X] T145 [US8] Create crates/zkore-network/src/http_client.rs with base HTTP client using reqwest (30s timeout per request)
+- [X] T146 [US8] Create crates/zkore-network/src/near_intents.rs with 1Click API client (GET /v0/quote, POST /v0/deposit/submit, GET /v0/status; include optional depositMemo where required); handle basic rate limiting/throttling (e.g., do not overlap polls; respect 429 Retry-After when present)
+- [X] T147 [US8] Implement request_swap_quote() in crates/zkore-engine/src/swap_service.rs calling NEAR Intents quote endpoint
+- [X] T148 [US8] Implement start_swap() in crates/zkore-engine/src/swap_service.rs: call 1Click deposit-intent endpoint (POST /v0/deposit/submit) to obtain deposit instructions, populate `SwapInfo.deposit_address`/`SwapInfo.deposit_memo`/`SwapInfo.remote_id`/`SwapInfo.deadline` (if provided), and transition Draft -> AwaitingDeposit
+- [X] T149 [US8] Implement swap status polling in crates/zkore-engine/src/swap_service.rs (5s interval, exponential backoff on error; include deposit memo/tag in status requests when applicable)
+- [X] T150 [US8] Implement status mapping from v0 API statuses to SwapState in crates/zkore-network/src/near_intents.rs (map remote `SUCCESS` -> local `Confirming`)
 - [ ] T150a [US8] Implement `Confirming -> Completed` transition in crates/zkore-engine/src/swap_service.rs by correlating provider success with wallet confirmation of the relevant Zcash tx (incoming payout for ToZec, outgoing deposit for FromZec)
-- [ ] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table (including deposit_memo)
-- [ ] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
-- [ ] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token and allow_transparent_interaction; pass through to engine and propagate PRIVACY_ACK_REQUIRED)
-- [ ] T154 [US8] Implement GetSwapStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
-- [ ] T155 [US8] Implement ListSwaps Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
-- [ ] T156 [P] [US8] Create apps/zkore-app-tauri/src/pages/Swap.tsx with swap type selection, asset selection (for v1: populate from a static supported-tokens list, e.g., apps/zkore-app-tauri/src/data/supportedTokens.ts), amount input
-- [ ] T157 [P] [US8] Create apps/zkore-app-tauri/src/pages/SwapQuote.tsx showing quote details, fees, deadline countdown
-- [ ] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment; display deposit address and optional memo/tag (`SwapInfo.deposit_memo`) with copy actions, show deadline + countdown during AwaitingDeposit, and handle expiration UX when deadline is reached
-- [ ] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent; show deadline/countdown when relevant (especially AwaitingDeposit) and handle expiration UX when deadline is reached
-- [ ] T160 [US8] Implement SwapChangedEvent emission in crates/zkore-engine/src/swap_service.rs on state transitions
-- [ ] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error code `SWAP_UNSUPPORTED_NETWORK` (mainnet-only 1Click API)
-- [ ] T160b [US8] Disable Swap UI for Testnet wallets with clear explanation in apps/zkore-app-tauri/src/pages/Swap.tsx and apps/zkore-app-tauri/src/pages/SwapFromZec.tsx
-- [ ] T160c [US8] Add milestone tests: unit (crates/zkore-network/tests/us8_near_intents.rs), integration (tests/integration/us8_swaps_to_zec.rs), e2e (tests/e2e/us8_swap_to_zec.spec.ts) using mocked 1Click API and verifying state transitions/events
+- [X] T151 [US8] Create crates/zkore-engine/src/db/swap_meta.rs with CRUD operations for swaps table (including deposit_memo)
+- [X] T152 [US8] Implement RequestSwapQuote Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
+- [X] T153 [US8] Implement StartSwap Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs (accepts optional reauth_token and allow_transparent_interaction; pass through to engine and propagate PRIVACY_ACK_REQUIRED)
+- [X] T154 [US8] Implement GetSwapStatus Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
+- [X] T155 [US8] Implement ListSwaps Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/swap.rs
+- [X] T156 [P] [US8] Create apps/zkore-app-tauri/src/pages/Swap.tsx with swap type selection, asset selection (for v1: populate from a static supported-tokens list, e.g., apps/zkore-app-tauri/src/data/supportedTokens.ts), amount input
+- [X] T157 [P] [US8] Create apps/zkore-app-tauri/src/pages/SwapQuote.tsx showing quote details, fees, deadline countdown
+- [X] T158 [US8] Create apps/zkore-app-tauri/src/pages/SwapDeposit.tsx with deposit QR code for external wallet payment; display deposit address and optional memo/tag (`SwapInfo.deposit_memo`) with copy actions, show deadline + countdown during AwaitingDeposit, and handle expiration UX when deadline is reached
+- [X] T159 [US8] Add swap entries to apps/zkore-app-tauri/src/pages/Activity.tsx with real-time status from SwapChangedEvent; show deadline/countdown when relevant (especially AwaitingDeposit) and handle expiration UX when deadline is reached
+- [X] T160 [US8] Implement SwapChangedEvent emission in crates/zkore-engine/src/swap_service.rs on state transitions
+- [X] T160a [US8] Reject swap requests for Testnet wallets in crates/zkore-engine/src/swap_service.rs with stable error code `SWAP_UNSUPPORTED_NETWORK` (mainnet-only 1Click API)
+- [X] T160b [US8] Disable Swap UI for Testnet wallets with clear explanation in apps/zkore-app-tauri/src/pages/Swap.tsx and apps/zkore-app-tauri/src/pages/SwapFromZec.tsx
+- [X] T160c [US8] Add milestone tests: unit (crates/zkore-network/tests/us8_near_intents.rs), integration (tests/integration/us8_swaps_to_zec.rs), e2e (tests/e2e/us8_swap_to_zec.spec.ts) using mocked 1Click API and verifying state transitions/events
 
 **Checkpoint**: User Story 8 complete - Swap to ZEC via NEAR Intents functional
 

@@ -8,6 +8,8 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -15,3 +17,4 @@ tonic = { workspace = true, features = ["tls-native-roots"] }
 prost.workspace = true
 reqwest.workspace = true
 zcash_client_backend.workspace = true
+zkore-core = { path = "../zkore-core" }

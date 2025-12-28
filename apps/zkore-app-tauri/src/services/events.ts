@@ -25,6 +25,14 @@ export function onTransactionChanged(
   });
 }
 
+export function onSwapChanged(
+  callback: (event: IPC.SwapChangedEvent) => void
+): Promise<UnlistenFn> {
+  return listen(IPC.EventChannels.SWAP, (event) => {
+    callback(event.payload as IPC.SwapChangedEvent);
+  });
+}
+
 export function onWalletStatus(
   callback: (event: IPC.WalletStatusEvent) => void
 ): Promise<UnlistenFn> {

@@ -5,5 +5,6 @@ pub mod keystone;
 pub mod logs;
 pub mod server;
 pub mod sync;
+pub mod swap;
 pub mod transaction;
 pub mod wallet;

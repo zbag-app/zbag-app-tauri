@@ -9,6 +9,7 @@ pub mod migrations;
 pub mod rotation_meta;
 pub mod schema;
 pub mod server_meta;
+pub mod swap_meta;
 pub mod wallet_encryption_meta;
 pub mod wallet_meta;
 

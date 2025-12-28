@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod events;
 pub mod state;
+pub mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,6 +34,11 @@ pub fn run() {
             commands::backup::zkore_verify_backup,
             // Keystone
             commands::keystone::zkore_import_ufvk,
+            // Swaps
+            commands::swap::zkore_request_swap_quote,
+            commands::swap::zkore_start_swap,
+            commands::swap::zkore_get_swap_status,
+            commands::swap::zkore_list_swaps,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

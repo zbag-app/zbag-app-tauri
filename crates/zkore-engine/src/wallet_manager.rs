@@ -1436,6 +1436,10 @@ impl WalletManager {
         &self.app_db
     }
 
+    pub fn active_wallet_info(&self) -> Option<WalletInfo> {
+        self.active_wallet.as_ref().map(|w| w.wallet.clone())
+    }
+
     pub fn wallets_root(&self) -> &Path {
         &self.wallets_root
     }

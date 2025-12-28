@@ -152,3 +152,25 @@ export async function shieldFunds(
 ): Promise<IPC.IpcResult<IPC.ShieldFundsResponse>> {
   return invoke(IPC.Commands.SHIELD_FUNDS, { request: versioned(request) });
 }
+
+export async function requestSwapQuote(
+  request: Omit<IPC.RequestSwapQuoteRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.RequestSwapQuoteResponse>> {
+  return invoke(IPC.Commands.REQUEST_SWAP_QUOTE, { request: versioned(request) });
+}
+
+export async function startSwap(
+  request: Omit<IPC.StartSwapRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.StartSwapResponse>> {
+  return invoke(IPC.Commands.START_SWAP, { request: versioned(request) });
+}
+
+export async function getSwapStatus(
+  request: Omit<IPC.GetSwapStatusRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetSwapStatusResponse>> {
+  return invoke(IPC.Commands.GET_SWAP_STATUS, { request: versioned(request) });
+}
+
+export async function listSwaps(): Promise<IPC.IpcResult<IPC.ListSwapsResponse>> {
+  return invoke(IPC.Commands.LIST_SWAPS, { request: versioned({}) });
+}

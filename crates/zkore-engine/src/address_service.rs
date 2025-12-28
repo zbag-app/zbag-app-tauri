@@ -36,10 +36,10 @@ pub fn get_receive_address(
 
     match address_type {
         AddressType::ShieldedOnly => {
-            // Require Orchard and allow Sapling; omit transparent receiver.
+            // Require Orchard and Sapling; omit transparent receiver.
             let request = UnifiedAddressRequest::custom(
                 ReceiverRequirement::Require,
-                ReceiverRequirement::Allow,
+                ReceiverRequirement::Require,
                 ReceiverRequirement::Omit,
             )
             .expect("valid receiver requirements");

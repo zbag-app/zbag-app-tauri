@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::{Balance, SyncProgress, TransactionInfo, WalletStatus};
 
+pub mod swap;
+pub use swap::SwapChangedEvent;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncProgressEvent {
     pub schema_version: u32,

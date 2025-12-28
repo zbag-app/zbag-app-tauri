@@ -18,6 +18,10 @@ import { RestoreBirthday } from './pages/RestoreBirthday';
 import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
 import { Signing } from './pages/Signing';
+import { Swap } from './pages/Swap';
+import { SwapDeposit } from './pages/SwapDeposit';
+import { SwapFromZec } from './pages/SwapFromZec';
+import { SwapQuote } from './pages/SwapQuote';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -173,6 +177,7 @@ function AppInner() {
           <Link to="/">Home</Link>
           <Link to="/receive">Receive</Link>
           <Link to="/send">Send</Link>
+          <Link to="/swap">Swap</Link>
           <Link to="/activity">Activity</Link>
           <Link to="/settings">Settings</Link>
         </nav>
@@ -194,6 +199,13 @@ function AppInner() {
         <Route path="/send" element={<Send activeAccount={activeAccount} />} />
         <Route path="/send/confirm" element={<SendConfirm walletId={startup.wallet.id} />} />
         <Route path="/signing" element={<Signing walletId={startup.wallet.id} />} />
+        <Route
+          path="/swap"
+          element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
+        />
+        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} />} />
+        <Route path="/swap/quote" element={<SwapQuote />} />
+        <Route path="/swap/deposit" element={<SwapDeposit />} />
         <Route
           path="/activity"
           element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
