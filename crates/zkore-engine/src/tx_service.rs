@@ -186,6 +186,7 @@ impl<C: Clock> TxService<C> {
                 total: "0".to_string(),
             });
         let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
+        let shielded_pending = balance.shielded_pending.parse::<u64>().unwrap_or(0);
         let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
         let spendable_if_transparent = shielded_spendable.saturating_add(transparent_total);
         let amount_u64 = u64::from(amount);
@@ -197,6 +198,16 @@ impl<C: Clock> TxService<C> {
             return Err(ipc_err(
                 errors::TRANSPARENT_SPEND_BLOCKED,
                 "shielded funds are insufficient; shield transparent funds first",
+            ));
+        }
+
+        if shielded_spendable < amount_u64
+            && shielded_pending > 0
+            && shielded_spendable.saturating_add(shielded_pending) >= amount_u64
+        {
+            return Err(ipc_err(
+                errors::INSUFFICIENT_FUNDS,
+                "insufficient spendable funds (some funds are still pending sync/restore)",
             ));
         }
 

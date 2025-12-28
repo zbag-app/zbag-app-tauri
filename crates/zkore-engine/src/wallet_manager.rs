@@ -21,6 +21,7 @@ use zkore_core::errors;
 
 use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
 use crate::db::{account_meta, backup_meta, wallet_encryption_meta, wallet_meta, AppDb};
+use crate::birthday;
 use crate::error::ipc_err;
 use crate::encryption::{Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek};
 use crate::key_store::KeyStore;
@@ -57,6 +58,12 @@ pub struct CreateWalletResult {
     pub wallet: WalletInfo,
     pub seed_phrase: Vec<String>,
     pub backup_challenge: BackupChallenge,
+}
+
+#[derive(Debug, Clone)]
+pub struct RestoreWalletResult {
+    pub wallet: WalletInfo,
+    pub birthday_height: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -272,6 +279,9 @@ impl WalletManager {
             let _ = wdb
                 .create_account(&wallet.name, &seed, &birthday, None)
                 .context("failed to create wallet account")?;
+
+            wdb.update_chain_tip(birthday.height())
+                .context("failed to set initial chain tip")?;
         }
 
         let mut mnemonic_phrase = seed_phrase.join(" ");
@@ -319,6 +329,185 @@ impl WalletManager {
             wallet,
             seed_phrase,
             backup_challenge,
+        })
+    }
+
+    pub fn restore_wallet(
+        &mut self,
+        name: &str,
+        network: Network,
+        password: &str,
+        remember_unlock: bool,
+        seed_phrase: &str,
+        birthday_date_ms: Option<i64>,
+    ) -> anyhow::Result<RestoreWalletResult> {
+        if name.trim().is_empty() {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet name must not be empty",
+            ));
+        }
+        if name.chars().count() > 50 {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet name must be at most 50 characters",
+            ));
+        }
+        if password.is_empty() {
+            return Err(ipc_err(errors::INVALID_REQUEST, "password required"));
+        }
+
+        let mut phrase = seed_phrase.trim().to_string();
+        let mnemonic = Mnemonic::parse_in_normalized(bip39::Language::English, phrase.as_str())
+            .map_err(|_e| ipc_err(errors::INVALID_SEED_PHRASE, "invalid seed phrase"))?;
+        if mnemonic.words().count() != 24 {
+            return Err(ipc_err(
+                errors::INVALID_SEED_PHRASE,
+                "seed phrase must be 24 words",
+            ));
+        }
+        phrase.zeroize();
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        use zcash_protocol::consensus::NetworkUpgrade;
+        use zcash_protocol::consensus::Parameters as _;
+
+        let sapling_activation = zcash_consensus_network(network)
+            .activation_height(NetworkUpgrade::Sapling)
+            .unwrap_or(zcash_protocol::consensus::H0);
+        let sapling_activation_u32 = u32::from(sapling_activation);
+
+        let birthday_height = birthday_date_ms
+            .map(|ms| birthday::estimate_birthday_height(network, ms))
+            .unwrap_or(sapling_activation_u32)
+            .max(sapling_activation_u32);
+
+        let wallet = WalletInfo {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            wallet_type: WalletType::Software,
+            network,
+            remember_unlock_enabled: remember_unlock,
+            created_at: now_ms,
+            last_opened_at: None,
+        };
+
+        let wallet_dir = self.wallet_dir(wallet.id, network);
+        std::fs::create_dir_all(&wallet_dir).with_context(|| {
+            format!(
+                "failed to create wallet directory: {}",
+                wallet_dir.display()
+            )
+        })?;
+
+        let wallet_dir_str = wallet_dir.to_string_lossy().to_string();
+        wallet_meta::insert_wallet(self.app_db.conn(), &wallet, &wallet_dir_str)?;
+        backup_meta::mark_backup_complete(
+            self.app_db.conn(),
+            wallet.id,
+            now_ms,
+            "restore_seed_phrase",
+        )?;
+
+        let dek = generate_dek();
+        let kdf = default_kdf_params();
+        let aead = default_aead_params();
+        let wrapped_dek_b64 =
+            wrap_dek(wallet.id, wallet.network, password, &kdf.salt_b64, &aead.nonce_b64, &dek)?;
+
+        wallet_encryption_meta::insert_wallet_encryption(
+            self.app_db.conn(),
+            wallet.id,
+            &WalletEncryptionMeta {
+                kdf,
+                aead,
+                wrapped_dek_b64,
+            },
+        )?;
+
+        let mut seed_bytes = mnemonic.to_seed_normalized("");
+        let seed = SecretVec::new(seed_bytes.to_vec());
+        seed_bytes.zeroize();
+
+        let mut conn = self
+            .open_wallet_db_with_dek(&wallet_dir, network, &dek, Some(seed), true)
+            .context("failed to initialize encrypted wallet db")?;
+
+        {
+            use zcash_client_backend::data_api::{AccountBirthday, WalletWrite as _};
+            use zcash_client_backend::data_api::chain::ChainState;
+            use zcash_primitives::block::BlockHash;
+
+            let params = zcash_consensus_network(network);
+            let birthday_state = ChainState::empty(
+                zcash_protocol::consensus::BlockHeight::from(birthday_height.saturating_sub(1)),
+                BlockHash([0; 32]),
+            );
+            let birthday = AccountBirthday::from_parts(birthday_state, None);
+
+            let mut seed_bytes = mnemonic.to_seed_normalized("");
+            let seed = SecretVec::new(seed_bytes.to_vec());
+            seed_bytes.zeroize();
+
+            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
+
+            let _ = wdb
+                .create_account(&wallet.name, &seed, &birthday, None)
+                .context("failed to create wallet account")?;
+
+            wdb.update_chain_tip(birthday.height())
+                .context("failed to set initial chain tip")?;
+        }
+
+        let mut normalized_phrase = mnemonic.words().collect::<Vec<_>>().join(" ");
+        let encrypted_mnemonic =
+            encrypt_mnemonic(wallet.id, wallet.network, &dek, normalized_phrase.as_bytes())
+                .context("failed to encrypt mnemonic")?;
+        normalized_phrase.zeroize();
+
+        self.key_store
+            .store_encrypted_mnemonic(wallet.id, wallet.network, &encrypted_mnemonic)
+            .context("failed to store encrypted mnemonic")?;
+
+        account_meta::upsert_account(
+            self.app_db.conn(),
+            wallet.id,
+            &AccountInfo {
+                id: 0,
+                name: wallet.name.clone(),
+                account_type: AccountType::Software,
+            },
+            now_ms,
+        )
+        .context("failed to insert account metadata")?;
+
+        if remember_unlock {
+            self.key_store
+                .store_keychain_unlock_material(wallet.id, network, &dek.0)
+                .context("failed to store keychain unlock material")?;
+        }
+
+        self.active_wallet = Some(ActiveWallet {
+            wallet: wallet.clone(),
+            wallet_dir: wallet_dir.clone(),
+            lock_status: WalletLockStatus::Unlocked,
+            dek: Some(dek),
+            wallet_db: Some(conn),
+        });
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet.id, &wallet_dir)
+            .context("failed to scan queued broadcasts")?;
+
+        Ok(RestoreWalletResult {
+            wallet,
+            birthday_height,
         })
     }
 

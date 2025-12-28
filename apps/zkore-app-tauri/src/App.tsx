@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { HashRouter, Link, Route, Routes } from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import type * as IPC from './types/ipc';
 import { AccountSelector } from './components/wallet/AccountSelector';
 import { useActiveAccount } from './hooks/useActiveAccount';
@@ -14,6 +14,8 @@ import { Send } from './pages/Send';
 import { SendConfirm } from './pages/SendConfirm';
 import { Settings } from './pages/Settings';
 import { Activity } from './pages/Activity';
+import { RestoreBirthday } from './pages/RestoreBirthday';
+import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -39,6 +41,7 @@ function AppInner() {
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
   const [accounts, setAccounts] = useState<IPC.AccountInfo[]>([]);
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
+  const [restoreFlow, setRestoreFlow] = useState<RestoreFlowData | null>(null);
 
   const activeWalletId = useMemo(() => {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
@@ -94,13 +97,44 @@ function AppInner() {
 
   if (startup.kind === 'no-wallets') {
     return (
-      <CreateWallet
-        onCreated={(args) => {
-          setSeedPhrase(args.seedPhrase);
-          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-          setAccounts(args.accounts);
-        }}
-      />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <CreateWallet
+              onCreated={(args) => {
+                setSeedPhrase(args.seedPhrase);
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/restore"
+          element={
+            <RestoreWallet
+              onContinue={(data) => {
+                setRestoreFlow(data);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/restore/birthday"
+          element={
+            <RestoreBirthday
+              flow={restoreFlow}
+              onClearFlow={() => setRestoreFlow(null)}
+              onRestored={(args) => {
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     );
   }
 

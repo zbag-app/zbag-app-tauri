@@ -37,6 +37,7 @@ fn main() {
             // Backup
             zkore_app_tauri_lib::commands::backup::zkore_get_backup_challenge,
             zkore_app_tauri_lib::commands::backup::zkore_verify_backup,
+            zkore_app_tauri_lib::commands::backup::zkore_restore_wallet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

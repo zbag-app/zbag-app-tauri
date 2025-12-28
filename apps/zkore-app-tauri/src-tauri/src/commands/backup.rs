@@ -5,6 +5,7 @@ use tauri::State;
 use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSION};
 use zkore_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, VerifyBackupRequest, VerifyBackupResponse,
+    RestoreWalletRequest, RestoreWalletResponse,
 };
 
 use crate::state::AppState;
@@ -54,3 +55,30 @@ pub fn zkore_verify_backup(
     })())
 }
 
+#[tauri::command(rename = "zkore_restore_wallet")]
+pub fn zkore_restore_wallet(
+    state: State<'_, AppState>,
+    request: RestoreWalletRequest,
+) -> IpcResult<RestoreWalletResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    map_anyhow((|| {
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let restored = mgr.restore_wallet(
+            &request.name,
+            request.network,
+            &request.password,
+            request.remember_unlock,
+            &request.seed_phrase,
+            request.birthday_date,
+        )?;
+
+        Ok(RestoreWalletResponse {
+            schema_version: SCHEMA_VERSION,
+            wallet: restored.wallet,
+            birthday_height: restored.birthday_height,
+        })
+    })())
+}

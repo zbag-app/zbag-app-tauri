@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::Context as _;
 use rusqlite::{Connection, OpenFlags};
@@ -32,6 +33,7 @@ struct State {
     jobs: HashMap<Uuid, SyncJob>,
     progress: HashMap<Uuid, SyncProgress>,
     balances: HashMap<(Uuid, u32), Balance>,
+    started_at: HashMap<Uuid, Instant>,
 }
 
 #[derive(Debug)]
@@ -47,6 +49,7 @@ impl SyncService {
                 jobs: HashMap::new(),
                 progress: HashMap::new(),
                 balances: HashMap::new(),
+                started_at: HashMap::new(),
             })),
         }
     }
@@ -78,6 +81,7 @@ impl SyncService {
                 return Err(ipc_err(errors::SYNC_IN_PROGRESS, "sync already in progress"));
             }
 
+            state.started_at.insert(wallet_id, Instant::now());
             state.progress.insert(
                 wallet_id,
                 SyncProgress {
@@ -144,6 +148,7 @@ impl SyncService {
 
             let mut update = |progress: SyncProgress| {
                 let mut state = state.lock().expect("mutex poisoned");
+                let progress = with_eta(&state, wallet_id, progress);
                 state.progress.insert(wallet_id, progress.clone());
                 drop(state);
                 emit(progress);
@@ -154,7 +159,7 @@ impl SyncService {
                 phase: SyncPhase::Downloading,
                 scan_frontier_height: 0,
                 wallet_tip_height: 0,
-                progress_percent: 10,
+                progress_percent: 5,
                 eta_seconds: None,
             });
 
@@ -166,6 +171,51 @@ impl SyncService {
                 }
                 res = connect_fut => {
                     if res.is_ok() {
+                        update(SyncProgress {
+                            phase: SyncPhase::Scanning,
+                            scan_frontier_height: 0,
+                            wallet_tip_height: 0,
+                            progress_percent: 30,
+                            eta_seconds: None,
+                        });
+
+                        tokio::select! {
+                            _ = cancel_rx.changed() => {
+                                update(default_progress());
+                            }
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {}
+                        }
+
+                        update(SyncProgress {
+                            phase: SyncPhase::Enhancing,
+                            scan_frontier_height: 0,
+                            wallet_tip_height: 0,
+                            progress_percent: 70,
+                            eta_seconds: None,
+                        });
+
+                        tokio::select! {
+                            _ = cancel_rx.changed() => {
+                                update(default_progress());
+                            }
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {}
+                        }
+
+                        update(SyncProgress {
+                            phase: SyncPhase::CatchingUp,
+                            scan_frontier_height: 0,
+                            wallet_tip_height: 0,
+                            progress_percent: 90,
+                            eta_seconds: None,
+                        });
+
+                        tokio::select! {
+                            _ = cancel_rx.changed() => {
+                                update(default_progress());
+                            }
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {}
+                        }
+
                         update(SyncProgress {
                             phase: SyncPhase::Idle,
                             scan_frontier_height: 0,
@@ -182,6 +232,7 @@ impl SyncService {
             // Clear job entry (best effort).
             let mut state = state.lock().expect("mutex poisoned");
             state.jobs.remove(&wallet_id);
+            state.started_at.remove(&wallet_id);
         });
 
         let finished = handle.is_finished();
@@ -225,6 +276,12 @@ impl SyncService {
             .expect("mutex poisoned")
             .progress
             .insert(wallet_id, default_progress());
+
+        self.state
+            .lock()
+            .expect("mutex poisoned")
+            .started_at
+            .remove(&wallet_id);
 
         self.emit_progress(wallet_id, on_progress.as_ref());
         Ok(())
@@ -289,4 +346,28 @@ fn default_progress() -> SyncProgress {
         progress_percent: 0,
         eta_seconds: None,
     }
+}
+
+fn with_eta(state: &State, wallet_id: Uuid, mut progress: SyncProgress) -> SyncProgress {
+    if progress.progress_percent == 0 || progress.progress_percent >= 100 {
+        progress.eta_seconds = None;
+        return progress;
+    }
+
+    let Some(started_at) = state.started_at.get(&wallet_id) else {
+        progress.eta_seconds = None;
+        return progress;
+    };
+
+    let elapsed = started_at.elapsed().as_secs_f64();
+    let done = progress.progress_percent as f64 / 100.0;
+    if done <= 0.0 || elapsed <= 0.0 {
+        progress.eta_seconds = None;
+        return progress;
+    }
+
+    let total_estimated = elapsed / done;
+    let remaining = (total_estimated - elapsed).max(0.0);
+    progress.eta_seconds = Some(remaining.round() as u64);
+    progress
 }

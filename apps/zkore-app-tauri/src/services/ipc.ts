@@ -75,6 +75,12 @@ export async function verifyBackup(
   return invoke(IPC.Commands.VERIFY_BACKUP, { request: versioned(request) });
 }
 
+export async function restoreWallet(
+  request: Omit<IPC.RestoreWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.RestoreWalletResponse>> {
+  return invoke(IPC.Commands.RESTORE_WALLET, { request: versioned(request) });
+}
+
 export async function startSync(
   request: Omit<IPC.StartSyncRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.StartSyncResponse>> {

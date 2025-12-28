@@ -3,6 +3,7 @@ import type * as IPC from '../types/ipc';
 import { BackupReminder } from '../components/common/BackupReminder';
 import { AccountSelector } from '../components/wallet/AccountSelector';
 import { ShieldPrompt } from '../components/wallet/ShieldPrompt';
+import { SyncProgressWidget } from '../components/wallet/SyncProgressWidget';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
 import { getBalance, getSyncProgress, getWalletStatus, startSync } from '../services/ipc';
 
@@ -186,10 +187,7 @@ export function Home(props: {
       <div style={{ display: 'grid', gap: 8 }}>
         <h2 style={{ margin: 0 }}>Sync</h2>
         {sync ? (
-          <div>
-            {sync.phase} — {sync.progress_percent}% (frontier {sync.scan_frontier_height} / tip{' '}
-            {sync.wallet_tip_height})
-          </div>
+          <SyncProgressWidget progress={sync} />
         ) : (
           <div>Loading…</div>
         )}
