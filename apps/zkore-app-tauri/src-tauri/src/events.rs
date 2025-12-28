@@ -1,13 +1,14 @@
 use tauri::Emitter;
 use zkore_core::ipc::v1::events::{
     BalanceChangedEvent, SwapChangedEvent, SyncProgressEvent, TransactionChangedEvent,
-    WalletStatusEvent,
+    TorStatusEvent, WalletStatusEvent,
 };
 
 pub const CHANNEL_SYNC: &str = "zkore://sync";
 pub const CHANNEL_BALANCE: &str = "zkore://balance";
 pub const CHANNEL_TX: &str = "zkore://tx";
 pub const CHANNEL_SWAP: &str = "zkore://swap";
+pub const CHANNEL_TOR: &str = "zkore://tor";
 pub const CHANNEL_WALLET_STATUS: &str = "zkore://wallet-status";
 
 pub fn emit_sync_progress(
@@ -36,6 +37,10 @@ pub fn emit_swap_changed(
     event: SwapChangedEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_SWAP, event)
+}
+
+pub fn emit_tor_status(app: &tauri::AppHandle, event: TorStatusEvent) -> Result<(), tauri::Error> {
+    app.emit(CHANNEL_TOR, event)
 }
 
 pub fn emit_wallet_status(

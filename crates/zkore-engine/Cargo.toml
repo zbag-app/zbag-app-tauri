@@ -31,6 +31,7 @@ zcash_proofs.workspace = true
 zkore-core = { path = "../zkore-core" }
 zkore-keystone = { path = "../zkore-keystone" }
 zkore-network = { path = "../zkore-network" }
+zkore-tor = { path = "../zkore-tor" }
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true
 zcash_primitives.workspace = true

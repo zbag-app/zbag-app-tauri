@@ -33,6 +33,14 @@ export function onSwapChanged(
   });
 }
 
+export function onTorStatus(
+  callback: (event: IPC.TorStatusEvent) => void
+): Promise<UnlistenFn> {
+  return listen(IPC.EventChannels.TOR, (event) => {
+    callback(event.payload as IPC.TorStatusEvent);
+  });
+}
+
 export function onWalletStatus(
   callback: (event: IPC.WalletStatusEvent) => void
 ): Promise<UnlistenFn> {

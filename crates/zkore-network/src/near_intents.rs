@@ -3,11 +3,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::http_client::HttpClient;
+use crate::http_client::{HttpClient, HttpClientError};
 
 const DEFAULT_BASE_URL: &str = "https://1click.chaindefuser.com";
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NearIntentsClient {
     base_url: String,
     http: HttpClient,
@@ -21,10 +21,27 @@ impl NearIntentsClient {
         })
     }
 
+    pub fn new_with_tor(tor: std::sync::Arc<zkore_tor::TorManager>) -> anyhow::Result<Self> {
+        Ok(Self {
+            base_url: DEFAULT_BASE_URL.to_string(),
+            http: HttpClient::new_with_tor(tor)?,
+        })
+    }
+
     pub fn with_base_url(base_url: impl Into<String>) -> anyhow::Result<Self> {
         Ok(Self {
             base_url: base_url.into(),
             http: HttpClient::new()?,
+        })
+    }
+
+    pub fn with_base_url_and_http(
+        base_url: impl Into<String>,
+        http: HttpClient,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            base_url: base_url.into(),
+            http,
         })
     }
 
@@ -42,30 +59,18 @@ impl NearIntentsClient {
             qp.append_pair("dry", "true");
         }
 
-        let res = self
-            .http
-            .inner()
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| NearIntentsError::Transport(e.to_string()))?;
+        let res = self.http.get_json(url).await.map_err(map_http_error)?;
 
-        Self::handle_rate_limit(&res)?;
+        Self::handle_rate_limit(res.status, res.retry_after)?;
 
-        let status = res.status();
-        let body: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| NearIntentsError::InvalidResponse(e.to_string()))?;
-
-        if !status.is_success() {
+        if !(200..300).contains(&res.status) {
             return Err(NearIntentsError::Http {
-                status: status.as_u16(),
-                message: body.to_string(),
+                status: res.status,
+                message: res.body.to_string(),
             });
         }
 
-        parse_quote_response(&body)
+        parse_quote_response(&res.body)
     }
 
     pub async fn submit_deposit(
@@ -79,29 +84,20 @@ impl NearIntentsClient {
 
         let res = self
             .http
-            .inner()
-            .post(url)
-            .json(&req)
-            .send()
+            .post_json(url, &req)
             .await
-            .map_err(|e| NearIntentsError::Transport(e.to_string()))?;
+            .map_err(map_http_error)?;
 
-        Self::handle_rate_limit(&res)?;
+        Self::handle_rate_limit(res.status, res.retry_after)?;
 
-        let status = res.status();
-        let body: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| NearIntentsError::InvalidResponse(e.to_string()))?;
-
-        if !status.is_success() {
+        if !(200..300).contains(&res.status) {
             return Err(NearIntentsError::Http {
-                status: status.as_u16(),
-                message: body.to_string(),
+                status: res.status,
+                message: res.body.to_string(),
             });
         }
 
-        parse_deposit_submit_response(&body)
+        parse_deposit_submit_response(&res.body)
     }
 
     pub async fn get_status(
@@ -121,43 +117,27 @@ impl NearIntentsClient {
             }
         }
 
-        let res = self
-            .http
-            .inner()
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| NearIntentsError::Transport(e.to_string()))?;
+        let res = self.http.get_json(url).await.map_err(map_http_error)?;
 
-        Self::handle_rate_limit(&res)?;
+        Self::handle_rate_limit(res.status, res.retry_after)?;
 
-        let status = res.status();
-        let body: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| NearIntentsError::InvalidResponse(e.to_string()))?;
-
-        if !status.is_success() {
+        if !(200..300).contains(&res.status) {
             return Err(NearIntentsError::Http {
-                status: status.as_u16(),
-                message: body.to_string(),
+                status: res.status,
+                message: res.body.to_string(),
             });
         }
 
-        parse_status_response(&body)
+        parse_status_response(&res.body)
     }
 
-    fn handle_rate_limit(res: &reqwest::Response) -> Result<(), NearIntentsError> {
-        if res.status().as_u16() != 429 {
+    fn handle_rate_limit(
+        status: u16,
+        retry_after: Option<Duration>,
+    ) -> Result<(), NearIntentsError> {
+        if status != 429 {
             return Ok(());
         }
-
-        let retry_after = res
-            .headers()
-            .get("retry-after")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(Duration::from_secs);
 
         Err(NearIntentsError::RateLimited { retry_after })
     }
@@ -238,12 +218,25 @@ pub fn map_remote_status_to_local_state(status: &RemoteStatus) -> zkore_core::do
 pub enum NearIntentsError {
     #[error("rate limited")]
     RateLimited { retry_after: Option<Duration> },
+    #[error("Tor is enabled but not ready")]
+    TorNotReady,
     #[error("transport error: {0}")]
     Transport(String),
     #[error("http error: status={status} {message}")]
     Http { status: u16, message: String },
     #[error("invalid response: {0}")]
     InvalidResponse(String),
+}
+
+fn map_http_error(err: HttpClientError) -> NearIntentsError {
+    match err {
+        HttpClientError::FailClosed(_) => NearIntentsError::TorNotReady,
+        HttpClientError::DirectTransport(e) => NearIntentsError::Transport(e.to_string()),
+        HttpClientError::TorTransport(message) => NearIntentsError::Transport(message),
+        HttpClientError::Timeout => NearIntentsError::Transport("timeout".to_string()),
+        HttpClientError::InvalidUrl(message) => NearIntentsError::InvalidResponse(message),
+        HttpClientError::InvalidBody(message) => NearIntentsError::InvalidResponse(message),
+    }
 }
 
 fn parse_quote_response(body: &serde_json::Value) -> Result<QuoteResponse, NearIntentsError> {
@@ -335,4 +328,3 @@ fn parse_status_response(body: &serde_json::Value) -> Result<StatusResponse, Nea
         message: body.get("message").and_then(|v| v.as_str()).map(str::to_string),
     })
 }
-

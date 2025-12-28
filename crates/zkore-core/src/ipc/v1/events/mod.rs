@@ -5,6 +5,9 @@ use crate::domain::{Balance, SyncProgress, TransactionInfo, WalletStatus};
 pub mod swap;
 pub use swap::SwapChangedEvent;
 
+pub mod tor;
+pub use tor::TorStatusEvent;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncProgressEvent {
     pub schema_version: u32,

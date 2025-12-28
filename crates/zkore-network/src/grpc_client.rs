@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -8,18 +9,36 @@ use zcash_client_backend::proto::service::Empty;
 use zcash_client_backend::proto::service::RawTransaction;
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 
+use crate::transport::{SelectedTransport, TransportConfig, TransportSelector};
+
 /// CompactTxStreamer gRPC client wrapper.
 ///
 /// Note: In v1 we require mempool support (`GetMempoolStream`) for pending tx detection.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GrpcClient {
     endpoint: String,
+    transport: TransportSelector,
 }
 
 impl GrpcClient {
     pub fn new(endpoint: impl Into<String>) -> Self {
         Self {
             endpoint: endpoint.into(),
+            transport: TransportSelector::new(TransportConfig::default()),
+        }
+    }
+
+    pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<zkore_tor::TorManager>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            transport: TransportSelector::with_tor(TransportConfig::default(), tor),
+        }
+    }
+
+    pub fn new_with_transport(endpoint: impl Into<String>, transport: TransportSelector) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            transport,
         }
     }
 
@@ -28,13 +47,36 @@ impl GrpcClient {
     }
 
     pub async fn connect(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
-        let endpoint = Endpoint::from_shared(self.endpoint.clone())
-            .context("invalid gRPC endpoint URL")?
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(10));
+        let selected = self.transport.select().map_err(anyhow::Error::new)?;
 
-        let channel = endpoint.connect().await.context("failed to connect")?;
-        Ok(CompactTxStreamerClient::new(channel))
+        match selected {
+            SelectedTransport::Direct => {
+                let endpoint = Endpoint::from_shared(self.endpoint.clone())
+                    .context("invalid gRPC endpoint URL")?
+                    .timeout(Duration::from_secs(10))
+                    .connect_timeout(Duration::from_secs(10));
+
+                let channel = endpoint.connect().await.context("failed to connect")?;
+                Ok(CompactTxStreamerClient::new(channel))
+            }
+            SelectedTransport::Tor { client } => {
+                let uri = self
+                    .endpoint
+                    .parse()
+                    .context("invalid gRPC endpoint URL")?;
+
+                let conn = tokio::time::timeout(
+                    self.transport.config().timeout,
+                    client.connect_to_lightwalletd(uri),
+                )
+                .await
+                .context("Tor gRPC connection timed out")?
+                .map_err(anyhow::Error::new)
+                .context("failed to connect through Tor")?;
+
+                Ok(conn)
+            }
+        }
     }
 
     pub async fn probe_mempool_support(&self) -> anyhow::Result<()> {

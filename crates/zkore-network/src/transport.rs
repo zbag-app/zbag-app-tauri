@@ -1,6 +1,9 @@
+use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context as _;
+use zkore_core::domain::TorStatus;
+
+use zkore_tor::TorManager;
 
 #[derive(Debug, Clone)]
 pub struct TransportConfig {
@@ -15,20 +18,69 @@ impl Default for TransportConfig {
     }
 }
 
-pub trait Transport: Send + Sync {
-    fn http_client(&self) -> anyhow::Result<reqwest::Client>;
+#[derive(Clone)]
+pub struct TransportSelector {
+    config: TransportConfig,
+    tor: Option<Arc<TorManager>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct DirectTransport {
-    pub config: TransportConfig,
-}
-
-impl Transport for DirectTransport {
-    fn http_client(&self) -> anyhow::Result<reqwest::Client> {
-        reqwest::Client::builder()
-            .timeout(self.config.timeout)
-            .build()
-            .context("failed to build reqwest client")
+impl TransportSelector {
+    pub fn new(config: TransportConfig) -> Self {
+        Self { config, tor: None }
     }
+
+    pub fn with_tor(config: TransportConfig, tor: Arc<TorManager>) -> Self {
+        Self {
+            config,
+            tor: Some(tor),
+        }
+    }
+
+    pub fn config(&self) -> &TransportConfig {
+        &self.config
+    }
+
+    pub fn select(&self) -> Result<SelectedTransport, TransportError> {
+        let Some(tor) = self.tor.as_ref() else {
+            return Ok(SelectedTransport::Direct);
+        };
+
+        let state = tor.state();
+        if !state.enabled {
+            return Ok(SelectedTransport::Direct);
+        }
+
+        if state.status != TorStatus::On {
+            return Err(TransportError::TorNotReady {
+                status: state.status,
+                last_error: state.last_error,
+            });
+        }
+
+        let Some(client) = tor.tor_client() else {
+            return Err(TransportError::TorNotReady {
+                status: state.status,
+                last_error: state.last_error,
+            });
+        };
+
+        Ok(SelectedTransport::Tor { client })
+    }
+}
+
+#[derive(Clone)]
+pub enum SelectedTransport {
+    Direct,
+    Tor {
+        client: zcash_client_backend::tor::Client,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TransportError {
+    #[error("tor enabled but not ready (status={status:?})")]
+    TorNotReady {
+        status: TorStatus,
+        last_error: Option<String>,
+    },
 }

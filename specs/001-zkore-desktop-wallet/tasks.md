@@ -426,30 +426,30 @@
 
 ### Implementation for User Story 10
 
- - [ ] T166 [US10] Create crates/zkore-tor/src/lib.rs with module structure
- - [ ] T167 [US10] Create crates/zkore-core/src/domain/tor.rs with TorState and TorStatus types
- - [ ] T167a [US10] Update crates/zkore-core/src/domain/mod.rs to export the tor domain module
- - [ ] T168 [P] [US10] Create crates/zkore-core/src/ipc/v1/commands/tor.rs with SetTorEnabled, GetTorState request/response types
- - [ ] T168a [P] [US10] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export Tor commands
- - [ ] T169 [P] [US10] Create crates/zkore-core/src/ipc/v1/events/tor.rs with TorStatusEvent
- - [ ] T169a [P] [US10] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export TorStatusEvent
-- [ ] T170 [US10] Create crates/zkore-tor/src/manager.rs with Tor state machine (Off, Connecting, On, Error) using Arti via zcash_client_backend tor feature
-- [ ] T171 [US10] Implement circuit establishment with 60s timeout in crates/zkore-tor/src/manager.rs
-- [ ] T172 [US10] Implement health check before marking status as On in crates/zkore-tor/src/manager.rs
-- [ ] T173 [US10] Implement Tor-aware transport selection in crates/zkore-network/src/transport.rs
-- [ ] T174 [US10] Implement fail-closed check in grpc_client blocking requests when Tor enabled but unhealthy in crates/zkore-network/src/grpc_client.rs
-- [ ] T174a [US10] Add Tor-aware transport support to crates/zkore-network/src/http_client.rs
-- [ ] T174b [US10] Update crates/zkore-network/src/near_intents.rs to use Tor-aware http_client
-- [ ] T174c [US10] Enforce fail-closed behavior for HTTP when Tor enabled but unhealthy in crates/zkore-network/src/http_client.rs
-- [ ] T175 [US10] Create crates/zkore-engine/src/db/tor_meta.rs with tor_settings table operations
-- [ ] T176 [US10] Implement SetTorEnabled Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
-- [ ] T177 [US10] Implement GetTorState Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
-- [ ] T178 [US10] Implement TorStatusEvent emission on state changes in crates/zkore-tor/src/manager.rs
-- [ ] T179 [P] [US10] Extend apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) with Tor toggle, beta label, status indicator
-- [ ] T180 [US10] Create apps/zkore-app-tauri/src/components/common/TorStatusBadge.tsx showing Off/Connecting/On/Error
-- [ ] T180a [US10] Render TorStatusBadge in persistent app chrome (e.g., shared layout / header) so it is visible on all pages; initialize via GetTorState on startup and subscribe to TorStatusEvent for real-time updates (covers FR-038)
-- [ ] T181 [US10] Create apps/zkore-app-tauri/src/components/common/TorErrorDialog.tsx with retry and disable options
-- [ ] T181a [US10] Add milestone tests: unit (crates/zkore-tor/tests/us10_tor_state.rs), integration (tests/integration/us10_tor_fail_closed.rs), e2e (tests/e2e/us10_tor_toggle.spec.ts) covering state machine and fail-closed network behavior, and asserting Tor status is visible globally via TorStatusBadge (FR-038)
+ - [X] T166 [US10] Create crates/zkore-tor/src/lib.rs with module structure
+ - [X] T167 [US10] Create crates/zkore-core/src/domain/tor.rs with TorState and TorStatus types
+ - [X] T167a [US10] Update crates/zkore-core/src/domain/mod.rs to export the tor domain module
+ - [X] T168 [P] [US10] Create crates/zkore-core/src/ipc/v1/commands/tor.rs with SetTorEnabled, GetTorState request/response types
+ - [X] T168a [P] [US10] Update crates/zkore-core/src/ipc/v1/commands/mod.rs to re-export Tor commands
+ - [X] T169 [P] [US10] Create crates/zkore-core/src/ipc/v1/events/tor.rs with TorStatusEvent
+ - [X] T169a [P] [US10] Update crates/zkore-core/src/ipc/v1/events/mod.rs to re-export TorStatusEvent
+- [X] T170 [US10] Create crates/zkore-tor/src/manager.rs with Tor state machine (Off, Connecting, On, Error) using Arti via zcash_client_backend tor feature
+- [X] T171 [US10] Implement circuit establishment with 60s timeout in crates/zkore-tor/src/manager.rs
+- [X] T172 [US10] Implement health check before marking status as On in crates/zkore-tor/src/manager.rs
+- [X] T173 [US10] Implement Tor-aware transport selection in crates/zkore-network/src/transport.rs
+- [X] T174 [US10] Implement fail-closed check in grpc_client blocking requests when Tor enabled but unhealthy in crates/zkore-network/src/grpc_client.rs
+- [X] T174a [US10] Add Tor-aware transport support to crates/zkore-network/src/http_client.rs
+- [X] T174b [US10] Update crates/zkore-network/src/near_intents.rs to use Tor-aware http_client
+- [X] T174c [US10] Enforce fail-closed behavior for HTTP when Tor enabled but unhealthy in crates/zkore-network/src/http_client.rs
+- [X] T175 [US10] Create crates/zkore-engine/src/db/tor_meta.rs with tor_settings table operations
+- [X] T176 [US10] Implement SetTorEnabled Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
+- [X] T177 [US10] Implement GetTorState Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/tor.rs
+- [X] T178 [US10] Implement TorStatusEvent emission on state changes in crates/zkore-tor/src/manager.rs
+- [X] T179 [P] [US10] Extend apps/zkore-app-tauri/src/pages/Settings.tsx (created in T083b) with Tor toggle, beta label, status indicator
+- [X] T180 [US10] Create apps/zkore-app-tauri/src/components/common/TorStatusBadge.tsx showing Off/Connecting/On/Error
+- [X] T180a [US10] Render TorStatusBadge in persistent app chrome (e.g., shared layout / header) so it is visible on all pages; initialize via GetTorState on startup and subscribe to TorStatusEvent for real-time updates (covers FR-038)
+- [X] T181 [US10] Create apps/zkore-app-tauri/src/components/common/TorErrorDialog.tsx with retry and disable options
+- [X] T181a [US10] Add milestone tests: unit (crates/zkore-tor/tests/us10_tor_state.rs), integration (tests/integration/us10_tor_fail_closed.rs), e2e (tests/e2e/us10_tor_toggle.spec.ts) covering state machine and fail-closed network behavior, and asserting Tor status is visible globally via TorStatusBadge (FR-038)
 
 **Checkpoint**: User Story 10 complete - Tor anonymization with fail-closed behavior functional
 

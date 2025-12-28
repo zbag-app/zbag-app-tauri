@@ -7739,6 +7739,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -10727,6 +10728,7 @@ dependencies = [
  "zkore-core",
  "zkore-keystone",
  "zkore-network",
+ "zkore-tor",
 ]
 
 [[package]]
@@ -10746,6 +10748,9 @@ name = "zkore-network"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
+ "http",
+ "http-body-util",
  "prost",
  "reqwest",
  "serde",
@@ -10756,13 +10761,20 @@ dependencies = [
  "tracing",
  "zcash_client_backend",
  "zkore-core",
+ "zkore-tor",
 ]
 
 [[package]]
 name = "zkore-tor"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "http",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
  "zcash_client_backend",
+ "zkore-core",
 ]
 
 [[package]]

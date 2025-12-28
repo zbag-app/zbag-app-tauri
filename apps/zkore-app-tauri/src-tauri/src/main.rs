@@ -1,12 +1,34 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::Manager;
+
 fn main() {
     let state = zkore_app_tauri_lib::state::AppState::new()
         .expect("failed to initialize application state");
 
     tauri::Builder::default()
         .manage(state)
+        .setup(|app| {
+            let state = app.state::<zkore_app_tauri_lib::state::AppState>();
+
+            let _ = state.tor_manager.start_if_enabled();
+
+            let app_handle = app.handle().clone();
+            let mut rx = state.tor_manager.subscribe();
+
+            tauri::async_runtime::spawn(async move {
+                let _ = zkore_app_tauri_lib::events::emit_tor_status(&app_handle, rx.borrow().clone());
+                while rx.changed().await.is_ok() {
+                    let _ = zkore_app_tauri_lib::events::emit_tor_status(
+                        &app_handle,
+                        rx.borrow().clone(),
+                    );
+                }
+            });
+
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -47,6 +69,9 @@ fn main() {
             zkore_app_tauri_lib::commands::swap::zkore_start_swap,
             zkore_app_tauri_lib::commands::swap::zkore_get_swap_status,
             zkore_app_tauri_lib::commands::swap::zkore_list_swaps,
+            // Tor
+            zkore_app_tauri_lib::commands::tor::zkore_set_tor_enabled,
+            zkore_app_tauri_lib::commands::tor::zkore_get_tor_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

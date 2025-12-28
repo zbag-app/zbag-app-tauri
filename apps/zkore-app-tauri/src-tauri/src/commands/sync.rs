@@ -66,6 +66,7 @@ pub fn zkore_start_sync(
             wallet_db_path,
             wallet_dek,
             account_ids,
+            Some(Arc::clone(&state.tor_manager)),
             Some(progress_handler),
             Some(balance_handler),
         )?;

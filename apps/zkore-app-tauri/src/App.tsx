@@ -2,9 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import type * as IPC from './types/ipc';
+import { TorErrorDialog } from './components/common/TorErrorDialog';
+import { TorStatusBadge } from './components/common/TorStatusBadge';
 import { AccountSelector } from './components/wallet/AccountSelector';
 import { useActiveAccount } from './hooks/useActiveAccount';
-import { listWallets, loadWallet, unlockWallet } from './services/ipc';
+import { getTorState, listWallets, loadWallet, setTorEnabled, unlockWallet } from './services/ipc';
+import { onTorStatus } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
 import { CreateWallet } from './pages/CreateWallet';
 import { Home } from './pages/Home';
@@ -48,6 +51,8 @@ function AppInner() {
   const [accounts, setAccounts] = useState<IPC.AccountInfo[]>([]);
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
   const [restoreFlow, setRestoreFlow] = useState<RestoreFlowData | null>(null);
+  const [torState, setTorState] = useState<IPC.TorState | null>(null);
+  const [dismissedTorError, setDismissedTorError] = useState(false);
 
   const activeWalletId = useMemo(() => {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
@@ -59,6 +64,41 @@ function AppInner() {
     if (activeAccountId == null) return null;
     return accounts.find((a) => a.id === activeAccountId) ?? null;
   }, [accounts, activeAccountId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    async function initTor() {
+      const stateRes = await getTorState();
+      if (!cancelled && 'ok' in stateRes) {
+        setTorState(stateRes.ok.state);
+      }
+
+      unlisten = await onTorStatus((event) => {
+        setTorState(event.state);
+      });
+    }
+
+    initTor();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (torState?.enabled && torState.status === 'Error') {
+      setDismissedTorError(false);
+    }
+  }, [torState?.enabled, torState?.status]);
+
+  const toggleTor = async (enabled: boolean) => {
+    const res = await setTorEnabled({ enabled });
+    if ('ok' in res) {
+      setTorState(res.ok.state);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +206,15 @@ function AppInner() {
 
   return (
     <div style={{ display: 'grid', gap: 16, padding: 16 }}>
+      {torState && torState.enabled && torState.status === 'Error' && !dismissedTorError ? (
+        <TorErrorDialog
+          state={torState}
+          onClose={() => setDismissedTorError(true)}
+          onDisable={() => toggleTor(false)}
+          onRetry={() => toggleTor(true)}
+        />
+      ) : null}
+
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <strong>{startup.wallet.name}</strong>
         <AccountSelector
@@ -173,6 +222,7 @@ function AppInner() {
           activeAccountId={activeAccountId}
           onChange={setActiveAccountId}
         />
+        <TorStatusBadge state={torState} />
         <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Link to="/">Home</Link>
           <Link to="/receive">Receive</Link>
@@ -210,7 +260,10 @@ function AppInner() {
           path="/activity"
           element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
         />
-        <Route path="/settings" element={<Settings wallet={startup.wallet} />} />
+        <Route
+          path="/settings"
+          element={<Settings wallet={startup.wallet} torState={torState} onSetTorEnabled={toggleTor} />}
+        />
         <Route
           path="/keystone/import"
           element={

@@ -38,11 +38,11 @@ const MAX_SHIELDING_INPUTS_PER_TX: usize = 200;
 
 pub type TxEventHandler = Arc<dyn Fn(TransactionChangedEvent) + Send + Sync>;
 
-#[derive(Debug)]
 pub struct TxService<C: Clock> {
     clock: C,
     proposals: HashMap<String, ProposalRecord>,
     queued_broadcasts: HashMap<Uuid, HashMap<String, QueuedBroadcastEntry>>,
+    tor_manager: Option<Arc<zkore_tor::TorManager>>,
 }
 
 #[derive(Debug)]
@@ -77,7 +77,12 @@ impl<C: Clock> TxService<C> {
             clock,
             proposals: HashMap::new(),
             queued_broadcasts: HashMap::new(),
+            tor_manager: None,
         }
+    }
+
+    pub fn set_tor_manager(&mut self, tor_manager: Arc<zkore_tor::TorManager>) {
+        self.tor_manager = Some(tor_manager);
     }
 
     pub fn proposal_account_id(&self, proposal_id: &str) -> Option<u32> {
@@ -572,7 +577,7 @@ impl<C: Clock> TxService<C> {
 
         let txid_str = txid.to_string();
 
-        if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
+        if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
             queue_broadcast(
                 &self.clock,
                 wallet_id,
@@ -700,7 +705,7 @@ impl<C: Clock> TxService<C> {
                 )
             })?;
 
-            if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
+            if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
                 let err_msg = format!("{err:#}");
                 broadcast_errors.insert(txid.to_string(), err_msg.clone());
                 queue_broadcast(
@@ -1016,7 +1021,7 @@ impl<C: Clock> TxService<C> {
                     )
                 })?;
 
-                if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
+                if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
                     let err_msg = format!("{err:#}");
                     queue_broadcast(
                         &self.clock,
@@ -1136,7 +1141,7 @@ impl<C: Clock> TxService<C> {
 
         let tx_bytes = decrypt_queued_tx_bytes(wallet_id, wallet_dek, &entry.bin_path)?;
 
-        match send_transaction_bytes(grpc_url, &tx_bytes) {
+        match self.send_transaction_bytes(grpc_url, &tx_bytes) {
             Ok(()) => {
                 delete_queued_broadcast(wallet_dir, txid.to_string());
             }
@@ -1579,6 +1584,21 @@ fn decrypt_queued_tx_bytes(
     Ok(plaintext)
 }
 
+impl<C: Clock> TxService<C> {
+    fn send_transaction_bytes(&self, grpc_url: &str, tx_bytes: &[u8]) -> anyhow::Result<()> {
+        let client = match self.tor_manager.as_ref() {
+            Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(
+                grpc_url.to_string(),
+                Arc::clone(tor),
+            ),
+            None => zkore_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
+        };
+
+        let tx_bytes = tx_bytes.to_vec();
+        block_on(async move { client.send_transaction(tx_bytes).await })
+    }
+}
+
 fn delete_queued_broadcast(wallet_dir: &Path, txid: String) {
     let queue_dir = queued_broadcasts_dir(wallet_dir);
     let _ = std::fs::remove_file(queued_broadcast_bin_path(&queue_dir, &txid));
@@ -1612,12 +1632,6 @@ fn update_queued_broadcast_error<C: Clock>(
         )
     })?;
     Ok(())
-}
-
-fn send_transaction_bytes(grpc_url: &str, tx_bytes: &[u8]) -> anyhow::Result<()> {
-    let client = zkore_network::grpc_client::GrpcClient::new(grpc_url.to_string());
-    let tx_bytes = tx_bytes.to_vec();
-    block_on(async move { client.send_transaction(tx_bytes).await })
 }
 
 fn block_on<F: std::future::Future>(future: F) -> F::Output {

@@ -104,8 +104,11 @@ impl SwapService {
             output_asset: intent.output_asset.clone(),
         };
 
-        let quote_res = block_on(async { self.near.get_quote(req).await }).map_err(|e| {
-            ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}"))
+        let quote_res = block_on(async { self.near.get_quote(req).await }).map_err(|e| match e {
+            zkore_network::near_intents::NearIntentsError::TorNotReady => {
+                ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+            }
+            _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
         })?;
 
         let quote = SwapQuote {
@@ -236,7 +239,12 @@ impl SwapService {
                         swap: swap.clone(),
                     });
                 }
-                return Err(ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")));
+                return Err(match e {
+                    zkore_network::near_intents::NearIntentsError::TorNotReady => {
+                        ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+                    }
+                    _ => ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")),
+                });
             }
         };
 
@@ -374,7 +382,12 @@ impl SwapService {
                         swap: swap.clone(),
                     });
                 }
-                return Err(ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")));
+                return Err(match e {
+                    zkore_network::near_intents::NearIntentsError::TorNotReady => {
+                        ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+                    }
+                    _ => ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")),
+                });
             }
         };
 

@@ -174,3 +174,13 @@ export async function getSwapStatus(
 export async function listSwaps(): Promise<IPC.IpcResult<IPC.ListSwapsResponse>> {
   return invoke(IPC.Commands.LIST_SWAPS, { request: versioned({}) });
 }
+
+export async function setTorEnabled(
+  request: Omit<IPC.SetTorEnabledRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.SetTorEnabledResponse>> {
+  return invoke(IPC.Commands.SET_TOR_ENABLED, { request: versioned(request) });
+}
+
+export async function getTorState(): Promise<IPC.IpcResult<IPC.GetTorStateResponse>> {
+  return invoke(IPC.Commands.GET_TOR_STATE, { request: versioned({}) });
+}

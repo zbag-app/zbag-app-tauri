@@ -1432,6 +1432,10 @@ impl WalletManager {
         self.key_store.as_ref()
     }
 
+    pub fn set_tor_manager(&mut self, tor_manager: std::sync::Arc<zkore_tor::TorManager>) {
+        self.tx_service.set_tor_manager(tor_manager);
+    }
+
     pub fn app_db(&self) -> &AppDb {
         &self.app_db
     }

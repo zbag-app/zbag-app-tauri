@@ -72,6 +72,7 @@ impl SyncService {
         wallet_db_path: PathBuf,
         wallet_dek: Dek,
         account_ids: Vec<u32>,
+        tor_manager: Option<std::sync::Arc<zkore_tor::TorManager>>,
         on_progress: Option<SyncEventHandler>,
         on_balance_changed: Option<BalanceEventHandler>,
     ) -> anyhow::Result<()> {
@@ -108,7 +109,10 @@ impl SyncService {
         let on_balance_task = on_balance_changed.clone();
 
         let handle = tokio::spawn(async move {
-            let client = zkore_network::grpc_client::GrpcClient::new(grpc_url);
+            let client = match tor_manager {
+                Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
+                None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
+            };
 
             let emit = |progress: SyncProgress| {
                 if let Some(handler) = on_progress_task.as_ref() {
