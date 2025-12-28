@@ -138,7 +138,7 @@ pub fn get_receive_address(
     }
 }
 
-fn find_account_uuid(
+pub(crate) fn find_account_uuid(
     wdb: &mut zcash_client_sqlite::WalletDb<
         &mut Connection,
         zcash_protocol::consensus::Network,

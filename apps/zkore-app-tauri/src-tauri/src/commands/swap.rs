@@ -25,10 +25,12 @@ pub fn zkore_request_swap_quote(
     }
 
     map_anyhow((|| {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let wallet = mgr
-            .active_wallet_info()
-            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded"))?;
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
 
         let intent = SwapIntent {
             swap_type: request.swap_type,
@@ -60,10 +62,12 @@ pub fn zkore_start_swap(
     });
 
     map_anyhow((|| {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let wallet = mgr
-            .active_wallet_info()
-            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded"))?;
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
 
         state.swap_service.start_swap(
             wallet.id,
@@ -86,10 +90,12 @@ pub fn zkore_get_swap_status(
     }
 
     map_anyhow((|| {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let wallet = mgr
-            .active_wallet_info()
-            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded"))?;
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
 
         state.swap_service.get_swap_status(wallet.id, request.swap_id)
     })())
@@ -105,12 +111,13 @@ pub fn zkore_list_swaps(
     }
 
     map_anyhow((|| {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let wallet = mgr
-            .active_wallet_info()
-            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded"))?;
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
 
         state.swap_service.list_swaps(wallet.id)
     })())
 }
-

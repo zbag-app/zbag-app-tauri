@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use zkore_engine::key_store_keychain::KeyStoreKeychain;
 use zkore_engine::swap_service::SwapService;
@@ -7,7 +7,7 @@ use zkore_engine::sync_service::SyncService;
 use zkore_engine::wallet_manager::WalletManager;
 
 pub struct AppState {
-    pub wallet_manager: Mutex<WalletManager>,
+    pub wallet_manager: Arc<Mutex<WalletManager>>,
     pub sync_service: SyncService,
     pub swap_service: SwapService,
 }
@@ -17,11 +17,15 @@ impl AppState {
         let app_db_path = default_app_db_path()?;
         let wallets_root = default_wallets_root()?;
         let key_store = Box::new(KeyStoreKeychain::new(wallets_root.clone()));
-        let swap_service = SwapService::new(app_db_path.clone())?;
-        let wallet_manager =
-            WalletManager::new_with_wallets_root(app_db_path, wallets_root, key_store)?;
+        let wallet_manager = WalletManager::new_with_wallets_root(
+            app_db_path.clone(),
+            wallets_root,
+            key_store,
+        )?;
+        let wallet_manager = Arc::new(Mutex::new(wallet_manager));
+        let swap_service = SwapService::new(app_db_path, Arc::clone(&wallet_manager))?;
         Ok(Self {
-            wallet_manager: Mutex::new(wallet_manager),
+            wallet_manager,
             sync_service: SyncService::new(),
             swap_service,
         })
