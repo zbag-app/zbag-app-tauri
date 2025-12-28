@@ -1,4 +1,4 @@
-use argon2::{password_hash::SaltString, Argon2, Params, PasswordHasher};
+use argon2::{Argon2, Params, PasswordHasher, password_hash::SaltString};
 use base64::Engine as _;
 use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
@@ -55,7 +55,9 @@ pub fn generate_dek() -> Dek {
 }
 
 pub fn generate_kdf_salt_b64() -> String {
-    SaltString::generate(&mut rand::thread_rng()).as_str().to_string()
+    SaltString::generate(&mut rand::thread_rng())
+        .as_str()
+        .to_string()
 }
 
 pub fn generate_nonce_b64() -> String {
@@ -79,7 +81,10 @@ pub fn wrap_dek(
         .decode(aead_nonce_b64)
         .map_err(|e| anyhow::anyhow!("invalid AEAD nonce base64: {e}"))?;
     if nonce_bytes.len() != 24 {
-        return Err(anyhow::anyhow!("invalid AEAD nonce length: {}", nonce_bytes.len()));
+        return Err(anyhow::anyhow!(
+            "invalid AEAD nonce length: {}",
+            nonce_bytes.len()
+        ));
     }
     let nonce: &XNonce = XNonce::from_slice(&nonce_bytes);
 
@@ -87,7 +92,13 @@ pub fn wrap_dek(
         .map_err(|e| anyhow::anyhow!("failed to init AEAD: {e}"))?;
 
     let ciphertext = cipher
-        .encrypt(nonce, Payload { msg: &dek.0, aad: aad.as_bytes() })
+        .encrypt(
+            nonce,
+            Payload {
+                msg: &dek.0,
+                aad: aad.as_bytes(),
+            },
+        )
         .map_err(|e| anyhow::anyhow!("failed to wrap DEK: {e}"))?;
 
     kek.0.zeroize();
@@ -110,7 +121,10 @@ pub fn unwrap_dek(
         .decode(aead_nonce_b64)
         .map_err(|e| anyhow::anyhow!("invalid AEAD nonce base64: {e}"))?;
     if nonce_bytes.len() != 24 {
-        return Err(anyhow::anyhow!("invalid AEAD nonce length: {}", nonce_bytes.len()));
+        return Err(anyhow::anyhow!(
+            "invalid AEAD nonce length: {}",
+            nonce_bytes.len()
+        ));
     }
     let nonce: &XNonce = XNonce::from_slice(&nonce_bytes);
 
@@ -122,7 +136,13 @@ pub fn unwrap_dek(
         .map_err(|e| anyhow::anyhow!("failed to init AEAD: {e}"))?;
 
     let plaintext = cipher
-        .decrypt(nonce, Payload { msg: &ciphertext, aad: aad.as_bytes() })
+        .decrypt(
+            nonce,
+            Payload {
+                msg: &ciphertext,
+                aad: aad.as_bytes(),
+            },
+        )
         .map_err(|e| anyhow::anyhow!("failed to unwrap DEK: {e}"))?;
 
     kek.0.zeroize();
@@ -155,8 +175,8 @@ pub fn default_aead_params() -> WalletAeadParams {
 }
 
 fn derive_kek(password: &str, salt_b64: &str) -> anyhow::Result<Kek> {
-    let salt = SaltString::from_b64(salt_b64)
-        .map_err(|e| anyhow::anyhow!("invalid KDF salt: {e}"))?;
+    let salt =
+        SaltString::from_b64(salt_b64).map_err(|e| anyhow::anyhow!("invalid KDF salt: {e}"))?;
     let params = Params::new(
         KDF_MEMORY_MIB * 1024,
         KDF_ITERATIONS,

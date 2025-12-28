@@ -72,13 +72,23 @@ fn find_account_uuid(
             continue;
         };
 
-        let Some(derivation) = account.source().key_derivation() else {
+        if let Some(derivation) = account.source().key_derivation() {
+            let derived_id: u32 = derivation.account_index().into();
+            if derived_id == account_id {
+                return Ok(account_uuid);
+            }
             continue;
-        };
-        let derived_id: u32 = derivation.account_index().into();
-        if derived_id == account_id {
-            return Ok(account_uuid);
         }
+
+        if let Some(key_source) = account.source().key_source() {
+            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+                == Some(account_id)
+            {
+                return Ok(account_uuid);
+            }
+        }
+
+        continue;
     }
 
     Err(ipc_err(errors::ACCOUNT_NOT_FOUND, "account not found"))

@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use uuid::Uuid;
 
 use crate::encryption::{WalletAeadParams, WalletKdfParams};
@@ -93,4 +93,3 @@ pub fn get_wallet_encryption(
         },
     }))
 }
-

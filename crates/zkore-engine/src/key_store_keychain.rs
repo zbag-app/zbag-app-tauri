@@ -39,14 +39,16 @@ impl KeyStoreKeychain {
 
     fn keychain_entry(&self, wallet_id: Uuid, network: Network) -> anyhow::Result<keyring::Entry> {
         let username = format!("wallet-dek:{wallet_id}:{}", network_dir_name(network));
-        keyring::Entry::new(&self.service, &username)
-            .context("failed to construct keychain entry")
+        keyring::Entry::new(&self.service, &username).context("failed to construct keychain entry")
     }
 
     fn write_file_atomic(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create key store parent directory: {}", parent.display())
+                format!(
+                    "failed to create key store parent directory: {}",
+                    parent.display()
+                )
             })?;
         }
 

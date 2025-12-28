@@ -31,6 +31,8 @@ pub fn run() {
             // Backup
             commands::backup::zkore_get_backup_challenge,
             commands::backup::zkore_verify_backup,
+            // Keystone
+            commands::keystone::zkore_import_ufvk,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

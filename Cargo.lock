@@ -10724,6 +10724,7 @@ dependencies = [
  "zeroize",
  "zip32",
  "zkore-core",
+ "zkore-keystone",
  "zkore-network",
 ]
 
@@ -10731,7 +10732,10 @@ dependencies = [
 name = "zkore-keystone"
 version = "0.1.0"
 dependencies = [
+ "thiserror 2.0.17",
  "zcash_client_backend",
+ "zcash_protocol",
+ "zip32",
 ]
 
 [[package]]

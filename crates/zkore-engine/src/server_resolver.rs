@@ -21,4 +21,3 @@ pub fn resolve_grpc_url(app_db: &db::AppDb, network: Network) -> anyhow::Result<
 
     Ok(server.grpc_url)
 }
-

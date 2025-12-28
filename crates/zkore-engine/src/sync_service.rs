@@ -5,8 +5,8 @@ use std::time::Instant;
 
 use anyhow::Context as _;
 use rusqlite::{Connection, OpenFlags};
-use tokio::task::JoinHandle;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 use zeroize::Zeroize;
 
@@ -16,9 +16,9 @@ use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 
 use crate::db::AppDb;
+use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
-use crate::encryption::Dek;
 
 type SyncEventHandler = Arc<dyn Fn(SyncProgressEvent) + Send + Sync>;
 type BalanceEventHandler = Arc<dyn Fn(BalanceChangedEvent) + Send + Sync>;
@@ -78,7 +78,10 @@ impl SyncService {
         {
             let mut state = self.state.lock().expect("mutex poisoned");
             if state.jobs.contains_key(&wallet_id) {
-                return Err(ipc_err(errors::SYNC_IN_PROGRESS, "sync already in progress"));
+                return Err(ipc_err(
+                    errors::SYNC_IN_PROGRESS,
+                    "sync already in progress",
+                ));
             }
 
             state.started_at.insert(wallet_id, Instant::now());
@@ -236,11 +239,13 @@ impl SyncService {
         });
 
         let finished = handle.is_finished();
-        self.state
-            .lock()
-            .expect("mutex poisoned")
-            .jobs
-            .insert(wallet_id, SyncJob { cancel: cancel_tx, handle });
+        self.state.lock().expect("mutex poisoned").jobs.insert(
+            wallet_id,
+            SyncJob {
+                cancel: cancel_tx,
+                handle,
+            },
+        );
         if finished {
             self.state
                 .lock()

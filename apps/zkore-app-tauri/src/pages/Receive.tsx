@@ -1,12 +1,13 @@
-import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
+import { AddressDisplay } from '../components/wallet/AddressDisplay';
 import { getReceiveAddress } from '../services/ipc';
 
 export function Receive(props: { activeAccountId: number | null }) {
   const { activeAccountId } = props;
   const [showTransparent, setShowTransparent] = useState(false);
-  const [address, setAddress] = useState<IPC.AddressInfo | null>(null);
+  const [shieldedAddress, setShieldedAddress] = useState<IPC.AddressInfo | null>(null);
+  const [transparentAddress, setTransparentAddress] = useState<IPC.AddressInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,31 +15,42 @@ export function Receive(props: { activeAccountId: number | null }) {
 
     async function run() {
       setError(null);
-      setAddress(null);
+      setShieldedAddress(null);
+      setTransparentAddress(null);
       if (activeAccountId === null) return;
 
-      const res = await getReceiveAddress({
-        account_id: activeAccountId,
-        address_type: showTransparent ? 'Transparent' : 'ShieldedOnly',
-      });
+      const [shieldedRes, transparentRes] = await Promise.all([
+        getReceiveAddress({
+          account_id: activeAccountId,
+          address_type: 'ShieldedOnly',
+        }),
+        getReceiveAddress({
+          account_id: activeAccountId,
+          address_type: 'Transparent',
+        }),
+      ]);
+
       if (cancelled) return;
-      if ('err' in res) {
-        setError(res.err.message);
+      if ('err' in shieldedRes) {
+        setError(shieldedRes.err.message);
         return;
       }
-      setAddress(res.ok.address);
+      if ('err' in transparentRes) {
+        setError(transparentRes.err.message);
+        return;
+      }
+
+      setShieldedAddress(shieldedRes.ok.address);
+      setTransparentAddress(transparentRes.ok.address);
     }
 
     run();
     return () => {
       cancelled = true;
     };
-  }, [activeAccountId, showTransparent]);
+  }, [activeAccountId]);
 
-  const copy = async () => {
-    if (!address) return;
-    await navigator.clipboard.writeText(address.encoded);
-  };
+  const address = showTransparent ? transparentAddress : shieldedAddress;
 
   return (
     <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
@@ -62,27 +74,10 @@ export function Receive(props: { activeAccountId: number | null }) {
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
       {address ? (
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <div style={{ fontSize: 14, opacity: 0.8 }}>Address</div>
-            <code style={{ wordBreak: 'break-all' }}>{address.encoded}</code>
-          </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <QRCodeSVG value={address.encoded} size={180} />
-            <div style={{ display: 'grid', gap: 8 }}>
-              <button type="button" onClick={copy}>
-                Copy
-              </button>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                Diversifier index: {address.diversifier_index}
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddressDisplay address={address} />
       ) : (
         <div>{activeAccountId === null ? 'No active account.' : 'Loading…'}</div>
       )}
     </div>
   );
 }
-

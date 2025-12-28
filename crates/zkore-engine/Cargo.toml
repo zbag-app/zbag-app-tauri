@@ -29,6 +29,7 @@ keyring.workspace = true
 zip32.workspace = true
 zcash_proofs.workspace = true
 zkore-core = { path = "../zkore-core" }
+zkore-keystone = { path = "../zkore-keystone" }
 zkore-network = { path = "../zkore-network" }
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true

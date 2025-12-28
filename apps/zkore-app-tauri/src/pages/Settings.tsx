@@ -1,4 +1,5 @@
 import type * as IPC from '../types/ipc';
+import { Link } from 'react-router-dom';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
 
 export function Settings(props: { wallet: IPC.WalletInfo }) {
@@ -15,7 +16,14 @@ export function Settings(props: { wallet: IPC.WalletInfo }) {
         </div>
         <ViewSeedPhraseDialog walletId={wallet.id} triggerLabel="View seed phrase" />
       </section>
+
+      <section style={{ display: 'grid', gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Hardware Wallet</h2>
+        <div style={{ fontSize: 14, opacity: 0.85 }}>
+          Import a Keystone watch-only account using a UFVK.
+        </div>
+        <Link to="/keystone/import">Import Keystone UFVK</Link>
+      </section>
     </div>
   );
 }
-

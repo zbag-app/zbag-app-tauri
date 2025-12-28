@@ -3,8 +3,10 @@ use serde_json::json;
 use zkore_core::domain::{BackupAction, ShieldAction, SyncStatus, WalletLockStatus, WalletStatus};
 use zkore_core::errors;
 use zkore_core::ipc::v1::commands::balance::GetBalanceResponse;
-use zkore_core::ipc::v1::commands::wallet::{CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse};
-use zkore_core::ipc::v1::common::{ensure_schema_version, SCHEMA_VERSION};
+use zkore_core::ipc::v1::commands::wallet::{
+    CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
+};
+use zkore_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
 #[test]
 fn schema_version_enforcement() {
@@ -30,10 +32,16 @@ fn deny_unknown_fields_on_requests() {
 
 #[test]
 fn enum_json_shapes_match_contract() {
-    let syncing = serde_json::to_value(SyncStatus::Syncing { progress_percent: 42 }).unwrap();
+    let syncing = serde_json::to_value(SyncStatus::Syncing {
+        progress_percent: 42,
+    })
+    .unwrap();
     assert_eq!(syncing, json!({ "Syncing": { "progress_percent": 42 } }));
 
-    let shield = serde_json::to_value(ShieldAction::Available { amount: "1".to_string() }).unwrap();
+    let shield = serde_json::to_value(ShieldAction::Available {
+        amount: "1".to_string(),
+    })
+    .unwrap();
     assert_eq!(shield, json!({ "Available": { "amount": "1" } }));
 
     let backup = serde_json::to_value(BackupAction::Required).unwrap();
@@ -97,4 +105,3 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
     assert!(!status_json.contains("\"seed_phrase\""));
     assert!(!status_json.to_lowercase().contains("mnemonic"));
 }
-

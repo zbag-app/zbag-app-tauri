@@ -296,11 +296,11 @@
 
 ### Implementation for User Story 5
 
-- [ ] T072 [US5] Implement diversifier index tracking in crates/zkore-engine/src/db/rotation_meta.rs (receive_rotation table)
-- [ ] T116 [US5] Implement shielded-only UA diversifier rotation in crates/zkore-engine/src/address_service.rs using receive_rotation: each Receive open returns a fresh Orchard+Sapling UA with no transparent receiver
-- [ ] T118 [US5] Update apps/zkore-app-tauri/src/pages/Receive.tsx to request a fresh shielded address on each open (driving rotation) while keeping the transparent compatibility address stable per account (no rotation in v1); both must respect the active `account_id`
-- [ ] T120 [US5] Create apps/zkore-app-tauri/src/components/wallet/AddressDisplay.tsx with large QR and one-click copy
-- [ ] T120a [US5] Add milestone tests: unit (crates/zkore-engine/tests/us5_address_rotation.rs), integration (tests/integration/us5_addresses.rs), e2e (tests/e2e/us5_receive_addresses.spec.ts) covering rotation, address types, and labeling
+- [X] T072 [US5] Implement diversifier index tracking in crates/zkore-engine/src/db/rotation_meta.rs (receive_rotation table)
+- [X] T116 [US5] Implement shielded-only UA diversifier rotation in crates/zkore-engine/src/address_service.rs using receive_rotation: each Receive open returns a fresh Orchard+Sapling UA with no transparent receiver
+- [X] T118 [US5] Update apps/zkore-app-tauri/src/pages/Receive.tsx to request a fresh shielded address on each open (driving rotation) while keeping the transparent compatibility address stable per account (no rotation in v1); both must respect the active `account_id`
+- [X] T120 [US5] Create apps/zkore-app-tauri/src/components/wallet/AddressDisplay.tsx with large QR and one-click copy
+- [X] T120a [US5] Add milestone tests: unit (crates/zkore-engine/tests/us5_address_rotation.rs), integration (tests/integration/us5_addresses.rs), e2e (tests/e2e/us5_receive_addresses.spec.ts) covering rotation, address types, and labeling
 
 **Checkpoint**: User Story 5 complete - address rotation and compatibility addresses functional
 
@@ -314,14 +314,14 @@
 
 ### Implementation for User Story 6
 
- - [ ] T121 [US6] Create crates/zkore-keystone/src/lib.rs with module structure
-- [ ] T122 [US6] Create crates/zkore-keystone/src/ufvk.rs with UFVK parsing and validation (including extracting/validating the UFVK network)
-- [ ] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account; persist app metadata accounts row for the new account_id with name from request and account_type=HardwareSigner; reject UFVK network mismatches vs the wallet’s network and return `INVALID_UFVK`
-- [ ] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
-- [ ] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
-- [ ] T126 [US6] Add watch-only badge to account display (AccountSelector and any Home account header) in apps/zkore-app-tauri/src/pages/Home.tsx
+- [X] T121 [US6] Create crates/zkore-keystone/src/lib.rs with module structure
+- [X] T122 [US6] Create crates/zkore-keystone/src/ufvk.rs with UFVK parsing and validation (including extracting/validating the UFVK network)
+- [X] T123 [US6] Implement import_ufvk() in crates/zkore-engine/src/wallet_manager.rs creating HardwareSigner account; persist app metadata accounts row for the new account_id with name from request and account_type=HardwareSigner; reject UFVK network mismatches vs the wallet’s network and return `INVALID_UFVK`
+- [X] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
+- [X] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
+- [X] T126 [US6] Add watch-only badge to account display (AccountSelector and any Home account header) in apps/zkore-app-tauri/src/pages/Home.tsx
 - [ ] T127 [US6] Implement WATCH_ONLY_CANNOT_SPEND check redirecting to signing flow in apps/zkore-app-tauri/src/pages/Send.tsx; for HardwareSigner accounts, handle PRIVACY_ACK_REQUIRED by prompting the user and retrying BuildSigningRequest with allow_transparent_recipient=true (same semantics/UX as PrepareSend)
-- [ ] T127a [US6] Add milestone tests: unit (crates/zkore-keystone/tests/us6_ufvk.rs), integration (tests/integration/us6_import_ufvk.rs), e2e (tests/e2e/us6_import_keystone.spec.ts) covering UFVK validation, watch-only behavior, and UI active-account switching between Software and HardwareSigner accounts
+- [X] T127a [US6] Add milestone tests: unit (crates/zkore-keystone/tests/us6_ufvk.rs), integration (tests/integration/us6_import_ufvk.rs), e2e (tests/e2e/us6_import_keystone.spec.ts) covering UFVK validation, watch-only behavior, and UI active-account switching between Software and HardwareSigner accounts
 
 **Checkpoint**: User Story 6 complete - Keystone watch-only import functional
 

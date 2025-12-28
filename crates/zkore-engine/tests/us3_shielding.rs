@@ -61,8 +61,16 @@ impl KeyStore for TestKeyStore {
         Ok(())
     }
 
-    fn load_encrypted_mnemonic(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<Option<Vec<u8>>> {
-        let bytes = self.encrypted_mnemonics.lock().expect("mutex poisoned").clone();
+    fn load_encrypted_mnemonic(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let bytes = self
+            .encrypted_mnemonics
+            .lock()
+            .expect("mutex poisoned")
+            .clone();
         if bytes.is_empty() {
             Ok(None)
         } else {
@@ -71,7 +79,10 @@ impl KeyStore for TestKeyStore {
     }
 
     fn delete_encrypted_mnemonic(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<()> {
-        self.encrypted_mnemonics.lock().expect("mutex poisoned").clear();
+        self.encrypted_mnemonics
+            .lock()
+            .expect("mutex poisoned")
+            .clear();
         Ok(())
     }
 
@@ -84,11 +95,19 @@ impl KeyStore for TestKeyStore {
         Ok(())
     }
 
-    fn load_keychain_unlock_material(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<Option<Vec<u8>>> {
+    fn load_keychain_unlock_material(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
         Ok(None)
     }
 
-    fn delete_keychain_unlock_material(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<()> {
+    fn delete_keychain_unlock_material(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -111,8 +130,8 @@ fn wallet_db_path(wallets_root: &Path, network: Network, wallet_id: Uuid) -> Pat
 }
 
 fn open_sqlcipher_conn(path: &Path, dek: &[u8; 32]) -> Connection {
-    let conn =
-        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE).expect("open wallet db");
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .expect("open wallet db");
 
     let mut dek_hex = dek.iter().map(|b| format!("{b:02x}")).collect::<String>();
     let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
@@ -184,7 +203,8 @@ fn insert_transparent_utxos(
     let nu5_activation = params
         .activation_height(zcash_protocol::consensus::NetworkUpgrade::Nu5)
         .expect("NU5 activation height must be available");
-    let tip_height = zcash_protocol::consensus::BlockHeight::from_u32(u32::from(nu5_activation) + 100);
+    let tip_height =
+        zcash_protocol::consensus::BlockHeight::from_u32(u32::from(nu5_activation) + 100);
 
     let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
         &mut conn,
@@ -281,15 +301,19 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)
@@ -297,11 +321,21 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
     assert!(!transparent.encoded.trim().is_empty());
 
     mgr.lock_wallet(wallet.id).expect("lock wallet");
-    insert_transparent_utxos(&mgr, wallet.id, wallet.network, "pw", &transparent.encoded, [100_000]);
+    insert_transparent_utxos(
+        &mgr,
+        wallet.id,
+        wallet.network,
+        "pw",
+        &transparent.encoded,
+        [100_000],
+    );
     mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
 
     let balance = mgr.get_balance(0).expect("get balance");
-    let transparent_total: u64 = balance.transparent_total.parse().expect("transparent_total u64");
+    let transparent_total: u64 = balance
+        .transparent_total
+        .parse()
+        .expect("transparent_total u64");
     assert!(transparent_total > 0);
 
     let shielded = testnet_shielded_address();
@@ -321,27 +355,41 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)
         .expect("get transparent address");
 
     mgr.lock_wallet(wallet.id).expect("lock wallet");
-    insert_transparent_utxos(&mgr, wallet.id, wallet.network, "pw", &transparent.encoded, [250_000]);
+    insert_transparent_utxos(
+        &mgr,
+        wallet.id,
+        wallet.network,
+        "pw",
+        &transparent.encoded,
+        [250_000],
+    );
     mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
 
     let before = mgr.get_balance(0).expect("get balance before");
     let before_total: u64 = before.total.parse().expect("before total u64");
-    let before_transparent: u64 = before.transparent_total.parse().expect("before transparent_total u64");
+    let before_transparent: u64 = before
+        .transparent_total
+        .parse()
+        .expect("before transparent_total u64");
     assert_eq!(before_total, before_transparent);
 
     let (reauth_token, _expires_at) = mgr
@@ -365,7 +413,10 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
 
     let after = mgr.get_balance(0).expect("get balance after");
     let after_total: u64 = after.total.parse().expect("after total u64");
-    let after_transparent: u64 = after.transparent_total.parse().expect("after transparent_total u64");
+    let after_transparent: u64 = after
+        .transparent_total
+        .parse()
+        .expect("after transparent_total u64");
     assert_eq!(after_transparent, 0);
     assert_eq!(after_total, before_total.saturating_sub(fee));
 
@@ -385,9 +436,12 @@ fn shield_funds_is_blocked_until_backup_complete() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
@@ -414,22 +468,33 @@ fn shield_funds_insufficient_fee_includes_details() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)
         .expect("get transparent address");
 
     mgr.lock_wallet(wallet.id).expect("lock wallet");
-    insert_transparent_utxos(&mgr, wallet.id, wallet.network, "pw", &transparent.encoded, [6_000]);
+    insert_transparent_utxos(
+        &mgr,
+        wallet.id,
+        wallet.network,
+        "pw",
+        &transparent.encoded,
+        [6_000],
+    );
     mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
 
     let (reauth_token, _expires_at) = mgr
@@ -464,15 +529,19 @@ fn shield_funds_batches_large_input_sets() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)

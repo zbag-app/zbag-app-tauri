@@ -13,13 +13,15 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType};
+use zkore_core::domain::{
+    Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
+};
 use zkore_core::errors;
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
     TransactionSummary,
 };
+use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::events::TransactionChangedEvent;
 
 use crate::db::AppDb;
@@ -79,7 +81,11 @@ impl<C: Clock> TxService<C> {
         self.proposals.get(proposal_id).map(|r| r.account_id)
     }
 
-    pub fn scan_queued_broadcasts(&mut self, wallet_id: Uuid, wallet_dir: &Path) -> anyhow::Result<()> {
+    pub fn scan_queued_broadcasts(
+        &mut self,
+        wallet_id: Uuid,
+        wallet_dir: &Path,
+    ) -> anyhow::Result<()> {
         let queue_dir = queued_broadcasts_dir(wallet_dir);
         if !queue_dir.exists() {
             self.queued_broadcasts.remove(&wallet_id);
@@ -89,9 +95,12 @@ impl<C: Clock> TxService<C> {
         let now = self.clock.now();
         let mut entries: HashMap<String, QueuedBroadcastEntry> = HashMap::new();
 
-        for dir_entry in std::fs::read_dir(&queue_dir)
-            .with_context(|| format!("failed to read queued broadcasts dir: {}", queue_dir.display()))?
-        {
+        for dir_entry in std::fs::read_dir(&queue_dir).with_context(|| {
+            format!(
+                "failed to read queued broadcasts dir: {}",
+                queue_dir.display()
+            )
+        })? {
             let dir_entry = dir_entry?;
             let path = dir_entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
@@ -124,10 +133,7 @@ impl<C: Clock> TxService<C> {
                 continue;
             }
 
-            if now
-                .duration_since(created_at)
-                .unwrap_or(Duration::ZERO)
-                > QUEUED_BROADCAST_RETENTION
+            if now.duration_since(created_at).unwrap_or(Duration::ZERO) > QUEUED_BROADCAST_RETENTION
             {
                 let _ = std::fs::remove_file(&bin_path);
                 let _ = std::fs::remove_file(&path);
@@ -178,13 +184,14 @@ impl<C: Clock> TxService<C> {
             })
             .transpose()?;
 
-        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id)
-            .unwrap_or(zkore_core::domain::Balance {
+        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id).unwrap_or(
+            zkore_core::domain::Balance {
                 shielded_spendable: "0".to_string(),
                 shielded_pending: "0".to_string(),
                 transparent_total: "0".to_string(),
                 total: "0".to_string(),
-            });
+            },
+        );
         let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
         let shielded_pending = balance.shielded_pending.parse::<u64>().unwrap_or(0);
         let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
@@ -249,7 +256,8 @@ impl<C: Clock> TxService<C> {
             Ok(p) => p,
             Err(err) => {
                 let err_str = err.to_string();
-                if err_str.contains("Insufficient balance") || err_str.contains("Insufficient funds")
+                if err_str.contains("Insufficient balance")
+                    || err_str.contains("Insufficient funds")
                 {
                     let spendable_if_transparent =
                         shielded_spendable.saturating_add(transparent_total);
@@ -397,7 +405,12 @@ impl<C: Clock> TxService<C> {
             zcash_client_backend::wallet::OvkPolicy::Sender,
             &record.proposal,
         )
-        .map_err(|e| ipc_err(errors::TRANSACTION_FAILED, format!("failed to build tx: {e}")))?;
+        .map_err(|e| {
+            ipc_err(
+                errors::TRANSACTION_FAILED,
+                format!("failed to build tx: {e}"),
+            )
+        })?;
 
         let mut broadcast_errors: HashMap<String, String> = HashMap::new();
 
@@ -407,12 +420,20 @@ impl<C: Clock> TxService<C> {
         for txid in txids.iter() {
             let tx = wdb
                 .get_transaction(*txid)
-                .map_err(|e| ipc_err(errors::TRANSACTION_FAILED, format!("failed to load tx: {e}")))?
+                .map_err(|e| {
+                    ipc_err(
+                        errors::TRANSACTION_FAILED,
+                        format!("failed to load tx: {e}"),
+                    )
+                })?
                 .ok_or_else(|| ipc_err(errors::TRANSACTION_FAILED, "tx bytes unavailable"))?;
 
             let mut tx_bytes = Vec::new();
             tx.write(&mut tx_bytes).map_err(|e| {
-                ipc_err(errors::TRANSACTION_FAILED, format!("failed to serialize tx: {e}"))
+                ipc_err(
+                    errors::TRANSACTION_FAILED,
+                    format!("failed to serialize tx: {e}"),
+                )
             })?;
 
             if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
@@ -443,11 +464,7 @@ impl<C: Clock> TxService<C> {
             .cloned();
 
         let (status, last_error, can_retry_broadcast) = match queued {
-            Some(entry) => (
-                TransactionStatus::Failed,
-                entry.last_error.clone(),
-                true,
-            ),
+            Some(entry) => (TransactionStatus::Failed, entry.last_error.clone(), true),
             None => (TransactionStatus::Pending, None, false),
         };
 
@@ -619,7 +636,10 @@ impl<C: Clock> TxService<C> {
                     &wallet_meta,
                 ) {
                     Ok(balance) => break Some(balance),
-                    Err(zcash_client_backend::fees::ChangeError::DustInputs { transparent, .. }) => {
+                    Err(zcash_client_backend::fees::ChangeError::DustInputs {
+                        transparent,
+                        ..
+                    }) => {
                         let exclusions: BTreeSet<zcash_transparent::bundle::OutPoint> =
                             transparent.into_iter().collect();
                         input_selection.retain(|i| !exclusions.contains(i.outpoint()));
@@ -680,7 +700,12 @@ impl<C: Clock> TxService<C> {
                 target_height,
                 true,
             )
-            .map_err(|e| ipc_err(errors::TRANSACTION_FAILED, format!("invalid shielding proposal: {e}")))?;
+            .map_err(|e| {
+                ipc_err(
+                    errors::TRANSACTION_FAILED,
+                    format!("invalid shielding proposal: {e}"),
+                )
+            })?;
 
             let txids = zcash_client_backend::data_api::wallet::create_proposed_transactions::<
                 _,
@@ -699,7 +724,10 @@ impl<C: Clock> TxService<C> {
                 &proposal,
             )
             .map_err(|e| {
-                ipc_err(errors::TRANSACTION_FAILED, format!("failed to build shielding tx: {e}"))
+                ipc_err(
+                    errors::TRANSACTION_FAILED,
+                    format!("failed to build shielding tx: {e}"),
+                )
             })?;
 
             #[allow(deprecated)]
@@ -709,13 +737,19 @@ impl<C: Clock> TxService<C> {
                 let tx = wdb
                     .get_transaction(*txid)
                     .map_err(|e| {
-                        ipc_err(errors::TRANSACTION_FAILED, format!("failed to load tx: {e}"))
+                        ipc_err(
+                            errors::TRANSACTION_FAILED,
+                            format!("failed to load tx: {e}"),
+                        )
                     })?
                     .ok_or_else(|| ipc_err(errors::TRANSACTION_FAILED, "tx bytes unavailable"))?;
 
                 let mut tx_bytes = Vec::new();
                 tx.write(&mut tx_bytes).map_err(|e| {
-                    ipc_err(errors::TRANSACTION_FAILED, format!("failed to serialize tx: {e}"))
+                    ipc_err(
+                        errors::TRANSACTION_FAILED,
+                        format!("failed to serialize tx: {e}"),
+                    )
                 })?;
 
                 if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
@@ -750,11 +784,7 @@ impl<C: Clock> TxService<C> {
                         .cloned();
 
                     let (status, last_error, can_retry_broadcast) = match queued {
-                        Some(entry) => (
-                            TransactionStatus::Failed,
-                            entry.last_error.clone(),
-                            true,
-                        ),
+                        Some(entry) => (TransactionStatus::Failed, entry.last_error.clone(), true),
                         None => (TransactionStatus::Pending, None, false),
                     };
 
@@ -783,7 +813,10 @@ impl<C: Clock> TxService<C> {
         }
 
         let Some(primary_txid) = primary_txid else {
-            return Err(ipc_err(errors::INSUFFICIENT_FUNDS, "no transparent funds to shield"));
+            return Err(ipc_err(
+                errors::INSUFFICIENT_FUNDS,
+                "no transparent funds to shield",
+            ));
         };
         let fee = primary_fee.unwrap_or(0).to_string();
 
@@ -830,7 +863,12 @@ impl<C: Clock> TxService<C> {
             .get(&wallet_id)
             .and_then(|map| map.get(txid))
             .cloned()
-            .ok_or_else(|| ipc_err(errors::QUEUED_BROADCAST_NOT_FOUND, "queued broadcast not found"))?;
+            .ok_or_else(|| {
+                ipc_err(
+                    errors::QUEUED_BROADCAST_NOT_FOUND,
+                    "queued broadcast not found",
+                )
+            })?;
 
         let tx_bytes = decrypt_queued_tx_bytes(wallet_id, wallet_dek, &entry.bin_path)?;
 
@@ -1135,16 +1173,30 @@ fn resolve_wallet_account_uuid(
         rand::rngs::OsRng,
     );
 
-    for account_uuid in wdb.get_account_ids().context("failed to list wallet accounts")? {
-        let Some(account) = wdb.get_account(account_uuid).context("failed to load account")? else {
+    for account_uuid in wdb
+        .get_account_ids()
+        .context("failed to list wallet accounts")?
+    {
+        let Some(account) = wdb
+            .get_account(account_uuid)
+            .context("failed to load account")?
+        else {
             continue;
         };
-        let Some(derivation) = account.source().key_derivation() else {
+        if let Some(derivation) = account.source().key_derivation() {
+            let idx: u32 = derivation.account_index().into();
+            if idx == account_id {
+                return Ok(account_uuid);
+            }
             continue;
-        };
-        let idx: u32 = derivation.account_index().into();
-        if idx == account_id {
-            return Ok(account_uuid);
+        }
+
+        if let Some(key_source) = account.source().key_source() {
+            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+                == Some(account_id)
+            {
+                return Ok(account_uuid);
+            }
         }
     }
 
@@ -1173,8 +1225,12 @@ fn queue_broadcast<C: Clock>(
     last_error: Option<String>,
 ) -> anyhow::Result<()> {
     let queue_dir = queued_broadcasts_dir(wallet_dir);
-    std::fs::create_dir_all(&queue_dir)
-        .with_context(|| format!("failed to create queued broadcasts dir: {}", queue_dir.display()))?;
+    std::fs::create_dir_all(&queue_dir).with_context(|| {
+        format!(
+            "failed to create queued broadcasts dir: {}",
+            queue_dir.display()
+        )
+    })?;
 
     let mut nonce = [0u8; 24];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
@@ -1206,13 +1262,21 @@ fn queue_broadcast<C: Clock>(
         created_at_ms: to_unix_ms(clock.now())?,
         last_error,
     };
-    std::fs::write(&meta_path, serde_json::to_vec_pretty(&meta)?)
-        .with_context(|| format!("failed to write queued tx metadata: {}", meta_path.display()))?;
+    std::fs::write(&meta_path, serde_json::to_vec_pretty(&meta)?).with_context(|| {
+        format!(
+            "failed to write queued tx metadata: {}",
+            meta_path.display()
+        )
+    })?;
 
     Ok(())
 }
 
-fn decrypt_queued_tx_bytes(wallet_id: Uuid, wallet_dek: &Dek, bin_path: &Path) -> anyhow::Result<Vec<u8>> {
+fn decrypt_queued_tx_bytes(
+    wallet_id: Uuid,
+    wallet_dek: &Dek,
+    bin_path: &Path,
+) -> anyhow::Result<Vec<u8>> {
     let bytes = std::fs::read(bin_path)
         .with_context(|| format!("failed to read queued tx bytes: {}", bin_path.display()))?;
     if bytes.len() < 24 {
@@ -1268,8 +1332,12 @@ fn update_queued_broadcast_error<C: Clock>(
         created_at_ms: existing.created_at_ms,
         last_error,
     };
-    std::fs::write(&meta_path, serde_json::to_vec_pretty(&updated)?)
-        .with_context(|| format!("failed to update queued broadcast meta: {}", meta_path.display()))?;
+    std::fs::write(&meta_path, serde_json::to_vec_pretty(&updated)?).with_context(|| {
+        format!(
+            "failed to update queued broadcast meta: {}",
+            meta_path.display()
+        )
+    })?;
     Ok(())
 }
 
@@ -1292,7 +1360,8 @@ fn to_unix_ms(time: SystemTime) -> anyhow::Result<i64> {
     let dur = time
         .duration_since(UNIX_EPOCH)
         .map_err(|_| ipc_err(errors::INTERNAL_ERROR, "time went backwards"))?;
-    i64::try_from(dur.as_millis()).map_err(|_| ipc_err(errors::INTERNAL_ERROR, "timestamp overflow"))
+    i64::try_from(dur.as_millis())
+        .map_err(|_| ipc_err(errors::INTERNAL_ERROR, "timestamp overflow"))
 }
 
 fn current_chain_height(conn: &mut Connection, network: Network) -> Option<u32> {

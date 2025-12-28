@@ -26,7 +26,10 @@ impl KeyStore for TestKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+            .insert(
+                (wallet_id, network_key(network)),
+                encrypted_mnemonic.to_vec(),
+            );
         Ok(())
     }
 
@@ -173,7 +176,9 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
 
     let err = mgr
         .prepare_send(0, &recipient.encoded, "1", None, false)
-        .expect_err("send should fail (no funds / not yet scanned), but must not be BACKUP_REQUIRED");
+        .expect_err(
+            "send should fail (no funds / not yet scanned), but must not be BACKUP_REQUIRED",
+        );
 
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_ne!(ipc.code, errors::BACKUP_REQUIRED);
@@ -196,7 +201,8 @@ fn restore_wallet_returns_birthday_height_estimate() {
     let seed_phrase = created.seed_phrase.join(" ");
 
     let birthday_date_ms: i64 = 1_704_067_200_000; // 2024-01-01T00:00:00Z
-    let expected = zkore_engine::birthday::estimate_birthday_height(Network::Mainnet, birthday_date_ms);
+    let expected =
+        zkore_engine::birthday::estimate_birthday_height(Network::Mainnet, birthday_date_ms);
 
     let restored = mgr
         .restore_wallet(

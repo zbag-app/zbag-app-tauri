@@ -1,7 +1,7 @@
 pub mod account;
 pub mod address;
-pub mod balance;
 pub mod backup;
+pub mod balance;
 pub mod server;
 pub mod sync;
 pub mod transaction;
@@ -11,8 +11,8 @@ pub mod wallet_status;
 
 pub use account::*;
 pub use address::*;
-pub use balance::*;
 pub use backup::*;
+pub use balance::*;
 pub use server::*;
 pub use sync::*;
 pub use transaction::*;

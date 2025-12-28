@@ -85,4 +85,3 @@ pub enum ReauthError {
     #[error("reauth token expired")]
     Expired,
 }
-

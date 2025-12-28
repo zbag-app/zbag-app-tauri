@@ -13,25 +13,27 @@ use uuid::Uuid;
 use zeroize::Zeroize;
 
 use zkore_core::domain::{
-    AccountInfo, AccountType, AddressInfo, AddressType, Balance, BackupAction, Network,
+    AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
     PrivacyPosture, ShieldAction, SyncStatus, WalletInfo, WalletLockStatus, WalletStatus,
     WalletType,
 };
 use zkore_core::errors;
 
-use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
-use crate::db::{account_meta, backup_meta, wallet_encryption_meta, wallet_meta, AppDb};
 use crate::birthday;
+use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
+use crate::db::{AppDb, account_meta, backup_meta, wallet_encryption_meta, wallet_meta};
+use crate::encryption::{
+    Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
+};
 use crate::error::ipc_err;
-use crate::encryption::{Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek};
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
-use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
 };
-use zcash_client_backend::data_api::{Account as _, WalletRead as _};
+use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 
 pub struct WalletManager {
     app_db: AppDb,
@@ -102,8 +104,12 @@ impl WalletManager {
         Ok(wallets)
     }
 
-    pub fn load_wallet(&mut self, wallet_id: Uuid) -> anyhow::Result<(WalletInfo, WalletLockStatus)> {
-        let Some((wallet, directory_path_str)) = wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
+    pub fn load_wallet(
+        &mut self,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<(WalletInfo, WalletLockStatus)> {
+        let Some((wallet, directory_path_str)) =
+            wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
         else {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
         };
@@ -128,8 +134,9 @@ impl WalletManager {
         let mut wallet_db: Option<rusqlite::Connection> = None;
 
         if wallet.remember_unlock_enabled {
-            if let Some(mut material) =
-                self.key_store.load_keychain_unlock_material(wallet_id, wallet.network)?
+            if let Some(mut material) = self
+                .key_store
+                .load_keychain_unlock_material(wallet_id, wallet.network)?
             {
                 if material.len() == 32 {
                     let mut dek_bytes = [0u8; 32];
@@ -229,8 +236,14 @@ impl WalletManager {
         let dek = generate_dek();
         let kdf = default_kdf_params();
         let aead = default_aead_params();
-        let wrapped_dek_b64 =
-            wrap_dek(wallet.id, wallet.network, password, &kdf.salt_b64, &aead.nonce_b64, &dek)?;
+        let wrapped_dek_b64 = wrap_dek(
+            wallet.id,
+            wallet.network,
+            password,
+            &kdf.salt_b64,
+            &aead.nonce_b64,
+            &dek,
+        )?;
 
         wallet_encryption_meta::insert_wallet_encryption(
             self.app_db.conn(),
@@ -251,11 +264,11 @@ impl WalletManager {
             .context("failed to initialize encrypted wallet db")?;
 
         {
-            use zcash_client_backend::data_api::{AccountBirthday, WalletWrite as _};
             use zcash_client_backend::data_api::chain::ChainState;
+            use zcash_client_backend::data_api::{AccountBirthday, WalletWrite as _};
             use zcash_primitives::block::BlockHash;
-            use zcash_protocol::consensus::Parameters as _;
             use zcash_protocol::consensus::NetworkUpgrade;
+            use zcash_protocol::consensus::Parameters as _;
 
             let params = zcash_consensus_network(network);
             let sapling_activation = params
@@ -285,8 +298,9 @@ impl WalletManager {
         }
 
         let mut mnemonic_phrase = seed_phrase.join(" ");
-        let encrypted_mnemonic = encrypt_mnemonic(wallet.id, wallet.network, &dek, mnemonic_phrase.as_bytes())
-            .context("failed to encrypt mnemonic")?;
+        let encrypted_mnemonic =
+            encrypt_mnemonic(wallet.id, wallet.network, &dek, mnemonic_phrase.as_bytes())
+                .context("failed to encrypt mnemonic")?;
         mnemonic_phrase.zeroize();
 
         self.key_store
@@ -413,8 +427,14 @@ impl WalletManager {
         let dek = generate_dek();
         let kdf = default_kdf_params();
         let aead = default_aead_params();
-        let wrapped_dek_b64 =
-            wrap_dek(wallet.id, wallet.network, password, &kdf.salt_b64, &aead.nonce_b64, &dek)?;
+        let wrapped_dek_b64 = wrap_dek(
+            wallet.id,
+            wallet.network,
+            password,
+            &kdf.salt_b64,
+            &aead.nonce_b64,
+            &dek,
+        )?;
 
         wallet_encryption_meta::insert_wallet_encryption(
             self.app_db.conn(),
@@ -435,8 +455,8 @@ impl WalletManager {
             .context("failed to initialize encrypted wallet db")?;
 
         {
-            use zcash_client_backend::data_api::{AccountBirthday, WalletWrite as _};
             use zcash_client_backend::data_api::chain::ChainState;
+            use zcash_client_backend::data_api::{AccountBirthday, WalletWrite as _};
             use zcash_primitives::block::BlockHash;
 
             let params = zcash_consensus_network(network);
@@ -466,9 +486,13 @@ impl WalletManager {
         }
 
         let mut normalized_phrase = mnemonic.words().collect::<Vec<_>>().join(" ");
-        let encrypted_mnemonic =
-            encrypt_mnemonic(wallet.id, wallet.network, &dek, normalized_phrase.as_bytes())
-                .context("failed to encrypt mnemonic")?;
+        let encrypted_mnemonic = encrypt_mnemonic(
+            wallet.id,
+            wallet.network,
+            &dek,
+            normalized_phrase.as_bytes(),
+        )
+        .context("failed to encrypt mnemonic")?;
         normalized_phrase.zeroize();
 
         self.key_store
@@ -517,13 +541,15 @@ impl WalletManager {
         password: &str,
         remember_unlock: bool,
     ) -> anyhow::Result<WalletLockStatus> {
-        let Some((wallet, directory_path_str)) = wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
+        let Some((wallet, directory_path_str)) =
+            wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
         else {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
         };
         let directory_path = PathBuf::from(directory_path_str);
 
-        let Some(meta) = wallet_encryption_meta::get_wallet_encryption(self.app_db.conn(), wallet_id)?
+        let Some(meta) =
+            wallet_encryption_meta::get_wallet_encryption(self.app_db.conn(), wallet_id)?
         else {
             return Err(ipc_err(
                 errors::INTERNAL_ERROR,
@@ -630,16 +656,23 @@ impl WalletManager {
         wallet_id: Uuid,
         reauth_token: &str,
     ) -> anyhow::Result<Vec<String>> {
-        match self
-            .reauth
-            .validate_and_consume(reauth_token, wallet_id, ReauthPurpose::ViewSeedPhrase)
-        {
+        match self.reauth.validate_and_consume(
+            reauth_token,
+            wallet_id,
+            ReauthPurpose::ViewSeedPhrase,
+        ) {
             Ok(()) => {}
             Err(crate::reauth::ReauthError::Invalid) => {
-                return Err(ipc_err(errors::REAUTH_TOKEN_INVALID, "reauth token invalid"));
+                return Err(ipc_err(
+                    errors::REAUTH_TOKEN_INVALID,
+                    "reauth token invalid",
+                ));
             }
             Err(crate::reauth::ReauthError::Expired) => {
-                return Err(ipc_err(errors::REAUTH_TOKEN_EXPIRED, "reauth token expired"));
+                return Err(ipc_err(
+                    errors::REAUTH_TOKEN_EXPIRED,
+                    "reauth token expired",
+                ));
             }
         }
 
@@ -656,17 +689,16 @@ impl WalletManager {
         token: &str,
         purpose: ReauthPurpose,
     ) -> anyhow::Result<()> {
-        match self
-            .reauth
-            .validate_and_consume(token, wallet_id, purpose)
-        {
+        match self.reauth.validate_and_consume(token, wallet_id, purpose) {
             Ok(()) => Ok(()),
-            Err(crate::reauth::ReauthError::Invalid) => {
-                Err(ipc_err(errors::REAUTH_TOKEN_INVALID, "reauth token invalid"))
-            }
-            Err(crate::reauth::ReauthError::Expired) => {
-                Err(ipc_err(errors::REAUTH_TOKEN_EXPIRED, "reauth token expired"))
-            }
+            Err(crate::reauth::ReauthError::Invalid) => Err(ipc_err(
+                errors::REAUTH_TOKEN_INVALID,
+                "reauth token invalid",
+            )),
+            Err(crate::reauth::ReauthError::Expired) => Err(ipc_err(
+                errors::REAUTH_TOKEN_EXPIRED,
+                "reauth token expired",
+            )),
         }
     }
 
@@ -682,15 +714,29 @@ impl WalletManager {
             .context("failed to decrypt mnemonic")?;
 
         let mnemonic = Mnemonic::parse_in_normalized(bip39::Language::English, phrase.trim())
-            .map_err(|e| ipc_err(errors::INTERNAL_ERROR, format!("invalid stored mnemonic: {e}")))?;
+            .map_err(|e| {
+                ipc_err(
+                    errors::INTERNAL_ERROR,
+                    format!("invalid stored mnemonic: {e}"),
+                )
+            })?;
         phrase.zeroize();
 
         let mut seed_bytes = mnemonic.to_seed_normalized("");
         let account = zip32::AccountId::try_from(account_id)
             .map_err(|_| ipc_err(errors::INVALID_REQUEST, "invalid account_id"))?;
         let params = zcash_consensus_network(wallet.network);
-        let usk = zcash_client_backend::keys::UnifiedSpendingKey::from_seed(&params, &seed_bytes, account)
-            .map_err(|e| ipc_err(errors::INTERNAL_ERROR, format!("failed to derive spending key: {e}")))?;
+        let usk = zcash_client_backend::keys::UnifiedSpendingKey::from_seed(
+            &params,
+            &seed_bytes,
+            account,
+        )
+        .map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("failed to derive spending key: {e}"),
+            )
+        })?;
         seed_bytes.zeroize();
 
         Ok(usk)
@@ -819,8 +865,8 @@ impl WalletManager {
             _ => WalletLockStatus::Locked,
         };
 
-        let backup_required = backup_meta::get_backup_required(self.app_db.conn(), wallet.id)?
-            .unwrap_or(true);
+        let backup_required =
+            backup_meta::get_backup_required(self.app_db.conn(), wallet.id)?.unwrap_or(true);
 
         let backup_status = if backup_required {
             BackupAction::Required
@@ -852,7 +898,9 @@ impl WalletManager {
             zcash_client_sqlite::util::SystemClock,
             rand::rngs::OsRng,
         );
-        let account_uuids = wdb.get_account_ids().context("failed to list wallet accounts")?;
+        let account_uuids = wdb
+            .get_account_ids()
+            .context("failed to list wallet accounts")?;
         let mut account_indices = Vec::with_capacity(account_uuids.len());
         for account_uuid in account_uuids {
             let Some(account) = wdb
@@ -861,16 +909,128 @@ impl WalletManager {
             else {
                 continue;
             };
-            let Some(derivation) = account.source().key_derivation() else {
+            if let Some(derivation) = account.source().key_derivation() {
+                let account_index: u32 = derivation.account_index().into();
+                account_indices.push(account_index);
                 continue;
-            };
+            }
 
-            let account_index: u32 = derivation.account_index().into();
-            account_indices.push(account_index);
+            if let Some(key_source) = account.source().key_source() {
+                if let Some(account_id) =
+                    crate::account_key_source::parse_account_id_from_key_source(key_source)
+                {
+                    account_indices.push(account_id);
+                }
+            }
         }
         account_indices.sort_unstable();
         account_indices.dedup();
         Ok(account_indices)
+    }
+
+    pub fn import_ufvk(
+        &mut self,
+        wallet_id: Uuid,
+        ufvk: &str,
+        name: &str,
+    ) -> anyhow::Result<AccountInfo> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(ipc_err(errors::INVALID_REQUEST, "account name required"));
+        }
+
+        let (wallet, conn) = self.require_unlocked_wallet_db(wallet_id)?;
+
+        let parsed = zkore_keystone::ufvk::parse_ufvk(ufvk)
+            .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
+
+        let expected_net = zcash_consensus_network(wallet.network).network_type();
+        if parsed.network != expected_net {
+            return Err(ipc_err(errors::INVALID_UFVK, "UFVK network mismatch"));
+        }
+
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::Account as _;
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::WalletRead as _;
+
+        let params = zcash_consensus_network(wallet.network);
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let mut used_ids = std::collections::HashSet::<u32>::new();
+        for account_uuid in wdb
+            .get_account_ids()
+            .context("failed to list wallet accounts")?
+        {
+            let Some(account) = wdb
+                .get_account(account_uuid)
+                .context("failed to load wallet account")?
+            else {
+                continue;
+            };
+
+            if let Some(derivation) = account.source().key_derivation() {
+                used_ids.insert(derivation.account_index().into());
+                continue;
+            }
+
+            if let Some(key_source) = account.source().key_source() {
+                if let Some(id) =
+                    crate::account_key_source::parse_account_id_from_key_source(key_source)
+                {
+                    used_ids.insert(id);
+                }
+            }
+        }
+
+        let next_account_id = used_ids
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+
+        use zcash_client_backend::data_api::chain::ChainState;
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::{AccountBirthday, AccountPurpose, WalletWrite as _};
+        use zcash_primitives::block::BlockHash;
+        use zcash_protocol::consensus::NetworkUpgrade;
+        use zcash_protocol::consensus::Parameters as _;
+
+        let sapling_activation = params
+            .activation_height(NetworkUpgrade::Sapling)
+            .unwrap_or(zcash_protocol::consensus::H0);
+        let birthday = AccountBirthday::from_parts(
+            ChainState::empty(sapling_activation.saturating_sub(1), BlockHash([0; 32])),
+            None,
+        );
+
+        let key_source = crate::account_key_source::key_source_for_account_id(next_account_id);
+        let _ = wdb
+            .import_account_ufvk(
+                name,
+                &parsed.ufvk,
+                &birthday,
+                AccountPurpose::ViewOnly,
+                Some(&key_source),
+            )
+            .context("failed to import UFVK into wallet db")?;
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let account = AccountInfo {
+            id: next_account_id,
+            name: name.to_string(),
+            account_type: AccountType::HardwareSigner,
+        };
+        account_meta::upsert_account(self.app_db.conn(), wallet_id, &account, now_ms)
+            .context("failed to insert account metadata")?;
+
+        Ok(account)
     }
 
     pub fn get_receive_address(
@@ -878,8 +1038,30 @@ impl WalletManager {
         account_id: u32,
         address_type: AddressType,
     ) -> anyhow::Result<AddressInfo> {
-        let (wallet, conn) = self.require_active_unlocked_wallet_db()?;
-        crate::address_service::get_receive_address(conn, wallet.network, account_id, address_type)
+        let WalletManager {
+            app_db,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        crate::address_service::get_receive_address(
+            app_db.conn(),
+            active.wallet.id,
+            conn,
+            active.wallet.network,
+            account_id,
+            address_type,
+        )
     }
 
     pub fn get_balance(&mut self, account_id: u32) -> anyhow::Result<Balance> {
@@ -1061,7 +1243,11 @@ impl WalletManager {
             let Some(active) = self.active_wallet.as_ref() else {
                 return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
             };
-            (active.wallet.id, active.wallet.network, active.wallet_dir.clone())
+            (
+                active.wallet.id,
+                active.wallet.network,
+                active.wallet_dir.clone(),
+            )
         };
 
         let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
@@ -1112,7 +1298,11 @@ impl WalletManager {
             let Some(active) = self.active_wallet.as_ref() else {
                 return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
             };
-            (active.wallet.id, active.wallet.network, active.wallet_dir.clone())
+            (
+                active.wallet.id,
+                active.wallet.network,
+                active.wallet_dir.clone(),
+            )
         };
 
         let WalletManager {
@@ -1134,7 +1324,15 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
 
-        tx_service.list_transactions(wallet_id, wallet_network, &wallet_dir, conn, account_id, limit, offset)
+        tx_service.list_transactions(
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            conn,
+            account_id,
+            limit,
+            offset,
+        )
     }
 
     pub fn key_store(&self) -> &dyn KeyStore {
@@ -1157,7 +1355,11 @@ impl WalletManager {
 
     #[cfg(debug_assertions)]
     #[doc(hidden)]
-    pub fn __set_backup_challenge_expires_at(&mut self, wallet_id: Uuid, expires_at_ms: i64) -> bool {
+    pub fn __set_backup_challenge_expires_at(
+        &mut self,
+        wallet_id: Uuid,
+        expires_at_ms: i64,
+    ) -> bool {
         let Some(state) = self.backup_challenges.get_mut(&wallet_id) else {
             return false;
         };
@@ -1204,9 +1406,11 @@ impl WalletManager {
         }
 
         let migrate_result = (|| {
-            let mut conn = self.open_sqlcipher_connection(&wallet_db_path, dek, create_if_missing)?;
+            let mut conn =
+                self.open_sqlcipher_connection(&wallet_db_path, dek, create_if_missing)?;
 
-            rusqlite::vtab::array::load_module(&conn).context("failed to load sqlite array module")?;
+            rusqlite::vtab::array::load_module(&conn)
+                .context("failed to load sqlite array module")?;
 
             let params = zcash_consensus_network(network);
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
@@ -1233,8 +1437,8 @@ impl WalletManager {
             }
             Err(err) => {
                 if existed {
-                    let restore_result =
-                        std::fs::copy(&snapshot_path, &wallet_db_path).with_context(|| {
+                    let restore_result = std::fs::copy(&snapshot_path, &wallet_db_path)
+                        .with_context(|| {
                             format!(
                                 "failed to restore pre-migration snapshot: {} -> {}",
                                 snapshot_path.display(),
@@ -1325,7 +1529,10 @@ impl WalletManager {
         })
     }
 
-    fn require_unlocked_wallet_snapshot(&self, wallet_id: Uuid) -> anyhow::Result<(WalletInfo, Dek)> {
+    fn require_unlocked_wallet_snapshot(
+        &self,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<(WalletInfo, Dek)> {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
@@ -1390,7 +1597,12 @@ impl WalletManager {
         let Some(dek) = active.dek.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
-        Ok((active.wallet.clone(), active.wallet_dir.clone(), Dek(dek.0), conn))
+        Ok((
+            active.wallet.clone(),
+            active.wallet_dir.clone(),
+            Dek(dek.0),
+            conn,
+        ))
     }
 
     fn decrypt_mnemonic(
@@ -1453,7 +1665,13 @@ fn encrypt_mnemonic(
 
     let aad = mnemonic_aad(wallet_id, network);
     let ciphertext = cipher
-        .encrypt(nonce, Payload { msg: plaintext, aad: aad.as_bytes() })
+        .encrypt(
+            nonce,
+            Payload {
+                msg: plaintext,
+                aad: aad.as_bytes(),
+            },
+        )
         .map_err(|e| anyhow::anyhow!("failed to encrypt mnemonic: {e}"))?;
 
     let mut out = Vec::with_capacity(1 + nonce_bytes.len() + ciphertext.len());
@@ -1484,6 +1702,12 @@ fn decrypt_mnemonic(
         .map_err(|e| anyhow::anyhow!("failed to init AEAD: {e}"))?;
     let aad = mnemonic_aad(wallet_id, network);
     cipher
-        .decrypt(XNonce::from_slice(nonce), Payload { msg: ciphertext, aad: aad.as_bytes() })
+        .decrypt(
+            XNonce::from_slice(nonce),
+            Payload {
+                msg: ciphertext,
+                aad: aad.as_bytes(),
+            },
+        )
         .map_err(|e| anyhow::anyhow!("failed to decrypt mnemonic: {e}"))
 }

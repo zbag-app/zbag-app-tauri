@@ -36,7 +36,10 @@ fn app_db_initial_migration_creates_schema_and_seeds_servers() {
         "wallet_encryption",
         "wallets",
     ] {
-        assert!(tables.iter().any(|t| t == required), "missing table: {required}");
+        assert!(
+            tables.iter().any(|t| t == required),
+            "missing table: {required}"
+        );
     }
 
     let server_count: i64 = conn
@@ -76,4 +79,3 @@ fn app_db_migration_is_idempotent() {
         .unwrap();
     assert_eq!(server_count, 6);
 }
-

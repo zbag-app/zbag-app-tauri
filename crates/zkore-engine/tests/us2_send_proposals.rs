@@ -29,8 +29,16 @@ impl KeyStore for TestKeyStore {
         Ok(())
     }
 
-    fn load_encrypted_mnemonic(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<Option<Vec<u8>>> {
-        let bytes = self.encrypted_mnemonics.lock().expect("mutex poisoned").clone();
+    fn load_encrypted_mnemonic(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let bytes = self
+            .encrypted_mnemonics
+            .lock()
+            .expect("mutex poisoned")
+            .clone();
         if bytes.is_empty() {
             Ok(None)
         } else {
@@ -39,7 +47,10 @@ impl KeyStore for TestKeyStore {
     }
 
     fn delete_encrypted_mnemonic(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<()> {
-        self.encrypted_mnemonics.lock().expect("mutex poisoned").clear();
+        self.encrypted_mnemonics
+            .lock()
+            .expect("mutex poisoned")
+            .clear();
         Ok(())
     }
 
@@ -52,11 +63,19 @@ impl KeyStore for TestKeyStore {
         Ok(())
     }
 
-    fn load_keychain_unlock_material(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<Option<Vec<u8>>> {
+    fn load_keychain_unlock_material(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
         Ok(None)
     }
 
-    fn delete_keychain_unlock_material(&self, _wallet_id: Uuid, _network: Network) -> anyhow::Result<()> {
+    fn delete_keychain_unlock_material(
+        &self,
+        _wallet_id: Uuid,
+        _network: Network,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -89,9 +108,12 @@ fn prepare_send_is_blocked_until_backup_complete() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
@@ -105,7 +127,8 @@ fn prepare_send_is_blocked_until_backup_complete() {
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::BACKUP_REQUIRED);
 
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("set backup required=false");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("set backup required=false");
 
     let err = mgr
         .prepare_send(0, "not-an-address", "1", None, false)
@@ -120,15 +143,19 @@ fn prepare_send_enforces_privacy_ack_and_memo_rules_for_transparent_recipients()
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)
@@ -153,15 +180,19 @@ fn prepare_send_rejects_memo_over_512_bytes() {
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
 
-    let mut mgr =
-        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(TestKeyStore::default()))
-            .expect("create wallet manager");
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
 
     let wallet = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false)
         .expect("create wallet")
         .wallet;
-    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false).expect("disable backup gate");
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
 
     let shielded = testnet_shielded_address();
 
@@ -306,7 +337,8 @@ fn queued_broadcasts_with_invalid_metadata_are_dropped() {
 
     let txid = "invalidmeta";
     std::fs::write(queue_dir.join(format!("{txid}.bin")), b"test").expect("write bin");
-    std::fs::write(queue_dir.join(format!("{txid}.json")), b"{not json").expect("write invalid json");
+    std::fs::write(queue_dir.join(format!("{txid}.json")), b"{not json")
+        .expect("write invalid json");
 
     service
         .scan_queued_broadcasts(wallet_id, &wallet_dir)

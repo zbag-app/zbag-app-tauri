@@ -1,5 +1,6 @@
 //! Wallet engine wrapping librustzcash and providing storage, encryption and business logic.
 
+pub(crate) mod account_key_source;
 pub mod address_service;
 pub mod balance;
 pub mod birthday;

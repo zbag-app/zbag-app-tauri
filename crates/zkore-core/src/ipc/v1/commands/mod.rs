@@ -1,6 +1,6 @@
 pub mod address;
-pub mod balance;
 pub mod backup;
+pub mod balance;
 pub mod keystone;
 pub mod logs;
 pub mod server;

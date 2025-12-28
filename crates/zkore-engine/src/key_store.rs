@@ -37,4 +37,3 @@ pub trait KeyStore: Send + Sync {
         network: Network,
     ) -> anyhow::Result<()>;
 }
-

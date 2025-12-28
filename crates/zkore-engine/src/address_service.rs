@@ -1,10 +1,13 @@
 use anyhow::Context as _;
 use rusqlite::Connection;
+use uuid::Uuid;
 use zcash_protocol::consensus::Parameters as _;
+use zip32::DiversifierIndex;
 
 use zkore_core::domain::{AddressInfo, AddressType, Network};
 use zkore_core::errors;
 
+use crate::db::rotation_meta;
 use crate::error::ipc_err;
 
 #[allow(deprecated)]
@@ -14,14 +17,16 @@ use zcash_client_backend::{
 };
 
 pub fn get_receive_address(
-    conn: &mut Connection,
+    app_conn: &Connection,
+    wallet_id: Uuid,
+    wallet_conn: &mut Connection,
     network: Network,
     account_id: u32,
     address_type: AddressType,
 ) -> anyhow::Result<AddressInfo> {
     let params = zcash_consensus_network(network);
     let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
-        conn,
+        wallet_conn,
         params,
         zcash_client_sqlite::util::SystemClock,
         rand::rngs::OsRng,
@@ -39,49 +44,63 @@ pub fn get_receive_address(
             )
             .expect("valid receiver requirements");
 
-            if let Ok(addresses) = wdb.list_addresses(account) {
-                let mut best: Option<(&zcash_client_backend::address::UnifiedAddress, u128)> = None;
-                for info in addresses.iter() {
-                    let ua = match info.address() {
-                        zcash_client_backend::address::Address::Unified(ua) => ua,
-                        _ => continue,
-                    };
+            let addresses = wdb
+                .list_addresses(account)
+                .context("failed to list wallet addresses")?;
+            let mut max_existing: Option<u64> = None;
+            for info in &addresses {
+                let AddressSource::Derived {
+                    diversifier_index, ..
+                } = info.source();
+                let di_u128 = u128::from(diversifier_index);
+                let di_u64 = u64::try_from(di_u128).map_err(|_| {
+                    ipc_err(errors::INTERNAL_ERROR, "diversifier index out of range")
+                })?;
+                max_existing = Some(max_existing.map_or(di_u64, |best| best.max(di_u64)));
+            }
 
-                    if ua.transparent().is_some() {
-                        continue;
-                    }
+            let stored_next =
+                rotation_meta::get_next_diversifier_index(app_conn, wallet_id, account_id)
+                    .context("failed to load receive rotation state")?;
 
-                    let di = match info.source() {
-                        AddressSource::Derived { diversifier_index, .. } => u128::from(diversifier_index),
-                    };
+            let min_next = max_existing.map(|di| di.saturating_add(1)).unwrap_or(0);
+            let mut next_di = stored_next.unwrap_or(min_next);
+            if next_di < min_next {
+                next_di = min_next;
+            }
 
-                    match best {
-                        Some((_, best_di)) if di <= best_di => {}
-                        _ => best = Some((ua, di)),
-                    }
-                }
+            let mut candidate = next_di;
+            for _ in 0..1_000 {
+                let maybe = wdb
+                    .get_address_for_index(account, DiversifierIndex::from(candidate), request)
+                    .context("failed to derive receive address")?;
+                if let Some(ua) = maybe {
+                    let now_ms = chrono::Utc::now().timestamp_millis();
+                    rotation_meta::set_next_diversifier_index(
+                        app_conn,
+                        wallet_id,
+                        account_id,
+                        candidate.saturating_add(1),
+                        now_ms,
+                    )
+                    .context("failed to update receive rotation state")?;
 
-                if let Some((ua, di)) = best {
                     return Ok(AddressInfo {
                         encoded: ua.encode(&params),
                         address_type,
-                        diversifier_index: di.to_string(),
+                        diversifier_index: candidate.to_string(),
                     });
                 }
+
+                candidate = candidate
+                    .checked_add(1)
+                    .ok_or_else(|| ipc_err(errors::INTERNAL_ERROR, "diversifier index overflow"))?;
             }
 
-            let Some((ua, di)) = wdb
-                .get_next_available_address(account, request)
-                .context("failed to derive receive address")?
-            else {
-                return Err(ipc_err(errors::ACCOUNT_NOT_FOUND, "account not found"));
-            };
-
-            Ok(AddressInfo {
-                encoded: ua.encode(&params),
-                address_type,
-                diversifier_index: u128::from(di).to_string(),
-            })
+            Err(ipc_err(
+                errors::INTERNAL_ERROR,
+                "unable to derive receive address",
+            ))
         }
         AddressType::Transparent => {
             // v1: use a single stable transparent compatibility address per account (no rotation).
@@ -100,10 +119,9 @@ pub fn get_receive_address(
                     .context("failed to list transparent receivers")?;
             }
 
-            let Some((addr, meta)) = receivers
-                .into_iter()
-                .min_by_key(|(_addr, meta)| meta.address_index().map(|i| i.index()).unwrap_or(u32::MAX))
-            else {
+            let Some((addr, meta)) = receivers.into_iter().min_by_key(|(_addr, meta)| {
+                meta.address_index().map(|i| i.index()).unwrap_or(u32::MAX)
+            }) else {
                 return Err(ipc_err(
                     errors::INTERNAL_ERROR,
                     "no transparent receiver available",
@@ -141,13 +159,24 @@ fn find_account_uuid(
             continue;
         };
 
-        let Some(derivation) = account.source().key_derivation() else {
+        if let Some(derivation) = account.source().key_derivation() {
+            let derived_id: u32 = derivation.account_index().into();
+            if derived_id == account_id {
+                return Ok(account_uuid);
+            }
             continue;
-        };
-        let derived_id: u32 = derivation.account_index().into();
-        if derived_id == account_id {
-            return Ok(account_uuid);
         }
+
+        if let Some(key_source) = account.source().key_source() {
+            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+                == Some(account_id)
+            {
+                return Ok(account_uuid);
+            }
+        }
+
+        // Unknown account ID (not derived, not a Zkore-tagged imported account).
+        continue;
     }
 
     Err(ipc_err(errors::ACCOUNT_NOT_FOUND, "account not found"))

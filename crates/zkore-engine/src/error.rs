@@ -28,6 +28,6 @@ pub fn ipc_err(code: &'static str, message: impl Into<String>) -> anyhow::Error 
 }
 
 pub fn find_engine_ipc_error(err: &anyhow::Error) -> Option<&EngineIpcError> {
-    err.chain().find_map(|cause| cause.downcast_ref::<EngineIpcError>())
+    err.chain()
+        .find_map(|cause| cause.downcast_ref::<EngineIpcError>())
 }
-

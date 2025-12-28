@@ -29,7 +29,10 @@ impl KeyStore for TestKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+            .insert(
+                (wallet_id, network_key(network)),
+                encrypted_mnemonic.to_vec(),
+            );
         Ok(())
     }
 
@@ -172,7 +175,8 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
     );
 
     assert!(
-        mgr.unlock_wallet(wallet.id, "wrong-password", false).is_err(),
+        mgr.unlock_wallet(wallet.id, "wrong-password", false)
+            .is_err(),
         "unlock with wrong password must fail"
     );
 
@@ -291,22 +295,21 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         wallet_id
     };
 
-    let mut mgr = WalletManager::new_with_wallets_root(
-        app_db_path,
-        wallets_root,
-        Box::new(key_store),
-    )
-    .expect("create wallet manager");
+    let mut mgr =
+        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
+            .expect("create wallet manager");
 
     let (_wallet, lock_status) = mgr.load_wallet(wallet_id).expect("load wallet");
     assert_eq!(lock_status, WalletLockStatus::Unlocked);
 
     assert!(
-        mgr.reauth_wallet(wallet_id, "", ReauthPurpose::Spend).is_err(),
+        mgr.reauth_wallet(wallet_id, "", ReauthPurpose::Spend)
+            .is_err(),
         "reauth must require password input even when auto-unlocked"
     );
     assert!(
-        mgr.reauth_wallet(wallet_id, "wrong", ReauthPurpose::Spend).is_err(),
+        mgr.reauth_wallet(wallet_id, "wrong", ReauthPurpose::Spend)
+            .is_err(),
         "reauth must reject incorrect password"
     );
 

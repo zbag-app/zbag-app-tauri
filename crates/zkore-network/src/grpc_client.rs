@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use anyhow::Context as _;
-use tonic::transport::{Channel, Endpoint};
 use tonic::Code;
+use tonic::transport::{Channel, Endpoint};
 
-use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 use zcash_client_backend::proto::service::Empty;
 use zcash_client_backend::proto::service::RawTransaction;
+use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 
 /// CompactTxStreamer gRPC client wrapper.
 ///
@@ -45,9 +45,9 @@ impl GrpcClient {
 
         match client.get_mempool_stream(req).await {
             Ok(_stream) => Ok(()),
-            Err(status) if status.code() == Code::Unimplemented => {
-                Err(anyhow::anyhow!("server missing GetMempoolStream capability"))
-            }
+            Err(status) if status.code() == Code::Unimplemented => Err(anyhow::anyhow!(
+                "server missing GetMempoolStream capability"
+            )),
             Err(status) if status.code() == Code::DeadlineExceeded => Ok(()),
             Err(status) => Err(anyhow::anyhow!(status)).context("mempool probe failed"),
         }

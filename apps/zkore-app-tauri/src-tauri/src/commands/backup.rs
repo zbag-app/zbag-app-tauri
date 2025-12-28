@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use tauri::State;
 
-use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSION};
 use zkore_core::ipc::v1::commands::backup::{
-    GetBackupChallengeRequest, GetBackupChallengeResponse, VerifyBackupRequest, VerifyBackupResponse,
-    RestoreWalletRequest, RestoreWalletResponse,
+    GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
+    RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
 };
+use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 

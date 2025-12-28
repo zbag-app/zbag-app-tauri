@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSION};
 use zkore_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
+use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;

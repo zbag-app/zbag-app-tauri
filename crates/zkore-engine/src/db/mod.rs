@@ -6,6 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 pub mod account_meta;
 pub mod backup_meta;
 pub mod migrations;
+pub mod rotation_meta;
 pub mod schema;
 pub mod server_meta;
 pub mod wallet_encryption_meta;
@@ -22,7 +23,10 @@ impl AppDb {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create app metadata db parent directory: {}", parent.display())
+                format!(
+                    "failed to create app metadata db parent directory: {}",
+                    parent.display()
+                )
             })?;
         }
 

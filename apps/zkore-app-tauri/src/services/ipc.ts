@@ -81,6 +81,12 @@ export async function restoreWallet(
   return invoke(IPC.Commands.RESTORE_WALLET, { request: versioned(request) });
 }
 
+export async function importUfvk(
+  request: Omit<IPC.ImportUfvkRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ImportUfvkResponse>> {
+  return invoke(IPC.Commands.IMPORT_UFVK, { request: versioned(request) });
+}
+
 export async function startSync(
   request: Omit<IPC.StartSyncRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.StartSyncResponse>> {

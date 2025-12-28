@@ -16,6 +16,7 @@ import { Settings } from './pages/Settings';
 import { Activity } from './pages/Activity';
 import { RestoreBirthday } from './pages/RestoreBirthday';
 import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
+import { ImportKeystone } from './pages/ImportKeystone';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -192,6 +193,15 @@ function AppInner() {
           element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
         />
         <Route path="/settings" element={<Settings wallet={startup.wallet} />} />
+        <Route
+          path="/keystone/import"
+          element={
+            <ImportKeystone
+              walletId={startup.wallet.id}
+              onAccountsUpdated={(next) => setAccounts(next)}
+            />
+          }
+        />
         <Route
           path="/seed"
           element={

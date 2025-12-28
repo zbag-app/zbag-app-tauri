@@ -1,14 +1,14 @@
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tauri::State;
 
 use zkore_core::errors;
-use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSION};
 use zkore_core::ipc::v1::commands::sync::{
     GetSyncProgressRequest, GetSyncProgressResponse, StartSyncRequest, StartSyncResponse,
     StopSyncRequest, StopSyncResponse,
 };
+use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
@@ -29,13 +29,19 @@ pub fn zkore_start_sync(
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let (wallet, lock_status) = mgr.load_wallet(request.wallet_id)?;
         if lock_status != zkore_core::domain::WalletLockStatus::Unlocked {
-            return Err(zkore_engine::error::ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            return Err(zkore_engine::error::ipc_err(
+                errors::WALLET_LOCKED,
+                "wallet locked",
+            ));
         }
 
-        let wallet_db_path = zkore_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
-            .map_err(|e| anyhow::anyhow!(e))?
-            .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
-            .ok_or_else(|| zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"))?;
+        let wallet_db_path =
+            zkore_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+                .map_err(|e| anyhow::anyhow!(e))?
+                .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
+                .ok_or_else(|| {
+                    zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
+                })?;
 
         let wallet_dek = mgr.unlocked_wallet_dek(wallet.id)?;
         let account_ids = mgr.list_wallet_db_account_ids(wallet.id)?;
@@ -53,18 +59,16 @@ pub fn zkore_start_sync(
                 let _ = events::emit_balance_changed(&app, event);
             })
         };
-        state
-            .sync_service
-            .start_sync(
-                mgr.app_db(),
-                wallet.id,
-                wallet.network,
-                wallet_db_path,
-                wallet_dek,
-                account_ids,
-                Some(progress_handler),
-                Some(balance_handler),
-            )?;
+        state.sync_service.start_sync(
+            mgr.app_db(),
+            wallet.id,
+            wallet.network,
+            wallet_db_path,
+            wallet_dek,
+            account_ids,
+            Some(progress_handler),
+            Some(balance_handler),
+        )?;
 
         Ok(StartSyncResponse {
             schema_version: SCHEMA_VERSION,
@@ -88,7 +92,9 @@ pub fn zkore_stop_sync(
     });
 
     map_anyhow((|| {
-        state.sync_service.stop_sync(request.wallet_id, Some(handler))?;
+        state
+            .sync_service
+            .stop_sync(request.wallet_id, Some(handler))?;
         Ok(StopSyncResponse {
             schema_version: SCHEMA_VERSION,
             stopped: true,

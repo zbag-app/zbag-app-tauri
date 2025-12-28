@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context as _};
-use rusqlite::{params, Connection, OpenFlags};
+use anyhow::{Context as _, bail};
+use rusqlite::{Connection, OpenFlags, params};
 
 use super::schema::INITIAL_SCHEMA_V1;
 
@@ -141,7 +141,11 @@ fn seed_servers_v1(conn: &Connection) -> anyhow::Result<()> {
 
     // Mainnet non-defaults
     for (id, name, url) in [
-        ("00000000-0000-0000-0000-000000000002", "zec.rocks", "https://zec.rocks"),
+        (
+            "00000000-0000-0000-0000-000000000002",
+            "zec.rocks",
+            "https://zec.rocks",
+        ),
         (
             "00000000-0000-0000-0000-000000000003",
             "na.zec.rocks",

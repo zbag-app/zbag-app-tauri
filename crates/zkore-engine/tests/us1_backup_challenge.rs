@@ -26,7 +26,10 @@ impl KeyStore for TestKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+            .insert(
+                (wallet_id, network_key(network)),
+                encrypted_mnemonic.to_vec(),
+            );
         Ok(())
     }
 
@@ -246,7 +249,10 @@ fn backup_challenge_invalidates_after_five_failures_and_requires_new_challenge()
     let new_challenge = mgr
         .get_backup_challenge(created.wallet.id)
         .expect("issue new challenge");
-    assert_ne!(new_challenge.challenge_id, created.backup_challenge.challenge_id);
+    assert_ne!(
+        new_challenge.challenge_id,
+        created.backup_challenge.challenge_id
+    );
 
     let answers = solve_backup_challenge(&created.seed_phrase, &new_challenge.indices);
     mgr.verify_backup(created.wallet.id, &new_challenge.challenge_id, &answers)
@@ -281,12 +287,20 @@ fn expired_backup_challenge_returns_backup_challenge_expired() {
     );
 
     let err = mgr
-        .verify_backup(created.wallet.id, &created.backup_challenge.challenge_id, &HashMap::new())
+        .verify_backup(
+            created.wallet.id,
+            &created.backup_challenge.challenge_id,
+            &HashMap::new(),
+        )
         .expect_err("expired challenge must fail");
     assert_ipc_err_code(&err, errors::BACKUP_CHALLENGE_EXPIRED);
 
     let err = mgr
-        .verify_backup(created.wallet.id, &created.backup_challenge.challenge_id, &HashMap::new())
+        .verify_backup(
+            created.wallet.id,
+            &created.backup_challenge.challenge_id,
+            &HashMap::new(),
+        )
         .expect_err("expired challenge should be removed");
     assert_ipc_err_code(&err, errors::BACKUP_CHALLENGE_INVALID);
 }
@@ -310,12 +324,9 @@ fn restart_invalidates_in_memory_backup_challenges() {
             .expect("create wallet")
     };
 
-    let mut mgr = WalletManager::new_with_wallets_root(
-        app_db_path,
-        wallets_root,
-        Box::new(key_store),
-    )
-    .expect("create wallet manager (restarted)");
+    let mut mgr =
+        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
+            .expect("create wallet manager (restarted)");
 
     let err = mgr
         .verify_backup(
@@ -344,9 +355,7 @@ fn load_wallet_is_locked_then_unlocked_after_unlock_wallet() {
 
     mgr.lock_wallet(created.wallet.id).expect("lock wallet");
 
-    let (_wallet, lock_status) = mgr
-        .load_wallet(created.wallet.id)
-        .expect("load wallet");
+    let (_wallet, lock_status) = mgr.load_wallet(created.wallet.id).expect("load wallet");
     assert_eq!(lock_status, WalletLockStatus::Locked);
 
     mgr.unlock_wallet(created.wallet.id, "pw", false)
@@ -385,6 +394,8 @@ fn create_wallet_end_to_end_duration_is_under_sixty_seconds_in_release() {
         .expect("create wallet");
     let elapsed = start.elapsed();
     eprintln!("CreateWallet duration (release): {elapsed:?}");
-    assert!(elapsed.as_secs() < 60, "CreateWallet took too long: {elapsed:?}");
+    assert!(
+        elapsed.as_secs() < 60,
+        "CreateWallet took too long: {elapsed:?}"
+    );
 }
-

@@ -1,9 +1,13 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use uuid::Uuid;
 
 use zkore_core::domain::{Network, ServerInfo};
 
-pub fn insert_server(conn: &Connection, server: &ServerInfo, created_at: i64) -> rusqlite::Result<()> {
+pub fn insert_server(
+    conn: &Connection,
+    server: &ServerInfo,
+    created_at: i64,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO servers (id, name, grpc_url, network, is_default, last_success_at, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -55,7 +59,13 @@ pub fn list_servers(conn: &Connection) -> rusqlite::Result<Vec<ServerInfo>> {
             let id_str: String = row.get(0)?;
             let network: String = row.get(3)?;
             Ok(ServerInfo {
-                id: Uuid::parse_str(&id_str).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+                id: Uuid::parse_str(&id_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
                 name: row.get(1)?,
                 grpc_url: row.get(2)?,
                 network: match network.as_str() {

@@ -9,7 +9,10 @@ use zkore_engine::server_resolver::resolve_grpc_url;
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn temp_db_path() -> PathBuf {
-    std::env::temp_dir().join(format!("zkore_app_db_server_resolver_{}.sqlite", Uuid::new_v4()))
+    std::env::temp_dir().join(format!(
+        "zkore_app_db_server_resolver_{}.sqlite",
+        Uuid::new_v4()
+    ))
 }
 
 #[test]

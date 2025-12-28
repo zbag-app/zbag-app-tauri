@@ -5,13 +5,13 @@ use tauri::State;
 use tracing::warn;
 
 use zkore_core::domain::{AccountInfo, AccountType, WalletLockStatus};
-use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSION};
 use zkore_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
-    ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse, LockWalletRequest,
-    LockWalletResponse, ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest,
-    UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
+    ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
+    LockWalletRequest, LockWalletResponse, ReauthWalletRequest, ReauthWalletResponse,
+    UnlockWalletRequest, UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
+use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
@@ -89,7 +89,11 @@ pub fn zkore_unlock_wallet(
 
     map_anyhow((|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let status = mgr.unlock_wallet(request.wallet_id, &request.password, request.remember_unlock)?;
+        let status = mgr.unlock_wallet(
+            request.wallet_id,
+            &request.password,
+            request.remember_unlock,
+        )?;
         Ok(UnlockWalletResponse {
             schema_version: SCHEMA_VERSION,
             unlocked: status == WalletLockStatus::Unlocked,
@@ -260,7 +264,10 @@ mod tests {
             self.encrypted_mnemonics
                 .lock()
                 .expect("mutex poisoned")
-                .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+                .insert(
+                    (wallet_id, network_key(network)),
+                    encrypted_mnemonic.to_vec(),
+                );
             Ok(())
         }
 
@@ -348,12 +355,9 @@ mod tests {
         let wallets_root = root.join("wallets");
 
         let key_store = TestKeyStore::default();
-        let mut mgr = WalletManager::new_with_wallets_root(
-            app_db_path,
-            wallets_root,
-            Box::new(key_store),
-        )
-        .expect("create wallet manager");
+        let mut mgr =
+            WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
+                .expect("create wallet manager");
 
         let created = mgr
             .create_wallet("Test Wallet", Network::Testnet, "pw", false)
