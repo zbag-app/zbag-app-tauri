@@ -27,7 +27,9 @@ use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
 use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
-use zkore_core::ipc::v1::commands::transaction::{ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse};
+use zkore_core::ipc::v1::commands::transaction::{
+    ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
+};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 
 pub struct WalletManager {
@@ -796,6 +798,63 @@ impl WalletManager {
 
     pub fn cancel_send(&mut self, proposal_id: &str) -> bool {
         self.tx_service.cancel_send(proposal_id)
+    }
+
+    pub fn shield_funds(
+        &mut self,
+        account_id: u32,
+        consolidate: bool,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<ShieldFundsResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        let wallet_id = active.wallet.id;
+        let wallet_network = active.wallet.network;
+        let wallet_dir = active.wallet_dir.clone();
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let spending_key = self.derive_unified_spending_key(wallet_id, account_id)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.shield_funds(
+            app_db,
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            &wallet_dek,
+            conn,
+            &grpc_url,
+            account_id,
+            consolidate,
+            spending_key,
+            on_tx_changed,
+        )
     }
 
     pub fn retry_broadcast(

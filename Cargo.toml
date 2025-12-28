@@ -23,6 +23,7 @@ zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-in
 zcash_primitives = { version = "0.26" }
 zcash_proofs = { version = "0.26", features = ["bundled-prover"], default-features = false }
 zcash_protocol = { version = "0.7" }
+zcash_transparent = "0.6.3"
 
 # Modules relocated from zcash_primitives in 0.20+
 zip32 = "0.2"

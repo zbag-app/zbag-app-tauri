@@ -34,3 +34,4 @@ zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true
 zcash_primitives.workspace = true
 zcash_protocol.workspace = true
+zcash_transparent.workspace = true

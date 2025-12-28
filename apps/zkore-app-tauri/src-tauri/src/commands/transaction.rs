@@ -6,7 +6,7 @@ use zkore_core::ipc::v1::common::{ensure_schema_version, IpcResult, SCHEMA_VERSI
 use zkore_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
-    RetryBroadcastRequest, RetryBroadcastResponse,
+    RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
 
 use crate::events;
@@ -112,3 +112,27 @@ pub fn zkore_list_transactions(
     })())
 }
 
+#[tauri::command(rename = "zkore_shield_funds")]
+pub fn zkore_shield_funds(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: ShieldFundsRequest,
+) -> IpcResult<ShieldFundsResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_transaction_changed(&app, event);
+    });
+
+    map_anyhow((|| {
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        mgr.shield_funds(
+            request.account_id,
+            request.consolidate,
+            &request.reauth_token,
+            Some(handler),
+        )
+    })())
+}

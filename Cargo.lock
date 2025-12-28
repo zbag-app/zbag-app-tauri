@@ -10720,6 +10720,7 @@ dependencies = [
  "zcash_primitives",
  "zcash_proofs",
  "zcash_protocol",
+ "zcash_transparent",
  "zeroize",
  "zip32",
  "zkore-core",

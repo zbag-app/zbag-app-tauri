@@ -33,6 +33,7 @@ fn main() {
             zkore_app_tauri_lib::commands::transaction::zkore_confirm_send,
             zkore_app_tauri_lib::commands::transaction::zkore_cancel_send,
             zkore_app_tauri_lib::commands::transaction::zkore_retry_broadcast,
+            zkore_app_tauri_lib::commands::transaction::zkore_shield_funds,
             // Backup
             zkore_app_tauri_lib::commands::backup::zkore_get_backup_challenge,
             zkore_app_tauri_lib::commands::backup::zkore_verify_backup,

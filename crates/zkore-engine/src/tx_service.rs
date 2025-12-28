@@ -1,6 +1,6 @@
 //! Transaction proposal creation, signing, and broadcast (US2+).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -17,7 +17,8 @@ use zkore_core::domain::{Network, RecipientKind, TransactionInfo, TransactionSta
 use zkore_core::errors;
 use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::commands::transaction::{
-    ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, TransactionSummary,
+    ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
+    TransactionSummary,
 };
 use zkore_core::ipc::v1::events::TransactionChangedEvent;
 
@@ -28,6 +29,7 @@ use crate::reauth::Clock;
 
 const PROPOSAL_TTL: Duration = Duration::from_secs(5 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+const MAX_SHIELDING_INPUTS_PER_TX: usize = 200;
 
 pub type TxEventHandler = Arc<dyn Fn(TransactionChangedEvent) + Send + Sync>;
 
@@ -176,6 +178,28 @@ impl<C: Clock> TxService<C> {
             })
             .transpose()?;
 
+        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id)
+            .unwrap_or(zkore_core::domain::Balance {
+                shielded_spendable: "0".to_string(),
+                shielded_pending: "0".to_string(),
+                transparent_total: "0".to_string(),
+                total: "0".to_string(),
+            });
+        let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
+        let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
+        let spendable_if_transparent = shielded_spendable.saturating_add(transparent_total);
+        let amount_u64 = u64::from(amount);
+
+        if shielded_spendable < amount_u64
+            && transparent_total > 0
+            && spendable_if_transparent >= amount_u64
+        {
+            return Err(ipc_err(
+                errors::TRANSPARENT_SPEND_BLOCKED,
+                "shielded funds are insufficient; shield transparent funds first",
+            ));
+        }
+
         let params = zcash_consensus_network(network);
         let account_uuid = resolve_wallet_account_uuid(wallet_db_conn, network, account_id)
             .context("failed to resolve wallet account")?;
@@ -216,19 +240,12 @@ impl<C: Clock> TxService<C> {
                 let err_str = err.to_string();
                 if err_str.contains("Insufficient balance") || err_str.contains("Insufficient funds")
                 {
-                    let balance = crate::balance::get_balance(wallet_db_conn, network, account_id)
-                        .unwrap_or(zkore_core::domain::Balance {
-                            shielded_spendable: "0".to_string(),
-                            shielded_pending: "0".to_string(),
-                            transparent_total: "0".to_string(),
-                            total: "0".to_string(),
-                        });
-                    let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
-                    let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
-                    let total = balance.total.parse::<u64>().unwrap_or(0);
-                    let amount_u64 = u64::from(amount);
-
-                    if shielded_spendable < amount_u64 && total >= amount_u64 && transparent_total > 0 {
+                    let spendable_if_transparent =
+                        shielded_spendable.saturating_add(transparent_total);
+                    if shielded_spendable < amount_u64
+                        && transparent_total > 0
+                        && spendable_if_transparent >= amount_u64
+                    {
                         return Err(ipc_err(
                             errors::TRANSPARENT_SPEND_BLOCKED,
                             "shielded funds are insufficient; shield transparent funds first",
@@ -455,6 +472,317 @@ impl<C: Clock> TxService<C> {
         })
     }
 
+    pub fn shield_funds(
+        &mut self,
+        app_db: &AppDb,
+        wallet_id: Uuid,
+        network: Network,
+        wallet_dir: &Path,
+        wallet_dek: &Dek,
+        wallet_db_conn: &mut Connection,
+        grpc_url: &str,
+        account_id: u32,
+        consolidate: bool,
+        spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<ShieldFundsResponse> {
+        ensure_spend_allowed(app_db, wallet_id, account_id)?;
+        let _ = consolidate;
+
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::{InputSource as _, WalletRead as _};
+        use zcash_client_backend::fees::ChangeStrategy as _;
+        use zcash_primitives::transaction::fees::transparent as transparent_fees;
+
+        let account_uuid = resolve_wallet_account_uuid(wallet_db_conn, network, account_id)
+            .context("failed to resolve wallet account")?;
+
+        let params = zcash_consensus_network(network);
+
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut *wallet_db_conn,
+            params.clone(),
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let receivers = wdb
+            .get_transparent_receivers(account_uuid, false, false)
+            .context("failed to list transparent receivers")?;
+        let from_addrs: Vec<_> = receivers.into_iter().map(|(addr, _meta)| addr).collect();
+
+        let chain_tip_height = wdb
+            .chain_height()
+            .context("failed to read chain height")?
+            .ok_or_else(|| ipc_err(errors::TRANSACTION_FAILED, "must scan blocks first"))?;
+        let target_height: zcash_client_backend::data_api::wallet::TargetHeight =
+            (chain_tip_height + 1).into();
+        let confirmations_policy =
+            zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default();
+
+        let mut transparent_inputs = Vec::new();
+        for addr in from_addrs.iter() {
+            let outputs = wdb
+                .get_spendable_transparent_outputs(addr, target_height, confirmations_policy)
+                .context("failed to list transparent outputs")?;
+            transparent_inputs.extend(outputs.into_iter().map(|u| u.into_wallet_output()));
+        }
+
+        if transparent_inputs.is_empty() {
+            return Err(ipc_err(
+                errors::INSUFFICIENT_FUNDS,
+                "no transparent funds to shield",
+            ));
+        }
+
+        let fee_rule = zcash_client_backend::fees::StandardFeeRule::Zip317;
+        let change_strategy = zcash_client_backend::fees::standard::SingleOutputChangeStrategy::new(
+            fee_rule,
+            None,
+            zcash_protocol::ShieldedProtocol::Orchard,
+            zcash_client_backend::fees::DustOutputPolicy::default(),
+        );
+
+        let spending_keys =
+            zcash_client_backend::data_api::wallet::SpendingKeys::from_unified_spending_key(
+                spending_key,
+            );
+        let prover = zcash_proofs::prover::LocalTxProver::bundled();
+
+        let batches: Vec<Vec<_>> = transparent_inputs
+            .chunks(MAX_SHIELDING_INPUTS_PER_TX)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        let mut primary_txid: Option<String> = None;
+        let mut primary_fee: Option<u64> = None;
+
+        for batch in batches {
+            if batch.is_empty() {
+                continue;
+            }
+
+            let mut input_selection = batch;
+            let wallet_meta = change_strategy
+                .fetch_wallet_meta(&wdb, account_uuid, target_height, &[])
+                .context("failed to load wallet metadata for shielding")?;
+
+            let balance = loop {
+                #[derive(Debug)]
+                struct Zip317P2pkhTransparentInput<'a> {
+                    utxo: &'a zcash_client_backend::wallet::WalletTransparentOutput,
+                }
+
+                impl transparent_fees::InputView for Zip317P2pkhTransparentInput<'_> {
+                    fn outpoint(&self) -> &zcash_transparent::bundle::OutPoint {
+                        self.utxo.outpoint()
+                    }
+
+                    fn coin(&self) -> &zcash_transparent::bundle::TxOut {
+                        self.utxo.txout()
+                    }
+
+                    fn serialized_size(&self) -> transparent_fees::InputSize {
+                        match self.utxo.recipient_address() {
+                            zcash_transparent::address::TransparentAddress::PublicKeyHash(_) => {
+                                transparent_fees::InputSize::Known(149)
+                            }
+                            _ => transparent_fees::InputSize::Unknown(self.utxo.outpoint().clone()),
+                        }
+                    }
+                }
+
+                let input_views: Vec<_> = input_selection
+                    .iter()
+                    .map(|utxo| Zip317P2pkhTransparentInput { utxo })
+                    .collect();
+
+                match change_strategy.compute_balance::<_, std::convert::Infallible>(
+                    &params,
+                    target_height,
+                    &input_views,
+                    &[] as &[zcash_transparent::bundle::TxOut],
+                    &zcash_client_backend::fees::sapling::EmptyBundleView,
+                    &zcash_client_backend::fees::orchard::EmptyBundleView,
+                    None,
+                    &wallet_meta,
+                ) {
+                    Ok(balance) => break Some(balance),
+                    Err(zcash_client_backend::fees::ChangeError::DustInputs { transparent, .. }) => {
+                        let exclusions: BTreeSet<zcash_transparent::bundle::OutPoint> =
+                            transparent.into_iter().collect();
+                        input_selection.retain(|i| !exclusions.contains(i.outpoint()));
+                        if input_selection.is_empty() {
+                            break None;
+                        }
+                    }
+                    Err(zcash_client_backend::fees::ChangeError::InsufficientFunds {
+                        available,
+                        required,
+                    }) => {
+                        let required_u64 = u64::from(required);
+                        let details = serde_json::json!({
+                            "required_minimum_zatoshis": required_u64.to_string(),
+                            "available_zatoshis": u64::from(available).to_string(),
+                            "estimated_fee_zatoshis": required_u64.to_string(),
+                        });
+                        return Err(anyhow::anyhow!(
+                            crate::error::EngineIpcError::new(
+                                errors::INSUFFICIENT_FUNDS,
+                                "insufficient transparent balance to cover shielding fee",
+                            )
+                            .with_details(details)
+                        ));
+                    }
+                    Err(other) => {
+                        return Err(ipc_err(
+                            errors::TRANSACTION_FAILED,
+                            format!("failed to compute shielding balance: {other}"),
+                        ));
+                    }
+                }
+            };
+
+            if input_selection.is_empty() {
+                continue;
+            }
+            let Some(balance) = balance else {
+                continue;
+            };
+
+            let input_total: u64 = input_selection
+                .iter()
+                .map(|i| u64::from(i.value()))
+                .fold(0u64, |acc, v| acc.saturating_add(v));
+            let fee_u64: u64 = u64::from(balance.fee_required());
+
+            let proposal = zcash_client_backend::proposal::Proposal::<
+                zcash_client_backend::fees::StandardFeeRule,
+                std::convert::Infallible,
+            >::single_step(
+                zcash_client_backend::zip321::TransactionRequest::empty(),
+                BTreeMap::new(),
+                input_selection,
+                None,
+                balance,
+                fee_rule,
+                target_height,
+                true,
+            )
+            .map_err(|e| ipc_err(errors::TRANSACTION_FAILED, format!("invalid shielding proposal: {e}")))?;
+
+            let txids = zcash_client_backend::data_api::wallet::create_proposed_transactions::<
+                _,
+                _,
+                std::convert::Infallible,
+                _,
+                std::convert::Infallible,
+                std::convert::Infallible,
+            >(
+                &mut wdb,
+                &params,
+                &prover,
+                &prover,
+                &spending_keys,
+                zcash_client_backend::wallet::OvkPolicy::Sender,
+                &proposal,
+            )
+            .map_err(|e| {
+                ipc_err(errors::TRANSACTION_FAILED, format!("failed to build shielding tx: {e}"))
+            })?;
+
+            #[allow(deprecated)]
+            use zcash_client_backend::data_api::WalletRead as _;
+
+            for txid in txids.iter() {
+                let tx = wdb
+                    .get_transaction(*txid)
+                    .map_err(|e| {
+                        ipc_err(errors::TRANSACTION_FAILED, format!("failed to load tx: {e}"))
+                    })?
+                    .ok_or_else(|| ipc_err(errors::TRANSACTION_FAILED, "tx bytes unavailable"))?;
+
+                let mut tx_bytes = Vec::new();
+                tx.write(&mut tx_bytes).map_err(|e| {
+                    ipc_err(errors::TRANSACTION_FAILED, format!("failed to serialize tx: {e}"))
+                })?;
+
+                if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
+                    let err_msg = format!("{err:#}");
+                    queue_broadcast(
+                        &self.clock,
+                        wallet_id,
+                        wallet_dir,
+                        wallet_dek,
+                        txid.to_string(),
+                        &tx_bytes,
+                        Some(err_msg),
+                    )?;
+                } else {
+                    delete_queued_broadcast(wallet_dir, txid.to_string());
+                }
+
+                let txid_str = txid.to_string();
+                if primary_txid.is_none() {
+                    primary_txid = Some(txid_str.clone());
+                    primary_fee = Some(fee_u64);
+                }
+
+                self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
+
+                if let Some(handler) = on_tx_changed.as_ref() {
+                    let now_ms = chrono::Utc::now().timestamp_millis();
+                    let queued = self
+                        .queued_broadcasts
+                        .get(&wallet_id)
+                        .and_then(|m| m.get(&txid_str))
+                        .cloned();
+
+                    let (status, last_error, can_retry_broadcast) = match queued {
+                        Some(entry) => (
+                            TransactionStatus::Failed,
+                            entry.last_error.clone(),
+                            true,
+                        ),
+                        None => (TransactionStatus::Pending, None, false),
+                    };
+
+                    let shielded_value = input_total.saturating_sub(fee_u64).to_string();
+                    handler(TransactionChangedEvent {
+                        schema_version: SCHEMA_VERSION,
+                        event: "tx.changed".to_string(),
+                        transaction: TransactionInfo {
+                            txid: txid_str,
+                            account_id,
+                            tx_type: TransactionType::Shield,
+                            value: shielded_value,
+                            fee: fee_u64.to_string(),
+                            memo_present: false,
+                            memo: None,
+                            status,
+                            last_error,
+                            can_retry_broadcast,
+                            mined_height: None,
+                            created_at: now_ms,
+                            confirmed_at: None,
+                        },
+                    });
+                }
+            }
+        }
+
+        let Some(primary_txid) = primary_txid else {
+            return Err(ipc_err(errors::INSUFFICIENT_FUNDS, "no transparent funds to shield"));
+        };
+        let fee = primary_fee.unwrap_or(0).to_string();
+
+        Ok(ShieldFundsResponse {
+            schema_version: SCHEMA_VERSION,
+            txid: primary_txid,
+            fee,
+        })
+    }
+
     pub fn retry_broadcast(
         &mut self,
         app_db: &AppDb,
@@ -541,9 +869,13 @@ impl<C: Clock> TxService<C> {
     ) -> anyhow::Result<ListTransactionsResponse> {
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
 
+        let account_uuid = resolve_wallet_account_uuid(wallet_db_conn, network, account_id)
+            .context("failed to resolve wallet account")?;
+        let account_uuid_bytes = account_uuid.expose_uuid().as_bytes().to_vec();
+
         let total_count: i64 = wallet_db_conn.query_row(
-            "SELECT COUNT(*) FROM (\n             SELECT id_tx FROM v_tx_sent WHERE sent_from_account = ?1\n             UNION ALL\n             SELECT id_tx FROM v_tx_received WHERE received_by_account = ?1\n             )",
-            [account_id as i64],
+            "SELECT COUNT(*) FROM v_transactions WHERE account_uuid = ?1",
+            [account_uuid_bytes.clone()],
             |row| row.get(0),
         )?;
         let total_count = total_count.max(0) as u32;
@@ -551,32 +883,55 @@ impl<C: Clock> TxService<C> {
         let chain_height = current_chain_height(wallet_db_conn, network).unwrap_or(0);
 
         let mut stmt = wallet_db_conn.prepare(
-            "SELECT txid, mined_height, expiry_height, fee_paid, value, memo_present, tx_type, block_time\n             FROM (\n               SELECT s.txid AS txid,\n                      s.mined_height AS mined_height,\n                      s.expiry_height AS expiry_height,\n                      t.fee_paid AS fee_paid,\n                      s.sent_total AS value,\n                      s.memo_count > 0 AS memo_present,\n                      'Send' AS tx_type,\n                      s.block_time AS block_time\n               FROM v_tx_sent s\n               JOIN v_transactions t ON t.id_tx = s.id_tx\n               WHERE s.sent_from_account = ?1\n\n               UNION ALL\n\n               SELECT r.txid AS txid,\n                      r.mined_height AS mined_height,\n                      r.expiry_height AS expiry_height,\n                      t.fee_paid AS fee_paid,\n                      r.received_total AS value,\n                      r.memo_count > 0 AS memo_present,\n                      'Receive' AS tx_type,\n                      r.block_time AS block_time\n               FROM v_tx_received r\n               JOIN v_transactions t ON t.id_tx = r.id_tx\n               WHERE r.received_by_account = ?1\n             )\n             ORDER BY COALESCE(block_time, 0) DESC, txid DESC\n             LIMIT ?2 OFFSET ?3",
+            "SELECT txid,\n                    mined_height,\n                    expiry_height,\n                    fee_paid,\n                    total_spent,\n                    total_received,\n                    memo_count,\n                    block_time,\n                    is_shielding,\n                    sent_note_count,\n                    received_note_count\n             FROM v_transactions\n             WHERE account_uuid = ?1\n             ORDER BY COALESCE(block_time, 0) DESC, txid DESC\n             LIMIT ?2 OFFSET ?3",
         )?;
 
-        let mut rows = stmt.query(params![account_id as i64, limit as i64, offset as i64])?;
+        let mut rows = stmt.query(params![account_uuid_bytes, limit as i64, offset as i64])?;
         let mut transactions = Vec::new();
-        let mut seen: HashSet<String> = HashSet::new();
 
         while let Some(row) = rows.next()? {
-            let txid: String = row.get(0)?;
-            if !seen.insert(txid.clone()) {
-                continue;
-            }
+            let txid_bytes: Vec<u8> = row.get(0)?;
+            let txid = if txid_bytes.len() == 32 {
+                let mut buf = [0u8; 32];
+                buf.copy_from_slice(&txid_bytes);
+                zcash_protocol::TxId::from_bytes(buf).to_string()
+            } else {
+                return Err(ipc_err(errors::TRANSACTION_FAILED, "invalid txid encoding"));
+            };
             let mined_height: Option<i64> = row.get(1)?;
             let expiry_height: Option<i64> = row.get(2)?;
             let fee_paid: Option<i64> = row.get(3)?;
-            let value: i64 = row.get(4)?;
-            let memo_present: bool = row.get(5)?;
-            let tx_type_str: String = row.get(6)?;
+            let total_spent: i64 = row.get(4)?;
+            let total_received: i64 = row.get(5)?;
+            let memo_count: i64 = row.get(6)?;
             let block_time: Option<i64> = row.get(7)?;
+            let is_shielding: bool = row.get(8)?;
+            let sent_note_count: i64 = row.get(9)?;
+            let received_note_count: i64 = row.get(10)?;
 
-            let tx_type = match tx_type_str.as_str() {
-                "Send" => TransactionType::Send,
-                "Receive" => TransactionType::Receive,
-                "Shield" => TransactionType::Shield,
-                "Consolidate" => TransactionType::Consolidate,
-                _ => TransactionType::Receive,
+            let tx_type = if is_shielding {
+                TransactionType::Shield
+            } else if sent_note_count > 0 {
+                TransactionType::Send
+            } else if received_note_count > 0 {
+                TransactionType::Receive
+            } else {
+                TransactionType::Consolidate
+            };
+
+            let total_spent_u64 = u64::try_from(total_spent.max(0)).unwrap_or(0);
+            let total_received_u64 = u64::try_from(total_received.max(0)).unwrap_or(0);
+            let fee_u64 = fee_paid
+                .and_then(|f| u64::try_from(f.max(0)).ok())
+                .unwrap_or(0);
+
+            let value_u64 = match tx_type {
+                TransactionType::Send => total_spent_u64
+                    .saturating_sub(total_received_u64)
+                    .saturating_sub(fee_u64),
+                TransactionType::Shield => total_received_u64,
+                TransactionType::Receive => total_received_u64,
+                TransactionType::Consolidate => total_received_u64,
             };
 
             let mined_height_u32 = mined_height.and_then(|h| u32::try_from(h).ok());
@@ -618,9 +973,9 @@ impl<C: Clock> TxService<C> {
                 txid,
                 account_id,
                 tx_type,
-                value: value.max(0).to_string(),
-                fee: fee_paid.unwrap_or(0).max(0).to_string(),
-                memo_present,
+                value: value_u64.to_string(),
+                fee: fee_u64.to_string(),
+                memo_present: memo_count > 0,
                 memo: None,
                 status,
                 last_error,

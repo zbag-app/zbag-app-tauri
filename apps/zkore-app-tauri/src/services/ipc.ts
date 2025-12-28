@@ -122,3 +122,9 @@ export async function retryBroadcast(
 ): Promise<IPC.IpcResult<IPC.RetryBroadcastResponse>> {
   return invoke(IPC.Commands.RETRY_BROADCAST, { request: versioned(request) });
 }
+
+export async function shieldFunds(
+  request: Omit<IPC.ShieldFundsRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.ShieldFundsResponse>> {
+  return invoke(IPC.Commands.SHIELD_FUNDS, { request: versioned(request) });
+}
