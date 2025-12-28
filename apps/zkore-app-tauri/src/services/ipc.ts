@@ -87,6 +87,18 @@ export async function importUfvk(
   return invoke(IPC.Commands.IMPORT_UFVK, { request: versioned(request) });
 }
 
+export async function buildSigningRequest(
+  request: Omit<IPC.BuildSigningRequestRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.BuildSigningRequestResponse>> {
+  return invoke(IPC.Commands.BUILD_SIGNING_REQUEST, { request: versioned(request) });
+}
+
+export async function finalizeSigning(
+  request: Omit<IPC.FinalizeSigningRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.FinalizeSigningResponse>> {
+  return invoke(IPC.Commands.FINALIZE_SIGNING, { request: versioned(request) });
+}
+
 export async function startSync(
   request: Omit<IPC.StartSyncRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.StartSyncResponse>> {

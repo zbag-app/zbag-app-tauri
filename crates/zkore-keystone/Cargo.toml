@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+base64.workspace = true
+pczt.workspace = true
 zcash_client_backend.workspace = true
 zcash_protocol.workspace = true
 thiserror.workspace = true

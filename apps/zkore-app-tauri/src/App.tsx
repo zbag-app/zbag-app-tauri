@@ -17,6 +17,7 @@ import { Activity } from './pages/Activity';
 import { RestoreBirthday } from './pages/RestoreBirthday';
 import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
+import { Signing } from './pages/Signing';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -50,6 +51,10 @@ function AppInner() {
   }, [startup]);
 
   const { activeAccountId, setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
+  const activeAccount = useMemo(() => {
+    if (activeAccountId == null) return null;
+    return accounts.find((a) => a.id === activeAccountId) ?? null;
+  }, [accounts, activeAccountId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,8 +191,9 @@ function AppInner() {
           }
         />
         <Route path="/receive" element={<Receive activeAccountId={activeAccountId} />} />
-        <Route path="/send" element={<Send activeAccountId={activeAccountId} />} />
+        <Route path="/send" element={<Send activeAccount={activeAccount} />} />
         <Route path="/send/confirm" element={<SendConfirm walletId={startup.wallet.id} />} />
+        <Route path="/signing" element={<Signing walletId={startup.wallet.id} />} />
         <Route
           path="/activity"
           element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}

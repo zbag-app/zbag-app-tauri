@@ -320,7 +320,7 @@
 - [X] T124 [US6] Implement ImportUfvk Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
 - [X] T125 [P] [US6] Create apps/zkore-app-tauri/src/pages/ImportKeystone.tsx with UFVK text input and QR scan option
 - [X] T126 [US6] Add watch-only badge to account display (AccountSelector and any Home account header) in apps/zkore-app-tauri/src/pages/Home.tsx
-- [ ] T127 [US6] Implement WATCH_ONLY_CANNOT_SPEND check redirecting to signing flow in apps/zkore-app-tauri/src/pages/Send.tsx; for HardwareSigner accounts, handle PRIVACY_ACK_REQUIRED by prompting the user and retrying BuildSigningRequest with allow_transparent_recipient=true (same semantics/UX as PrepareSend)
+- [X] T127 [US6] Implement WATCH_ONLY_CANNOT_SPEND check redirecting to signing flow in apps/zkore-app-tauri/src/pages/Send.tsx; for HardwareSigner accounts, handle PRIVACY_ACK_REQUIRED by prompting the user and retrying BuildSigningRequest with allow_transparent_recipient=true (same semantics/UX as PrepareSend)
 - [X] T127a [US6] Add milestone tests: unit (crates/zkore-keystone/tests/us6_ufvk.rs), integration (tests/integration/us6_import_ufvk.rs), e2e (tests/e2e/us6_import_keystone.spec.ts) covering UFVK validation, watch-only behavior, and UI active-account switching between Software and HardwareSigner accounts
 
 **Checkpoint**: User Story 6 complete - Keystone watch-only import functional
@@ -335,20 +335,20 @@
 
 ### Implementation for User Story 7
 
-- [ ] T128 [US7] Create crates/zkore-keystone/src/pczt.rs with PCZT building helpers using pczt feature
+- [X] T128 [US7] Create crates/zkore-keystone/src/pczt.rs with PCZT building helpers using pczt feature
 - [ ] T129 [US7] Create crates/zkore-keystone/src/payload.rs with QR frame encoding using @keystonehq/animated-qr compatible format
-- [ ] T130 [US7] Implement build_signing_request() in crates/zkore-engine/src/tx_service.rs using the same recipient parsing + receiver selection + privacy downgrade rules as prepare_send(): support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); if Transparent recipient require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED; reject memos exceeding 512 bytes (UTF-8) with MEMO_TOO_LONG; before constructing the signing request enforce BACKUP_REQUIRED (if backup is required return BACKUP_REQUIRED); MUST fund from shielded notes only and return `TRANSPARENT_SPEND_BLOCKED` when only transparent funds are available; return SigningRequest with summary including recipient_kind
-- [ ] T131 [US7] Implement BuildSigningRequest Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
-- [ ] T132 [US7] Create apps/zkore-app-tauri/src/pages/Signing.tsx full-screen signing window with animated QR display
-- [ ] T133 [US7] Create apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx using @keystonehq/animated-qr
-- [ ] T134 [US7] Create apps/zkore-app-tauri/src/components/signing/QRScanner.tsx for webcam-based animated QR scanning
-- [ ] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT; enforce BACKUP_REQUIRED guard (FR-004) before broadcast and require a valid re-auth token
-- [ ] T136 [US7] Implement FinalizeSigning Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
-- [ ] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, recipient_kind, amount, fee, memo_present for confirmation (including transparent-recipient privacy warnings)
-- [ ] T138 [US7] Implement microSD fallback export in the UI in apps/zkore-app-tauri/src/pages/Signing.tsx: decode `SigningRequest.pczt_payload` (base64) to bytes and save as a `.pczt` file with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028); the backend does not write files for this path
-- [ ] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import: read `.pczt` bytes, base64-encode, and pass into `FinalizeSigningRequest.signed_payload`
-- [ ] T139a [US7] Clear sensitive UI state after signing: ensure Signing.tsx and signing components clear in-memory payloads/QR frames/file bytes after signing completes or the signing window closes
-- [ ] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
+- [X] T130 [US7] Implement build_signing_request() in crates/zkore-engine/src/tx_service.rs using the same recipient parsing + receiver selection + privacy downgrade rules as prepare_send(): support UA/Orchard/Sapling/t-addr; for UA select Orchard receiver when available (otherwise Sapling); if Transparent recipient require allow_transparent_recipient=true else return PRIVACY_ACK_REQUIRED; reject non-null memo for Transparent recipients with MEMO_NOT_ALLOWED; reject memos exceeding 512 bytes (UTF-8) with MEMO_TOO_LONG; before constructing the signing request enforce BACKUP_REQUIRED (if backup is required return BACKUP_REQUIRED); MUST fund from shielded notes only and return `TRANSPARENT_SPEND_BLOCKED` when only transparent funds are available; return SigningRequest with summary including recipient_kind
+- [X] T131 [US7] Implement BuildSigningRequest Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
+- [X] T132 [US7] Create apps/zkore-app-tauri/src/pages/Signing.tsx full-screen signing window with animated QR display
+- [X] T133 [US7] Create apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx using @keystonehq/animated-qr
+- [X] T134 [US7] Create apps/zkore-app-tauri/src/components/signing/QRScanner.tsx for webcam-based animated QR scanning
+- [X] T135 [US7] Implement finalize_signing() in crates/zkore-engine/src/tx_service.rs to complete and broadcast signed PCZT; enforce BACKUP_REQUIRED guard (FR-004) before broadcast and require a valid re-auth token
+- [X] T136 [US7] Implement FinalizeSigning Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/keystone.rs
+- [X] T137 [US7] Create apps/zkore-app-tauri/src/components/signing/SigningVerify.tsx showing recipient, recipient_kind, amount, fee, memo_present for confirmation (including transparent-recipient privacy warnings)
+- [X] T138 [US7] Implement microSD fallback export in the UI in apps/zkore-app-tauri/src/pages/Signing.tsx: decode `SigningRequest.pczt_payload` (base64) to bytes and save as a `.pczt` file with a generic filename (e.g., `transaction.pczt` or `zkore-unsigned.pczt`, never `keystone-*`) and no hardware-wallet branding/identifiers in filename or payload wrappers (FR-028); the backend does not write files for this path
+- [X] T139 [US7] Create apps/zkore-app-tauri/src/components/signing/FileImport.tsx for microSD file import: read `.pczt` bytes, base64-encode, and pass into `FinalizeSigningRequest.signed_payload`
+- [X] T139a [US7] Clear sensitive UI state after signing: ensure Signing.tsx and signing components clear in-memory payloads/QR frames/file bytes after signing completes or the signing window closes
+- [X] T140 [US7] Implement slow QR mode (3 fps) toggle in apps/zkore-app-tauri/src/components/signing/AnimatedQRDisplay.tsx
 - [ ] T141 [US7] Create apps/zkore-app-tauri/src-tauri/src/windows.rs for dedicated signing window management
 - [ ] T141a [US7] Add milestone tests: unit (crates/zkore-keystone/tests/us7_pczt.rs), integration (tests/integration/us7_signing_flow.rs), e2e (tests/e2e/us7_keystone_signing.spec.ts) covering unsigned build, signed import, broadcast, transparent recipient privacy acknowledgement (PRIVACY_ACK_REQUIRED unless allow_transparent_recipient=true), memo handling (reject MEMO_NOT_ALLOWED for transparent recipients; reject MEMO_TOO_LONG for >512-byte UTF-8 memos), SigningSummary includes recipient_kind, and spending blocked until backup verified (BACKUP_REQUIRED)
 - [ ] T141b [US7] Add malformed payload ingestion regression tests: unit `crates/zkore-keystone/tests/us7_malformed_payloads.rs` + integration `tests/integration/us7_malformed_signing_inputs.rs` covering truncated/corrupted/oversized animated-QR frame sets, invalid file imports, and malformed PCZT; assert stable error codes, no panics across IPC boundaries, and no secret leakage to logs

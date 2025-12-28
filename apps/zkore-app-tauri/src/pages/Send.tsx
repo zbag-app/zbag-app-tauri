@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as IPC from '../types/ipc';
-import { prepareSend } from '../services/ipc';
+import { buildSigningRequest, prepareSend } from '../services/ipc';
 
-export function Send(props: { activeAccountId: number | null }) {
-  const { activeAccountId } = props;
+export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
+  const { activeAccount } = props;
   const navigate = useNavigate();
 
   const [recipient, setRecipient] = useState('');
@@ -16,15 +16,15 @@ export function Send(props: { activeAccountId: number | null }) {
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = useMemo(() => {
-    if (activeAccountId == null) return false;
+    if (activeAccount == null) return false;
     if (!recipient.trim()) return false;
     if (!amount.trim()) return false;
     if (transparentRecipient && !transparentAck) return false;
     return true;
-  }, [activeAccountId, recipient, amount, transparentRecipient, transparentAck]);
+  }, [activeAccount, recipient, amount, transparentRecipient, transparentAck]);
 
   const submit = async () => {
-    if (activeAccountId == null) return;
+    if (activeAccount == null) return;
 
     setSubmitting(true);
     setError(null);
@@ -32,8 +32,51 @@ export function Send(props: { activeAccountId: number | null }) {
     const allowTransparent = transparentRecipient && transparentAck;
     const memoValue = memo.trim() ? memo : null;
 
+    const accountId = activeAccount.id;
+    const isHardwareSigner = activeAccount.account_type === 'HardwareSigner';
+
+    if (isHardwareSigner) {
+      const res = await buildSigningRequest({
+        account_id: accountId,
+        recipient,
+        amount,
+        memo: memoValue,
+        allow_transparent_recipient: allowTransparent,
+      });
+
+      setSubmitting(false);
+
+      if ('err' in res) {
+        if (res.err.code === IPC.ErrorCodes.PRIVACY_ACK_REQUIRED) {
+          setTransparentRecipient(true);
+          setMemo('');
+          setError(
+            'This recipient is transparent. Confirm the privacy acknowledgement to continue.'
+          );
+          return;
+        }
+
+        if (res.err.code === IPC.ErrorCodes.MEMO_NOT_ALLOWED) {
+          setTransparentRecipient(true);
+          setMemo('');
+          setError('Memos are not allowed for transparent recipients.');
+          return;
+        }
+
+        setError(res.err.message);
+        return;
+      }
+
+      navigate('/signing', {
+        state: {
+          signingRequest: res.ok.signing_request,
+        },
+      });
+      return;
+    }
+
     const res = await prepareSend({
-      account_id: activeAccountId,
+      account_id: accountId,
       recipient,
       amount,
       memo: memoValue,

@@ -40,6 +40,8 @@ fn main() {
             zkore_app_tauri_lib::commands::backup::zkore_restore_wallet,
             // Keystone
             zkore_app_tauri_lib::commands::keystone::zkore_import_ufvk,
+            zkore_app_tauri_lib::commands::keystone::zkore_build_signing_request,
+            zkore_app_tauri_lib::commands::keystone::zkore_finalize_signing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -17,6 +17,9 @@ use zkore_core::domain::{
     Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
 };
 use zkore_core::errors;
+use zkore_core::ipc::v1::commands::keystone::{
+    BuildSigningRequestResponse, FinalizeSigningResponse, SigningRequest, SigningSummary,
+};
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
     TransactionSummary,
@@ -327,6 +330,267 @@ impl<C: Clock> TxService<C> {
             fee: fee_str,
             summary,
             expires_at: to_unix_ms(expires_at)?,
+        })
+    }
+
+    pub fn build_signing_request(
+        &mut self,
+        app_db: &AppDb,
+        wallet_id: Uuid,
+        network: Network,
+        wallet_db_conn: &mut Connection,
+        account_id: u32,
+        recipient: &str,
+        amount_zat: &str,
+        memo: Option<&str>,
+        allow_transparent_recipient: bool,
+    ) -> anyhow::Result<BuildSigningRequestResponse> {
+        ensure_backup_complete(app_db, wallet_id)?;
+
+        let amount = parse_zatoshis(amount_zat)?;
+        if amount == zcash_protocol::value::Zatoshis::ZERO {
+            return Err(ipc_err(errors::INVALID_REQUEST, "amount must be > 0"));
+        }
+
+        let (recipient_addr, recipient_kind) = parse_recipient(network, recipient)?;
+        enforce_privacy_and_memo_rules(recipient_kind, memo, allow_transparent_recipient)?;
+
+        let memo_bytes = memo
+            .map(|m| {
+                zcash_protocol::memo::MemoBytes::from_bytes(m.as_bytes())
+                    .map_err(|_| ipc_err(errors::MEMO_TOO_LONG, "memo too long"))
+            })
+            .transpose()?;
+
+        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id).unwrap_or(
+            zkore_core::domain::Balance {
+                shielded_spendable: "0".to_string(),
+                shielded_pending: "0".to_string(),
+                transparent_total: "0".to_string(),
+                total: "0".to_string(),
+            },
+        );
+        let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
+        let shielded_pending = balance.shielded_pending.parse::<u64>().unwrap_or(0);
+        let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
+        let spendable_if_transparent = shielded_spendable.saturating_add(transparent_total);
+        let amount_u64 = u64::from(amount);
+
+        if shielded_spendable < amount_u64
+            && transparent_total > 0
+            && spendable_if_transparent >= amount_u64
+        {
+            return Err(ipc_err(
+                errors::TRANSPARENT_SPEND_BLOCKED,
+                "shielded funds are insufficient; shield transparent funds first",
+            ));
+        }
+
+        if shielded_spendable < amount_u64
+            && shielded_pending > 0
+            && shielded_spendable.saturating_add(shielded_pending) >= amount_u64
+        {
+            return Err(ipc_err(
+                errors::INSUFFICIENT_FUNDS,
+                "insufficient spendable funds (some funds are still pending sync/restore)",
+            ));
+        }
+
+        let params = zcash_consensus_network(network);
+        let account_uuid = resolve_wallet_account_uuid(wallet_db_conn, network, account_id)
+            .context("failed to resolve wallet account")?;
+
+        let fee_rule = zcash_client_backend::fees::StandardFeeRule::Zip317;
+        let confirmations_policy =
+            zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default();
+
+        let (proposal, pczt_payload) = {
+            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut *wallet_db_conn,
+                params.clone(),
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
+
+            let proposal =
+                zcash_client_backend::data_api::wallet::propose_standard_transfer_to_address::<
+                    _,
+                    _,
+                    zcash_client_sqlite::error::SqliteClientError,
+                >(
+                    &mut wdb,
+                    &params,
+                    fee_rule,
+                    account_uuid,
+                    confirmations_policy,
+                    &recipient_addr,
+                    amount,
+                    memo_bytes,
+                    None,
+                    zcash_protocol::ShieldedProtocol::Orchard,
+                )
+                .map_err(|err| {
+                    let err_str = err.to_string();
+                    if err_str.contains("Insufficient balance")
+                        || err_str.contains("Insufficient funds")
+                    {
+                        ipc_err(errors::INSUFFICIENT_FUNDS, "insufficient funds")
+                    } else {
+                        ipc_err(
+                            errors::TRANSACTION_FAILED,
+                            format!("failed to propose transaction: {err}"),
+                        )
+                    }
+                })?;
+
+            if proposal
+                .steps()
+                .iter()
+                .any(|step| !step.transparent_inputs().is_empty())
+            {
+                return Err(ipc_err(
+                    errors::TRANSPARENT_SPEND_BLOCKED,
+                    "transparent inputs are not allowed; shield funds before sending",
+                ));
+            }
+
+            let pczt = zcash_client_backend::data_api::wallet::create_pczt_from_proposal::<
+                _,
+                _,
+                std::convert::Infallible,
+                _,
+                std::convert::Infallible,
+                _,
+            >(
+                &mut wdb,
+                &params,
+                account_uuid,
+                zcash_client_backend::wallet::OvkPolicy::Sender,
+                &proposal,
+            )
+            .map_err(|e| {
+                ipc_err(
+                    errors::SIGNING_FAILED,
+                    format!("failed to create signing request: {e}"),
+                )
+            })?;
+
+            Ok::<_, anyhow::Error>((proposal, zkore_keystone::pczt::encode_pczt_base64(&pczt)))
+        }?;
+
+        let fee = proposal_total_fee(&proposal)?;
+        let fee_str = u64::from(fee).to_string();
+        let amount_str = amount_u64.to_string();
+
+        let summary = SigningSummary {
+            recipient: recipient.to_string(),
+            recipient_kind,
+            amount: amount_str,
+            fee: fee_str.clone(),
+            memo_present: memo.is_some(),
+            tx_type: TransactionType::Send,
+        };
+
+        Ok(BuildSigningRequestResponse {
+            schema_version: SCHEMA_VERSION,
+            signing_request: SigningRequest {
+                pczt_payload,
+                qr_frames: vec![],
+                summary,
+            },
+        })
+    }
+
+    pub fn finalize_signing(
+        &mut self,
+        app_db: &AppDb,
+        wallet_id: Uuid,
+        network: Network,
+        wallet_dir: &Path,
+        wallet_dek: &Dek,
+        wallet_db_conn: &mut Connection,
+        grpc_url: &str,
+        signed_payload: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<FinalizeSigningResponse> {
+        let _ = on_tx_changed;
+
+        ensure_backup_complete(app_db, wallet_id)?;
+
+        let pczt = zkore_keystone::pczt::decode_pczt_base64(signed_payload)
+            .map_err(|e| ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}")))?;
+
+        let params = zcash_consensus_network(network);
+
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut *wallet_db_conn,
+            params.clone(),
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let prover = zcash_proofs::prover::LocalTxProver::bundled();
+        let (sapling_spend_vk, sapling_output_vk) = prover.verifying_keys();
+
+        let txid =
+            zcash_client_backend::data_api::wallet::extract_and_store_transaction_from_pczt::<
+                _,
+                zcash_client_sqlite::ReceivedNoteId,
+            >(
+                &mut wdb,
+                pczt,
+                Some((&sapling_spend_vk, &sapling_output_vk)),
+                None,
+            )
+            .map_err(|e| {
+                ipc_err(
+                    errors::SIGNING_FAILED,
+                    format!("failed to finalize signing: {e}"),
+                )
+            })?;
+
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::WalletRead as _;
+
+        let tx = wdb
+            .get_transaction(txid)
+            .map_err(|e| {
+                ipc_err(
+                    errors::TRANSACTION_FAILED,
+                    format!("failed to load tx: {e}"),
+                )
+            })?
+            .ok_or_else(|| ipc_err(errors::TRANSACTION_FAILED, "tx bytes unavailable"))?;
+
+        let mut tx_bytes = Vec::new();
+        tx.write(&mut tx_bytes).map_err(|e| {
+            ipc_err(
+                errors::TRANSACTION_FAILED,
+                format!("failed to serialize tx: {e}"),
+            )
+        })?;
+
+        let txid_str = txid.to_string();
+
+        if let Err(err) = send_transaction_bytes(grpc_url, &tx_bytes) {
+            queue_broadcast(
+                &self.clock,
+                wallet_id,
+                wallet_dir,
+                wallet_dek,
+                txid_str.clone(),
+                &tx_bytes,
+                Some(format!("{err:#}")),
+            )?;
+        } else {
+            delete_queued_broadcast(wallet_dir, txid_str.clone());
+        }
+
+        self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
+
+        Ok(FinalizeSigningResponse {
+            schema_version: SCHEMA_VERSION,
+            txid: txid_str,
         })
     }
 
@@ -1070,6 +1334,15 @@ fn ensure_spend_allowed(app_db: &AppDb, wallet_id: Uuid, account_id: u32) -> any
         ));
     }
 
+    Ok(())
+}
+
+fn ensure_backup_complete(app_db: &AppDb, wallet_id: Uuid) -> anyhow::Result<()> {
+    let backup_required =
+        crate::db::backup_meta::get_backup_required(app_db.conn(), wallet_id)?.unwrap_or(true);
+    if backup_required {
+        return Err(ipc_err(errors::BACKUP_REQUIRED, "backup required"));
+    }
     Ok(())
 }
 

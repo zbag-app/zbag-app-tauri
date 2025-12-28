@@ -30,6 +30,9 @@ use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
+use zkore_core::ipc::v1::commands::keystone::{
+    BuildSigningRequestResponse, FinalizeSigningResponse,
+};
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
 };
@@ -1104,6 +1107,96 @@ impl WalletManager {
             amount_zat,
             memo,
             allow_transparent_recipient,
+        )
+    }
+
+    pub fn build_signing_request(
+        &mut self,
+        account_id: u32,
+        recipient: &str,
+        amount_zat: &str,
+        memo: Option<&str>,
+        allow_transparent_recipient: bool,
+    ) -> anyhow::Result<BuildSigningRequestResponse> {
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.build_signing_request(
+            app_db,
+            active.wallet.id,
+            active.wallet.network,
+            conn,
+            account_id,
+            recipient,
+            amount_zat,
+            memo,
+            allow_transparent_recipient,
+        )
+    }
+
+    pub fn finalize_signing(
+        &mut self,
+        signed_payload: &str,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<FinalizeSigningResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        let wallet_id = active.wallet.id;
+        let wallet_network = active.wallet.network;
+        let wallet_dir = active.wallet_dir.clone();
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.finalize_signing(
+            app_db,
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            &wallet_dek,
+            conn,
+            &grpc_url,
+            signed_payload,
+            on_tx_changed,
         )
     }
 
