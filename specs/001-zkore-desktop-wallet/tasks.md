@@ -37,7 +37,7 @@
 - [X] T008 Configure apps/zkore-app-tauri/src-tauri/Cargo.toml to reference workspace crates
 - [X] T009 [P] Create rust-toolchain.toml pinning Rust 1.92.0 with rustfmt and clippy components
 - [X] T010 [P] Create `.env.development` with `ZKORE_GRPC_URL` and `RUST_LOG` configuration (development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint; it MUST NOT override wallet network or silently override user-selected persisted server configuration in release builds)
-- [X] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, @keystonehq/keystone-sdk, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
+- [X] T011 [P] Install frontend dependencies: @keystonehq/animated-qr, buffer, ~~@keystonehq/keystone-sdk~~, qrcode.react, @tanstack/react-query, react-hotkeys-hook, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-tabs; dev dependencies: @tauri-apps/cli, @types/node, @axe-core/react
 - [X] T012 [P] Configure apps/zkore-app-tauri/src-tauri/tauri.conf.json per quickstart.md
 - [X] T013 Create tests/integration/ and tests/e2e/ directory structure
 

@@ -14,7 +14,8 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
 **Language/Version**: Rust 1.92.0 with edition 2024 (backend), TypeScript 5.x (frontend)
 **Primary Dependencies**:
 - Backend: zcash_client_backend 0.21+ (pczt, tor features), zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+ (gRPC)
-- Frontend: React 18+, @keystonehq/animated-qr, @keystonehq/keystone-sdk, bun 1.3.5+ (package manager)
+- Frontend: React 18+, @keystonehq/animated-qr, ~~@keystonehq/keystone-sdk~~, bun 1.3.5+ (package manager)
+  - Keystone QR approach: encode/decode the `zcash-pczt` UR payload directly in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps that break in the Tauri WebView
 
 > **Version Strategy**: We use caret (^) semver constraints aligned with librustzcash/Zashi. This allows security fixes while maintaining compatibility. Always commit Cargo.lock and build with `--locked` in production.
 **Storage**: Encrypted wallet DB (zcash_client_sqlite-backed) + separate SQLite app metadata DB

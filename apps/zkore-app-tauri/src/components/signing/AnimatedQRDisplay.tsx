@@ -1,7 +1,6 @@
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
-import { KeystoneZcashSDK } from '@keystonehq/keystone-sdk';
-import { Buffer } from 'buffer';
 import { useMemo, useState } from 'react';
+import { encodeZcashPcztUrCbor, ZCASH_PCZT_UR_TYPE } from './zcashPcztUr';
 
 function decodeBase64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -11,8 +10,6 @@ function decodeBase64ToBytes(base64: string): Uint8Array {
   }
   return bytes;
 }
-
-const zcashSdk = new KeystoneZcashSDK();
 
 export function AnimatedQRDisplay(props: {
   pcztPayloadBase64: string;
@@ -24,8 +21,8 @@ export function AnimatedQRDisplay(props: {
 
   const encoded = useMemo(() => {
     const pcztBytes = decodeBase64ToBytes(pcztPayloadBase64);
-    const ur = zcashSdk.generatePczt(Buffer.from(pcztBytes));
-    return { cborHex: ur.cbor.toString('hex'), type: ur.type };
+    const cbor = encodeZcashPcztUrCbor(pcztBytes);
+    return { cborHex: Buffer.from(cbor).toString('hex'), type: ZCASH_PCZT_UR_TYPE };
   }, [pcztPayloadBase64]);
 
   return (

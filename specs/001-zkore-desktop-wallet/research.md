@@ -32,13 +32,14 @@
 
 ### 2. Keystone PCZT Signing Protocol
 
-**Decision**: Use PCZT (ZIP-320) for unsigned transaction format with Keystone SDK for QR encoding
+**Decision**: Use PCZT (ZIP-320) for unsigned transaction format with ~~Keystone SDK~~ `@keystonehq/animated-qr` for QR framing + a minimal `zcash-pczt` UR CBOR codec in the UI
 
 **Rationale**:
 - PCZT is the official Zcash standard for partially signed transactions (similar to PSBT for Bitcoin)
 - Keystone firmware supports PCZT format for Zcash Orchard transactions
 - @keystonehq/animated-qr handles multi-frame QR for large payloads
-- @keystonehq/keystone-sdk provides encoding/decoding utilities
+- ~~@keystonehq/keystone-sdk provides encoding/decoding utilities~~
+- Encode/decode the `zcash-pczt` UR payload directly in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps (e.g. `events`) that break in the Tauri WebView
 
 **Alternatives Considered**:
 - Custom binary format: Rejected for interoperability concerns
@@ -51,6 +52,7 @@
 - File fallback: Export as `.pczt` binary file for microSD transfer
 - Implementation: UI exports/imports binary `.pczt` using the base64 payload fields (`SigningRequest.pczt_payload`, `FinalizeSigningRequest.signed_payload`); no dedicated IPC command required.
 - **FR-028 hygiene**: Do not include hardware-wallet branding or identifiers anywhere in exported files or QR payloads (including filenames, wrapper metadata/comments, or extra non-protocol fields).
+- Renderer note: Tauri WebViews do not provide Node globals; load minimal `Buffer` + `process.env.NODE_ENV` shims before importing QR tooling.
 
 ### 3. NEAR Intents 1Click API Integration
 
@@ -406,7 +408,8 @@ We follow the same approach as Zashi (zcash-light-client-ffi):
 - [Changes to impl Trait in Rust 2024](https://blog.rust-lang.org/2024/09/05/impl-trait-capture-rules.html)
 
 ### Infrastructure
-- [Keystone SDK documentation](https://dev.keyst.one/docs/integration-guide-basics/install-the-sdk)
+- ~~[Keystone SDK documentation](https://dev.keyst.one/docs/integration-guide-basics/install-the-sdk)~~
+- [Keystone QR tooling (`@keystonehq/animated-qr`)](https://github.com/KeystoneHQ/keystone-airgaped-base)
 - [NEAR Intents 1Click API](https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api)
 - [Tauri v2 documentation](https://v2.tauri.app)
 - [Arti (Tor implementation in Rust)](https://gitlab.torproject.org/tpo/core/arti)

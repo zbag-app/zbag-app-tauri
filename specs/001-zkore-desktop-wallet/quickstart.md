@@ -164,12 +164,16 @@ bun install
 bun add -D @tauri-apps/cli
 
 # Install additional UI dependencies
-bun add @keystonehq/animated-qr @keystonehq/keystone-sdk
+bun add @keystonehq/animated-qr buffer
 bun add qrcode.react @tanstack/react-query
 bun add @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-tabs
 bun add react-hotkeys-hook
 bun add -D @types/node @axe-core/react
 ```
+
+~~bun add @keystonehq/animated-qr @keystonehq/keystone-sdk~~
+
+**Updated approach**: use `@keystonehq/animated-qr` for multi-frame QR and a minimal `zcash-pczt` UR CBOR codec in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps in the Tauri WebView.
 
 > **Note**: We use `@tauri-apps/cli` as a dev dependency rather than `cargo install tauri-cli`. This ensures consistent CLI versions across the team and integrates with bun scripts (`bun tauri dev`, `bun tauri build`).
 

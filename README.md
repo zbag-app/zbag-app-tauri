@@ -65,7 +65,8 @@ Platform targets: macOS, Windows, Linux
 - [zcash_client_backend](https://docs.rs/zcash_client_backend) - Zcash light client with PCZT and Tor support
 - [zcash_client_sqlite](https://docs.rs/zcash_client_sqlite) - Wallet database implementation
 - [Tauri v2](https://v2.tauri.app) - Desktop application framework
-- [Keystone SDK](https://dev.keyst.one) - Hardware wallet integration
+- ~~[Keystone SDK](https://dev.keyst.one) - Hardware wallet integration~~
+- [Keystone QR tooling (`@keystonehq/animated-qr`)](https://github.com/KeystoneHQ/keystone-airgaped-base) - Multi-frame QR for PCZT signing; Zcash `zcash-pczt` UR payload is encoded/decoded in-app to stay browser-compatible
 - [NEAR Intents](https://docs.near-intents.org) - DEX functionality
 
 ## Requirements

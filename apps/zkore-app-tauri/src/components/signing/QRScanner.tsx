@@ -1,9 +1,6 @@
 import { AnimatedQRScanner, Purpose } from '@keystonehq/animated-qr';
-import { KeystoneZcashSDK, UR } from '@keystonehq/keystone-sdk';
-import { Buffer } from 'buffer';
 import { useCallback, useState } from 'react';
-
-const zcashSdk = new KeystoneZcashSDK();
+import { decodeZcashPcztUrCbor, ZCASH_PCZT_UR_TYPE } from './zcashPcztUr';
 
 export function QRScanner(props: { onScanned: (payloadBase64: string) => void }) {
   const { onScanned } = props;
@@ -13,9 +10,11 @@ export function QRScanner(props: { onScanned: (payloadBase64: string) => void })
     ({ type, cbor }: { type: string; cbor: string }) => {
       try {
         setError(null);
-        const ur = new UR(Buffer.from(cbor, 'hex'), type);
-        const pcztHex = zcashSdk.parsePczt(ur);
-        onScanned(Buffer.from(pcztHex, 'hex').toString('base64'));
+        if (type !== ZCASH_PCZT_UR_TYPE) {
+          throw new Error(`Unexpected UR type: ${type}`);
+        }
+        const pcztBytes = decodeZcashPcztUrCbor(Buffer.from(cbor, 'hex'));
+        onScanned(Buffer.from(pcztBytes).toString('base64'));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Scan failed');
       }
@@ -27,7 +26,7 @@ export function QRScanner(props: { onScanned: (payloadBase64: string) => void })
     <div style={{ display: 'grid', gap: 8, justifyItems: 'center' }}>
       <AnimatedQRScanner
         purpose={Purpose.SIGN}
-        urTypes={['zcash-pczt']}
+        urTypes={[ZCASH_PCZT_UR_TYPE]}
         handleScan={handleScan}
         handleError={(e) => setError(e)}
         options={{ width: 320 }}
@@ -36,4 +35,3 @@ export function QRScanner(props: { onScanned: (payloadBase64: string) => void })
     </div>
   );
 }
-

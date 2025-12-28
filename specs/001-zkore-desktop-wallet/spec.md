@@ -457,6 +457,7 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 
 - librustzcash ecosystem (zcash_client_backend, zcash_client_sqlite) for wallet engine
 - CompactTxStreamer gRPC protocol for light client sync
-- Keystone SDK for hardware wallet integration
+- ~~Keystone SDK for hardware wallet integration~~
+- Keystone QR tooling (`@keystonehq/animated-qr`) + minimal `zcash-pczt` UR CBOR codec in the UI for PCZT signing
 - NEAR Intents 1Click API for swap operations
 - Arti-based Tor client for anonymized networking
