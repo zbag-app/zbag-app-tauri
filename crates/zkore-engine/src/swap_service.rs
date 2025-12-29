@@ -9,7 +9,9 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use zkore_core::domain::{AccountType, Network, SwapInfo, SwapIntent, SwapQuote, SwapState, SwapType};
+use zkore_core::domain::{
+    AccountType, Network, SwapInfo, SwapIntent, SwapQuote, SwapState, SwapType,
+};
 use zkore_core::errors;
 use zkore_core::ipc::v1::commands::swap::{
     GetSwapStatusResponse, ListSwapsResponse, RequestSwapQuoteResponse, StartSwapResponse,
@@ -105,12 +107,13 @@ impl SwapService {
             output_asset: intent.output_asset.clone(),
         };
 
-        let quote_res = block_on(async { self.near.get_quote(req).await }).map_err(|e| match e {
-            zkore_network::near_intents::NearIntentsError::TorNotReady => {
-                ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
-            }
-            _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
-        })?;
+        let quote_res =
+            block_on(async { self.near.get_quote(req).await }).map_err(|e| match e {
+                zkore_network::near_intents::NearIntentsError::TorNotReady => {
+                    ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+                }
+                _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
+            })?;
 
         let quote = SwapQuote {
             input_asset: intent.input_asset.clone(),
@@ -125,18 +128,14 @@ impl SwapService {
 
         let quote_id = quote_res.quote_id;
 
-        self.state
-            .lock()
-            .expect("mutex poisoned")
-            .quotes
-            .insert(
-                quote_id.clone(),
-                QuoteRecord {
-                    wallet_id,
-                    intent,
-                    quote: quote.clone(),
-                },
-            );
+        self.state.lock().expect("mutex poisoned").quotes.insert(
+            quote_id.clone(),
+            QuoteRecord {
+                wallet_id,
+                intent,
+                quote: quote.clone(),
+            },
+        );
 
         Ok(RequestSwapQuoteResponse {
             schema_version: SCHEMA_VERSION,
@@ -534,11 +533,14 @@ impl SwapService {
                     Ok(status) => {
                         backoff = Duration::from_secs(5);
 
-                        let mapped = zkore_network::near_intents::map_remote_status_to_local_state(&status.status);
+                        let mapped = zkore_network::near_intents::map_remote_status_to_local_state(
+                            &status.status,
+                        );
                         let mut next_state = mapped;
 
                         if mapped == SwapState::Confirming {
-                            let confirmed = has_confirmed_zcash_tx(&wallet_manager, wallet_id, &swap);
+                            let confirmed =
+                                has_confirmed_zcash_tx(&wallet_manager, wallet_id, &swap);
                             if confirmed {
                                 next_state = SwapState::Completed;
                             }
@@ -569,8 +571,12 @@ impl SwapService {
                             break;
                         }
                     }
-                    Err(zkore_network::near_intents::NearIntentsError::RateLimited { retry_after }) => {
-                        backoff = retry_after.unwrap_or_else(|| backoff.saturating_mul(2)).min(Duration::from_secs(60));
+                    Err(zkore_network::near_intents::NearIntentsError::RateLimited {
+                        retry_after,
+                    }) => {
+                        backoff = retry_after
+                            .unwrap_or_else(|| backoff.saturating_mul(2))
+                            .min(Duration::from_secs(60));
                     }
                     Err(err) => {
                         backoff = backoff.saturating_mul(2).min(Duration::from_secs(60));
@@ -687,7 +693,9 @@ fn has_confirmed_zcash_tx(
         };
 
         let block_time: Option<i64> = row.get(7).ok();
-        if let Some(bt) = block_time && bt < min_block_time_s {
+        if let Some(bt) = block_time
+            && bt < min_block_time_s
+        {
             continue;
         }
 
@@ -757,9 +765,7 @@ fn parse_zatoshis(value: &str) -> Option<u64> {
         }
         let frac_str = std::str::from_utf8(&frac_buf).ok()?;
         let frac_val: u64 = frac_str.parse().ok()?;
-        whole
-            .checked_mul(100_000_000)?
-            .checked_add(frac_val)
+        whole.checked_mul(100_000_000)?.checked_add(frac_val)
     } else {
         value.parse::<u64>().ok()
     }
@@ -784,9 +790,8 @@ fn derive_ephemeral_transparent_address(
         rand::rngs::OsRng,
     );
 
-    let account_uuid =
-        crate::address_service::find_account_uuid(&mut wdb, account_id)
-            .context("account not found")?;
+    let account_uuid = crate::address_service::find_account_uuid(&mut wdb, account_id)
+        .context("account not found")?;
 
     // Force derivation of a new address index that permits a transparent receiver, then return the
     // newest transparent receiver as an "ephemeral" address for one-off flows.
@@ -798,9 +803,10 @@ fn derive_ephemeral_transparent_address(
         .get_transparent_receivers(account_uuid, false, false)
         .context("failed to list transparent receivers")?;
 
-    let Some((addr, _meta)) = receivers.into_iter().max_by_key(|(_addr, meta)| {
-        meta.address_index().map(|i| i.index()).unwrap_or(0)
-    }) else {
+    let Some((addr, _meta)) = receivers
+        .into_iter()
+        .max_by_key(|(_addr, meta)| meta.address_index().map(|i| i.index()).unwrap_or(0))
+    else {
         return Err(ipc_err(
             errors::INTERNAL_ERROR,
             "no transparent receiver available",

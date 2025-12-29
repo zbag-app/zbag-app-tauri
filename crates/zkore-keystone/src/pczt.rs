@@ -17,7 +17,8 @@ pub fn decode_pczt_base64(payload: &str) -> Result<pczt::Pczt, PcztPayloadError>
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(payload)
         .map_err(|_| PcztPayloadError::InvalidBase64)?;
-    let parsed = pczt::Pczt::parse(&bytes).map_err(|e| PcztPayloadError::InvalidPczt(format!("{e:?}")))?;
+    let parsed =
+        pczt::Pczt::parse(&bytes).map_err(|e| PcztPayloadError::InvalidPczt(format!("{e:?}")))?;
     Ok(strip_proprietary(parsed))
 }
 

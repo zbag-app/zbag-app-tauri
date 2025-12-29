@@ -59,4 +59,3 @@ pub struct SwapQuote {
     pub deadline: i64,
     pub rate: String,
 }
-

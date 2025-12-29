@@ -3,9 +3,8 @@ use rusqlite::{Connection, params};
 use zkore_core::domain::{TorState, TorStatus};
 
 pub fn get_tor_state(conn: &Connection) -> rusqlite::Result<TorState> {
-    let mut stmt = conn.prepare(
-        "SELECT enabled, status, last_error FROM tor_settings WHERE id = 1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT enabled, status, last_error FROM tor_settings WHERE id = 1")?;
     let mut rows = stmt.query([])?;
     let Some(row) = rows.next()? else {
         return Ok(TorState {
@@ -54,4 +53,3 @@ pub fn upsert_tor_state(
     )?;
     Ok(())
 }
-

@@ -15,4 +15,3 @@ pub struct TorState {
     pub status: TorStatus,
     pub last_error: Option<String>,
 }
-

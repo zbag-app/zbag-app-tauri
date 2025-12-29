@@ -31,7 +31,9 @@ fn main() -> anyhow::Result<()> {
                 i += 1;
             }
             "--mnemonic-file" => {
-                let value = args.get(i + 1).context("--mnemonic-file requires a value")?;
+                let value = args
+                    .get(i + 1)
+                    .context("--mnemonic-file requires a value")?;
                 mnemonic_file = Some(PathBuf::from(value));
                 i += 1;
             }
@@ -40,7 +42,9 @@ fn main() -> anyhow::Result<()> {
                 network = match value.as_str() {
                     "testnet" => ConsensusNetwork::TestNetwork,
                     "mainnet" => ConsensusNetwork::MainNetwork,
-                    other => anyhow::bail!("invalid --network value: {other} (expected testnet|mainnet)"),
+                    other => {
+                        anyhow::bail!("invalid --network value: {other} (expected testnet|mainnet)")
+                    }
                 };
                 i += 1;
             }
@@ -148,10 +152,7 @@ fn load_or_create_mnemonic(path: &Path, force_new: bool) -> anyhow::Result<(Stri
 fn write_secret_file(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create mnemonic directory: {}",
-                parent.display()
-            )
+            format!("failed to create mnemonic directory: {}", parent.display())
         })?;
     }
 

@@ -97,7 +97,9 @@ pub fn zkore_get_swap_status(
             })?
         };
 
-        state.swap_service.get_swap_status(wallet.id, request.swap_id)
+        state
+            .swap_service
+            .get_swap_status(wallet.id, request.swap_id)
     })
 }
 

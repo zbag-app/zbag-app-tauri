@@ -55,7 +55,9 @@ fn encode_cbor_major_len(major: u8, len: usize) -> Vec<u8> {
 }
 
 fn read_head(bytes: &[u8], offset: usize) -> Result<CborHead, ZcashPcztUrCborError> {
-    let initial = *bytes.get(offset).ok_or(ZcashPcztUrCborError::UnexpectedEnd)?;
+    let initial = *bytes
+        .get(offset)
+        .ok_or(ZcashPcztUrCborError::UnexpectedEnd)?;
     let major = initial >> 5;
     let ai = initial & 0x1f;
     let mut next = offset + 1;
@@ -82,7 +84,9 @@ fn read_head(bytes: &[u8], offset: usize) -> Result<CborHead, ZcashPcztUrCborErr
         }
         25 => {
             let b0 = *bytes.get(next).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
-            let b1 = *bytes.get(next + 1).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
+            let b1 = *bytes
+                .get(next + 1)
+                .ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
             next += 2;
             Ok(CborHead {
                 major,
@@ -93,9 +97,15 @@ fn read_head(bytes: &[u8], offset: usize) -> Result<CborHead, ZcashPcztUrCborErr
         }
         26 => {
             let b0 = *bytes.get(next).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
-            let b1 = *bytes.get(next + 1).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
-            let b2 = *bytes.get(next + 2).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
-            let b3 = *bytes.get(next + 3).ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
+            let b1 = *bytes
+                .get(next + 1)
+                .ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
+            let b2 = *bytes
+                .get(next + 2)
+                .ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
+            let b3 = *bytes
+                .get(next + 3)
+                .ok_or(ZcashPcztUrCborError::UnexpectedEnd)? as u64;
             next += 4;
             Ok(CborHead {
                 major,

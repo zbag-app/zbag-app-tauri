@@ -52,8 +52,10 @@ pub fn zkore_get_tor_state(
         return IpcResult::Err { err };
     }
 
-    map_anyhow(|| Ok(GetTorStateResponse {
-        schema_version: SCHEMA_VERSION,
-        state: state.tor_manager.state(),
-    }))
+    map_anyhow(|| {
+        Ok(GetTorStateResponse {
+            schema_version: SCHEMA_VERSION,
+            state: state.tor_manager.state(),
+        })
+    })
 }

@@ -38,7 +38,8 @@ fn pczt_encode_and_decode_strip_proprietary_fields() {
         .finish();
 
     let raw_payload = base64::engine::general_purpose::STANDARD.encode(pczt.serialize());
-    let decoded = zkore_keystone::pczt::decode_pczt_base64(&raw_payload).expect("decode should succeed");
+    let decoded =
+        zkore_keystone::pczt::decode_pczt_base64(&raw_payload).expect("decode should succeed");
     assert!(decoded.global().proprietary().is_empty());
 
     let stripped_payload = zkore_keystone::pczt::encode_pczt_base64(&pczt);

@@ -37,7 +37,10 @@ struct BufWriterGuard {
 
 impl io::Write for BufWriterGuard {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.buf.lock().expect("mutex poisoned").extend_from_slice(bytes);
+        self.buf
+            .lock()
+            .expect("mutex poisoned")
+            .extend_from_slice(bytes);
         Ok(bytes.len())
     }
 
@@ -61,7 +64,10 @@ impl KeyStore for TestKeyStore {
         self.encrypted_mnemonics
             .lock()
             .expect("mutex poisoned")
-            .insert((wallet_id, network_key(network)), encrypted_mnemonic.to_vec());
+            .insert(
+                (wallet_id, network_key(network)),
+                encrypted_mnemonic.to_vec(),
+            );
         Ok(())
     }
 
@@ -128,7 +134,9 @@ fn temp_root(prefix: &str) -> PathBuf {
 #[test]
 fn regression_no_secret_logging() {
     let buf = Arc::new(Mutex::new(Vec::new()));
-    let writer = BufMakeWriter { buf: Arc::clone(&buf) };
+    let writer = BufMakeWriter {
+        buf: Arc::clone(&buf),
+    };
     let reauth_token_seen = Arc::new(Mutex::new(String::new()));
 
     let subscriber = tracing_subscriber::fmt()
@@ -152,8 +160,12 @@ fn regression_no_secret_logging() {
         let wallets_root = root.join("wallets");
         let key_store = TestKeyStore::default();
         let wallet_manager = Arc::new(Mutex::new(
-            WalletManager::new_with_wallets_root(app_db_path.clone(), wallets_root, Box::new(key_store))
-                .expect("create wallet manager"),
+            WalletManager::new_with_wallets_root(
+                app_db_path.clone(),
+                wallets_root,
+                Box::new(key_store),
+            )
+            .expect("create wallet manager"),
         ));
 
         let wallet_id = {
@@ -200,7 +212,8 @@ fn regression_no_secret_logging() {
         }
 
         // Swap-from / quote paths should fail closed on Testnet without network calls.
-        let swap_service = SwapService::new(app_db_path, Arc::clone(&wallet_manager)).expect("swap service");
+        let swap_service =
+            SwapService::new(app_db_path, Arc::clone(&wallet_manager)).expect("swap service");
         let _ = swap_service.request_swap_quote(
             wallet_id,
             Network::Testnet,
@@ -225,15 +238,16 @@ fn regression_no_secret_logging() {
             Box::new(restore_key_store),
         )
         .expect("create restore wallet manager");
-        let _ = restore_mgr.restore_wallet(
-            "Restored wallet",
-            Network::Testnet,
-            password,
-            false,
-            restore_phrase,
-            None,
-        )
-        .expect("restore wallet should succeed");
+        let _ = restore_mgr
+            .restore_wallet(
+                "Restored wallet",
+                Network::Testnet,
+                password,
+                false,
+                restore_phrase,
+                None,
+            )
+            .expect("restore wallet should succeed");
     });
 
     let logs = String::from_utf8_lossy(&buf.lock().expect("mutex poisoned")).to_string();
@@ -257,5 +271,8 @@ fn regression_no_secret_logging() {
         "logs must not contain raw reauth token"
     );
 
-    assert!(logs.contains("[REDACTED MEMO"), "expected redacted memo marker");
+    assert!(
+        logs.contains("[REDACTED MEMO"),
+        "expected redacted memo marker"
+    );
 }

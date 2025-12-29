@@ -15,8 +15,8 @@ use zeroize::Zeroize;
 
 use zkore_core::domain::{
     AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
-    PrivacyPosture, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletInfo, WalletLockStatus,
-    WalletStatus, WalletType,
+    PrivacyPosture, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletInfo,
+    WalletLockStatus, WalletStatus, WalletType,
 };
 use zkore_core::errors;
 
@@ -37,8 +37,8 @@ use zkore_core::ipc::v1::commands::keystone::{
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
 };
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::events::WalletStatusEvent;
 
 pub struct WalletManager {
@@ -919,9 +919,12 @@ impl WalletManager {
             .cloned()
             .unwrap_or(SyncStatus::Synced);
 
-        let transparent_total_zat = self
-            .cached_transparent_total_zat(wallet_id)
-            .unwrap_or_else(|| self.transparent_total_from_wallet_db(wallet_id).unwrap_or(0));
+        let transparent_total_zat =
+            self.cached_transparent_total_zat(wallet_id)
+                .unwrap_or_else(|| {
+                    self.transparent_total_from_wallet_db(wallet_id)
+                        .unwrap_or(0)
+                });
 
         let shield_status = if transparent_total_zat > 0 {
             ShieldAction::Available {
@@ -985,7 +988,8 @@ impl WalletManager {
     }
 
     pub fn observe_balance_changed(&mut self, wallet_id: Uuid, account_id: u32, balance: Balance) {
-        self.cached_balances.insert((wallet_id, account_id), balance);
+        self.cached_balances
+            .insert((wallet_id, account_id), balance);
         self.maybe_emit_wallet_status(wallet_id);
     }
 
@@ -1023,7 +1027,9 @@ impl WalletManager {
         );
 
         let summary = wdb
-            .get_wallet_summary(zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default())
+            .get_wallet_summary(
+                zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default(),
+            )
             .context("failed to compute wallet summary")?;
 
         let Some(summary) = summary else {
@@ -1155,7 +1161,8 @@ impl WalletManager {
             }
 
             if let Some(key_source) = account.source().key_source()
-                && let Some(id) = crate::account_key_source::parse_account_id_from_key_source(key_source)
+                && let Some(id) =
+                    crate::account_key_source::parse_account_id_from_key_source(key_source)
             {
                 used_ids.insert(id);
             }

@@ -95,8 +95,8 @@ fn set_default_server_is_scoped_to_server_network() {
     )
     .expect("create wallet manager");
 
-    let before = zkore_engine::db::server_meta::list_servers(mgr.app_db().conn())
-        .expect("list servers");
+    let before =
+        zkore_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_before = before
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)
@@ -118,8 +118,8 @@ fn set_default_server_is_scoped_to_server_network() {
     zkore_engine::db::server_meta::set_default_server(mgr.app_db_mut().conn_mut(), new_testnet.id)
         .expect("set default");
 
-    let after = zkore_engine::db::server_meta::list_servers(mgr.app_db().conn())
-        .expect("list servers");
+    let after =
+        zkore_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_after = after
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)
@@ -164,4 +164,3 @@ fn server_network_mismatch_is_rejected_for_active_wallet() {
 
     mgr.lock_wallet(wallet.id).expect("lock wallet");
 }
-

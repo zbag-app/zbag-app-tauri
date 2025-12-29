@@ -46,10 +46,8 @@ impl NearIntentsClient {
     }
 
     pub async fn get_quote(&self, req: QuoteRequest) -> Result<QuoteResponse, NearIntentsError> {
-        let mut url =
-            reqwest::Url::parse(&format!("{}/v0/quote", self.base_url)).map_err(|_| {
-                NearIntentsError::InvalidResponse("invalid base url".to_string())
-            })?;
+        let mut url = reqwest::Url::parse(&format!("{}/v0/quote", self.base_url))
+            .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
 
         {
             let mut qp = url.query_pairs_mut();
@@ -77,10 +75,8 @@ impl NearIntentsClient {
         &self,
         req: DepositSubmitRequest,
     ) -> Result<DepositSubmitResponse, NearIntentsError> {
-        let url =
-            reqwest::Url::parse(&format!("{}/v0/deposit/submit", self.base_url)).map_err(|_| {
-                NearIntentsError::InvalidResponse("invalid base url".to_string())
-            })?;
+        let url = reqwest::Url::parse(&format!("{}/v0/deposit/submit", self.base_url))
+            .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
 
         let res = self
             .http
@@ -100,14 +96,9 @@ impl NearIntentsClient {
         parse_deposit_submit_response(&res.body)
     }
 
-    pub async fn get_status(
-        &self,
-        req: StatusRequest,
-    ) -> Result<StatusResponse, NearIntentsError> {
-        let mut url =
-            reqwest::Url::parse(&format!("{}/v0/status", self.base_url)).map_err(|_| {
-                NearIntentsError::InvalidResponse("invalid base url".to_string())
-            })?;
+    pub async fn get_status(&self, req: StatusRequest) -> Result<StatusResponse, NearIntentsError> {
+        let mut url = reqwest::Url::parse(&format!("{}/v0/status", self.base_url))
+            .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
 
         {
             let mut qp = url.query_pairs_mut();
@@ -264,10 +255,7 @@ fn parse_quote_response(body: &serde_json::Value) -> Result<QuoteResponse, NearI
         .unwrap_or_default()
         .to_string();
 
-    let deadline_ms = body
-        .get("deadline")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let deadline_ms = body.get("deadline").and_then(|v| v.as_i64()).unwrap_or(0);
 
     let rate = body
         .get("rate")
@@ -295,7 +283,10 @@ fn parse_deposit_submit_response(
         .to_string();
 
     Ok(DepositSubmitResponse {
-        remote_id: body.get("remote_id").and_then(|v| v.as_str()).map(str::to_string),
+        remote_id: body
+            .get("remote_id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         deposit_address,
         deposit_memo: body
             .get("deposit_memo")
@@ -325,6 +316,9 @@ fn parse_status_response(body: &serde_json::Value) -> Result<StatusResponse, Nea
 
     Ok(StatusResponse {
         status,
-        message: body.get("message").and_then(|v| v.as_str()).map(str::to_string),
+        message: body
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
     })
 }

@@ -123,7 +123,9 @@ fn spawn_mock_1click_server(
                 body.len(),
                 body
             );
-            stream.write_all(response.as_bytes()).expect("write response");
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
         }
     });
 

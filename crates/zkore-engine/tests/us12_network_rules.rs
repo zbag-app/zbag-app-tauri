@@ -100,9 +100,7 @@ fn wallet_directories_are_network_scoped_and_network_is_immutable() {
         .expect("create wallet")
         .wallet;
 
-    let expected_dir = wallets_root
-        .join("testnet")
-        .join(wallet.id.to_string());
+    let expected_dir = wallets_root.join("testnet").join(wallet.id.to_string());
     assert!(
         expected_dir.exists(),
         "expected testnet wallet dir to exist: {}",
@@ -118,7 +116,9 @@ fn wallet_directories_are_network_scoped_and_network_is_immutable() {
         )
         .expect("update network field");
 
-    let err = mgr.load_wallet(wallet.id).expect_err("network change should be rejected");
+    let err = mgr
+        .load_wallet(wallet.id)
+        .expect_err("network change should be rejected");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::INVALID_REQUEST);
 }
@@ -184,4 +184,3 @@ fn address_prefixes_match_network() {
     // Silence unused wallet variables, but keep them visible for debugging.
     let _ = mainnet;
 }
-

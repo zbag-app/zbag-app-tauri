@@ -1411,7 +1411,9 @@ fn enforce_privacy_and_memo_rules(
         }
     }
 
-    if let Some(memo) = memo && memo.len() > 512 {
+    if let Some(memo) = memo
+        && memo.len() > 512
+    {
         return Err(ipc_err(errors::MEMO_TOO_LONG, "memo too long"));
     }
 

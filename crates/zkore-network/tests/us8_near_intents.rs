@@ -20,4 +20,3 @@ fn maps_terminal_states() {
         SwapState::Failed
     );
 }
-

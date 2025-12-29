@@ -19,7 +19,8 @@ type BootstrapFuture =
 type BootstrapFn = Arc<dyn Fn(PathBuf) -> BootstrapFuture + Send + Sync>;
 
 type HealthcheckFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send>>;
-type HealthcheckFn = Arc<dyn Fn(zcash_client_backend::tor::Client) -> HealthcheckFuture + Send + Sync>;
+type HealthcheckFn =
+    Arc<dyn Fn(zcash_client_backend::tor::Client) -> HealthcheckFuture + Send + Sync>;
 
 #[derive(Clone)]
 pub struct TorManagerConfig {
@@ -140,8 +141,7 @@ impl TorManager {
     }
 
     pub fn set_enabled(&self, enabled: bool) -> Result<TorState, TorManagerError> {
-        tokio::runtime::Handle::try_current()
-            .map_err(|_| TorManagerError::MissingTokioRuntime)?;
+        tokio::runtime::Handle::try_current().map_err(|_| TorManagerError::MissingTokioRuntime)?;
 
         let (cancel_rx, should_spawn) = {
             let mut inner = self.inner.lock().expect("mutex poisoned");

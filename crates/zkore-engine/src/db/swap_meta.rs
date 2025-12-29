@@ -54,7 +54,11 @@ pub fn get_swap(conn: &Connection, swap_id: Uuid) -> rusqlite::Result<Option<(Uu
             let state: String = row.get(12)?;
 
             let wallet_id = Uuid::parse_str(&wallet_id_str).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+                rusqlite::Error::FromSqlConversionFailure(
+                    2,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
             })?;
 
             let info = SwapInfo {
@@ -89,7 +93,10 @@ pub fn get_swap(conn: &Connection, swap_id: Uuid) -> rusqlite::Result<Option<(Uu
     Ok(row)
 }
 
-pub fn list_swaps_for_wallet(conn: &Connection, wallet_id: Uuid) -> rusqlite::Result<Vec<SwapInfo>> {
+pub fn list_swaps_for_wallet(
+    conn: &Connection,
+    wallet_id: Uuid,
+) -> rusqlite::Result<Vec<SwapInfo>> {
     let mut stmt = conn.prepare(
         "SELECT
             id, remote_id, swap_type, input_asset, input_amount, output_asset, output_amount,
@@ -134,11 +141,7 @@ pub fn list_swaps_for_wallet(conn: &Connection, wallet_id: Uuid) -> rusqlite::Re
     Ok(swaps)
 }
 
-pub fn update_swap(
-    conn: &Connection,
-    wallet_id: Uuid,
-    swap: &SwapInfo,
-) -> rusqlite::Result<()> {
+pub fn update_swap(conn: &Connection, wallet_id: Uuid, swap: &SwapInfo) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE swaps SET
             remote_id = ?2,
@@ -199,4 +202,3 @@ fn parse_swap_state(value: &str) -> SwapState {
         _ => SwapState::Pending,
     }
 }
-

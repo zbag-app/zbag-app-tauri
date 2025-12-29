@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zkore_core::errors;
 use zkore_core::domain::{SyncPhase, SyncProgress};
+use zkore_core::errors;
 use zkore_core::ipc::v1::commands::sync::{
     GetSyncProgressRequest, GetSyncProgressResponse, StartSyncRequest, StartSyncResponse,
     StopSyncRequest, StopSyncResponse,
@@ -149,8 +149,10 @@ pub fn zkore_get_sync_progress(
         return IpcResult::Err { err };
     }
 
-    map_anyhow(|| Ok(GetSyncProgressResponse {
-        schema_version: SCHEMA_VERSION,
-        progress: state.sync_service.get_progress(request.wallet_id),
-    }))
+    map_anyhow(|| {
+        Ok(GetSyncProgressResponse {
+            schema_version: SCHEMA_VERSION,
+            progress: state.sync_service.get_progress(request.wallet_id),
+        })
+    })
 }

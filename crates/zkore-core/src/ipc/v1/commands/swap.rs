@@ -61,4 +61,3 @@ pub struct ListSwapsResponse {
     pub schema_version: u32,
     pub swaps: Vec<SwapInfo>,
 }
-

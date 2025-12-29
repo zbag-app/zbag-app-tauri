@@ -8,4 +8,3 @@ pub struct SwapChangedEvent {
     pub event: String,
     pub swap: SwapInfo,
 }
-

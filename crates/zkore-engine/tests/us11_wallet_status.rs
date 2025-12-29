@@ -259,14 +259,26 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
         .wallet;
 
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
-    assert_eq!(status.backup_status, zkore_core::domain::BackupAction::Required);
-    assert_eq!(status.privacy_posture, zkore_core::domain::PrivacyPosture::NeedsAction);
+    assert_eq!(
+        status.backup_status,
+        zkore_core::domain::BackupAction::Required
+    );
+    assert_eq!(
+        status.privacy_posture,
+        zkore_core::domain::PrivacyPosture::NeedsAction
+    );
 
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
         .expect("disable backup gate");
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
-    assert_eq!(status.backup_status, zkore_core::domain::BackupAction::Complete);
-    assert_eq!(status.privacy_posture, zkore_core::domain::PrivacyPosture::Optimal);
+    assert_eq!(
+        status.backup_status,
+        zkore_core::domain::BackupAction::Complete
+    );
+    assert_eq!(
+        status.privacy_posture,
+        zkore_core::domain::PrivacyPosture::Optimal
+    );
 
     let transparent = mgr
         .get_receive_address(0, AddressType::Transparent)
@@ -288,7 +300,10 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
         ShieldAction::Available { amount } => assert_eq!(amount, "10000"),
         other => panic!("expected ShieldAction::Available, got {other:?}"),
     }
-    assert_eq!(status.privacy_posture, zkore_core::domain::PrivacyPosture::NeedsAction);
+    assert_eq!(
+        status.privacy_posture,
+        zkore_core::domain::PrivacyPosture::NeedsAction
+    );
 }
 
 #[test]

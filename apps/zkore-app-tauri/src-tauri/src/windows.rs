@@ -9,11 +9,15 @@ pub fn open_signing_window(app: &AppHandle) -> Result<(), tauri::Error> {
         return Ok(());
     }
 
-    let window = WebviewWindowBuilder::new(app, SIGNING_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
-        .title("Sign Transaction")
-        .resizable(true)
-        .fullscreen(true)
-        .build()?;
+    let window = WebviewWindowBuilder::new(
+        app,
+        SIGNING_WINDOW_LABEL,
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("Sign Transaction")
+    .resizable(true)
+    .fullscreen(true)
+    .build()?;
 
     let _ = window.eval("window.location.hash = '#/signing'");
     Ok(())

@@ -1,8 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::Manager;
 use std::sync::Arc;
+use tauri::Manager;
 
 fn main() {
     let state = zkore_app_tauri_lib::state::AppState::new()
@@ -30,7 +30,8 @@ fn main() {
             let mut rx = state.tor_manager.subscribe();
 
             tauri::async_runtime::spawn(async move {
-                let _ = zkore_app_tauri_lib::events::emit_tor_status(&app_handle, rx.borrow().clone());
+                let _ =
+                    zkore_app_tauri_lib::events::emit_tor_status(&app_handle, rx.borrow().clone());
                 while rx.changed().await.is_ok() {
                     let _ = zkore_app_tauri_lib::events::emit_tor_status(
                         &app_handle,

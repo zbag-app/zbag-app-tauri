@@ -8,4 +8,3 @@ pub struct TorStatusEvent {
     pub event: String,
     pub state: TorState,
 }
-

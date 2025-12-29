@@ -21,11 +21,8 @@ impl AppState {
         let app_db_path = default_app_db_path()?;
         let wallets_root = default_wallets_root()?;
         let key_store = Box::new(KeyStoreKeychain::new(wallets_root.clone()));
-        let mut wallet_manager = WalletManager::new_with_wallets_root(
-            app_db_path.clone(),
-            wallets_root,
-            key_store,
-        )?;
+        let mut wallet_manager =
+            WalletManager::new_with_wallets_root(app_db_path.clone(), wallets_root, key_store)?;
 
         let tor_state = zkore_engine::db::tor_meta::get_tor_state(wallet_manager.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?;
@@ -39,7 +36,8 @@ impl AppState {
         wallet_manager.set_tor_manager(Arc::clone(&tor_manager));
 
         let wallet_manager = Arc::new(Mutex::new(wallet_manager));
-        let near = zkore_network::near_intents::NearIntentsClient::new_with_tor(Arc::clone(&tor_manager))?;
+        let near =
+            zkore_network::near_intents::NearIntentsClient::new_with_tor(Arc::clone(&tor_manager))?;
         let swap_service =
             SwapService::new_with_near_client(app_db_path, Arc::clone(&wallet_manager), near)?;
 

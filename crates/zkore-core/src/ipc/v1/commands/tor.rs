@@ -26,4 +26,3 @@ pub struct GetTorStateResponse {
     pub schema_version: u32,
     pub state: TorState,
 }
-

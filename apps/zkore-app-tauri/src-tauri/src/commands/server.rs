@@ -55,8 +55,13 @@ pub fn zkore_add_server(
         );
 
         let started = Instant::now();
-        let info = tauri::async_runtime::block_on(async { client.probe_server().await })
-            .map_err(|e| ipc_err(errors::SERVER_UNAVAILABLE, format!("server probe failed: {e}")))?;
+        let info =
+            tauri::async_runtime::block_on(async { client.probe_server().await }).map_err(|e| {
+                ipc_err(
+                    errors::SERVER_UNAVAILABLE,
+                    format!("server probe failed: {e}"),
+                )
+            })?;
         let _latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let network = parse_network(&info.chain_name)?;
@@ -93,9 +98,10 @@ pub fn zkore_set_default_server(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let server = zkore_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
-            .map_err(|e| anyhow::anyhow!(e))?
-            .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?;
+        let server =
+            zkore_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
+                .map_err(|e| anyhow::anyhow!(e))?
+                .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?;
         mgr.ensure_server_network_matches_active_wallet(server.network)?;
 
         zkore_engine::db::server_meta::set_default_server(
@@ -122,10 +128,8 @@ pub fn zkore_list_servers(
 
     map_anyhow(|| {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let servers =
-            zkore_engine::db::server_meta::list_servers(mgr.app_db().conn()).map_err(|e| {
-                anyhow::anyhow!(e)
-            })?;
+        let servers = zkore_engine::db::server_meta::list_servers(mgr.app_db().conn())
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         Ok(ListServersResponse {
             schema_version: SCHEMA_VERSION,

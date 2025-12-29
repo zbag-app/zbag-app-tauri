@@ -1,7 +1,7 @@
 use tauri::Emitter;
 use zkore_core::ipc::v1::events::{
-    BalanceChangedEvent, SwapChangedEvent, SyncProgressEvent, TransactionChangedEvent,
-    TorStatusEvent, WalletStatusEvent,
+    BalanceChangedEvent, SwapChangedEvent, SyncProgressEvent, TorStatusEvent,
+    TransactionChangedEvent, WalletStatusEvent,
 };
 
 pub const CHANNEL_SYNC: &str = "zkore://sync";
