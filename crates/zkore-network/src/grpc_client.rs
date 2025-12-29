@@ -5,10 +5,14 @@ use anyhow::Context as _;
 use tonic::Code;
 use tonic::transport::{Channel, Endpoint};
 
-use zcash_client_backend::proto::service::Empty;
-use zcash_client_backend::proto::service::LightdInfo;
-use zcash_client_backend::proto::service::RawTransaction;
-use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
+use zcash_client_backend::proto::compact_formats::CompactBlock;
+use zcash_client_backend::proto::service::{
+    BlockId, BlockRange, ChainSpec, Empty, GetSubtreeRootsArg, LightdInfo, RawTransaction,
+    SubtreeRoot, TreeState, compact_tx_streamer_client::CompactTxStreamerClient,
+};
+use zcash_protocol::consensus::BlockHeight;
+
+use tonic::Streaming;
 
 use crate::transport::{SelectedTransport, TransportConfig, TransportSelector};
 
@@ -166,5 +170,83 @@ impl GrpcClient {
         }
 
         Ok(())
+    }
+
+    /// Get the chain tip height and hash.
+    pub async fn get_latest_block(&self) -> anyhow::Result<(BlockHeight, Vec<u8>)> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(ChainSpec {});
+        req.set_timeout(Duration::from_secs(5));
+
+        let response = client
+            .get_latest_block(req)
+            .await
+            .map_err(|status| anyhow::anyhow!(status))
+            .context("GetLatestBlock RPC failed")?
+            .into_inner();
+
+        Ok((
+            BlockHeight::from_u32(response.height as u32),
+            response.hash,
+        ))
+    }
+
+    /// Download compact blocks in a range.
+    pub async fn get_block_range(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> anyhow::Result<Streaming<CompactBlock>> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let request = BlockRange {
+            start: Some(BlockId {
+                height: u64::from(start),
+                hash: vec![],
+            }),
+            end: Some(BlockId {
+                height: u64::from(end),
+                hash: vec![],
+            }),
+        };
+
+        Ok(client.get_block_range(request).await?.into_inner())
+    }
+
+    /// Get tree state at a height.
+    pub async fn get_tree_state(&self, height: BlockHeight) -> anyhow::Result<TreeState> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(BlockId {
+            height: u64::from(height),
+            hash: vec![],
+        });
+        req.set_timeout(Duration::from_secs(10));
+
+        Ok(client
+            .get_tree_state(req)
+            .await
+            .map_err(|status| anyhow::anyhow!(status))
+            .context("GetTreeState RPC failed")?
+            .into_inner())
+    }
+
+    /// Get subtree roots for commitment trees.
+    pub async fn get_subtree_roots(
+        &self,
+        start_index: u32,
+        shielded_protocol: i32,
+        max_entries: u32,
+    ) -> anyhow::Result<Streaming<SubtreeRoot>> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let request = GetSubtreeRootsArg {
+            start_index,
+            shielded_protocol,
+            max_entries,
+        };
+
+        Ok(client.get_subtree_roots(request).await?.into_inner())
     }
 }

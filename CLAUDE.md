@@ -14,22 +14,28 @@ Zkore Desktop is a privacy-by-design Zcash wallet built with Tauri v2 (Rust back
 ## Build Commands
 
 ```bash
-# Rust
-cargo build --workspace              # Build all crates
-cargo test --workspace               # Run all tests
+# Rust-only (excludes Tauri app which requires frontend dist)
+cargo build --workspace --exclude zkore-app-tauri  # Build library crates
+cargo test --workspace --exclude zkore-app-tauri   # Run library tests
 cargo test -p zkore-engine           # Test specific crate
 cargo fmt --all                      # Format
-cargo clippy --workspace --all-targets  # Lint
+cargo clippy --workspace --all-targets --exclude zkore-app-tauri  # Lint
 
 # Frontend (from apps/zkore-app-tauri)
 bun install                          # Install dependencies
+bun run build                        # Build frontend dist (required before full workspace build)
 bun run dev                          # Vite dev server only
 bun run tauri dev                    # Full Tauri development
 bun run tauri build                  # Production build
 bun test                             # Run tests
+
+# Full workspace (requires frontend dist to exist)
+cargo build --workspace              # Fails without `bun run build` first
 ```
 
-Note: `tauri dev` does not auto-load `.env.development`. Run `set -a; source .env.development; set +a` first in zsh.
+Note: `cargo build --workspace` will fail with "frontendDist path doesn't exist" unless you first run `bun run build` in `apps/zkore-app-tauri` to generate the `dist` folder.
+
+Note: To override the default lightwalletd server in debug builds, set `ZKORE_GRPC_URL` before running `tauri dev`.
 
 ## Architecture
 
