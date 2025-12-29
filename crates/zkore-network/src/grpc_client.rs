@@ -66,7 +66,7 @@ impl GrpcClient {
             SelectedTransport::Direct => {
                 tracing::debug!(endpoint = %self.endpoint, "grpc selected direct transport");
 
-                let endpoint = Endpoint::from_shared(self.endpoint.clone())
+                let endpoint = Endpoint::new(self.endpoint.clone())
                     .context("invalid gRPC endpoint URL")?
                     .timeout(Duration::from_secs(10))
                     .connect_timeout(Duration::from_secs(10));
