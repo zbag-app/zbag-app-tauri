@@ -80,12 +80,11 @@ fn find_account_uuid(
             continue;
         }
 
-        if let Some(key_source) = account.source().key_source() {
-            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+        if let Some(key_source) = account.source().key_source()
+            && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
-            {
-                return Ok(account_uuid);
-            }
+        {
+            return Ok(account_uuid);
         }
 
         continue;

@@ -39,6 +39,8 @@ pub fn run() {
             commands::swap::zkore_start_swap,
             commands::swap::zkore_get_swap_status,
             commands::swap::zkore_list_swaps,
+            // Logs
+            commands::logs::zkore_get_log_location,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

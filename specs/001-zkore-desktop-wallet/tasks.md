@@ -463,12 +463,12 @@
 
 ### Implementation for User Story 11
 
-- [ ] T183 [US11] Enhance compute_wallet_status() in crates/zkore-engine/src/wallet_manager.rs to fully populate WalletStatus fields now that US1-US3 are implemented (shield_status, privacy_posture rules, sync error states)
-- [ ] T184 [US11] Extend GetWalletStatus behavior (and any mapping) to reflect enhanced compute_wallet_status() outputs
-- [ ] T185 [US11] Implement WalletStatusEvent emission on any status component change in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T186 [US11] Create apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx with backup, sync, shield, privacy status cards
-- [ ] T187 [US11] Implement real-time status updates via WalletStatusEvent subscription in apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx
-- [ ] T187a [US11] Add milestone tests: unit (crates/zkore-engine/tests/us11_wallet_status.rs), integration (tests/integration/us11_status_widget.rs), e2e (tests/e2e/us11_status_widget.spec.ts) covering status aggregation and UI actions
+- [X] T183 [US11] Enhance compute_wallet_status() in crates/zkore-engine/src/wallet_manager.rs to fully populate WalletStatus fields now that US1-US3 are implemented (shield_status, privacy_posture rules, sync error states)
+- [X] T184 [US11] Extend GetWalletStatus behavior (and any mapping) to reflect enhanced compute_wallet_status() outputs
+- [X] T185 [US11] Implement WalletStatusEvent emission on any status component change in crates/zkore-engine/src/wallet_manager.rs
+- [X] T186 [US11] Create apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx with backup, sync, shield, privacy status cards
+- [X] T187 [US11] Implement real-time status updates via WalletStatusEvent subscription in apps/zkore-app-tauri/src/components/wallet/StatusWidget.tsx
+- [X] T187a [US11] Add milestone tests: unit (crates/zkore-engine/tests/us11_wallet_status.rs), integration (tests/integration/us11_status_widget.rs), e2e (tests/e2e/us11_status_widget.spec.ts) covering status aggregation and UI actions
 
 **Checkpoint**: User Story 11 complete - wallet status widget functional
 
@@ -482,14 +482,14 @@
 
 ### Implementation for User Story 12
 
-- [ ] T188 [US12] Add network field immutability enforcement in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T189 [US12] Implement network-aware address prefix validation in crates/zkore-engine/src/address_service.rs
-- [ ] T190 [US12] Add network badge/color coding to apps/zkore-app-tauri/src/pages/Home.tsx header
-- [ ] T190a [US12] Create apps/zkore-app-tauri/src/pages/Wallets.tsx to list wallets (ListWallets), show network badge per wallet, and open/switch wallets (LoadWallet); include entry points to CreateWallet/RestoreWallet flows so users can create/restore additional wallets after onboarding
-- [ ] T190b [US12] Add a persistent navigation entry or header wallet switcher/dropdown to reach apps/zkore-app-tauri/src/pages/Wallets.tsx and switch wallets (LoadWallet)
-- [ ] T191 [US12] Create apps/zkore-app-tauri/src/components/common/NetworkBadge.tsx with Mainnet (green) and Testnet (orange) styling
-- [ ] T192 [US12] Add network display (read-only) to apps/zkore-app-tauri/src/pages/Settings.tsx
-- [ ] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators; ALSO cover wallet list/switch UX (ListWallets shows per-wallet network badges; LoadWallet switches active wallet); ALSO assert wallet DB directories are separated by network root (Mainnet under `~/.zkore/wallets/mainnet/{wallet-id}/` and Testnet under `~/.zkore/wallets/testnet/{wallet-id}/`, with no shared directory)
+- [X] T188 [US12] Add network field immutability enforcement in crates/zkore-engine/src/wallet_manager.rs
+- [X] T189 [US12] Implement network-aware address prefix validation in crates/zkore-engine/src/address_service.rs
+- [X] T190 [US12] Add network badge/color coding to apps/zkore-app-tauri/src/pages/Home.tsx header
+- [X] T190a [US12] Create apps/zkore-app-tauri/src/pages/Wallets.tsx to list wallets (ListWallets), show network badge per wallet, and open/switch wallets (LoadWallet); include entry points to CreateWallet/RestoreWallet flows so users can create/restore additional wallets after onboarding
+- [X] T190b [US12] Add a persistent navigation entry or header wallet switcher/dropdown to reach apps/zkore-app-tauri/src/pages/Wallets.tsx and switch wallets (LoadWallet)
+- [X] T191 [US12] Create apps/zkore-app-tauri/src/components/common/NetworkBadge.tsx with Mainnet (green) and Testnet (orange) styling
+- [X] T192 [US12] Add network display (read-only) to apps/zkore-app-tauri/src/pages/Settings.tsx
+- [X] T192a [US12] Add milestone tests: unit (crates/zkore-engine/tests/us12_network_rules.rs), integration (tests/integration/us12_network_immutability.rs), e2e (tests/e2e/us12_network_badge.spec.ts) covering immutability and visual indicators; ALSO cover wallet list/switch UX (ListWallets shows per-wallet network badges; LoadWallet switches active wallet); ALSO assert wallet DB directories are separated by network root (Mainnet under `~/.zkore/wallets/mainnet/{wallet-id}/` and Testnet under `~/.zkore/wallets/testnet/{wallet-id}/`, with no shared directory)
 
 **Checkpoint**: User Story 12 complete - network selection and visual distinction functional
 
@@ -499,15 +499,15 @@
 
 **Purpose**: Custom server support with validation and security warnings (supports multiple user stories)
 
-- [ ] T193 Implement server probing in crates/zkore-network/src/grpc_client.rs via GetLightdInfo + required capability checks; AddServer MUST verify `CompactTxStreamer.GetMempoolStream` support for FR-013 by attempting the call with a short deadline and treating `UNIMPLEMENTED` as missing capability (a deadline/empty stream is acceptable as “supported”)
-- [ ] T194 Implement server network validation (must match wallet network) in crates/zkore-engine/src/wallet_manager.rs
-- [ ] T195 Implement AddServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
-- [ ] T196 Implement SetDefaultServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
-- [ ] T197 Implement TestServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
-- [ ] T198 Implement ListServers Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
-- [ ] T199 Create apps/zkore-app-tauri/src/pages/ServerSettings.tsx with server list, add custom, set default
-- [ ] T200 Create apps/zkore-app-tauri/src/components/settings/ServerSecurityWarning.tsx for custom server warning
-- [ ] T200a Add milestone tests: unit + integration + e2e for custom server flows covering AddServer probing (fail if probing fails OR if required capabilities like `GetMempoolStream` are missing), security warning on non-default servers, SetDefaultServer sets exactly one default per network, network mismatch rejection when selecting/using a server for an active wallet (FR-055), TestServer returns success/latency or stable error, and ListServers UI filtering by active wallet network
+- [X] T193 Implement server probing in crates/zkore-network/src/grpc_client.rs via GetLightdInfo + required capability checks; AddServer MUST verify `CompactTxStreamer.GetMempoolStream` support for FR-013 by attempting the call with a short deadline and treating `UNIMPLEMENTED` as missing capability (a deadline/empty stream is acceptable as “supported”)
+- [X] T194 Implement server network validation (must match wallet network) in crates/zkore-engine/src/wallet_manager.rs
+- [X] T195 Implement AddServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
+- [X] T196 Implement SetDefaultServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
+- [X] T197 Implement TestServer Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
+- [X] T198 Implement ListServers Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/server.rs
+- [X] T199 Create apps/zkore-app-tauri/src/pages/ServerSettings.tsx with server list, add custom, set default
+- [X] T200 Create apps/zkore-app-tauri/src/components/settings/ServerSecurityWarning.tsx for custom server warning
+- [X] T200a Add milestone tests: unit + integration + e2e for custom server flows covering AddServer probing (fail if probing fails OR if required capabilities like `GetMempoolStream` are missing), security warning on non-default servers, SetDefaultServer sets exactly one default per network, network mismatch rejection when selecting/using a server for an active wallet (FR-055), TestServer returns success/latency or stable error, and ListServers UI filtering by active wallet network
 
 ---
 
@@ -517,45 +517,45 @@
 
 ### Accessibility
 
-- [ ] T201 [P] Verify all interactive elements have ARIA labels in apps/zkore-app-tauri/src/
-- [ ] T202 [P] Verify Tab order follows logical reading order in all pages
-- [ ] T203 [P] Verify visible focus indicators on all focusable elements
-- [ ] T204 [P] Implement keyboard shortcuts: Escape (close modals), Enter (confirm), Tab (navigation)
+- [X] T201 [P] Verify all interactive elements have ARIA labels in apps/zkore-app-tauri/src/
+- [X] T202 [P] Verify Tab order follows logical reading order in all pages
+- [X] T203 [P] Verify visible focus indicators on all focusable elements
+- [X] T204 [P] Implement keyboard shortcuts: Escape (close modals), Enter (confirm), Tab (navigation)
 
 ### Error Handling
 
-- [ ] T205 Create apps/zkore-app-tauri/src/components/common/ErrorBoundary.tsx for React error boundary
-- [ ] T206 Create apps/zkore-app-tauri/src/components/common/ErrorDialog.tsx for user-friendly error display with stable error codes
+- [X] T205 Create apps/zkore-app-tauri/src/components/common/ErrorBoundary.tsx for React error boundary
+- [X] T206 Create apps/zkore-app-tauri/src/components/common/ErrorDialog.tsx for user-friendly error display with stable error codes
 
 ### Logging
 
-- [ ] T207 Implement sensitive data redaction (memos, addresses beyond 8 chars) in crates/zkore-engine/src/logging.rs
-- [ ] T208 Implement GetLogLocation Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/logs.rs
-- [ ] T209 Add log location display to apps/zkore-app-tauri/src/pages/Settings.tsx for support requests
+- [X] T207 Implement sensitive data redaction (memos, addresses beyond 8 chars) in crates/zkore-engine/src/logging.rs
+- [X] T208 Implement GetLogLocation Tauri command in apps/zkore-app-tauri/src-tauri/src/commands/logs.rs
+- [X] T209 Add log location display to apps/zkore-app-tauri/src/pages/Settings.tsx for support requests
 
 ### Privacy / Telemetry (NFR-002)
 
-- [ ] T209a Audit the full dependency tree and Tauri configuration for telemetry/crash reporting; explicitly disable/remove any remote telemetry or crash reporter integrations and document the decision in specs/001-zkore-desktop-wallet/research.md
-- [ ] T209b Add a regression guard (CI + local script) that fails if known telemetry/crash-reporting integrations are introduced (e.g., Sentry DSN usage, analytics SDKs) and verify logs remain local-only
+- [X] T209a Audit the full dependency tree and Tauri configuration for telemetry/crash reporting; explicitly disable/remove any remote telemetry or crash reporter integrations and document the decision in specs/001-zkore-desktop-wallet/research.md
+- [X] T209b Add a regression guard (CI + local script) that fails if known telemetry/crash-reporting integrations are introduced (e.g., Sentry DSN usage, analytics SDKs) and verify logs remain local-only
 
 ### Security
 
-- [ ] T210a Audit and enforce sensitive UI state clearing across all pages/components (seed words, backup word inputs, signing payloads/frames); add regression tests
-- [ ] T211 Remove hardware wallet identifiers from PCZT payloads in crates/zkore-keystone/src/pczt.rs
-- [ ] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, wallet passwords, reauth tokens, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
+- [X] T210a Audit and enforce sensitive UI state clearing across all pages/components (seed words, backup word inputs, signing payloads/frames); add regression tests
+- [X] T211 Remove hardware wallet identifiers from PCZT payloads in crates/zkore-keystone/src/pczt.rs
+- [X] T212 Add automated regression test `crates/zkore-engine/tests/regression_no_secret_logging.rs` that captures `tracing` output while exercising representative flows (create wallet, restore, send/shield/swap-from/keystone finalize) and asserts logs never contain mnemonic words, wallet passwords, reauth tokens, spending keys, raw memos, full payloads/qr frames, or full addresses (only redacted forms allowed)
 
 ### Validation
 
-- [ ] T213 Run cargo clippy --workspace and fix all warnings
-- [ ] T214 Run cargo test --workspace to verify all tests pass
-- [ ] T215 Verify build with cargo build --release --locked
-- [ ] T216 Run quickstart.md setup validation to verify project builds and runs
+- [X] T213 Run cargo clippy --workspace and fix all warnings
+- [X] T214 Run cargo test --workspace to verify all tests pass
+- [X] T215 Verify build with cargo build --release --locked
+- [X] T216 Run quickstart.md setup validation to verify project builds and runs
 
 ### CI (Constitution V / NFR-016)
 
-- [ ] T216a Add CI workflow configuration (e.g., .github/workflows/ci.yml) that runs required gates: cargo audit, cargo test --workspace (see T216b for multi-lightwalletd matrix), cargo build --release --locked, cargo clippy -- -D warnings, bun test, bun test:a11y where applicable
-- [ ] T216b Add CI matrix coverage across at least two independent lightwalletd deployments (primary + secondary) and fail if either backend fails
-- [ ] T216c Add CI gate for migration tests: run app metadata DB migration tests + wallet DB migration safety tests on every PR (forward + rollback paths)
+- [X] T216a Add CI workflow configuration (e.g., .github/workflows/ci.yml) that runs required gates: cargo audit, cargo test --workspace (see T216b for multi-lightwalletd matrix), cargo build --release --locked, cargo clippy -- -D warnings, bun test, bun test:a11y where applicable
+- [X] T216b Add CI matrix coverage across at least two independent lightwalletd deployments (primary + secondary) and fail if either backend fails
+- [X] T216c Add CI gate for migration tests: run app metadata DB migration tests + wallet DB migration safety tests on every PR (forward + rollback paths)
 
 ---
 

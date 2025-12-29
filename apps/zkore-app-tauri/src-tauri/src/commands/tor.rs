@@ -21,7 +21,7 @@ pub fn zkore_set_tor_enabled(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let next_state = state
             .tor_manager
             .set_enabled(request.enabled)
@@ -40,7 +40,7 @@ pub fn zkore_set_tor_enabled(
             schema_version: SCHEMA_VERSION,
             state: next_state,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_get_tor_state")]
@@ -52,9 +52,8 @@ pub fn zkore_get_tor_state(
         return IpcResult::Err { err };
     }
 
-    map_anyhow(Ok(GetTorStateResponse {
+    map_anyhow(|| Ok(GetTorStateResponse {
         schema_version: SCHEMA_VERSION,
         state: state.tor_manager.state(),
     }))
 }
-

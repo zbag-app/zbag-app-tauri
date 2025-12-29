@@ -61,7 +61,9 @@ h1 {
 }
 
 input,
-button {
+button,
+textarea,
+select {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
@@ -87,8 +89,18 @@ button:active {
 }
 
 input,
-button {
-  outline: none;
+button,
+textarea,
+select {
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+button:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #396cd8;
 }
 
 #greet-input {
@@ -106,11 +118,21 @@ button {
   }
 
   input,
-  button {
+  button,
+  textarea,
+  select {
     color: #ffffff;
     background-color: #0f0f0f98;
   }
   button:active {
     background-color: #0f0f0f69;
+  }
+
+  input:focus-visible,
+  button:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  a:focus-visible {
+    outline: 3px solid #24c8db;
   }
 }

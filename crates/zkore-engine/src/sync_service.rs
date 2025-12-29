@@ -64,6 +64,7 @@ impl SyncService {
             .unwrap_or_else(default_progress)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn start_sync(
         &self,
         app_db: &AppDb,
@@ -304,6 +305,12 @@ impl SyncService {
             event: "sync.progress".to_string(),
             progress,
         });
+    }
+}
+
+impl Default for SyncService {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

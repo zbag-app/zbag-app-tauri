@@ -72,7 +72,13 @@ export function RestoreBirthday(props: {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h1 style={{ margin: 0 }}>First transaction date (optional)</h1>
       <p style={{ margin: 0 }}>
         If you remember roughly when this wallet first received funds, adding a date can reduce
@@ -94,11 +100,10 @@ export function RestoreBirthday(props: {
         <button type="button" onClick={goBack} disabled={submitting}>
           Back
         </button>
-        <button type="button" onClick={submit} disabled={submitting}>
+        <button type="submit" disabled={submitting}>
           {submitting ? 'Restoring…' : 'Restore'}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
-

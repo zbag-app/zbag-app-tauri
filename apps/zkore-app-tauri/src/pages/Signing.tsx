@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type * as IPC from '../types/ipc';
 import { AnimatedQRDisplay } from '../components/signing/AnimatedQRDisplay';
@@ -24,9 +24,11 @@ export function Signing(props: { walletId: string }) {
   const { walletId } = props;
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as LocationState | null;
 
-  const signingRequest = state?.signingRequest ?? null;
+  const [signingRequest] = useState<IPC.SigningRequest | null>(() => {
+    const state = location.state as LocationState | null;
+    return state?.signingRequest ?? null;
+  });
   const summary = signingRequest?.summary ?? null;
 
   const [password, setPassword] = useState('');
@@ -34,6 +36,19 @@ export function Signing(props: { walletId: string }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state != null) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    return () => {
+      setPassword('');
+      setSignedPayload(null);
+    };
+  }, []);
 
   const clearSensitive = () => {
     setPassword('');

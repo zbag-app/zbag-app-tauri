@@ -2,8 +2,11 @@ use zkore_core::errors;
 use zkore_core::ipc::v1::common::{IpcError, IpcResult};
 use zkore_engine::error::find_engine_ipc_error;
 
-pub fn map_anyhow<T>(result: anyhow::Result<T>) -> IpcResult<T> {
-    match result {
+pub fn map_anyhow<T, F>(f: F) -> IpcResult<T>
+where
+    F: FnOnce() -> anyhow::Result<T>,
+{
+    match f() {
         Ok(value) => IpcResult::ok(value),
         Err(err) => IpcResult::Err {
             err: to_ipc_error(err),

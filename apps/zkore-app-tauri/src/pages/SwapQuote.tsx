@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type * as IPC from '../types/ipc';
 import { startSwap } from '../services/ipc';
@@ -19,12 +19,18 @@ export type SwapDepositLocationState = {
 export function SwapQuote() {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as SwapQuoteLocationState | null;
+  const [state] = useState<SwapQuoteLocationState | null>(() => location.state as SwapQuoteLocationState | null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const quoteId = state?.quoteId ?? null;
   const quote = state?.quote ?? null;
+
+  useEffect(() => {
+    if (location.state != null) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const expired = useMemo(() => {
     if (!quote) return false;
@@ -91,4 +97,3 @@ export function SwapQuote() {
     </div>
   );
 }
-

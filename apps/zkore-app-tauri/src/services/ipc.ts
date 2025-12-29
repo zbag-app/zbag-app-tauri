@@ -184,3 +184,29 @@ export async function setTorEnabled(
 export async function getTorState(): Promise<IPC.IpcResult<IPC.GetTorStateResponse>> {
   return invoke(IPC.Commands.GET_TOR_STATE, { request: versioned({}) });
 }
+
+export async function addServer(
+  request: Omit<IPC.AddServerRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.AddServerResponse>> {
+  return invoke(IPC.Commands.ADD_SERVER, { request: versioned(request) });
+}
+
+export async function setDefaultServer(
+  request: Omit<IPC.SetDefaultServerRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.SetDefaultServerResponse>> {
+  return invoke(IPC.Commands.SET_DEFAULT_SERVER, { request: versioned(request) });
+}
+
+export async function testServer(
+  request: Omit<IPC.TestServerRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.TestServerResponse>> {
+  return invoke(IPC.Commands.TEST_SERVER, { request: versioned(request) });
+}
+
+export async function listServers(): Promise<IPC.IpcResult<IPC.ListServersResponse>> {
+  return invoke(IPC.Commands.LIST_SERVERS, { request: versioned({}) });
+}
+
+export async function getLogLocation(): Promise<IPC.IpcResult<IPC.GetLogLocationResponse>> {
+  return invoke(IPC.Commands.GET_LOG_LOCATION, { request: versioned({}) });
+}

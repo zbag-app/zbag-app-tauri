@@ -6,6 +6,7 @@ use tonic::Code;
 use tonic::transport::{Channel, Endpoint};
 
 use zcash_client_backend::proto::service::Empty;
+use zcash_client_backend::proto::service::LightdInfo;
 use zcash_client_backend::proto::service::RawTransaction;
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
 
@@ -93,6 +94,28 @@ impl GrpcClient {
             Err(status) if status.code() == Code::DeadlineExceeded => Ok(()),
             Err(status) => Err(anyhow::anyhow!(status)).context("mempool probe failed"),
         }
+    }
+
+    pub async fn get_lightd_info(&self) -> anyhow::Result<LightdInfo> {
+        let mut client = self.connect().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(Empty {});
+        req.set_timeout(Duration::from_secs(3));
+
+        let info = client
+            .get_lightd_info(req)
+            .await
+            .map_err(|status| anyhow::anyhow!(status))
+            .context("GetLightdInfo RPC failed")?
+            .into_inner();
+
+        Ok(info)
+    }
+
+    pub async fn probe_server(&self) -> anyhow::Result<LightdInfo> {
+        let info = self.get_lightd_info().await?;
+        self.probe_mempool_support().await?;
+        Ok(info)
     }
 
     pub async fn send_transaction(&self, tx_bytes: Vec<u8>) -> anyhow::Result<()> {

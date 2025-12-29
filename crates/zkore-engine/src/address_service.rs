@@ -12,9 +12,16 @@ use crate::error::ipc_err;
 
 #[allow(deprecated)]
 use zcash_client_backend::{
+    address::Address,
     data_api::{Account as _, AddressSource, WalletRead as _, WalletWrite as _},
     keys::{ReceiverRequirement, UnifiedAddressRequest},
 };
+
+pub fn decode_address(network: Network, encoded: &str) -> anyhow::Result<Address> {
+    let params = zcash_consensus_network(network);
+    Address::decode(&params, encoded)
+        .ok_or_else(|| ipc_err(errors::INVALID_RECIPIENT, "invalid recipient"))
+}
 
 pub fn get_receive_address(
     app_conn: &Connection,
@@ -167,12 +174,11 @@ pub(crate) fn find_account_uuid(
             continue;
         }
 
-        if let Some(key_source) = account.source().key_source() {
-            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+        if let Some(key_source) = account.source().key_source()
+            && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
-            {
-                return Ok(account_uuid);
-            }
+        {
+            return Ok(account_uuid);
         }
 
         // Unknown account ID (not derived, not a Zkore-tagged imported account).

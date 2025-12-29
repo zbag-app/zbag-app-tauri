@@ -45,6 +45,7 @@ struct QuoteRecord {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct SwapJob {
     cancel: watch::Sender<bool>,
     handle: JoinHandle<()>,
@@ -277,6 +278,7 @@ impl SwapService {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_swap_from_zec(
         &self,
         wallet_id: Uuid,
@@ -685,10 +687,8 @@ fn has_confirmed_zcash_tx(
         };
 
         let block_time: Option<i64> = row.get(7).ok();
-        if let Some(bt) = block_time {
-            if bt < min_block_time_s {
-                continue;
-            }
+        if let Some(bt) = block_time && bt < min_block_time_s {
+            continue;
         }
 
         match swap.swap_type {
@@ -702,7 +702,7 @@ fn has_confirmed_zcash_tx(
                     Err(_) => continue,
                 };
                 let received_u64 = u64::try_from(total_received.max(0)).unwrap_or(0);
-                if expected_amount_zat.map_or(true, |expected| received_u64 == expected) {
+                if expected_amount_zat.is_none_or(|expected| received_u64 == expected) {
                     return true;
                 }
             }
@@ -730,7 +730,7 @@ fn has_confirmed_zcash_tx(
                     .saturating_sub(received_u64)
                     .saturating_sub(fee_u64);
 
-                if expected_amount_zat.map_or(true, |expected| sent_u64 == expected) {
+                if expected_amount_zat.is_none_or(|expected| sent_u64 == expected) {
                     return true;
                 }
             }

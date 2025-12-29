@@ -16,12 +16,12 @@ pub fn zkore_get_balance(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let balance = mgr.get_balance(request.account_id)?;
         Ok(GetBalanceResponse {
             schema_version: SCHEMA_VERSION,
             balance,
         })
-    })())
+    })
 }

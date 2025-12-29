@@ -1,14 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { reauthWallet, viewSeedPhrase } from '../../services/ipc';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: string }) {
   const { walletId, triggerLabel } = props;
 
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seedWords, setSeedWords] = useState<string[] | null>(null);
+
+  useFocusTrap(dialogRef, open);
+  useKeyboardShortcuts('esc', () => setOpen(false), open);
 
   useEffect(() => {
     if (!open) {
@@ -62,10 +68,13 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
             padding: 16,
           }}
         >
-          <div style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}>
+          <div
+            ref={dialogRef}
+            style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <h2 style={{ margin: 0 }}>Seed phrase</h2>
-              <button type="button" onClick={() => setOpen(false)}>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close seed phrase dialog">
                 Close
               </button>
             </div>
@@ -102,7 +111,13 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+              <form
+                style={{ display: 'grid', gap: 12, marginTop: 12 }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void submit();
+                }}
+              >
                 <label style={{ display: 'grid', gap: 4 }}>
                   <span>Wallet password</span>
                   <input
@@ -112,10 +127,10 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
                   />
                 </label>
                 {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-                <button type="button" onClick={submit} disabled={!password || loading}>
+                <button type="submit" disabled={!password || loading}>
                   {loading ? 'Verifying…' : 'View seed phrase'}
                 </button>
-              </div>
+              </form>
             )}
           </div>
         </div>

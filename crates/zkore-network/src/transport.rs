@@ -64,7 +64,9 @@ impl TransportSelector {
             });
         };
 
-        Ok(SelectedTransport::Tor { client })
+        Ok(SelectedTransport::Tor {
+            client: Box::new(client),
+        })
     }
 }
 
@@ -72,7 +74,7 @@ impl TransportSelector {
 pub enum SelectedTransport {
     Direct,
     Tor {
-        client: zcash_client_backend::tor::Client,
+        client: Box<zcash_client_backend::tor::Client>,
     },
 }
 

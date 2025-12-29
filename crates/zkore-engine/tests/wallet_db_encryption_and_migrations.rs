@@ -13,10 +13,14 @@ use zkore_engine::encryption;
 use zkore_engine::key_store::KeyStore;
 use zkore_engine::wallet_manager::WalletManager;
 
+type StoreKey = (Uuid, u8);
+type Store = HashMap<StoreKey, Vec<u8>>;
+type SharedStore = Arc<Mutex<Store>>;
+
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
-    encrypted_mnemonics: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
-    keychain: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
+    encrypted_mnemonics: SharedStore,
+    keychain: SharedStore,
 }
 
 impl KeyStore for TestKeyStore {
@@ -287,12 +291,11 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         )
         .expect("create wallet manager");
 
-        let wallet_id = mgr
+        mgr
             .create_wallet("Test Wallet", Network::Testnet, password, true)
             .expect("create wallet")
             .wallet
-            .id;
-        wallet_id
+            .id
     };
 
     let mut mgr =

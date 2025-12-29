@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
 import { Link } from 'react-router-dom';
+import { NetworkBadge } from '../components/common/NetworkBadge';
 import { TorStatusBadge } from '../components/common/TorStatusBadge';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
+import { getLogLocation } from '../services/ipc';
 
 export function Settings(props: {
   wallet: IPC.WalletInfo;
@@ -9,10 +12,40 @@ export function Settings(props: {
   onSetTorEnabled: (enabled: boolean) => void;
 }) {
   const { wallet, torState, onSetTorEnabled } = props;
+  const [logLocation, setLogLocation] = useState<IPC.GetLogLocationResponse | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const res = await getLogLocation();
+      if (cancelled) return;
+      if ('err' in res) {
+        setLogError(res.err.message);
+        return;
+      }
+      setLogLocation(res.ok);
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <h1 style={{ margin: 0 }}>Settings</h1>
+
+      <section style={{ display: 'grid', gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Wallet</h2>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 14, opacity: 0.85 }}>Network</div>
+          <NetworkBadge network={wallet.network} />
+        </div>
+        <Link to="/settings/servers">Server settings</Link>
+      </section>
 
       <section style={{ display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -54,6 +87,27 @@ export function Settings(props: {
           Import a Keystone watch-only account using a UFVK.
         </div>
         <Link to="/keystone/import">Import Keystone UFVK</Link>
+      </section>
+
+      <section style={{ display: 'grid', gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Logs</h2>
+        <div style={{ fontSize: 14, opacity: 0.85 }}>
+          Logs are stored locally. Include the log file path when requesting support.
+        </div>
+        {logLocation ? (
+          <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
+            <div>
+              Directory: <code>{logLocation.log_directory}</code>
+            </div>
+            <div>
+              Current log: <code>{logLocation.current_log_file}</code>
+            </div>
+          </div>
+        ) : logError ? (
+          <div style={{ color: 'crimson' }}>{logError}</div>
+        ) : (
+          <div style={{ fontSize: 13, opacity: 0.8 }}>Loading log location…</div>
+        )}
       </section>
     </div>
   );

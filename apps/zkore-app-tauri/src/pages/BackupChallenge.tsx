@@ -101,7 +101,13 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 520 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 520 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h1>Backup verification</h1>
       <p>Enter the requested words from your 24-word seed phrase.</p>
 
@@ -122,7 +128,7 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={submit} disabled={loading}>
+        <button type="submit" disabled={loading}>
           Verify
         </button>
         <button type="button" onClick={refresh} disabled={loading}>
@@ -132,6 +138,6 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
           Cancel
         </button>
       </div>
-    </div>
+    </form>
   );
 }

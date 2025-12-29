@@ -67,7 +67,13 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <header style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Restore wallet</h1>
         <Link to="/" style={{ fontSize: 14 }}>
@@ -129,10 +135,9 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
 
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
-      <button type="button" onClick={submit}>
+      <button type="submit">
         Continue
       </button>
-    </div>
+    </form>
   );
 }
-

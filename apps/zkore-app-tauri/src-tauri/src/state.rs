@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use zkore_engine::key_store_keychain::KeyStoreKeychain;
+use zkore_engine::logging::LoggingGuard;
 use zkore_engine::swap_service::SwapService;
 use zkore_engine::sync_service::SyncService;
 use zkore_engine::wallet_manager::WalletManager;
@@ -11,10 +12,12 @@ pub struct AppState {
     pub sync_service: SyncService,
     pub swap_service: SwapService,
     pub tor_manager: Arc<zkore_tor::TorManager>,
+    pub logging_guard: Mutex<LoggingGuard>,
 }
 
 impl AppState {
     pub fn new() -> anyhow::Result<Self> {
+        let logging_guard = zkore_engine::logging::init_logging()?;
         let app_db_path = default_app_db_path()?;
         let wallets_root = default_wallets_root()?;
         let key_store = Box::new(KeyStoreKeychain::new(wallets_root.clone()));
@@ -45,6 +48,7 @@ impl AppState {
             sync_service: SyncService::new(),
             swap_service,
             tor_manager,
+            logging_guard: Mutex::new(logging_guard),
         })
     }
 }

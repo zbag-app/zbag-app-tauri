@@ -1,4 +1,7 @@
 import type * as IPC from '../../types/ipc';
+import { useRef } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 export function TorErrorDialog(props: {
   state: IPC.TorState;
@@ -7,6 +10,10 @@ export function TorErrorDialog(props: {
   onClose: () => void;
 }) {
   const { state, onRetry, onDisable, onClose } = props;
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, true);
+  useKeyboardShortcuts('esc', onClose);
 
   return (
     <div
@@ -23,7 +30,10 @@ export function TorErrorDialog(props: {
         zIndex: 50,
       }}
     >
-      <div style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 560, width: '100%' }}>
+      <div
+        ref={dialogRef}
+        style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 560, width: '100%' }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
           <h2 style={{ margin: 0 }}>Tor error</h2>
           <button type="button" onClick={onClose} aria-label="Close Tor error dialog">
@@ -53,4 +63,3 @@ export function TorErrorDialog(props: {
     </div>
   );
 }
-

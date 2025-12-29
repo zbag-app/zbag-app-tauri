@@ -2,7 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import type * as IPC from './types/ipc';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ErrorDialog } from './components/common/ErrorDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
+import { NetworkBadge } from './components/common/NetworkBadge';
 import { TorStatusBadge } from './components/common/TorStatusBadge';
 import { AccountSelector } from './components/wallet/AccountSelector';
 import { useActiveAccount } from './hooks/useActiveAccount';
@@ -25,6 +28,8 @@ import { Swap } from './pages/Swap';
 import { SwapDeposit } from './pages/SwapDeposit';
 import { SwapFromZec } from './pages/SwapFromZec';
 import { SwapQuote } from './pages/SwapQuote';
+import { ServerSettings } from './pages/ServerSettings';
+import { Wallets } from './pages/Wallets';
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -34,7 +39,7 @@ type StartupState =
   | { kind: 'no-wallets' }
   | { kind: 'locked'; wallet: IPC.WalletInfo }
   | { kind: 'ready'; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; error: IPC.IpcError };
 
 function pickMostRecentWallet(wallets: IPC.WalletInfo[]): IPC.WalletInfo {
   return wallets
@@ -107,7 +112,7 @@ function AppInner() {
       const walletsRes = await listWallets();
       if (cancelled) return;
       if ('err' in walletsRes) {
-        setStartup({ kind: 'error', message: walletsRes.err.message });
+        setStartup({ kind: 'error', error: walletsRes.err });
         return;
       }
 
@@ -121,7 +126,7 @@ function AppInner() {
       const load1 = await loadWallet({ wallet_id: mostRecent.id });
       if (cancelled) return;
       if ('err' in load1) {
-        setStartup({ kind: 'error', message: load1.err.message });
+        setStartup({ kind: 'error', error: load1.err });
         return;
       }
 
@@ -143,7 +148,15 @@ function AppInner() {
 
   if (startup.kind === 'loading') return <div>Loading…</div>;
 
-  if (startup.kind === 'error') return <div>Error: {startup.message}</div>;
+  if (startup.kind === 'error') {
+    return (
+      <ErrorDialog
+        title="Request failed"
+        error={{ code: startup.error.code, message: startup.error.message }}
+        primaryAction={{ label: 'Reload app', onClick: () => window.location.reload() }}
+      />
+    );
+  }
 
   if (startup.kind === 'no-wallets') {
     return (
@@ -217,6 +230,7 @@ function AppInner() {
 
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <strong>{startup.wallet.name}</strong>
+        <NetworkBadge network={startup.wallet.network} />
         <AccountSelector
           accounts={accounts}
           activeAccountId={activeAccountId}
@@ -225,6 +239,7 @@ function AppInner() {
         <TorStatusBadge state={torState} />
         <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Link to="/">Home</Link>
+          <Link to="/wallets">Wallets</Link>
           <Link to="/receive">Receive</Link>
           <Link to="/send">Send</Link>
           <Link to="/swap">Swap</Link>
@@ -242,6 +257,60 @@ function AppInner() {
               accounts={accounts}
               activeAccountId={activeAccountId}
               onChangeAccount={setActiveAccountId}
+            />
+          }
+        />
+        <Route
+          path="/wallets"
+          element={
+            <Wallets
+              activeWalletId={startup.wallet.id}
+              onLoaded={(resp) => {
+                setSeedPhrase(null);
+                setRestoreFlow(null);
+                if (resp.lock_status === 'Locked') {
+                  setStartup({ kind: 'locked', wallet: resp.wallet });
+                  setAccounts([]);
+                  return;
+                }
+                setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
+                setAccounts(resp.accounts);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/create"
+          element={
+            <CreateWallet
+              onCreated={(args) => {
+                setSeedPhrase(args.seedPhrase);
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/restore"
+          element={
+            <RestoreWallet
+              onContinue={(data) => {
+                setRestoreFlow(data);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/restore/birthday"
+          element={
+            <RestoreBirthday
+              flow={restoreFlow}
+              onClearFlow={() => setRestoreFlow(null)}
+              onRestored={(args) => {
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
             />
           }
         />
@@ -264,6 +333,7 @@ function AppInner() {
           path="/settings"
           element={<Settings wallet={startup.wallet} torState={torState} onSetTorEnabled={toggleTor} />}
         />
+        <Route path="/settings/servers" element={<ServerSettings wallet={startup.wallet} />} />
         <Route
           path="/keystone/import"
           element={
@@ -360,7 +430,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        <AppInner />
+        <ErrorBoundary>
+          <AppInner />
+        </ErrorBoundary>
       </HashRouter>
     </QueryClientProvider>
   );

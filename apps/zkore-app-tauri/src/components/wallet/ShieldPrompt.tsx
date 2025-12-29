@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as IPC from '../../types/ipc';
 import { reauthWallet, shieldFunds } from '../../services/ipc';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 type InsufficientFeeDetails = {
   required_minimum_zatoshis?: unknown;
@@ -24,10 +26,21 @@ export function ShieldPrompt(props: {
   const { walletId, accountId, transparentTotal, disabled, onShielded } = props;
 
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<IPC.IpcError | null>(null);
   const [result, setResult] = useState<IPC.ShieldFundsResponse | null>(null);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  useFocusTrap(dialogRef, open);
+  useKeyboardShortcuts('esc', () => {
+    if (!loadingRef.current) setOpen(false);
+  }, open);
 
   useEffect(() => {
     if (!open) {
@@ -96,10 +109,18 @@ export function ShieldPrompt(props: {
             padding: 16,
           }}
         >
-          <div style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}>
+          <div
+            ref={dialogRef}
+            style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <h2 style={{ margin: 0 }}>Shield and consolidate</h2>
-              <button type="button" onClick={() => setOpen(false)} disabled={loading}>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={loading}
+                aria-label="Close shield dialog"
+              >
                 Close
               </button>
             </div>
@@ -136,7 +157,13 @@ export function ShieldPrompt(props: {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gap: 10 }}>
+                <form
+                  style={{ display: 'grid', gap: 10 }}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void submit();
+                  }}
+                >
                   <label style={{ display: 'grid', gap: 4, maxWidth: 420 }}>
                     <span>Wallet password</span>
                     <input
@@ -170,14 +197,14 @@ export function ShieldPrompt(props: {
                   ) : null}
 
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button type="button" onClick={submit} disabled={!password || loading}>
+                    <button type="submit" disabled={!password || loading}>
                       {loading ? 'Shielding…' : 'Confirm & Shield'}
                     </button>
                     <button type="button" onClick={() => setOpen(false)} disabled={loading}>
                       Cancel
                     </button>
                   </div>
-                </div>
+                </form>
               )}
             </div>
           </div>
@@ -186,4 +213,3 @@ export function ShieldPrompt(props: {
     </div>
   );
 }
-

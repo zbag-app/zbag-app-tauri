@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type * as IPC from '../types/ipc';
 import { getSwapStatus } from '../services/ipc';
 import { onSwapChanged } from '../services/events';
@@ -15,10 +15,17 @@ function formatDeadline(deadlineMs: number): string {
 }
 
 export function SwapDeposit() {
+  const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as SwapDepositLocationState | null;
   const [swap, setSwap] = useState<IPC.SwapInfo | null>(state?.swap ?? null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state != null) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const expired = useMemo(() => {
     if (!swap?.deadline) return false;
@@ -27,13 +34,14 @@ export function SwapDeposit() {
 
   useEffect(() => {
     if (!swap) return;
+    const swapId = swap.id;
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
     async function run() {
       unlisten = await onSwapChanged((event) => {
         if (cancelled) return;
-        if (event.swap.id !== swap.id) return;
+        if (event.swap.id !== swapId) return;
         setSwap(event.swap);
       });
     }
@@ -43,7 +51,7 @@ export function SwapDeposit() {
       cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [swap]);
+  }, [swap?.id]);
 
   if (!swap) {
     return (
@@ -115,4 +123,3 @@ export function SwapDeposit() {
     </div>
   );
 }
-

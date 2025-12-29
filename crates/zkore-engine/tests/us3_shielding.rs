@@ -206,26 +206,25 @@ fn insert_transparent_utxos(
     let tip_height =
         zcash_protocol::consensus::BlockHeight::from_u32(u32::from(nu5_activation) + 100);
 
-    let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
-        &mut conn,
-        params.clone(),
-        zcash_client_sqlite::util::SystemClock,
-        rand::rngs::OsRng,
-    );
-
     #[allow(deprecated)]
     use zcash_client_backend::data_api::WalletRead as _;
     #[allow(deprecated)]
     use zcash_client_backend::data_api::WalletWrite as _;
 
-    wdb.update_chain_tip(tip_height).expect("update chain tip");
+    let chain_tip = {
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
 
-    let chain_tip = wdb
-        .chain_height()
-        .expect("read chain height")
-        .expect("chain height missing");
+        wdb.update_chain_tip(tip_height).expect("update chain tip");
 
-    drop(wdb);
+        wdb.chain_height()
+            .expect("read chain height")
+            .expect("chain height missing")
+    };
 
     // `get_wallet_summary` returns `None` until there is at least some block data available for scan
     // progress estimation. Insert a minimal placeholder block row at the (post-NU5) chain tip; we
@@ -554,7 +553,7 @@ fn shield_funds_batches_large_input_sets() {
         wallet.network,
         "pw",
         &transparent.encoded,
-        std::iter::repeat(50_000u64).take(201),
+        std::iter::repeat_n(50_000u64, 201),
     );
     mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
 

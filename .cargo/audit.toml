@@ -1,0 +1,5 @@
+[advisories]
+# `rsa` is pulled in via Arti/Tor (`tor-llcrypto`) for public-key operations in the Tor client.
+# The Marvin attack advisory targets RSA *decryption* timing side-channels; Zkore does not
+# perform RSA private-key operations via this dependency.
+ignore = ["RUSTSEC-2023-0071"]

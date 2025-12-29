@@ -19,14 +19,14 @@ pub fn zkore_import_ufvk(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let account = mgr.import_ufvk(request.wallet_id, &request.ufvk, &request.name)?;
         Ok(ImportUfvkResponse {
             schema_version: SCHEMA_VERSION,
             account,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_build_signing_request")]
@@ -38,7 +38,7 @@ pub fn zkore_build_signing_request(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.build_signing_request(
             request.account_id,
@@ -47,7 +47,7 @@ pub fn zkore_build_signing_request(
             request.memo.as_deref(),
             request.allow_transparent_recipient,
         )
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_finalize_signing")]
@@ -59,8 +59,8 @@ pub fn zkore_finalize_signing(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.finalize_signing(&request.signed_payload, &request.reauth_token, None)
-    })())
+    })
 }

@@ -35,6 +35,50 @@ impl<T> std::fmt::Debug for Redacted<T> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct RedactedMemo<'a>(pub &'a str);
+
+impl std::fmt::Display for RedactedMemo<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[REDACTED MEMO len={}]", self.0.len())
+    }
+}
+
+impl std::fmt::Debug for RedactedMemo<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct RedactedAddress<'a>(pub &'a str);
+
+impl std::fmt::Display for RedactedAddress<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const KEEP: usize = 8;
+        let prefix: String = self.0.chars().take(KEEP).collect();
+        if prefix.chars().count() == self.0.chars().count() {
+            f.write_str(&prefix)
+        } else {
+            write!(f, "{prefix}…")
+        }
+    }
+}
+
+impl std::fmt::Debug for RedactedAddress<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+pub fn redact_memo(memo: &str) -> RedactedMemo<'_> {
+    RedactedMemo(memo)
+}
+
+pub fn redact_address(address: &str) -> RedactedAddress<'_> {
+    RedactedAddress(address)
+}
+
 pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     let log_directory = default_log_directory()?;
     std::fs::create_dir_all(&log_directory).with_context(|| {
@@ -56,7 +100,8 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
         .with_env_filter(env_filter)
         .with_writer(non_blocking)
         .with_ansi(false)
-        .init();
+        .try_init()
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     let current_log_file = current_log_file_path(&log_directory);
     Ok(LoggingGuard {

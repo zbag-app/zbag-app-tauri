@@ -23,7 +23,7 @@ pub fn zkore_prepare_send(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.prepare_send(
             request.account_id,
@@ -32,7 +32,7 @@ pub fn zkore_prepare_send(
             request.memo.as_deref(),
             request.allow_transparent_recipient,
         )
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_confirm_send")]
@@ -49,10 +49,10 @@ pub fn zkore_confirm_send(
         let _ = events::emit_transaction_changed(&app, event);
     });
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.confirm_send(&request.proposal_id, &request.reauth_token, Some(handler))
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_cancel_send")]
@@ -64,13 +64,13 @@ pub fn zkore_cancel_send(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         Ok(CancelSendResponse {
             schema_version: SCHEMA_VERSION,
             cancelled: mgr.cancel_send(&request.proposal_id),
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_retry_broadcast")]
@@ -87,14 +87,14 @@ pub fn zkore_retry_broadcast(
         let _ = events::emit_transaction_changed(&app, event);
     });
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let txid = mgr.retry_broadcast(&request.txid, &request.reauth_token, Some(handler))?;
         Ok(RetryBroadcastResponse {
             schema_version: SCHEMA_VERSION,
             txid,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_list_transactions")]
@@ -106,10 +106,10 @@ pub fn zkore_list_transactions(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.list_transactions(request.account_id, request.limit, request.offset)
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_shield_funds")]
@@ -126,7 +126,7 @@ pub fn zkore_shield_funds(
         let _ = events::emit_transaction_changed(&app, event);
     });
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.shield_funds(
             request.account_id,
@@ -134,5 +134,5 @@ pub fn zkore_shield_funds(
             &request.reauth_token,
             Some(handler),
         )
-    })())
+    })
 }

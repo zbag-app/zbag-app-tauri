@@ -59,8 +59,6 @@ struct ProposalRecord {
 
 #[derive(Debug, Clone)]
 struct QueuedBroadcastEntry {
-    txid: String,
-    created_at: SystemTime,
     last_error: Option<String>,
     bin_path: PathBuf,
 }
@@ -151,8 +149,6 @@ impl<C: Clock> TxService<C> {
             entries.insert(
                 txid.clone(),
                 QueuedBroadcastEntry {
-                    txid,
-                    created_at,
                     last_error: meta.last_error,
                     bin_path,
                 },
@@ -163,6 +159,7 @@ impl<C: Clock> TxService<C> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn prepare_send(
         &mut self,
         app_db: &AppDb,
@@ -237,7 +234,7 @@ impl<C: Clock> TxService<C> {
         let proposal = {
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut *wallet_db_conn,
-                params.clone(),
+                params,
                 zcash_client_sqlite::util::SystemClock,
                 rand::rngs::OsRng,
             );
@@ -338,6 +335,7 @@ impl<C: Clock> TxService<C> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn build_signing_request(
         &mut self,
         app_db: &AppDb,
@@ -412,7 +410,7 @@ impl<C: Clock> TxService<C> {
         let (proposal, pczt_payload) = {
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut *wallet_db_conn,
-                params.clone(),
+                params,
                 zcash_client_sqlite::util::SystemClock,
                 rand::rngs::OsRng,
             );
@@ -506,6 +504,7 @@ impl<C: Clock> TxService<C> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn finalize_signing(
         &mut self,
         app_db: &AppDb,
@@ -529,7 +528,7 @@ impl<C: Clock> TxService<C> {
 
         let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
             &mut *wallet_db_conn,
-            params.clone(),
+            params,
             zcash_client_sqlite::util::SystemClock,
             rand::rngs::OsRng,
         );
@@ -603,6 +602,7 @@ impl<C: Clock> TxService<C> {
         self.proposals.remove(proposal_id).is_some()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn confirm_send(
         &mut self,
         app_db: &AppDb,
@@ -647,7 +647,7 @@ impl<C: Clock> TxService<C> {
 
         let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
             wallet_db_conn,
-            params.clone(),
+            params,
             zcash_client_sqlite::util::SystemClock,
             rand::rngs::OsRng,
         );
@@ -769,6 +769,7 @@ impl<C: Clock> TxService<C> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn shield_funds(
         &mut self,
         app_db: &AppDb,
@@ -798,7 +799,7 @@ impl<C: Clock> TxService<C> {
 
         let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
             &mut *wallet_db_conn,
-            params.clone(),
+            params,
             zcash_client_sqlite::util::SystemClock,
             rand::rngs::OsRng,
         );
@@ -806,7 +807,7 @@ impl<C: Clock> TxService<C> {
         let receivers = wdb
             .get_transparent_receivers(account_uuid, false, false)
             .context("failed to list transparent receivers")?;
-        let from_addrs: Vec<_> = receivers.into_iter().map(|(addr, _meta)| addr).collect();
+        let from_addrs: Vec<_> = receivers.into_keys().collect();
 
         let chain_tip_height = wdb
             .chain_height()
@@ -860,7 +861,7 @@ impl<C: Clock> TxService<C> {
             }
 
             let mut input_selection = batch;
-            let wallet_meta = change_strategy
+            change_strategy
                 .fetch_wallet_meta(&wdb, account_uuid, target_height, &[])
                 .context("failed to load wallet metadata for shielding")?;
 
@@ -902,7 +903,7 @@ impl<C: Clock> TxService<C> {
                     &zcash_client_backend::fees::sapling::EmptyBundleView,
                     &zcash_client_backend::fees::orchard::EmptyBundleView,
                     None,
-                    &wallet_meta,
+                    &(),
                 ) {
                     Ok(balance) => break Some(balance),
                     Err(zcash_client_backend::fees::ChangeError::DustInputs {
@@ -1096,6 +1097,7 @@ impl<C: Clock> TxService<C> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn retry_broadcast(
         &mut self,
         app_db: &AppDb,
@@ -1175,6 +1177,7 @@ impl<C: Clock> TxService<C> {
         Ok(txid.to_string())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn list_transactions(
         &mut self,
         wallet_id: Uuid,
@@ -1262,13 +1265,12 @@ impl<C: Clock> TxService<C> {
                 TransactionStatus::Pending
             };
 
-            if mined_height_u32.is_none() {
-                if let Some(expiry) = expiry_height_u32 {
-                    if chain_height > expiry {
-                        status = TransactionStatus::Expired;
-                        delete_queued_broadcast(wallet_dir, txid.clone());
-                    }
-                }
+            if mined_height_u32.is_none()
+                && let Some(expiry) = expiry_height_u32
+                && chain_height > expiry
+            {
+                status = TransactionStatus::Expired;
+                delete_queued_broadcast(wallet_dir, txid.clone());
             }
 
             let queue_entry = self
@@ -1367,10 +1369,7 @@ fn parse_recipient(
     network: Network,
     recipient: &str,
 ) -> anyhow::Result<(zcash_client_backend::address::Address, RecipientKind)> {
-    let params = zcash_consensus_network(network);
-
-    let addr = zcash_client_backend::address::Address::decode(&params, recipient)
-        .ok_or_else(|| ipc_err(errors::INVALID_RECIPIENT, "invalid recipient"))?;
+    let addr = crate::address_service::decode_address(network, recipient)?;
 
     let kind = match &addr {
         zcash_client_backend::address::Address::Unified(ua) => {
@@ -1412,10 +1411,8 @@ fn enforce_privacy_and_memo_rules(
         }
     }
 
-    if let Some(memo) = memo {
-        if memo.as_bytes().len() > 512 {
-            return Err(ipc_err(errors::MEMO_TOO_LONG, "memo too long"));
-        }
+    if let Some(memo) = memo && memo.len() > 512 {
+        return Err(ipc_err(errors::MEMO_TOO_LONG, "memo too long"));
     }
 
     Ok(())
@@ -1469,12 +1466,11 @@ fn resolve_wallet_account_uuid(
             continue;
         }
 
-        if let Some(key_source) = account.source().key_source() {
-            if crate::account_key_source::parse_account_id_from_key_source(key_source)
+        if let Some(key_source) = account.source().key_source()
+            && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
-            {
-                return Ok(account_uuid);
-            }
+        {
+            return Ok(account_uuid);
         }
     }
 

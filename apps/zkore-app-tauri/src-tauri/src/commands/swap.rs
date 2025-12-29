@@ -24,7 +24,7 @@ pub fn zkore_request_swap_quote(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
@@ -44,7 +44,7 @@ pub fn zkore_request_swap_quote(
         state
             .swap_service
             .request_swap_quote(wallet.id, wallet.network, intent)
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_start_swap")]
@@ -61,7 +61,7 @@ pub fn zkore_start_swap(
         let _ = events::emit_swap_changed(&app, event);
     });
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
@@ -77,7 +77,7 @@ pub fn zkore_start_swap(
             request.reauth_token.as_deref(),
             Some(handler),
         )
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_get_swap_status")]
@@ -89,7 +89,7 @@ pub fn zkore_get_swap_status(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
@@ -98,7 +98,7 @@ pub fn zkore_get_swap_status(
         };
 
         state.swap_service.get_swap_status(wallet.id, request.swap_id)
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_list_swaps")]
@@ -110,7 +110,7 @@ pub fn zkore_list_swaps(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
@@ -119,5 +119,5 @@ pub fn zkore_list_swaps(
         };
 
         state.swap_service.list_swaps(wallet.id)
-    })())
+    })
 }

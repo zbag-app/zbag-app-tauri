@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use tauri::Manager;
+use std::sync::Arc;
 
 fn main() {
     let state = zkore_app_tauri_lib::state::AppState::new()
@@ -15,6 +16,17 @@ fn main() {
             let _ = state.tor_manager.start_if_enabled();
 
             let app_handle = app.handle().clone();
+
+            {
+                let wallet_manager = Arc::clone(&state.wallet_manager);
+                let app_handle = app_handle.clone();
+                if let Ok(mut mgr) = wallet_manager.lock() {
+                    mgr.set_wallet_status_handler(Arc::new(move |event| {
+                        let _ = zkore_app_tauri_lib::events::emit_wallet_status(&app_handle, event);
+                    }));
+                }
+            }
+
             let mut rx = state.tor_manager.subscribe();
 
             tauri::async_runtime::spawn(async move {
@@ -72,6 +84,13 @@ fn main() {
             // Tor
             zkore_app_tauri_lib::commands::tor::zkore_set_tor_enabled,
             zkore_app_tauri_lib::commands::tor::zkore_get_tor_state,
+            // Logs
+            zkore_app_tauri_lib::commands::logs::zkore_get_log_location,
+            // Servers
+            zkore_app_tauri_lib::commands::server::zkore_add_server,
+            zkore_app_tauri_lib::commands::server::zkore_set_default_server,
+            zkore_app_tauri_lib::commands::server::zkore_test_server,
+            zkore_app_tauri_lib::commands::server::zkore_list_servers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

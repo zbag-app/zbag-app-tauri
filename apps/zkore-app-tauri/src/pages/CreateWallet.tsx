@@ -68,7 +68,13 @@ export function CreateWallet(props: {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 520 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 520 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <header style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Create wallet</h1>
         <Link to="/restore" style={{ fontSize: 14 }}>
@@ -118,9 +124,9 @@ export function CreateWallet(props: {
 
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
-      <button type="button" onClick={submit} disabled={submitting}>
+      <button type="submit" disabled={submitting}>
         {submitting ? 'Creating…' : 'Create wallet'}
       </button>
-    </div>
+    </form>
   );
 }

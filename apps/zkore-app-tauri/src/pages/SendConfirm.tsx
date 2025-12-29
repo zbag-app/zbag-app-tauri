@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import * as IPC from '../types/ipc';
 import { cancelSend, confirmSend, reauthWallet } from '../services/ipc';
@@ -11,14 +11,22 @@ export function SendConfirm(props: { walletId: string }) {
   const { walletId } = props;
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as LocationState | null;
 
-  const proposal = state?.proposal ?? null;
+  const [proposal] = useState<IPC.PrepareSendResponse | null>(() => {
+    const state = location.state as LocationState | null;
+    return state?.proposal ?? null;
+  });
   const summary = proposal?.summary ?? null;
 
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state != null) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const warning = useMemo(() => {
     if (!summary) return null;
@@ -72,7 +80,13 @@ export function SendConfirm(props: { walletId: string }) {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h1>Review send</h1>
 
       {warning ? (
@@ -115,13 +129,13 @@ export function SendConfirm(props: { walletId: string }) {
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button type="button" onClick={submit} disabled={!password || submitting}>
+        <button type="submit" disabled={!password || submitting}>
           {submitting ? 'Sending…' : 'Confirm & Send'}
         </button>
         <button type="button" onClick={cancel} disabled={submitting}>
           Cancel
         </button>
       </div>
-    </div>
+    </form>
   );
 }

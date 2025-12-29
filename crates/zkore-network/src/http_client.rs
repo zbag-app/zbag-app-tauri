@@ -35,6 +35,7 @@ impl HttpClient {
     pub fn new_with_transport(transport: TransportSelector) -> anyhow::Result<Self> {
         let direct = reqwest::Client::builder()
             .timeout(transport.config().timeout)
+            .no_proxy()
             .build()?;
         Ok(Self { direct, transport })
     }

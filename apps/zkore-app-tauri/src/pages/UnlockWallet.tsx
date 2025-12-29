@@ -44,7 +44,13 @@ export function UnlockWallet(props: {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 480 }}>
+    <form
+      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 480 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h1>Unlock wallet</h1>
       <div>
         <strong>{wallet.name}</strong>
@@ -66,10 +72,9 @@ export function UnlockWallet(props: {
         <span>Remember unlock</span>
       </label>
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-      <button type="button" onClick={submit} disabled={!password || submitting}>
+      <button type="submit" disabled={!password || submitting}>
         {submitting ? 'Unlocking…' : 'Unlock'}
       </button>
-    </div>
+    </form>
   );
 }
-

@@ -112,7 +112,13 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
+    <form
+      style={{ display: 'grid', gap: 12, maxWidth: 560 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h1>Send</h1>
       <label style={{ display: 'grid', gap: 4 }}>
         <span>Recipient</span>
@@ -159,9 +165,9 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
 
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
-      <button type="button" onClick={submit} disabled={!canSubmit || submitting}>
+      <button type="submit" disabled={!canSubmit || submitting}>
         {submitting ? 'Preparing…' : 'Review'}
       </button>
-    </div>
+    </form>
   );
 }

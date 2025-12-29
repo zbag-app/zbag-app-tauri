@@ -326,6 +326,20 @@
 - No remote telemetry - constitution principle
 - Provide IPC command to expose log directory path to UI for support workflows
 
+### 13a. Telemetry / Crash Reporting Audit (NFR-002)
+
+**Decision**: No remote telemetry or crash reporting.
+
+**Audit summary**:
+- **Tauri config** (`apps/zkore-app-tauri/src-tauri/tauri.conf.json`): No crash reporter configuration; no remote telemetry settings.
+- **Tauri plugins** (`apps/zkore-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` and `tauri-plugin-shell` (no telemetry/crash plugins).
+- **Frontend deps** (`apps/zkore-app-tauri/package.json`): No analytics/crash SDK dependencies (e.g., Sentry, PostHog, Segment, Amplitude).
+- **Rust deps** (`Cargo.toml`, `Cargo.lock`): No telemetry/crash crates (e.g., `sentry`, `bugsnag`, `rollbar`).
+
+**Enforcement**:
+- Local script: `scripts/check-no-telemetry.sh`
+- CI gate runs the same script to fail fast if a known telemetry integration is introduced.
+
 ### 14. Accessibility Patterns
 
 **Decision**: React accessibility with radix-ui primitives and custom focus management

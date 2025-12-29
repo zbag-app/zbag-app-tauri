@@ -12,12 +12,16 @@ use zkore_engine::error::find_engine_ipc_error;
 use zkore_engine::key_store::KeyStore;
 use zkore_engine::wallet_manager::WalletManager;
 
+type StoreKey = (Uuid, u8);
+type Store = HashMap<StoreKey, Vec<u8>>;
+type SharedStore = Arc<Mutex<Store>>;
+
 #[allow(deprecated)]
 use zcash_client_backend::keys::UnifiedSpendingKey;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
-    encrypted_mnemonics: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
+    encrypted_mnemonics: SharedStore,
 }
 
 impl KeyStore for TestKeyStore {

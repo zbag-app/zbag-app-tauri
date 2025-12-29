@@ -16,12 +16,12 @@ pub fn zkore_get_receive_address(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let address = mgr.get_receive_address(request.account_id, request.address_type)?;
         Ok(GetReceiveAddressResponse {
             schema_version: SCHEMA_VERSION,
             address,
         })
-    })())
+    })
 }

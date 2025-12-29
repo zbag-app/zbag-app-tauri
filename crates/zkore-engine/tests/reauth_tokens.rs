@@ -22,7 +22,7 @@ impl TestClock {
 
     fn advance(&self, delta: Duration) {
         let mut now = self.0.lock().expect("mutex poisoned");
-        *now = *now + delta;
+        *now += delta;
     }
 }
 

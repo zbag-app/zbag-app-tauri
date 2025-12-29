@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use bip39::Mnemonic;
@@ -14,8 +15,8 @@ use zeroize::Zeroize;
 
 use zkore_core::domain::{
     AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
-    PrivacyPosture, ShieldAction, SyncStatus, WalletInfo, WalletLockStatus, WalletStatus,
-    WalletType,
+    PrivacyPosture, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletInfo, WalletLockStatus,
+    WalletStatus, WalletType,
 };
 use zkore_core::errors;
 
@@ -36,7 +37,9 @@ use zkore_core::ipc::v1::commands::keystone::{
 use zkore_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
 };
+use zkore_core::ipc::v1::common::SCHEMA_VERSION;
 use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use zkore_core::ipc::v1::events::WalletStatusEvent;
 
 pub struct WalletManager {
     app_db: AppDb,
@@ -46,6 +49,11 @@ pub struct WalletManager {
     reauth: ReauthManager,
     tx_service: TxService<SystemClock>,
     backup_challenges: HashMap<Uuid, BackupChallengeState>,
+    cached_balances: HashMap<(Uuid, u32), Balance>,
+    cached_sync_status: HashMap<Uuid, SyncStatus>,
+    sync_stop_requested: HashSet<Uuid>,
+    last_emitted_status: HashMap<Uuid, WalletStatus>,
+    on_wallet_status: Option<Arc<dyn Fn(WalletStatusEvent) + Send + Sync>>,
     wallet_db_force_validate_fail: bool,
 }
 
@@ -98,6 +106,11 @@ impl WalletManager {
             reauth: ReauthManager::new(SystemClock),
             tx_service: TxService::new(SystemClock),
             backup_challenges: HashMap::new(),
+            cached_balances: HashMap::new(),
+            cached_sync_status: HashMap::new(),
+            sync_stop_requested: HashSet::new(),
+            last_emitted_status: HashMap::new(),
+            on_wallet_status: None,
             wallet_db_force_validate_fail: false,
         })
     }
@@ -117,48 +130,54 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
         };
 
+        let directory_path = PathBuf::from(directory_path_str);
+        let expected_dir = self.wallet_dir(wallet.id, wallet.network);
+        if directory_path != expected_dir {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet directory does not match network",
+            ));
+        }
+
         let now_ms = chrono::Utc::now().timestamp_millis();
         wallet_meta::update_last_opened_at(self.app_db.conn(), wallet_id, now_ms)?;
 
-        if let Some(active) = self.active_wallet.as_mut() {
-            if active.wallet.id == wallet_id
-                && active.lock_status == WalletLockStatus::Unlocked
-                && active.dek.is_some()
-                && active.wallet_db.is_some()
-            {
-                active.wallet = wallet.clone();
-                return Ok((wallet, WalletLockStatus::Unlocked));
-            }
+        if let Some(active) = self.active_wallet.as_mut()
+            && active.wallet.id == wallet_id
+            && active.lock_status == WalletLockStatus::Unlocked
+            && active.dek.is_some()
+            && active.wallet_db.is_some()
+        {
+            active.wallet = wallet.clone();
+            return Ok((wallet, WalletLockStatus::Unlocked));
         }
 
-        let directory_path = PathBuf::from(directory_path_str);
         let mut lock_status = WalletLockStatus::Locked;
         let mut dek: Option<Dek> = None;
         let mut wallet_db: Option<rusqlite::Connection> = None;
 
-        if wallet.remember_unlock_enabled {
-            if let Some(mut material) = self
+        if wallet.remember_unlock_enabled
+            && let Some(mut material) = self
                 .key_store
                 .load_keychain_unlock_material(wallet_id, wallet.network)?
-            {
-                if material.len() == 32 {
-                    let mut dek_bytes = [0u8; 32];
-                    dek_bytes.copy_from_slice(&material);
-                    let candidate_dek = Dek(dek_bytes);
-                    if let Ok(conn) = self.open_wallet_db_with_dek(
-                        &directory_path,
-                        wallet.network,
-                        &candidate_dek,
-                        None,
-                        false,
-                    ) {
-                        lock_status = WalletLockStatus::Unlocked;
-                        dek = Some(candidate_dek);
-                        wallet_db = Some(conn);
-                    }
+        {
+            if material.len() == 32 {
+                let mut dek_bytes = [0u8; 32];
+                dek_bytes.copy_from_slice(&material);
+                let candidate_dek = Dek(dek_bytes);
+                if let Ok(conn) = self.open_wallet_db_with_dek(
+                    &directory_path,
+                    wallet.network,
+                    &candidate_dek,
+                    None,
+                    false,
+                ) {
+                    lock_status = WalletLockStatus::Unlocked;
+                    dek = Some(candidate_dek);
+                    wallet_db = Some(conn);
                 }
-                material.zeroize();
             }
+            material.zeroize();
         }
 
         self.active_wallet = Some(ActiveWallet {
@@ -172,6 +191,8 @@ impl WalletManager {
         self.tx_service
             .scan_queued_broadcasts(wallet.id, &directory_path)
             .context("failed to scan queued broadcasts")?;
+
+        self.maybe_emit_wallet_status(wallet.id);
 
         Ok((wallet, lock_status))
     }
@@ -341,6 +362,8 @@ impl WalletManager {
         self.tx_service
             .scan_queued_broadcasts(wallet.id, &wallet_dir)
             .context("failed to scan queued broadcasts")?;
+
+        self.maybe_emit_wallet_status(wallet.id);
 
         Ok(CreateWalletResult {
             wallet,
@@ -532,6 +555,8 @@ impl WalletManager {
             .scan_queued_broadcasts(wallet.id, &wallet_dir)
             .context("failed to scan queued broadcasts")?;
 
+        self.maybe_emit_wallet_status(wallet.id);
+
         Ok(RestoreWalletResult {
             wallet,
             birthday_height,
@@ -550,6 +575,13 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
         };
         let directory_path = PathBuf::from(directory_path_str);
+        let expected_dir = self.wallet_dir(wallet.id, wallet.network);
+        if directory_path != expected_dir {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet directory does not match network",
+            ));
+        }
 
         let Some(meta) =
             wallet_encryption_meta::get_wallet_encryption(self.app_db.conn(), wallet_id)?
@@ -597,6 +629,8 @@ impl WalletManager {
             .scan_queued_broadcasts(wallet.id, &directory_path)
             .context("failed to scan queued broadcasts")?;
 
+        self.maybe_emit_wallet_status(wallet.id);
+
         Ok(WalletLockStatus::Unlocked)
     }
 
@@ -611,6 +645,7 @@ impl WalletManager {
         active.wallet_db = None;
         active.dek = None;
         active.lock_status = WalletLockStatus::Locked;
+        self.maybe_emit_wallet_status(wallet_id);
         Ok(WalletLockStatus::Locked)
     }
 
@@ -834,6 +869,7 @@ impl WalletManager {
         if ok {
             backup_meta::mark_backup_complete(self.app_db.conn(), wallet_id, now_ms, "challenge")?;
             self.backup_challenges.remove(&wallet_id);
+            self.maybe_emit_wallet_status(wallet_id);
             return Ok(());
         }
 
@@ -858,7 +894,7 @@ impl WalletManager {
         ))
     }
 
-    pub fn compute_wallet_status(&self, wallet_id: Uuid) -> anyhow::Result<WalletStatus> {
+    pub fn compute_wallet_status(&mut self, wallet_id: Uuid) -> anyhow::Result<WalletStatus> {
         let Some((wallet, _dir)) = wallet_meta::get_wallet(self.app_db.conn(), wallet_id)? else {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
         };
@@ -877,7 +913,25 @@ impl WalletManager {
             BackupAction::Complete
         };
 
-        let privacy_posture = if backup_required {
+        let sync_status = self
+            .cached_sync_status
+            .get(&wallet_id)
+            .cloned()
+            .unwrap_or(SyncStatus::Synced);
+
+        let transparent_total_zat = self
+            .cached_transparent_total_zat(wallet_id)
+            .unwrap_or_else(|| self.transparent_total_from_wallet_db(wallet_id).unwrap_or(0));
+
+        let shield_status = if transparent_total_zat > 0 {
+            ShieldAction::Available {
+                amount: transparent_total_zat.to_string(),
+            }
+        } else {
+            ShieldAction::None
+        };
+
+        let privacy_posture = if backup_required || transparent_total_zat > 0 {
             PrivacyPosture::NeedsAction
         } else {
             PrivacyPosture::Optimal
@@ -886,10 +940,129 @@ impl WalletManager {
         Ok(WalletStatus {
             lock_status,
             backup_status,
-            sync_status: SyncStatus::Synced,
-            shield_status: ShieldAction::None,
+            sync_status,
+            shield_status,
             privacy_posture,
         })
+    }
+
+    pub fn set_wallet_status_handler(
+        &mut self,
+        handler: Arc<dyn Fn(WalletStatusEvent) + Send + Sync>,
+    ) {
+        self.on_wallet_status = Some(handler);
+    }
+
+    pub fn observe_sync_progress(&mut self, wallet_id: Uuid, progress: SyncProgress) {
+        let prev = self.cached_sync_status.get(&wallet_id).cloned();
+
+        let next = match progress.phase {
+            SyncPhase::Idle => {
+                if progress.progress_percent >= 100 {
+                    self.sync_stop_requested.remove(&wallet_id);
+                    SyncStatus::Synced
+                } else if self.sync_stop_requested.remove(&wallet_id) {
+                    SyncStatus::Synced
+                } else if matches!(prev, Some(SyncStatus::Syncing { .. })) {
+                    SyncStatus::Error {
+                        message: "sync failed".to_string(),
+                    }
+                } else {
+                    SyncStatus::Synced
+                }
+            }
+            _ => SyncStatus::Syncing {
+                progress_percent: progress.progress_percent,
+            },
+        };
+
+        self.cached_sync_status.insert(wallet_id, next);
+        self.maybe_emit_wallet_status(wallet_id);
+    }
+
+    pub fn observe_sync_stop_requested(&mut self, wallet_id: Uuid) {
+        self.sync_stop_requested.insert(wallet_id);
+    }
+
+    pub fn observe_balance_changed(&mut self, wallet_id: Uuid, account_id: u32, balance: Balance) {
+        self.cached_balances.insert((wallet_id, account_id), balance);
+        self.maybe_emit_wallet_status(wallet_id);
+    }
+
+    fn cached_transparent_total_zat(&self, wallet_id: Uuid) -> Option<u64> {
+        let mut total: u64 = 0;
+        let mut seen = false;
+
+        for ((wid, _account_id), bal) in &self.cached_balances {
+            if *wid != wallet_id {
+                continue;
+            }
+            seen = true;
+            let value: u64 = bal.transparent_total.parse().unwrap_or(0);
+            total = total.saturating_add(value);
+        }
+
+        if seen { Some(total) } else { None }
+    }
+
+    fn transparent_total_from_wallet_db(&mut self, wallet_id: Uuid) -> anyhow::Result<u64> {
+        let (wallet, conn) = match self.require_unlocked_wallet_db(wallet_id) {
+            Ok(pair) => pair,
+            Err(_) => return Ok(0),
+        };
+
+        #[allow(deprecated)]
+        use zcash_client_backend::data_api::WalletRead as _;
+
+        let params = zcash_consensus_network(wallet.network);
+        let wdb = zcash_client_sqlite::WalletDb::from_connection(
+            conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let summary = wdb
+            .get_wallet_summary(zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default())
+            .context("failed to compute wallet summary")?;
+
+        let Some(summary) = summary else {
+            return Ok(0);
+        };
+
+        let mut total: u64 = 0;
+        for balance in summary.account_balances().values() {
+            total = total.saturating_add(balance.unshielded_balance().total().into_u64());
+        }
+
+        Ok(total)
+    }
+
+    fn maybe_emit_wallet_status(&mut self, wallet_id: Uuid) {
+        let status = match self.compute_wallet_status(wallet_id) {
+            Ok(status) => status,
+            Err(_) => return,
+        };
+
+        let changed = match self.last_emitted_status.get(&wallet_id) {
+            Some(prev) => prev != &status,
+            None => true,
+        };
+        if !changed {
+            return;
+        }
+
+        self.last_emitted_status.insert(wallet_id, status.clone());
+
+        let Some(handler) = self.on_wallet_status.as_ref() else {
+            return;
+        };
+
+        handler(WalletStatusEvent {
+            schema_version: SCHEMA_VERSION,
+            event: "wallet.status".to_string(),
+            status,
+        });
     }
 
     pub fn list_wallet_db_account_ids(&mut self, wallet_id: Uuid) -> anyhow::Result<Vec<u32>> {
@@ -918,12 +1091,11 @@ impl WalletManager {
                 continue;
             }
 
-            if let Some(key_source) = account.source().key_source() {
-                if let Some(account_id) =
+            if let Some(key_source) = account.source().key_source()
+                && let Some(account_id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
-                {
-                    account_indices.push(account_id);
-                }
+            {
+                account_indices.push(account_id);
             }
         }
         account_indices.sort_unstable();
@@ -982,12 +1154,10 @@ impl WalletManager {
                 continue;
             }
 
-            if let Some(key_source) = account.source().key_source() {
-                if let Some(id) =
-                    crate::account_key_source::parse_account_id_from_key_source(key_source)
-                {
-                    used_ids.insert(id);
-                }
+            if let Some(key_source) = account.source().key_source()
+                && let Some(id) = crate::account_key_source::parse_account_id_from_key_source(key_source)
+            {
+                used_ids.insert(id);
             }
         }
 
@@ -1306,7 +1476,7 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
 
-        tx_service.shield_funds(
+        let resp = tx_service.shield_funds(
             app_db,
             wallet_id,
             wallet_network,
@@ -1318,7 +1488,9 @@ impl WalletManager {
             consolidate,
             spending_key,
             on_tx_changed,
-        )
+        )?;
+        self.maybe_emit_wallet_status(wallet_id);
+        Ok(resp)
     }
 
     pub fn retry_broadcast(
@@ -1440,8 +1612,25 @@ impl WalletManager {
         &self.app_db
     }
 
+    pub fn app_db_mut(&mut self) -> &mut AppDb {
+        &mut self.app_db
+    }
+
     pub fn active_wallet_info(&self) -> Option<WalletInfo> {
         self.active_wallet.as_ref().map(|w| w.wallet.clone())
+    }
+
+    pub fn ensure_server_network_matches_active_wallet(
+        &self,
+        server_network: Network,
+    ) -> anyhow::Result<()> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Ok(());
+        };
+        if active.wallet.network != server_network {
+            return Err(ipc_err(errors::INVALID_REQUEST, "server network mismatch"));
+        }
+        Ok(())
     }
 
     pub fn wallets_root(&self) -> &Path {
@@ -1681,29 +1870,6 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         Ok((active.wallet.clone(), conn))
-    }
-
-    fn require_active_unlocked_wallet_context(
-        &mut self,
-    ) -> anyhow::Result<(WalletInfo, PathBuf, Dek, &mut rusqlite::Connection)> {
-        let Some(active) = self.active_wallet.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        if active.lock_status != WalletLockStatus::Unlocked {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        let Some(dek) = active.dek.as_ref() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        Ok((
-            active.wallet.clone(),
-            active.wallet_dir.clone(),
-            Dek(dek.0),
-            conn,
-        ))
     }
 
     fn decrypt_mnemonic(

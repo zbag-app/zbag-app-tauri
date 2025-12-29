@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
-import { BackupReminder } from '../components/common/BackupReminder';
 import { AccountSelector } from '../components/wallet/AccountSelector';
 import { ShieldPrompt } from '../components/wallet/ShieldPrompt';
+import { StatusWidget } from '../components/wallet/StatusWidget';
 import { SyncProgressWidget } from '../components/wallet/SyncProgressWidget';
+import { NetworkBadge } from '../components/common/NetworkBadge';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
-import { getBalance, getSyncProgress, getWalletStatus, startSync } from '../services/ipc';
+import { getBalance, getSyncProgress, startSync } from '../services/ipc';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
@@ -19,20 +20,6 @@ export function Home(props: {
   const [balance, setBalance] = useState<IPC.Balance | null>(null);
   const [sync, setSync] = useState<IPC.SyncProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const refreshStatus = async () => {
-    const res = await getWalletStatus({ wallet_id: wallet.id });
-    if ('err' in res) {
-      setError(res.err.message);
-      return;
-    }
-    setStatus(res.ok.status);
-  };
-
-  useEffect(() => {
-    refreshStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallet.id]);
 
   const refreshBalance = async () => {
     if (activeAccountId === null) {
@@ -134,6 +121,7 @@ export function Home(props: {
           activeAccountId={activeAccountId}
           onChange={onChangeAccount}
         />
+        <NetworkBadge network={wallet.network} />
         <button type="button" onClick={start}>
           Start sync
         </button>
@@ -144,7 +132,7 @@ export function Home(props: {
 
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
-      {status ? <BackupReminder walletId={wallet.id} status={status} /> : null}
+      <StatusWidget walletId={wallet.id} activeAccountId={activeAccountId} onStatusChange={setStatus} />
 
       <div style={{ display: 'grid', gap: 8 }}>
         <h2 style={{ margin: 0 }}>Balance</h2>

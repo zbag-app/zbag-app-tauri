@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 
-export function useFocusTrap(containerRef: RefObject<HTMLElement>, enabled: boolean) {
+export function useFocusTrap<T extends HTMLElement>(containerRef: RefObject<T | null>, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const container = containerRef.current;
@@ -12,4 +12,3 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement>, enabled: bool
     focusable?.focus();
   }, [containerRef, enabled]);
 }
-

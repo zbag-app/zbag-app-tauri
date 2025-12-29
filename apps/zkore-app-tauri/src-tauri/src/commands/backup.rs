@@ -21,7 +21,7 @@ pub fn zkore_get_backup_challenge(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let challenge = mgr.get_backup_challenge(request.wallet_id)?;
         Ok(GetBackupChallengeResponse {
@@ -32,7 +32,7 @@ pub fn zkore_get_backup_challenge(
                 expires_at: challenge.expires_at,
             },
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_verify_backup")]
@@ -44,7 +44,7 @@ pub fn zkore_verify_backup(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let word_challenges: HashMap<u8, String> = request.word_challenges.into_iter().collect();
         mgr.verify_backup(request.wallet_id, &request.challenge_id, &word_challenges)?;
@@ -52,7 +52,7 @@ pub fn zkore_verify_backup(
             schema_version: SCHEMA_VERSION,
             verified: true,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_restore_wallet")]
@@ -64,7 +64,7 @@ pub fn zkore_restore_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let restored = mgr.restore_wallet(
             &request.name,
@@ -80,5 +80,5 @@ pub fn zkore_restore_wallet(
             wallet: restored.wallet,
             birthday_height: restored.birthday_height,
         })
-    })())
+    })
 }

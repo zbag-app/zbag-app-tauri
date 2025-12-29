@@ -26,7 +26,7 @@ pub fn zkore_create_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let created = mgr.create_wallet(
             &request.name,
@@ -41,7 +41,7 @@ pub fn zkore_create_wallet(
             seed_phrase: created.seed_phrase,
             backup_challenge: created.backup_challenge,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_list_wallets")]
@@ -53,14 +53,14 @@ pub fn zkore_list_wallets(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let wallets = mgr.list_wallets()?;
         Ok(ListWalletsResponse {
             schema_version: SCHEMA_VERSION,
             wallets,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_load_wallet")]
@@ -72,10 +72,10 @@ pub fn zkore_load_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         build_load_wallet_response(&mut mgr, request.wallet_id)
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_unlock_wallet")]
@@ -87,7 +87,7 @@ pub fn zkore_unlock_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let status = mgr.unlock_wallet(
             request.wallet_id,
@@ -98,7 +98,7 @@ pub fn zkore_unlock_wallet(
             schema_version: SCHEMA_VERSION,
             unlocked: status == WalletLockStatus::Unlocked,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_lock_wallet")]
@@ -110,14 +110,14 @@ pub fn zkore_lock_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let status = mgr.lock_wallet(request.wallet_id)?;
         Ok(LockWalletResponse {
             schema_version: SCHEMA_VERSION,
             locked: status == WalletLockStatus::Locked,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_reauth_wallet")]
@@ -129,7 +129,7 @@ pub fn zkore_reauth_wallet(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let (token, expires_at) =
             mgr.reauth_wallet(request.wallet_id, &request.password, request.purpose)?;
@@ -138,7 +138,7 @@ pub fn zkore_reauth_wallet(
             reauth_token: token,
             expires_at: system_time_to_unix_ms(expires_at)?,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_view_seed_phrase")]
@@ -150,14 +150,14 @@ pub fn zkore_view_seed_phrase(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let seed_phrase = mgr.view_seed_phrase(request.wallet_id, &request.reauth_token)?;
         Ok(ViewSeedPhraseResponse {
             schema_version: SCHEMA_VERSION,
             seed_phrase,
         })
-    })())
+    })
 }
 
 #[tauri::command(rename = "zkore_get_wallet_status")]
@@ -169,14 +169,14 @@ pub fn zkore_get_wallet_status(
         return IpcResult::Err { err };
     }
 
-    map_anyhow((|| {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+    map_anyhow(|| {
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let status = mgr.compute_wallet_status(request.wallet_id)?;
         Ok(GetWalletStatusResponse {
             schema_version: SCHEMA_VERSION,
             status,
         })
-    })())
+    })
 }
 
 fn load_accounts_for_wallet(
@@ -248,10 +248,14 @@ mod tests {
 
     use super::*;
 
+    type StoreKey = (Uuid, u8);
+    type Store = HashMap<StoreKey, Vec<u8>>;
+    type SharedStore = Arc<Mutex<Store>>;
+
     #[derive(Debug, Default, Clone)]
     struct TestKeyStore {
-        encrypted_mnemonics: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
-        keychain: Arc<Mutex<HashMap<(Uuid, u8), Vec<u8>>>>,
+        encrypted_mnemonics: SharedStore,
+        keychain: SharedStore,
     }
 
     impl KeyStore for TestKeyStore {

@@ -2,6 +2,8 @@ pub mod address;
 pub mod backup;
 pub mod balance;
 pub mod keystone;
+pub mod logs;
+pub mod server;
 pub mod sync;
 pub mod swap;
 pub mod tor;
