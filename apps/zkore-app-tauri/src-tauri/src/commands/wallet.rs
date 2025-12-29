@@ -18,7 +18,7 @@ use crate::state::AppState;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "zkore_create_wallet")]
-pub async fn zkore_create_wallet(
+pub fn zkore_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
 ) -> IpcResult<CreateWalletResponse> {
@@ -37,10 +37,9 @@ pub async fn zkore_create_wallet(
     // Fetch birthday height near chain tip for new wallet
     // This avoids scanning the entire blockchain for a brand new wallet
     let birthday_height = match grpc_url {
-        Ok(url) => {
-            zkore_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager)
-                .await
-        }
+        Ok(url) => tauri::async_runtime::block_on(
+            zkore_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager),
+        ),
         Err(err) => {
             warn!(error = ?err, "failed to resolve gRPC URL for birthday fetch");
             None
