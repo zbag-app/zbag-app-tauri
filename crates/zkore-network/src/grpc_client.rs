@@ -48,23 +48,46 @@ impl GrpcClient {
     }
 
     pub async fn connect(&self) -> anyhow::Result<CompactTxStreamerClient<Channel>> {
-        let selected = self.transport.select().map_err(anyhow::Error::new)?;
+        tracing::debug!(endpoint = %self.endpoint, "grpc connect");
+
+        let selected = match self.transport.select() {
+            Ok(selected) => selected,
+            Err(err) => {
+                tracing::warn!(
+                    endpoint = %self.endpoint,
+                    error = ?err,
+                    "grpc transport selection failed"
+                );
+                return Err(anyhow::Error::new(err));
+            }
+        };
 
         match selected {
             SelectedTransport::Direct => {
+                tracing::debug!(endpoint = %self.endpoint, "grpc selected direct transport");
+
                 let endpoint = Endpoint::from_shared(self.endpoint.clone())
                     .context("invalid gRPC endpoint URL")?
                     .timeout(Duration::from_secs(10))
                     .connect_timeout(Duration::from_secs(10));
 
-                let channel = endpoint.connect().await.context("failed to connect")?;
+                let channel = match endpoint.connect().await {
+                    Ok(channel) => channel,
+                    Err(err) => {
+                        tracing::warn!(
+                            endpoint = %self.endpoint,
+                            error = ?err,
+                            "grpc direct connect failed"
+                        );
+                        return Err(anyhow::Error::new(err)).context("failed to connect");
+                    }
+                };
                 Ok(CompactTxStreamerClient::new(channel))
             }
             SelectedTransport::Tor { client } => {
-                let uri = self
-                    .endpoint
-                    .parse()
-                    .context("invalid gRPC endpoint URL")?;
+                tracing::debug!(endpoint = %self.endpoint, "grpc selected Tor transport");
+
+                let uri = self.endpoint.parse().context("invalid gRPC endpoint URL")?;
 
                 let conn = tokio::time::timeout(
                     self.transport.config().timeout,

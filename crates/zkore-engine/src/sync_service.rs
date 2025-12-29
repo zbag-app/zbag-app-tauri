@@ -77,6 +77,14 @@ impl SyncService {
         on_progress: Option<SyncEventHandler>,
         on_balance_changed: Option<BalanceEventHandler>,
     ) -> anyhow::Result<()> {
+        let tor_state = tor_manager.as_ref().map(|tor| tor.state());
+        tracing::info!(
+            wallet_id = %wallet_id,
+            network = ?network,
+            tor_state = ?tor_state,
+            "sync start requested"
+        );
+
         {
             let mut state = self.state.lock().expect("mutex poisoned");
             if state.jobs.contains_key(&wallet_id) {
@@ -103,6 +111,12 @@ impl SyncService {
 
         let grpc_url = server_resolver::resolve_grpc_url(app_db, network)
             .context("failed to resolve active lightwalletd endpoint")?;
+        tracing::debug!(
+            wallet_id = %wallet_id,
+            network = ?network,
+            grpc_url = %grpc_url,
+            "sync resolved gRPC endpoint"
+        );
 
         let (cancel_tx, mut cancel_rx) = watch::channel(false);
         let state = Arc::clone(&self.state);
@@ -110,6 +124,8 @@ impl SyncService {
         let on_balance_task = on_balance_changed.clone();
 
         let handle = crate::tokio_runtime::spawn(async move {
+            tracing::debug!(wallet_id = %wallet_id, grpc_url = %grpc_url, "sync task started");
+
             let client = match tor_manager {
                 Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
                 None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
@@ -125,9 +141,20 @@ impl SyncService {
                 }
             };
 
-            let mut wallet_db = match on_balance_task.as_ref() {
-                Some(_) => open_wallet_db(&wallet_db_path, &wallet_dek).ok(),
-                None => None,
+            let mut wallet_db = if on_balance_task.as_ref().is_some() {
+                match open_wallet_db(&wallet_db_path, &wallet_dek) {
+                    Ok(db) => Some(db),
+                    Err(err) => {
+                        tracing::debug!(
+                            wallet_id = %wallet_id,
+                            error = ?err,
+                            "failed to open wallet db for balance updates"
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
             };
 
             let maybe_emit_balances = |wallet_db: &mut Option<Connection>| {
@@ -178,7 +205,8 @@ impl SyncService {
                     update(default_progress());
                 }
                 res = connect_fut => {
-                    if res.is_ok() {
+                    match res {
+                        Ok(_) => {
                         update(SyncProgress {
                             phase: SyncPhase::Scanning,
                             scan_frontier_height: 0,
@@ -231,8 +259,15 @@ impl SyncService {
                             progress_percent: 100,
                             eta_seconds: None,
                         });
-                    } else {
-                        update(default_progress());
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                wallet_id = %wallet_id,
+                                error = ?err,
+                                "sync connect failed"
+                            );
+                            update(default_progress());
+                        }
                     }
                 }
             }
@@ -241,6 +276,8 @@ impl SyncService {
             let mut state = state.lock().expect("mutex poisoned");
             state.jobs.remove(&wallet_id);
             state.started_at.remove(&wallet_id);
+
+            tracing::debug!(wallet_id = %wallet_id, "sync task finished");
         });
 
         let finished = handle.is_finished();

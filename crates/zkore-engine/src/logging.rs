@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt as _};
 
 #[derive(Debug)]
 pub struct LoggingGuard {
@@ -93,12 +94,21 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     let file_appender = tracing_appender::rolling::daily(&log_directory, "zkore");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| default_env_filter());
+
+    let writer: BoxMakeWriter = if cfg!(debug_assertions) {
+        BoxMakeWriter::new(non_blocking.and(std::io::stderr))
+    } else {
+        BoxMakeWriter::new(non_blocking)
+    };
 
     tracing_subscriber::fmt()
         .with_env_filter(env_filter)
-        .with_writer(non_blocking)
+        .with_writer(writer)
+        .with_file(cfg!(debug_assertions))
+        .with_line_number(cfg!(debug_assertions))
+        .with_target(cfg!(debug_assertions))
         .with_ansi(false)
         .try_init()
         .map_err(|e| anyhow::anyhow!(e))?;
@@ -109,6 +119,16 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
         log_directory,
         current_log_file,
     })
+}
+
+fn default_env_filter() -> tracing_subscriber::EnvFilter {
+    if cfg!(debug_assertions) {
+        tracing_subscriber::EnvFilter::new(
+            "info,zkore_engine=debug,zkore_network=debug,zkore_tor=debug,zkore_app_tauri_lib=debug",
+        )
+    } else {
+        tracing_subscriber::EnvFilter::new("info")
+    }
 }
 
 fn default_log_directory() -> anyhow::Result<PathBuf> {
