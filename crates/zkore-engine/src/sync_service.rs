@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use anyhow::Context as _;
 use rusqlite::{Connection, OpenFlags};
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use zeroize::Zeroize;
@@ -13,13 +13,14 @@ use zeroize::Zeroize;
 use std::io::Write as _;
 
 use prost::Message as _;
-use zcash_client_backend::data_api::chain::{scan_cached_blocks, ChainState};
+use zcash_client_backend::data_api::chain::{ChainState, scan_cached_blocks};
 use zcash_client_backend::data_api::scanning::ScanPriority;
 use zcash_client_backend::data_api::wallet::ConfirmationsPolicy;
 use zcash_client_backend::data_api::{WalletRead as _, WalletWrite as _};
 use zcash_client_backend::proto::compact_formats::CompactBlock;
-use zcash_client_sqlite::chain::BlockMeta;
 use zcash_client_sqlite::FsBlockDb;
+use zcash_client_sqlite::chain::BlockMeta;
+use zcash_client_sqlite::chain::init::init_blockmeta_db;
 use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::BlockHeight;
 
@@ -33,7 +34,30 @@ use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
 
-const BATCH_SIZE: u32 = 1000;
+/// Batch size for downloading blocks. Smaller batches improve pipelining granularity.
+const BATCH_SIZE: u32 = 100;
+
+/// Number of batches to buffer ahead for download/scan pipelining.
+const LOOKAHEAD_BATCHES: usize = 2;
+
+/// A downloaded batch of blocks ready for scanning.
+struct DownloadedBatch {
+    range_start: BlockHeight,
+    range_end: BlockHeight,
+    blocks: Vec<CompactBlock>,
+}
+
+/// Result type for the download task.
+enum DownloadResult {
+    /// A batch of blocks was downloaded successfully.
+    Batch(DownloadedBatch),
+    /// Download completed for a range.
+    RangeComplete,
+    /// An error occurred during download.
+    Error(anyhow::Error),
+    /// Download was cancelled.
+    Cancelled,
+}
 
 type SyncEventHandler = Arc<dyn Fn(SyncProgressEvent) + Send + Sync>;
 type BalanceEventHandler = Arc<dyn Fn(BalanceChangedEvent) + Send + Sync>;
@@ -240,7 +264,10 @@ impl SyncService {
             tracing::debug!(wallet_id = %wallet_id, chain_tip = %u32::from(chain_tip), "got chain tip");
 
             // Initialize block cache directory
-            let cache_dir = wallet_db_path.parent().unwrap_or(&wallet_db_path).join("block_cache");
+            let cache_dir = wallet_db_path
+                .parent()
+                .unwrap_or(&wallet_db_path)
+                .join("block_cache");
             if let Err(err) = std::fs::create_dir_all(&cache_dir) {
                 tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
                 update(default_progress());
@@ -251,7 +278,7 @@ impl SyncService {
             }
 
             // Initialize FsBlockDb
-            let fsblock_db = match FsBlockDb::for_path(&cache_dir) {
+            let mut fsblock_db = match FsBlockDb::for_path(&cache_dir) {
                 Ok(db) => db,
                 Err(err) => {
                     tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
@@ -262,6 +289,12 @@ impl SyncService {
                     return;
                 }
             };
+
+            // Initialize the block metadata database schema
+            if let Err(err) = init_blockmeta_db(&mut fsblock_db) {
+                tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to init blockmeta db schema");
+                // Continue - scanning might still work without metadata
+            }
 
             // Open wallet DB for sync operations
             let mut sync_wallet_conn = match open_wallet_db(&wallet_db_path, &wallet_dek) {
@@ -345,8 +378,82 @@ impl SyncService {
                         continue;
                     }
 
-                    // === Phase: Downloading ===
                     let wallet_tip = wdb.chain_height().ok().flatten().unwrap_or(range_start);
+
+                    // === Pipelined download and scan ===
+                    // Create channel for downloaded batches
+                    let (batch_tx, mut batch_rx) =
+                        mpsc::channel::<DownloadResult>(LOOKAHEAD_BATCHES);
+
+                    // Clone what the download task needs
+                    let download_client = client.clone();
+                    let download_cancel_rx = cancel_rx.clone();
+                    let download_wallet_id = wallet_id;
+
+                    // Spawn download task
+                    let download_handle = crate::tokio_runtime::spawn(async move {
+                        let mut current = range_start;
+                        while current < range_end {
+                            // Check cancellation
+                            if *download_cancel_rx.borrow() {
+                                tracing::debug!(wallet_id = %download_wallet_id, "download task cancelled");
+                                let _ = batch_tx.send(DownloadResult::Cancelled).await;
+                                return;
+                            }
+
+                            let batch_end = std::cmp::min(current + BATCH_SIZE, range_end);
+
+                            // Download compact blocks with retry
+                            match download_blocks_with_retry(
+                                &download_client,
+                                current,
+                                batch_end,
+                                5,
+                            )
+                            .await
+                            {
+                                Ok(blocks) => {
+                                    tracing::debug!(
+                                        wallet_id = %download_wallet_id,
+                                        blocks_downloaded = blocks.len(),
+                                        range = format!("{}..{}", u32::from(current), u32::from(batch_end)),
+                                        "downloaded blocks"
+                                    );
+
+                                    let batch = DownloadedBatch {
+                                        range_start: current,
+                                        range_end: batch_end,
+                                        blocks,
+                                    };
+
+                                    // Send batch through channel (will block if channel is full, providing backpressure)
+                                    if batch_tx.send(DownloadResult::Batch(batch)).await.is_err() {
+                                        // Receiver dropped, scan loop exited early
+                                        tracing::debug!(wallet_id = %download_wallet_id, "batch receiver dropped, stopping download");
+                                        return;
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::warn!(
+                                        wallet_id = %download_wallet_id,
+                                        start = %u32::from(current),
+                                        end = %u32::from(batch_end),
+                                        error = ?err,
+                                        "failed to download blocks after retries"
+                                    );
+                                    let _ = batch_tx.send(DownloadResult::Error(err)).await;
+                                    return;
+                                }
+                            }
+
+                            current = batch_end;
+                        }
+
+                        // Signal download complete for this range
+                        let _ = batch_tx.send(DownloadResult::RangeComplete).await;
+                    });
+
+                    // Update phase to downloading/scanning (pipelined)
                     update(SyncProgress {
                         phase: SyncPhase::Downloading,
                         scan_frontier_height: u32::from(range_start),
@@ -355,148 +462,151 @@ impl SyncService {
                         eta_seconds: None,
                     });
 
-                    // Download blocks in batches
-                    let mut current = range_start;
-                    while current < range_end {
-                        if *cancel_rx.borrow() {
-                            tracing::debug!(wallet_id = %wallet_id, "sync cancelled during download");
-                            update(default_progress());
-                            break 'sync_loop;
-                        }
+                    // === Main scan loop - receives batches and scans them ===
+                    let blocks_dir = cache_dir.join("blocks");
+                    let mut range_error = false;
+                    let mut range_cancelled = false;
 
-                        let batch_end = std::cmp::min(
-                            current + BATCH_SIZE,
-                            range_end,
-                        );
-
-                        // Download compact blocks
-                        let mut stream = match client.get_block_range(current, batch_end).await {
-                            Ok(s) => s,
-                            Err(err) => {
-                                tracing::warn!(
-                                    wallet_id = %wallet_id,
-                                    start = %u32::from(current),
-                                    end = %u32::from(batch_end),
-                                    error = ?err,
-                                    "failed to download blocks"
-                                );
-                                update(default_progress());
-                                break 'sync_loop;
-                            }
-                        };
-
-                        // Collect blocks from stream
-                        let mut blocks = Vec::new();
-                        loop {
-                            match stream.message().await {
-                                Ok(Some(block)) => blocks.push(block),
-                                Ok(None) => break,
-                                Err(err) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        error = ?err,
-                                        "error reading block stream"
-                                    );
+                    while let Some(result) = batch_rx.recv().await {
+                        match result {
+                            DownloadResult::Batch(batch) => {
+                                // Check cancellation
+                                if *cancel_rx.borrow() {
+                                    tracing::debug!(wallet_id = %wallet_id, "sync cancelled during scan");
+                                    range_cancelled = true;
                                     break;
                                 }
-                            }
-                        }
 
-                        tracing::debug!(
-                            wallet_id = %wallet_id,
-                            blocks_downloaded = blocks.len(),
-                            range = format!("{}..{}", u32::from(current), u32::from(batch_end)),
-                            "downloaded blocks"
-                        );
+                                // Write blocks to cache
+                                let mut block_metas = Vec::new();
+                                for block in &batch.blocks {
+                                    match write_block_to_cache(&blocks_dir, block) {
+                                        Ok(meta) => block_metas.push(meta),
+                                        Err(err) => {
+                                            tracing::warn!(
+                                                wallet_id = %wallet_id,
+                                                block_height = block.height,
+                                                error = ?err,
+                                                "failed to cache block"
+                                            );
+                                        }
+                                    }
+                                }
 
-                        // Write blocks to cache
-                        let blocks_dir = cache_dir.join("blocks");
-                        let mut block_metas = Vec::new();
-                        for block in &blocks {
-                            match write_block_to_cache(&blocks_dir, block) {
-                                Ok(meta) => block_metas.push(meta),
-                                Err(err) => {
+                                // Register block metadata
+                                if !block_metas.is_empty()
+                                    && let Err(err) = fsblock_db.write_block_metadata(&block_metas)
+                                {
                                     tracing::warn!(
                                         wallet_id = %wallet_id,
-                                        block_height = block.height,
                                         error = ?err,
-                                        "failed to cache block"
+                                        "failed to write block metadata"
                                     );
                                 }
+
+                                // Update progress (downloading phase while receiving batches)
+                                update(SyncProgress {
+                                    phase: SyncPhase::Downloading,
+                                    scan_frontier_height: u32::from(batch.range_end),
+                                    wallet_tip_height: u32::from(wallet_tip),
+                                    progress_percent: calculate_progress(&wdb).max(5),
+                                    eta_seconds: None,
+                                });
+
+                                // Scan the batch immediately after caching
+                                let prior_height = batch.range_start.saturating_sub(1);
+                                let chain_state =
+                                    fetch_chain_state(&client, prior_height, wallet_id).await;
+                                let limit = batch.blocks.len();
+
+                                if limit > 0 {
+                                    update(SyncProgress {
+                                        phase: SyncPhase::Scanning,
+                                        scan_frontier_height: u32::from(batch.range_start),
+                                        wallet_tip_height: u32::from(wallet_tip),
+                                        progress_percent: calculate_progress(&wdb).max(10),
+                                        eta_seconds: None,
+                                    });
+
+                                    match scan_cached_blocks(
+                                        &params,
+                                        &fsblock_db,
+                                        &mut wdb,
+                                        batch.range_start,
+                                        &chain_state,
+                                        limit,
+                                    ) {
+                                        Ok(scan_result) => {
+                                            tracing::debug!(
+                                                wallet_id = %wallet_id,
+                                                scanned_range = ?scan_result.scanned_range(),
+                                                spent_sapling = scan_result.spent_sapling_note_count(),
+                                                spent_orchard = scan_result.spent_orchard_note_count(),
+                                                received_sapling = scan_result.received_sapling_note_count(),
+                                                received_orchard = scan_result.received_orchard_note_count(),
+                                                "scanned blocks"
+                                            );
+                                        }
+                                        Err(err) => {
+                                            tracing::warn!(
+                                                wallet_id = %wallet_id,
+                                                range_start = %u32::from(batch.range_start),
+                                                limit = limit,
+                                                error = ?err,
+                                                "failed to scan blocks"
+                                            );
+                                            // Continue - partial scan is ok
+                                        }
+                                    }
+
+                                    // Clean up scanned blocks from cache
+                                    if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
+                                        tracing::debug!(
+                                            wallet_id = %wallet_id,
+                                            error = ?err,
+                                            "failed to truncate block cache"
+                                        );
+                                    }
+                                }
+
+                                // Update progress after scan
+                                update(SyncProgress {
+                                    phase: SyncPhase::Scanning,
+                                    scan_frontier_height: u32::from(batch.range_end),
+                                    wallet_tip_height: u32::from(wallet_tip),
+                                    progress_percent: calculate_progress(&wdb).max(15),
+                                    eta_seconds: None,
+                                });
+                            }
+                            DownloadResult::RangeComplete => {
+                                tracing::debug!(wallet_id = %wallet_id, "range download complete");
+                                break;
+                            }
+                            DownloadResult::Error(_err) => {
+                                range_error = true;
+                                break;
+                            }
+                            DownloadResult::Cancelled => {
+                                range_cancelled = true;
+                                break;
                             }
                         }
-                        // Register block metadata
-                        if !block_metas.is_empty() {
-                            if let Err(err) = fsblock_db.write_block_metadata(&block_metas) {
-                                tracing::warn!(
-                                    wallet_id = %wallet_id,
-                                    error = ?err,
-                                    "failed to write block metadata"
-                                );
-                            }
-                        }
-
-                        current = batch_end;
-
-                        // Update progress
-                        update(SyncProgress {
-                            phase: SyncPhase::Downloading,
-                            scan_frontier_height: u32::from(current),
-                            wallet_tip_height: u32::from(wallet_tip),
-                            progress_percent: calculate_progress(&wdb).max(5),
-                            eta_seconds: None,
-                        });
                     }
 
-                    // === Phase: Scanning ===
-                    update(SyncProgress {
-                        phase: SyncPhase::Scanning,
-                        scan_frontier_height: u32::from(range_start),
-                        wallet_tip_height: u32::from(wallet_tip),
-                        progress_percent: calculate_progress(&wdb).max(10),
-                        eta_seconds: None,
-                    });
+                    // Wait for download task to complete
+                    let _ = download_handle.await;
 
-                    // Get chain state for scanning (use empty state for prior block)
-                    let prior_height = range_start.saturating_sub(1);
-                    let chain_state = empty_chain_state(prior_height);
-
-                    // Scan cached blocks
-                    let limit = (range_end - range_start) as usize;
-                    match scan_cached_blocks(&params, &fsblock_db, &mut wdb, range_start, &chain_state, limit) {
-                        Ok(scan_result) => {
-                            tracing::debug!(
-                                wallet_id = %wallet_id,
-                                scanned_range = ?scan_result.scanned_range(),
-                                spent_sapling = scan_result.spent_sapling_note_count(),
-                                spent_orchard = scan_result.spent_orchard_note_count(),
-                                received_sapling = scan_result.received_sapling_note_count(),
-                                received_orchard = scan_result.received_orchard_note_count(),
-                                "scanned blocks"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                wallet_id = %wallet_id,
-                                range_start = %u32::from(range_start),
-                                limit = limit,
-                                error = ?err,
-                                "failed to scan blocks"
-                            );
-                            // Continue to next range - partial scan is ok
-                        }
+                    if range_cancelled {
+                        update(default_progress());
+                        break 'sync_loop;
                     }
 
-                    // Clean up scanned blocks from cache
-                    if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
-                        tracing::debug!(
-                            wallet_id = %wallet_id,
-                            error = ?err,
-                            "failed to truncate block cache"
-                        );
+                    if range_error {
+                        update(default_progress());
+                        break 'sync_loop;
                     }
 
-                    // Trigger progress update which will also emit balance changes
+                    // Final progress update for the range
                     update(SyncProgress {
                         phase: SyncPhase::Scanning,
                         scan_frontier_height: u32::from(range_end),
@@ -697,7 +807,10 @@ where
     C: std::borrow::BorrowMut<Connection>,
     R: rand::RngCore + rand::CryptoRng,
 {
-    let summary = wdb.get_wallet_summary(ConfirmationsPolicy::default()).ok().flatten();
+    let summary = wdb
+        .get_wallet_summary(ConfirmationsPolicy::default())
+        .ok()
+        .flatten();
     if let Some(summary) = summary {
         let scan_progress = summary.progress().scan();
         let numerator = *scan_progress.numerator();
@@ -739,4 +852,106 @@ fn write_block_to_cache(
 /// Create an empty chain state at the given height.
 fn empty_chain_state(height: BlockHeight) -> ChainState {
     ChainState::empty(height, BlockHash([0; 32]))
+}
+
+/// Fetch the chain state from lightwalletd, falling back to empty state on failure.
+///
+/// For the very first scan from genesis (height 0), empty state is correct.
+/// For incremental syncs, we need the actual tree state for proper witness computation.
+async fn fetch_chain_state(
+    client: &zkore_network::grpc_client::GrpcClient,
+    height: BlockHeight,
+    wallet_id: uuid::Uuid,
+) -> ChainState {
+    // For height 0 (genesis), empty state is correct
+    if u32::from(height) == 0 {
+        return empty_chain_state(height);
+    }
+
+    match client.get_tree_state(height).await {
+        Ok(tree_state) => match tree_state.to_chain_state() {
+            Ok(state) => {
+                tracing::debug!(
+                    wallet_id = %wallet_id,
+                    height = %u32::from(height),
+                    "fetched tree state from lightwalletd"
+                );
+                state
+            }
+            Err(err) => {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    height = %u32::from(height),
+                    error = ?err,
+                    "failed to parse tree state, using empty"
+                );
+                empty_chain_state(height)
+            }
+        },
+        Err(err) => {
+            tracing::warn!(
+                wallet_id = %wallet_id,
+                height = %u32::from(height),
+                error = ?err,
+                "failed to get tree state, using empty"
+            );
+            empty_chain_state(height)
+        }
+    }
+}
+
+/// Download blocks with retry and exponential backoff.
+async fn download_blocks_with_retry(
+    client: &zkore_network::grpc_client::GrpcClient,
+    start: BlockHeight,
+    end: BlockHeight,
+    max_retries: u32,
+) -> anyhow::Result<Vec<CompactBlock>> {
+    let mut attempt = 0;
+    loop {
+        match client.get_block_range(start, end).await {
+            Ok(mut stream) => {
+                let mut blocks = Vec::new();
+                loop {
+                    match stream.message().await {
+                        Ok(Some(block)) => blocks.push(block),
+                        Ok(None) => break,
+                        Err(err) => {
+                            // Stream error - will retry from scratch
+                            if attempt < max_retries {
+                                tracing::warn!(
+                                    attempt = attempt + 1,
+                                    max_retries = max_retries,
+                                    error = ?err,
+                                    "stream error, will retry"
+                                );
+                                break;
+                            }
+                            return Err(anyhow::Error::from(err));
+                        }
+                    }
+                }
+                if !blocks.is_empty() || attempt >= max_retries {
+                    return Ok(blocks);
+                }
+            }
+            Err(err) if attempt < max_retries => {
+                attempt += 1;
+                let delay_ms = 1000 * 2u64.pow(attempt.min(6)); // Max ~64 seconds
+                let delay = std::time::Duration::from_millis(delay_ms.min(60_000)); // Cap at 60 seconds
+                tracing::warn!(
+                    attempt = attempt,
+                    max_retries = max_retries,
+                    delay_secs = delay.as_secs(),
+                    error = ?err,
+                    "download failed, retrying"
+                );
+                tokio::time::sleep(delay).await;
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+        attempt += 1;
+    }
 }

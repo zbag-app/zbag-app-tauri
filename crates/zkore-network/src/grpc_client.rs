@@ -72,8 +72,8 @@ impl GrpcClient {
 
                 let endpoint = Endpoint::new(self.endpoint.clone())
                     .context("invalid gRPC endpoint URL")?
-                    .timeout(Duration::from_secs(10))
-                    .connect_timeout(Duration::from_secs(10));
+                    .timeout(Duration::from_secs(120)) // 2 minutes for streaming operations
+                    .connect_timeout(Duration::from_secs(30)); // 30 seconds for connection
 
                 let channel = match endpoint.connect().await {
                     Ok(channel) => channel,
@@ -186,10 +186,7 @@ impl GrpcClient {
             .context("GetLatestBlock RPC failed")?
             .into_inner();
 
-        Ok((
-            BlockHeight::from_u32(response.height as u32),
-            response.hash,
-        ))
+        Ok((BlockHeight::from_u32(response.height as u32), response.hash))
     }
 
     /// Download compact blocks in a range.
