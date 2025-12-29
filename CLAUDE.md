@@ -79,6 +79,17 @@ apps/zkore-app-tauri/
 - TypeScript: `PascalCase.tsx` components, `useX` hooks
 - Commit patterns: `US<N>: ...`, `docs: ...`, `chore: ...`, `fix: ...`
 
+## Pre-Commit Checks
+
+Always run formatting and linting before committing Rust changes:
+
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets --exclude zkore-app-tauri
+```
+
+If clippy reports warnings, fix them before committing. If fmt makes changes, include them in your commit or commit separately as `chore: cargo fmt`.
+
 ## Zcash Library Notes (librustzcash 0.21+)
 
 ```rust
