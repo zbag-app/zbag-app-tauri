@@ -507,7 +507,7 @@ impl SwapService {
         let near = self.near.clone();
         let wallet_manager = Arc::clone(&self.wallet_manager);
 
-        let handle = tokio::spawn(async move {
+        let handle = crate::tokio_runtime::spawn(async move {
             let mut backoff = Duration::from_secs(5);
             let mut swap = initial_swap;
 

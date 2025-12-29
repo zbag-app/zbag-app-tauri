@@ -109,7 +109,7 @@ impl SyncService {
         let on_progress_task = on_progress.clone();
         let on_balance_task = on_balance_changed.clone();
 
-        let handle = tokio::spawn(async move {
+        let handle = crate::tokio_runtime::spawn(async move {
             let client = match tor_manager {
                 Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
                 None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
