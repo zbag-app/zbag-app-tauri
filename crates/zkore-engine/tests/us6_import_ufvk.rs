@@ -126,7 +126,7 @@ fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
     let answers = solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
     mgr.verify_backup(
@@ -181,7 +181,7 @@ fn import_ufvk_rejects_network_mismatch() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let seed = [11u8; 32];

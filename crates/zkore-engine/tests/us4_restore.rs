@@ -154,7 +154,7 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Seed Source", Network::Testnet, "pw", false)
+        .create_wallet("Seed Source", Network::Testnet, "pw", false, None)
         .expect("create wallet");
     let seed_phrase = created.seed_phrase.join(" ");
 
@@ -200,7 +200,7 @@ fn restore_wallet_returns_birthday_height_estimate() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Seed Source", Network::Mainnet, "pw", false)
+        .create_wallet("Seed Source", Network::Mainnet, "pw", false, None)
         .expect("create wallet");
     let seed_phrase = created.seed_phrase.join(" ");
 

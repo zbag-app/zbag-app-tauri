@@ -462,10 +462,19 @@ impl SyncService {
                         eta_seconds: None,
                     });
 
+                    // === Fetch tree state ONCE at the start of the range ===
+                    // This is a major optimization: instead of fetching tree state for every
+                    // 100-block batch (34,700 RPC calls for initial sync), we fetch it once
+                    // per range. The scanner maintains internal state between batches.
+                    let range_prior_height = range_start.saturating_sub(1);
+                    let range_chain_state =
+                        fetch_chain_state(&client, range_prior_height, wallet_id).await;
+
                     // === Main scan loop - receives batches and scans them ===
                     let blocks_dir = cache_dir.join("blocks");
                     let mut range_error = false;
                     let mut range_cancelled = false;
+                    let mut is_first_batch_in_range = true;
 
                     while let Some(result) = batch_rx.recv().await {
                         match result {
@@ -514,9 +523,16 @@ impl SyncService {
                                 });
 
                                 // Scan the batch immediately after caching
+                                // For the first batch in the range, use the pre-fetched tree state.
+                                // For subsequent batches, use empty state - the scanner maintains
+                                // internal state between calls so it doesn't need the tree state again.
                                 let prior_height = batch.range_start.saturating_sub(1);
-                                let chain_state =
-                                    fetch_chain_state(&client, prior_height, wallet_id).await;
+                                let chain_state = if is_first_batch_in_range {
+                                    is_first_batch_in_range = false;
+                                    range_chain_state.clone()
+                                } else {
+                                    empty_chain_state(prior_height)
+                                };
                                 let limit = batch.blocks.len();
 
                                 if limit > 0 {

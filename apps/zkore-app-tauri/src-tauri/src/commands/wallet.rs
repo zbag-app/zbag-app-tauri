@@ -18,13 +18,34 @@ use crate::state::AppState;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "zkore_create_wallet")]
-pub fn zkore_create_wallet(
+pub async fn zkore_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
 ) -> IpcResult<CreateWalletResponse> {
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
     }
+
+    // Resolve gRPC URL and fetch chain tip for birthday height
+    let (grpc_url, tor_manager) = {
+        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let grpc_url =
+            zkore_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
+        (grpc_url, Some(state.tor_manager.clone()))
+    };
+
+    // Fetch birthday height near chain tip for new wallet
+    // This avoids scanning the entire blockchain for a brand new wallet
+    let birthday_height = match grpc_url {
+        Ok(url) => {
+            zkore_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager)
+                .await
+        }
+        Err(err) => {
+            warn!(error = ?err, "failed to resolve gRPC URL for birthday fetch");
+            None
+        }
+    };
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
@@ -33,6 +54,7 @@ pub fn zkore_create_wallet(
             request.network,
             &request.password,
             request.remember_unlock,
+            birthday_height,
         )?;
 
         Ok(CreateWalletResponse {
@@ -364,7 +386,7 @@ mod tests {
                 .expect("create wallet manager");
 
         let created = mgr
-            .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+            .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
             .expect("create wallet");
         mgr.lock_wallet(created.wallet.id).expect("lock wallet");
 

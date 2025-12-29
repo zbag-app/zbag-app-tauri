@@ -203,6 +203,7 @@ impl WalletManager {
         network: Network,
         password: &str,
         remember_unlock: bool,
+        birthday_height: Option<u32>,
     ) -> anyhow::Result<CreateWalletResult> {
         if name.trim().is_empty() {
             return Err(ipc_err(
@@ -298,8 +299,21 @@ impl WalletManager {
             let sapling_activation = params
                 .activation_height(NetworkUpgrade::Sapling)
                 .unwrap_or(zcash_protocol::consensus::H0);
+
+            // For new wallets: use provided birthday_height (near chain tip) if available,
+            // otherwise fall back to Sapling activation (for tests or offline creation).
+            // Ensure birthday is at least Sapling activation height.
+            let birthday_height_u32 = birthday_height
+                .unwrap_or(u32::from(sapling_activation))
+                .max(u32::from(sapling_activation));
+
             let birthday = AccountBirthday::from_parts(
-                ChainState::empty(sapling_activation.saturating_sub(1), BlockHash([0; 32])),
+                ChainState::empty(
+                    zcash_protocol::consensus::BlockHeight::from(
+                        birthday_height_u32.saturating_sub(1),
+                    ),
+                    BlockHash([0; 32]),
+                ),
                 None,
             );
 
@@ -1984,4 +1998,46 @@ fn decrypt_mnemonic(
             },
         )
         .map_err(|e| anyhow::anyhow!("failed to decrypt mnemonic: {e}"))
+}
+
+/// Safety margin for birthday height below chain tip.
+/// New wallets use a birthday 100 blocks below the chain tip to avoid
+/// edge cases where the tip might be reorged.
+const NEW_WALLET_BIRTHDAY_MARGIN: u32 = 100;
+
+/// Fetch the current chain tip height for use as a new wallet birthday.
+///
+/// Returns the chain tip height minus a safety margin, or `None` if the chain tip
+/// cannot be fetched (e.g., no network connection).
+///
+/// For new wallets, this allows skipping the scan of the entire blockchain history
+/// since a new wallet cannot have any funds before its creation.
+pub async fn fetch_birthday_height_for_new_wallet(
+    grpc_url: &str,
+    tor_manager: Option<std::sync::Arc<zkore_tor::TorManager>>,
+) -> Option<u32> {
+    let client = match tor_manager {
+        Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
+        None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
+    };
+
+    match client.get_latest_block().await {
+        Ok((height, _hash)) => {
+            let tip_height = u32::from(height);
+            let birthday = tip_height.saturating_sub(NEW_WALLET_BIRTHDAY_MARGIN);
+            tracing::debug!(
+                chain_tip = tip_height,
+                birthday = birthday,
+                "fetched chain tip for new wallet birthday"
+            );
+            Some(birthday)
+        }
+        Err(err) => {
+            tracing::warn!(
+                error = ?err,
+                "failed to fetch chain tip for new wallet birthday, will use Sapling activation"
+            );
+            None
+        }
+    }
 }

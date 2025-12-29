@@ -161,7 +161,7 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
 
     let password = "correct horse battery staple";
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, password, false)
+        .create_wallet("Test Wallet", Network::Testnet, password, false, None)
         .expect("create wallet")
         .wallet;
 
@@ -224,7 +224,7 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
 
     let password = "pw";
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, password, false)
+        .create_wallet("Test Wallet", Network::Testnet, password, false, None)
         .expect("create wallet")
         .wallet;
     mgr.lock_wallet(wallet.id).expect("lock wallet");
@@ -291,7 +291,7 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         )
         .expect("create wallet manager");
 
-        mgr.create_wallet("Test Wallet", Network::Testnet, password, true)
+        mgr.create_wallet("Test Wallet", Network::Testnet, password, true, None)
             .expect("create wallet")
             .wallet
             .id

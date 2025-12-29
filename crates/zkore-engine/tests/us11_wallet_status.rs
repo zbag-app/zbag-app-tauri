@@ -254,7 +254,7 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -320,7 +320,7 @@ fn wallet_status_tracks_sync_progress_and_errors() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 

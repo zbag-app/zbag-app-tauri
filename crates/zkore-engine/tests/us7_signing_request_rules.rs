@@ -113,7 +113,7 @@ fn build_signing_request_is_blocked_until_backup_complete() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -147,7 +147,7 @@ fn build_signing_request_enforces_privacy_ack_and_memo_rules_for_transparent_rec
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -184,7 +184,7 @@ fn build_signing_request_rejects_memo_over_512_bytes() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)

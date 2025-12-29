@@ -96,7 +96,7 @@ fn wallet_directories_are_network_scoped_and_network_is_immutable() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -137,7 +137,7 @@ fn address_prefixes_match_network() {
     .expect("create wallet manager");
 
     let mainnet = mgr
-        .create_wallet("Main", Network::Mainnet, "pw", false)
+        .create_wallet("Main", Network::Mainnet, "pw", false, None)
         .expect("create mainnet wallet")
         .wallet;
     let main_shielded = mgr
@@ -159,7 +159,7 @@ fn address_prefixes_match_network() {
 
     // Switch to testnet wallet and assert prefixes.
     let testnet = mgr
-        .create_wallet("Test", Network::Testnet, "pw2", false)
+        .create_wallet("Test", Network::Testnet, "pw2", false, None)
         .expect("create testnet wallet")
         .wallet;
     mgr.load_wallet(testnet.id).expect("load testnet wallet");

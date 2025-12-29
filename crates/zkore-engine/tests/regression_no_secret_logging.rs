@@ -170,7 +170,7 @@ fn regression_no_secret_logging() {
 
         let wallet_id = {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            mgr.create_wallet("Test Wallet", Network::Testnet, password, false)
+            mgr.create_wallet("Test Wallet", Network::Testnet, password, false, None)
                 .expect("create wallet")
                 .wallet
                 .id

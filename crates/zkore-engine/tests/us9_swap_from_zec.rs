@@ -167,7 +167,7 @@ fn start_swap_from_zec_requires_privacy_ack() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -205,7 +205,7 @@ fn start_swap_from_zec_requires_reauth_token_when_acknowledged() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -243,7 +243,7 @@ fn start_swap_from_zec_is_blocked_until_backup_complete() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 

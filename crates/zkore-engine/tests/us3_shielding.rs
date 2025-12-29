@@ -308,7 +308,7 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -362,7 +362,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -443,7 +443,7 @@ fn shield_funds_is_blocked_until_backup_complete() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -475,7 +475,7 @@ fn shield_funds_insufficient_fee_includes_details() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -536,7 +536,7 @@ fn shield_funds_batches_large_input_sets() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false)
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
