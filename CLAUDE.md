@@ -37,6 +37,8 @@ Note: `cargo build --workspace` will fail with "frontendDist path doesn't exist"
 
 Note: To override the default lightwalletd server in debug builds, set `ZKORE_GRPC_URL` before running `tauri dev`.
 
+A `Makefile` is available with shortcuts for common tasks - run `make help` to see all targets.
+
 ## Architecture
 
 ```
@@ -59,6 +61,27 @@ apps/zkore-app-tauri/
 - `crates/zkore-engine/src/tx_service.rs` - Transaction building and broadcasting
 - `crates/zkore-core/src/ipc/` - IPC request/response types
 - `apps/zkore-app-tauri/src/services/ipc.ts` - Frontend IPC client
+
+### Adding Tauri Commands
+
+When adding a new Tauri IPC command, you must register it in **BOTH** files:
+
+1. `apps/zkore-app-tauri/src-tauri/src/lib.rs` - Library entry point (used by tests)
+2. `apps/zkore-app-tauri/src-tauri/src/main.rs` - Binary entry point (used at runtime)
+
+The `main.rs` is the actual entry point when running `make dev` or `tauri dev`. If you only add the command to `lib.rs`, it will NOT be available at runtime.
+
+Example registration in both files:
+```rust
+// In invoke_handler(tauri::generate_handler![...])
+commands::wallet::zkore_my_new_command,  // lib.rs
+zkore_app_tauri_lib::commands::wallet::zkore_my_new_command,  // main.rs
+```
+
+Also update:
+- `crates/zkore-core/src/ipc/v1/commands/*.rs` - Request/Response types
+- `apps/zkore-app-tauri/src/types/ipc.ts` - TypeScript types
+- `apps/zkore-app-tauri/src/services/ipc.ts` - IPC client function
 
 ## Toolchain
 
