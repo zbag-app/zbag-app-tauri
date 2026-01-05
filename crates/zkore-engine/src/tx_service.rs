@@ -602,6 +602,13 @@ impl<C: Clock> TxService<C> {
         self.proposals.remove(proposal_id).is_some()
     }
 
+    /// Clear all pending proposals for a specific wallet.
+    /// Called during wallet logout to prevent stale proposals.
+    pub fn clear_proposals_for_wallet(&mut self, wallet_id: Uuid) {
+        self.proposals
+            .retain(|_, record| record.wallet_id != wallet_id);
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn confirm_send(
         &mut self,
@@ -1634,7 +1641,10 @@ fn update_queued_broadcast_error<C: Clock>(
 
 fn block_on<F: std::future::Future>(future: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(future),
+        Ok(handle) => {
+            // Use block_in_place to avoid "cannot start runtime from within runtime" panic
+            tokio::task::block_in_place(|| handle.block_on(future))
+        }
         Err(_) => tokio::runtime::Runtime::new()
             .expect("create tokio runtime")
             .block_on(future),

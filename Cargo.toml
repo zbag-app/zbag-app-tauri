@@ -7,6 +7,8 @@ members = [
   "crates/zkore-keystone",
   "crates/zkore-tor",
   "apps/zkore-app-tauri/src-tauri",
+  "apps/zkore-tui",
+  "apps/zkore-cli",
 ]
 
 [workspace.package]
