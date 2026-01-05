@@ -663,6 +663,41 @@ impl WalletManager {
         Ok(WalletLockStatus::Locked)
     }
 
+    /// Logout from the active wallet completely.
+    /// This differs from lock_wallet() in that it:
+    /// 1. Clears all cached state for the wallet (balances, sync status, proposals)
+    /// 2. Sets active_wallet to None (not just locked)
+    /// 3. Clears backup challenges
+    ///
+    /// Caller MUST stop sync before calling this method.
+    pub fn logout_wallet(&mut self, wallet_id: Uuid) -> anyhow::Result<()> {
+        // Verify wallet_id matches active wallet
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_NOT_FOUND, "no active wallet"));
+        };
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not active"));
+        }
+
+        // Clear wallet_db connection and DEK
+        if let Some(active) = self.active_wallet.as_mut() {
+            active.wallet_db = None;
+            active.dek = None;
+        }
+
+        // Clear all cached state for this wallet
+        self.cached_balances.retain(|(wid, _), _| *wid != wallet_id);
+        self.cached_sync_status.remove(&wallet_id);
+        self.sync_stop_requested.remove(&wallet_id);
+        self.last_emitted_status.remove(&wallet_id);
+        self.backup_challenges.remove(&wallet_id);
+        self.tx_service.clear_proposals_for_wallet(wallet_id);
+
+        // Deactivate the wallet
+        self.active_wallet = None;
+        Ok(())
+    }
+
     pub fn reauth_wallet(
         &mut self,
         wallet_id: Uuid,
@@ -735,7 +770,7 @@ impl WalletManager {
         Ok(phrase.split_whitespace().map(|w| w.to_string()).collect())
     }
 
-    pub(crate) fn consume_reauth_token(
+    pub fn consume_reauth_token(
         &mut self,
         wallet_id: Uuid,
         token: &str,

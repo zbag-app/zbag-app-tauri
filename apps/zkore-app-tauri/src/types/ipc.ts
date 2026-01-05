@@ -241,7 +241,7 @@ export interface BackupChallenge {
 // Re-auth Types
 // ============================================================================
 
-export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase';
+export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase' | 'Logout';
 
 // ============================================================================
 // Server Types
@@ -355,6 +355,12 @@ export interface ReauthWalletRequest extends VersionedPayload {
 
 /** View seed phrase (requires re-auth token with purpose ViewSeedPhrase) */
 export interface ViewSeedPhraseRequest extends VersionedPayload {
+  wallet_id: string;
+  reauth_token: string;
+}
+
+/** Logout wallet (requires re-auth token with purpose Logout) */
+export interface LogoutWalletRequest extends VersionedPayload {
   wallet_id: string;
   reauth_token: string;
 }
@@ -626,6 +632,10 @@ export interface ReauthWalletResponse extends VersionedPayload {
 
 export interface ViewSeedPhraseResponse extends VersionedPayload {
   seed_phrase: string[];
+}
+
+export interface LogoutWalletResponse extends VersionedPayload {
+  success: boolean;
 }
 
 export interface LoadWalletResponse extends VersionedPayload {
@@ -927,6 +937,7 @@ export const Commands = {
   LOCK_WALLET: 'zkore_lock_wallet',
   REAUTH_WALLET: 'zkore_reauth_wallet',
   VIEW_SEED_PHRASE: 'zkore_view_seed_phrase',
+  LOGOUT_WALLET: 'zkore_logout_wallet',
 
   // Address
   GET_RECEIVE_ADDRESS: 'zkore_get_receive_address',

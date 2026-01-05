@@ -8,8 +8,9 @@ use zkore_core::domain::{AccountInfo, AccountType, WalletLockStatus};
 use zkore_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
-    LockWalletRequest, LockWalletResponse, ReauthWalletRequest, ReauthWalletResponse,
-    UnlockWalletRequest, UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
+    LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
+    ReauthPurpose, ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest,
+    UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
 use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
@@ -196,6 +197,38 @@ pub fn zkore_get_wallet_status(
         Ok(GetWalletStatusResponse {
             schema_version: SCHEMA_VERSION,
             status,
+        })
+    })
+}
+
+#[tauri::command(rename = "zkore_logout_wallet")]
+pub fn zkore_logout_wallet(
+    state: State<'_, AppState>,
+    request: LogoutWalletRequest,
+) -> IpcResult<LogoutWalletResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    map_anyhow(|| {
+        // Stop sync first (best effort)
+        let _ = state.sync_service.stop_sync(request.wallet_id, None);
+
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+
+        // Validate and consume reauth token
+        mgr.consume_reauth_token(
+            request.wallet_id,
+            &request.reauth_token,
+            ReauthPurpose::Logout,
+        )?;
+
+        // Perform logout
+        mgr.logout_wallet(request.wallet_id)?;
+
+        Ok(LogoutWalletResponse {
+            schema_version: SCHEMA_VERSION,
+            success: true,
         })
     })
 }

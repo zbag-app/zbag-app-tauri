@@ -21,6 +21,7 @@ pub fn run() {
             commands::wallet::zkore_lock_wallet,
             commands::wallet::zkore_reauth_wallet,
             commands::wallet::zkore_view_seed_phrase,
+            commands::wallet::zkore_logout_wallet,
             // Address
             commands::address::zkore_get_receive_address,
             // Sync

@@ -45,6 +45,12 @@ export async function reauthWallet(
   return invoke(IPC.Commands.REAUTH_WALLET, { request: versioned(request) });
 }
 
+export async function logoutWallet(
+  request: Omit<IPC.LogoutWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.LogoutWalletResponse>> {
+  return invoke(IPC.Commands.LOGOUT_WALLET, { request: versioned(request) });
+}
+
 export async function viewSeedPhrase(
   request: Omit<IPC.ViewSeedPhraseRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.ViewSeedPhraseResponse>> {

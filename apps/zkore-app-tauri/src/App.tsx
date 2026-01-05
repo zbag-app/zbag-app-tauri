@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type * as IPC from './types/ipc';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
@@ -9,7 +9,7 @@ import { NetworkBadge } from './components/common/NetworkBadge';
 import { TorStatusBadge } from './components/common/TorStatusBadge';
 import { AccountSelector } from './components/wallet/AccountSelector';
 import { useActiveAccount } from './hooks/useActiveAccount';
-import { getTorState, listWallets, loadWallet, setTorEnabled, unlockWallet } from './services/ipc';
+import { getTorState, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
 import { CreateWallet } from './pages/CreateWallet';
@@ -37,6 +37,7 @@ const queryClient = new QueryClient();
 type StartupState =
   | { kind: 'loading' }
   | { kind: 'no-wallets' }
+  | { kind: 'wallet-selection' }
   | { kind: 'locked'; wallet: IPC.WalletInfo }
   | { kind: 'ready'; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }
   | { kind: 'error'; error: IPC.IpcError };
@@ -52,6 +53,7 @@ function pickMostRecentWallet(wallets: IPC.WalletInfo[]): IPC.WalletInfo {
 }
 
 function AppInner() {
+  const navigate = useNavigate();
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
   const [accounts, setAccounts] = useState<IPC.AccountInfo[]>([]);
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
@@ -102,6 +104,15 @@ function AppInner() {
     const res = await setTorEnabled({ enabled });
     if ('ok' in res) {
       setTorState(res.ok.state);
+    }
+  };
+
+  const handleQuickLock = async () => {
+    if (startup.kind !== 'ready') return;
+    const res = await lockWallet({ wallet_id: startup.wallet.id });
+    if ('ok' in res && res.ok.locked) {
+      setStartup({ kind: 'locked', wallet: startup.wallet });
+      setAccounts([]);
     }
   };
 
@@ -217,6 +228,36 @@ function AppInner() {
     );
   }
 
+  if (startup.kind === 'wallet-selection') {
+    return (
+      <WalletSelectionRoutes
+        onLoaded={(resp) => {
+          setSeedPhrase(null);
+          setRestoreFlow(null);
+          if (resp.lock_status === 'Locked') {
+            setStartup({ kind: 'locked', wallet: resp.wallet });
+            setAccounts([]);
+            return;
+          }
+          setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
+          setAccounts(resp.accounts);
+        }}
+        onCreated={(args) => {
+          setSeedPhrase(args.seedPhrase);
+          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+          setAccounts(args.accounts);
+        }}
+        onRestoreFlow={setRestoreFlow}
+        restoreFlow={restoreFlow}
+        onClearRestoreFlow={() => setRestoreFlow(null)}
+        onRestored={(args) => {
+          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+          setAccounts(args.accounts);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ display: 'grid', gap: 16, padding: 16 }}>
       {torState && torState.enabled && torState.status === 'Error' && !dismissedTorError ? (
@@ -245,6 +286,9 @@ function AppInner() {
           <Link to="/swap">Swap</Link>
           <Link to="/activity">Activity</Link>
           <Link to="/settings">Settings</Link>
+          <button type="button" onClick={handleQuickLock} style={{ cursor: 'pointer' }}>
+            Lock
+          </button>
         </nav>
       </header>
 
@@ -331,7 +375,18 @@ function AppInner() {
         />
         <Route
           path="/settings"
-          element={<Settings wallet={startup.wallet} torState={torState} onSetTorEnabled={toggleTor} />}
+          element={
+            <Settings
+              wallet={startup.wallet}
+              torState={torState}
+              onSetTorEnabled={toggleTor}
+              onLogout={() => {
+                setAccounts([]);
+                setStartup({ kind: 'wallet-selection' });
+                navigate('/wallets');
+              }}
+            />
+          }
         />
         <Route path="/settings/servers" element={<ServerSettings wallet={startup.wallet} />} />
         <Route
@@ -356,6 +411,47 @@ function AppInner() {
           path="/backup"
           element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
         />
+      </Routes>
+    </div>
+  );
+}
+
+function WalletSelectionRoutes(props: {
+  onLoaded: (resp: IPC.LoadWalletResponse) => void;
+  onCreated: (args: { seedPhrase: string[]; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
+  onRestoreFlow: (data: RestoreFlowData) => void;
+  restoreFlow: RestoreFlowData | null;
+  onClearRestoreFlow: () => void;
+  onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
+}) {
+  const { onLoaded, onCreated, onRestoreFlow, restoreFlow, onClearRestoreFlow, onRestored } = props;
+
+  return (
+    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
+      <Routes>
+        <Route
+          path="/wallets"
+          element={<Wallets activeWalletId={null} onLoaded={onLoaded} />}
+        />
+        <Route
+          path="/create"
+          element={<CreateWallet onCreated={onCreated} />}
+        />
+        <Route
+          path="/restore"
+          element={<RestoreWallet onContinue={onRestoreFlow} />}
+        />
+        <Route
+          path="/restore/birthday"
+          element={
+            <RestoreBirthday
+              flow={restoreFlow}
+              onClearFlow={onClearRestoreFlow}
+              onRestored={onRestored}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/wallets" replace />} />
       </Routes>
     </div>
   );

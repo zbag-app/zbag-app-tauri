@@ -13,7 +13,7 @@ function formatTimestamp(ts: number | null): string {
   }
 }
 
-export function Wallets(props: { activeWalletId: string; onLoaded: (resp: IPC.LoadWalletResponse) => void }) {
+export function Wallets(props: { activeWalletId: string | null; onLoaded: (resp: IPC.LoadWalletResponse) => void }) {
   const { activeWalletId, onLoaded } = props;
   const navigate = useNavigate();
 
@@ -101,7 +101,7 @@ export function Wallets(props: { activeWalletId: string; onLoaded: (resp: IPC.Lo
                   ) : null}
                 </div>
                 <button type="button" onClick={() => openWallet(w.id)} disabled={loading || isActive}>
-                  {isActive ? 'Open' : 'Switch'}
+                  {isActive ? 'Active' : 'Open'}
                 </button>
               </div>
 

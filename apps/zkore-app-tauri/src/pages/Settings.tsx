@@ -4,14 +4,16 @@ import { Link } from 'react-router-dom';
 import { NetworkBadge } from '../components/common/NetworkBadge';
 import { TorStatusBadge } from '../components/common/TorStatusBadge';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
+import { LogoutDialog } from '../components/common/LogoutDialog';
 import { getLogLocation } from '../services/ipc';
 
 export function Settings(props: {
   wallet: IPC.WalletInfo;
   torState: IPC.TorState | null;
   onSetTorEnabled: (enabled: boolean) => void;
+  onLogout: () => void;
 }) {
-  const { wallet, torState, onSetTorEnabled } = props;
+  const { wallet, torState, onSetTorEnabled, onLogout } = props;
   const [logLocation, setLogLocation] = useState<IPC.GetLogLocationResponse | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
 
@@ -79,6 +81,11 @@ export function Settings(props: {
           More security settings are coming soon.
         </div>
         <ViewSeedPhraseDialog walletId={wallet.id} triggerLabel="View seed phrase" />
+        <LogoutDialog
+          walletId={wallet.id}
+          triggerLabel="Logout"
+          onLogout={onLogout}
+        />
       </section>
 
       <section style={{ display: 'grid', gap: 10 }}>

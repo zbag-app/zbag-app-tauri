@@ -54,6 +54,7 @@ fn main() {
             zkore_app_tauri_lib::commands::wallet::zkore_lock_wallet,
             zkore_app_tauri_lib::commands::wallet::zkore_reauth_wallet,
             zkore_app_tauri_lib::commands::wallet::zkore_view_seed_phrase,
+            zkore_app_tauri_lib::commands::wallet::zkore_logout_wallet,
             // Address
             zkore_app_tauri_lib::commands::address::zkore_get_receive_address,
             // Sync
