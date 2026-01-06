@@ -378,7 +378,10 @@ impl SyncService {
                         continue;
                     }
 
-                    let wallet_tip = wdb.chain_height().ok().flatten().unwrap_or(range_start);
+                    let wallet_tip = wdb.chain_height().ok().flatten().unwrap_or_else(|| {
+                        tracing::debug!("chain height unavailable for progress calculation");
+                        range_start
+                    });
 
                     // === Pipelined download and scan ===
                     // Create channel for downloaded batches
@@ -839,6 +842,9 @@ where
         .get_wallet_summary(ConfirmationsPolicy::default())
         .ok()
         .flatten();
+    if summary.is_none() {
+        tracing::debug!("wallet summary unavailable for progress calculation");
+    }
     if let Some(summary) = summary {
         let scan_progress = summary.progress().scan();
         let numerator = *scan_progress.numerator();
@@ -856,7 +862,17 @@ fn write_block_to_cache(
     block: &CompactBlock,
 ) -> anyhow::Result<BlockMeta> {
     let height = BlockHeight::from_u32(block.height as u32);
-    let hash_bytes: [u8; 32] = block.hash.as_slice().try_into().unwrap_or([0u8; 32]);
+    let hash_bytes: [u8; 32] = match block.hash.as_slice().try_into() {
+        Ok(h) => h,
+        Err(_) => {
+            tracing::warn!(
+                block_height = block.height,
+                hash_len = block.hash.len(),
+                "malformed block hash, using zeros"
+            );
+            [0u8; 32]
+        }
+    };
     let block_hash = BlockHash(hash_bytes);
 
     let block_meta = BlockMeta {

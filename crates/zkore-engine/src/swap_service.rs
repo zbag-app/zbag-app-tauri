@@ -693,7 +693,10 @@ fn has_confirmed_zcash_tx(
 
     let (wallet, conn) = match mgr.require_active_unlocked_wallet_db() {
         Ok(ctx) => ctx,
-        Err(_) => return false,
+        Err(e) => {
+            tracing::debug!(error = ?e, "swap detection check failed");
+            return false;
+        }
     };
     if wallet.id != wallet_id {
         return false;
@@ -724,18 +727,27 @@ fn has_confirmed_zcash_tx(
          LIMIT 200",
     ) {
         Ok(stmt) => stmt,
-        Err(_) => return false,
+        Err(e) => {
+            tracing::debug!(error = ?e, "swap detection check failed");
+            return false;
+        }
     };
 
     let mut rows = match stmt.query([]) {
         Ok(rows) => rows,
-        Err(_) => return false,
+        Err(e) => {
+            tracing::debug!(error = ?e, "swap detection check failed");
+            return false;
+        }
     };
 
     while let Ok(Some(row)) = rows.next() {
         let is_shielding: bool = match row.get(4) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                tracing::debug!(error = ?e, "skipping swap check due to error");
+                continue;
+            }
         };
         if is_shielding {
             continue;
@@ -743,11 +755,17 @@ fn has_confirmed_zcash_tx(
 
         let sent_note_count: i64 = match row.get(5) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                tracing::debug!(error = ?e, "skipping swap check due to error");
+                continue;
+            }
         };
         let received_note_count: i64 = match row.get(6) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                tracing::debug!(error = ?e, "skipping swap check due to error");
+                continue;
+            }
         };
 
         let block_time: Option<i64> = row.get(7).ok();
@@ -765,7 +783,10 @@ fn has_confirmed_zcash_tx(
 
                 let total_received: i64 = match row.get(3) {
                     Ok(v) => v,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::debug!(error = ?e, "skipping swap check due to error");
+                        continue;
+                    }
                 };
                 let received_u64 = u64::try_from(total_received.max(0)).unwrap_or(0);
                 if expected_amount_zat.is_none_or(|expected| received_u64 == expected) {
@@ -779,11 +800,17 @@ fn has_confirmed_zcash_tx(
 
                 let total_spent: i64 = match row.get(2) {
                     Ok(v) => v,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::debug!(error = ?e, "skipping swap check due to error");
+                        continue;
+                    }
                 };
                 let total_received: i64 = match row.get(3) {
                     Ok(v) => v,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::debug!(error = ?e, "skipping swap check due to error");
+                        continue;
+                    }
                 };
                 let fee_paid: Option<i64> = row.get(1).ok();
                 let fee_u64 = fee_paid

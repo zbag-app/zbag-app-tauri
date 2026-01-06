@@ -1074,7 +1074,10 @@ impl WalletManager {
     fn transparent_total_from_wallet_db(&mut self, wallet_id: Uuid) -> anyhow::Result<u64> {
         let (wallet, conn) = match self.require_unlocked_wallet_db(wallet_id) {
             Ok(pair) => pair,
-            Err(_) => return Ok(0),
+            Err(e) => {
+                tracing::debug!(error = ?e, "wallet not unlocked, returning 0");
+                return Ok(0);
+            }
         };
 
         #[allow(deprecated)]

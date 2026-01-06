@@ -120,13 +120,19 @@ impl<C: Clock> TxService<C> {
 
             let meta_bytes = match std::fs::read(&path) {
                 Ok(bytes) => bytes,
-                Err(_) => continue,
+                Err(e) => {
+                    tracing::debug!(path = ?path, error = ?e, "skipping unreadable queue file");
+                    continue;
+                }
             };
 
             let meta: QueuedBroadcastMeta = match serde_json::from_slice(&meta_bytes) {
                 Ok(meta) => meta,
-                Err(_) => {
-                    let _ = std::fs::remove_file(&path);
+                Err(e) => {
+                    tracing::debug!(path = ?path, error = ?e, "skipping unparseable queue meta file");
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        tracing::debug!(path = ?path, error = ?e, "failed to cleanup queue file");
+                    }
                     continue;
                 }
             };
@@ -135,14 +141,20 @@ impl<C: Clock> TxService<C> {
             let bin_path = queued_broadcast_bin_path(&queue_dir, &txid);
 
             if !bin_path.exists() {
-                let _ = std::fs::remove_file(&path);
+                if let Err(e) = std::fs::remove_file(&path) {
+                    tracing::debug!(path = ?path, error = ?e, "failed to cleanup orphaned queue meta file");
+                }
                 continue;
             }
 
             if now.duration_since(created_at).unwrap_or(Duration::ZERO) > QUEUED_BROADCAST_RETENTION
             {
-                let _ = std::fs::remove_file(&bin_path);
-                let _ = std::fs::remove_file(&path);
+                if let Err(e) = std::fs::remove_file(&bin_path) {
+                    tracing::debug!(path = ?bin_path, error = ?e, "failed to cleanup expired queue bin file");
+                }
+                if let Err(e) = std::fs::remove_file(&path) {
+                    tracing::debug!(path = ?path, error = ?e, "failed to cleanup expired queue meta file");
+                }
                 continue;
             }
 
@@ -1647,8 +1659,14 @@ impl<C: Clock> TxService<C> {
 
 fn delete_queued_broadcast(wallet_dir: &Path, txid: String) {
     let queue_dir = queued_broadcasts_dir(wallet_dir);
-    let _ = std::fs::remove_file(queued_broadcast_bin_path(&queue_dir, &txid));
-    let _ = std::fs::remove_file(queued_broadcast_meta_path(&queue_dir, &txid));
+    let bin_path = queued_broadcast_bin_path(&queue_dir, &txid);
+    let meta_path = queued_broadcast_meta_path(&queue_dir, &txid);
+    if let Err(e) = std::fs::remove_file(&bin_path) {
+        tracing::debug!(path = ?bin_path, error = ?e, "failed to delete queued broadcast bin file");
+    }
+    if let Err(e) = std::fs::remove_file(&meta_path) {
+        tracing::debug!(path = ?meta_path, error = ?e, "failed to delete queued broadcast meta file");
+    }
 }
 
 fn update_queued_broadcast_error<C: Clock>(
