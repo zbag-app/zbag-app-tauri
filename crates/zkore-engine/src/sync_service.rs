@@ -538,15 +538,26 @@ impl SyncService {
                                 });
 
                                 // Scan the batch immediately after caching
-                                // For the first batch in the range, use the pre-fetched tree state.
-                                // For subsequent batches, use empty state - the scanner maintains
-                                // internal state between calls so it doesn't need the tree state again.
+                                // Fetch tree state for each batch to avoid CheckpointConflict
+                                // with existing wallet data during incremental syncs.
                                 let prior_height = batch.range_start.saturating_sub(1);
                                 let chain_state = if is_first_batch_in_range {
                                     is_first_batch_in_range = false;
                                     range_chain_state.clone()
                                 } else {
-                                    empty_chain_state(prior_height)
+                                    match fetch_chain_state(&client, prior_height, wallet_id).await {
+                                        Ok(state) => state,
+                                        Err(err) => {
+                                            tracing::error!(
+                                                wallet_id = %wallet_id,
+                                                height = %u32::from(prior_height),
+                                                error = ?err,
+                                                "tree state fetch failed for batch, aborting range"
+                                            );
+                                            range_error = true;
+                                            break;
+                                        }
+                                    }
                                 };
                                 let limit = batch.blocks.len();
 
@@ -584,9 +595,10 @@ impl SyncService {
                                                 range_start = %u32::from(batch.range_start),
                                                 limit = limit,
                                                 error = ?err,
-                                                "failed to scan blocks - transactions in this range may be missed"
+                                                "failed to scan blocks, aborting range"
                                             );
-                                            // Continue - partial scan is ok, but error is logged
+                                            range_error = true;
+                                            break;
                                         }
                                     }
 
