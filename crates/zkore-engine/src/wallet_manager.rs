@@ -625,10 +625,15 @@ impl WalletManager {
             self.key_store
                 .store_keychain_unlock_material(wallet_id, wallet.network, &dek.0)
                 .context("failed to store keychain unlock material")?;
-        } else {
-            self.key_store
-                .delete_keychain_unlock_material(wallet_id, wallet.network)
-                .ok();
+        } else if let Err(e) = self
+            .key_store
+            .delete_keychain_unlock_material(wallet_id, wallet.network)
+        {
+            tracing::warn!(
+                wallet_id = %wallet_id,
+                error = ?e,
+                "failed to delete keychain entry - may require manual cleanup in OS keychain"
+            );
         }
 
         self.active_wallet = Some(ActiveWallet {

@@ -468,7 +468,19 @@ impl SyncService {
                     // per range. The scanner maintains internal state between batches.
                     let range_prior_height = range_start.saturating_sub(1);
                     let range_chain_state =
-                        fetch_chain_state(&client, range_prior_height, wallet_id).await;
+                        match fetch_chain_state(&client, range_prior_height, wallet_id).await {
+                            Ok(state) => state,
+                            Err(err) => {
+                                tracing::error!(
+                                    wallet_id = %wallet_id,
+                                    height = %u32::from(range_prior_height),
+                                    error = ?err,
+                                    "tree state fetch failed, aborting sync"
+                                );
+                                update(default_progress());
+                                break 'sync_loop;
+                            }
+                        };
 
                     // === Main scan loop - receives batches and scans them ===
                     let blocks_dir = cache_dir.join("blocks");
@@ -870,7 +882,7 @@ fn empty_chain_state(height: BlockHeight) -> ChainState {
     ChainState::empty(height, BlockHash([0; 32]))
 }
 
-/// Fetch the chain state from lightwalletd, falling back to empty state on failure.
+/// Fetch the chain state from lightwalletd.
 ///
 /// For the very first scan from genesis (height 0), empty state is correct.
 /// For incremental syncs, we need the actual tree state for proper witness computation.
@@ -878,42 +890,35 @@ async fn fetch_chain_state(
     client: &zkore_network::grpc_client::GrpcClient,
     height: BlockHeight,
     wallet_id: uuid::Uuid,
-) -> ChainState {
+) -> anyhow::Result<ChainState> {
     // For height 0 (genesis), empty state is correct
     if u32::from(height) == 0 {
-        return empty_chain_state(height);
+        return Ok(empty_chain_state(height));
     }
 
-    match client.get_tree_state(height).await {
-        Ok(tree_state) => match tree_state.to_chain_state() {
-            Ok(state) => {
-                tracing::debug!(
-                    wallet_id = %wallet_id,
-                    height = %u32::from(height),
-                    "fetched tree state from lightwalletd"
-                );
-                state
-            }
-            Err(err) => {
-                tracing::warn!(
-                    wallet_id = %wallet_id,
-                    height = %u32::from(height),
-                    error = ?err,
-                    "failed to parse tree state, using empty"
-                );
-                empty_chain_state(height)
-            }
-        },
-        Err(err) => {
-            tracing::warn!(
-                wallet_id = %wallet_id,
-                height = %u32::from(height),
-                error = ?err,
-                "failed to get tree state, using empty"
-            );
-            empty_chain_state(height)
-        }
-    }
+    let tree_state = client.get_tree_state(height).await.map_err(|e| {
+        anyhow::anyhow!(
+            "failed to fetch tree state at height {}: {}",
+            u32::from(height),
+            e
+        )
+    })?;
+
+    let state = tree_state.to_chain_state().map_err(|e| {
+        anyhow::anyhow!(
+            "failed to parse tree state at height {}: {}",
+            u32::from(height),
+            e
+        )
+    })?;
+
+    tracing::debug!(
+        wallet_id = %wallet_id,
+        height = %u32::from(height),
+        "fetched tree state from lightwalletd"
+    );
+
+    Ok(state)
 }
 
 /// Download blocks with retry and exponential backoff.

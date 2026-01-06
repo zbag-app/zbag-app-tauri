@@ -189,17 +189,31 @@ impl<C: Clock> TxService<C> {
             })
             .transpose()?;
 
-        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id).unwrap_or(
-            zkore_core::domain::Balance {
-                shielded_spendable: "0".to_string(),
-                shielded_pending: "0".to_string(),
-                transparent_total: "0".to_string(),
-                total: "0".to_string(),
-            },
-        );
-        let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
-        let shielded_pending = balance.shielded_pending.parse::<u64>().unwrap_or(0);
-        let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
+        let balance =
+            crate::balance::get_balance(wallet_db_conn, network, account_id).map_err(|e| {
+                ipc_err(
+                    errors::INTERNAL_ERROR,
+                    format!("balance lookup failed: {}", e),
+                )
+            })?;
+        let shielded_spendable = balance.shielded_spendable.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid shielded_spendable format: {}", e),
+            )
+        })?;
+        let shielded_pending = balance.shielded_pending.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid shielded_pending format: {}", e),
+            )
+        })?;
+        let transparent_total = balance.transparent_total.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid transparent_total format: {}", e),
+            )
+        })?;
         let spendable_if_transparent = shielded_spendable.saturating_add(transparent_total);
         let amount_u64 = u64::from(amount);
 
@@ -365,17 +379,31 @@ impl<C: Clock> TxService<C> {
             })
             .transpose()?;
 
-        let balance = crate::balance::get_balance(wallet_db_conn, network, account_id).unwrap_or(
-            zkore_core::domain::Balance {
-                shielded_spendable: "0".to_string(),
-                shielded_pending: "0".to_string(),
-                transparent_total: "0".to_string(),
-                total: "0".to_string(),
-            },
-        );
-        let shielded_spendable = balance.shielded_spendable.parse::<u64>().unwrap_or(0);
-        let shielded_pending = balance.shielded_pending.parse::<u64>().unwrap_or(0);
-        let transparent_total = balance.transparent_total.parse::<u64>().unwrap_or(0);
+        let balance =
+            crate::balance::get_balance(wallet_db_conn, network, account_id).map_err(|e| {
+                ipc_err(
+                    errors::INTERNAL_ERROR,
+                    format!("balance lookup failed: {}", e),
+                )
+            })?;
+        let shielded_spendable = balance.shielded_spendable.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid shielded_spendable format: {}", e),
+            )
+        })?;
+        let shielded_pending = balance.shielded_pending.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid shielded_pending format: {}", e),
+            )
+        })?;
+        let transparent_total = balance.transparent_total.parse::<u64>().map_err(|e| {
+            ipc_err(
+                errors::INTERNAL_ERROR,
+                format!("invalid transparent_total format: {}", e),
+            )
+        })?;
         let spendable_if_transparent = shielded_spendable.saturating_add(transparent_total);
         let amount_u64 = u64::from(amount);
 
@@ -1220,7 +1248,7 @@ impl<C: Clock> TxService<C> {
         )?;
         let total_count = total_count.max(0) as u32;
 
-        let chain_height = current_chain_height(wallet_db_conn, network).unwrap_or(0);
+        let chain_height = current_chain_height(wallet_db_conn, network);
 
         let mut stmt = wallet_db_conn.prepare(
             "SELECT txid,\n                    mined_height,\n                    expiry_height,\n                    fee_paid,\n                    total_spent,\n                    total_received,\n                    memo_count,\n                    block_time,\n                    is_shielding,\n                    sent_note_count,\n                    received_note_count\n             FROM v_transactions\n             WHERE account_uuid = ?1\n             ORDER BY COALESCE(block_time, 0) DESC, txid DESC\n             LIMIT ?2 OFFSET ?3",
@@ -1286,7 +1314,8 @@ impl<C: Clock> TxService<C> {
 
             if mined_height_u32.is_none()
                 && let Some(expiry) = expiry_height_u32
-                && chain_height > expiry
+                && let Some(height) = chain_height
+                && height > expiry
             {
                 status = TransactionStatus::Expired;
                 delete_queued_broadcast(wallet_dir, txid.clone());

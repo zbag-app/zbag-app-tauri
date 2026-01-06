@@ -231,7 +231,14 @@ impl SwapService {
                 swap.state = SwapState::Failed;
                 swap.updated_at = chrono::Utc::now().timestamp_millis();
                 swap.last_error = Some(e.to_string());
-                let _ = swap_meta::update_swap(&conn, wallet_id, &swap);
+                if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
+                    tracing::error!(
+                        wallet_id = %wallet_id,
+                        swap_id = %swap.id,
+                        error = ?db_err,
+                        "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                    );
+                }
                 if let Some(handler) = on_swap_changed.as_ref() {
                     handler(SwapChangedEvent {
                         schema_version: SCHEMA_VERSION,
@@ -375,7 +382,14 @@ impl SwapService {
                 swap.state = SwapState::Failed;
                 swap.updated_at = chrono::Utc::now().timestamp_millis();
                 swap.last_error = Some(e.to_string());
-                let _ = swap_meta::update_swap(&conn, wallet_id, &swap);
+                if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
+                    tracing::error!(
+                        wallet_id = %wallet_id,
+                        swap_id = %swap.id,
+                        error = ?db_err,
+                        "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                    );
+                }
                 if let Some(handler) = on_swap_changed.as_ref() {
                     handler(SwapChangedEvent {
                         schema_version: SCHEMA_VERSION,
@@ -434,7 +448,14 @@ impl SwapService {
             swap.state = SwapState::Failed;
             swap.updated_at = chrono::Utc::now().timestamp_millis();
             swap.last_error = Some(err.to_string());
-            let _ = swap_meta::update_swap(&conn, wallet_id, &swap);
+            if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
+                tracing::error!(
+                    wallet_id = %wallet_id,
+                    swap_id = %swap.id,
+                    error = ?db_err,
+                    "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                );
+            }
             if let Some(handler) = on_swap_changed.as_ref() {
                 handler(SwapChangedEvent {
                     schema_version: SCHEMA_VERSION,
@@ -551,8 +572,27 @@ impl SwapService {
                             swap.updated_at = chrono::Utc::now().timestamp_millis();
                             swap.last_error = status.message.clone().or(swap.last_error);
 
-                            if let Ok(conn) = open_app_db(&app_db_path) {
-                                let _ = swap_meta::update_swap(&conn, wallet_id, &swap);
+                            match open_app_db(&app_db_path) {
+                                Ok(conn) => {
+                                    if let Err(db_err) =
+                                        swap_meta::update_swap(&conn, wallet_id, &swap)
+                                    {
+                                        tracing::error!(
+                                            wallet_id = %wallet_id,
+                                            swap_id = %swap.id,
+                                            error = ?db_err,
+                                            "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                                        );
+                                    }
+                                }
+                                Err(db_err) => {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        swap_id = %swap.id,
+                                        error = ?db_err,
+                                        "CRITICAL: failed to open app DB for swap state update"
+                                    );
+                                }
                             }
 
                             if let Some(handler) = on_swap_changed.as_ref() {
@@ -582,8 +622,26 @@ impl SwapService {
                         backoff = backoff.saturating_mul(2).min(Duration::from_secs(60));
                         swap.last_error = Some(err.to_string());
                         swap.updated_at = chrono::Utc::now().timestamp_millis();
-                        if let Ok(conn) = open_app_db(&app_db_path) {
-                            let _ = swap_meta::update_swap(&conn, wallet_id, &swap);
+                        match open_app_db(&app_db_path) {
+                            Ok(conn) => {
+                                if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap)
+                                {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        swap_id = %swap.id,
+                                        error = ?db_err,
+                                        "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                                    );
+                                }
+                            }
+                            Err(db_err) => {
+                                tracing::error!(
+                                    wallet_id = %wallet_id,
+                                    swap_id = %swap.id,
+                                    error = ?db_err,
+                                    "CRITICAL: failed to open app DB for swap state update"
+                                );
+                            }
                         }
                         if let Some(handler) = on_swap_changed.as_ref() {
                             handler(SwapChangedEvent {
