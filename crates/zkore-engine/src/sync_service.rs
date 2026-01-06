@@ -34,8 +34,17 @@ use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
 
-/// Batch size for downloading blocks. Smaller batches improve pipelining granularity.
-const BATCH_SIZE: u32 = 100;
+/// Default batch size for downloading blocks.
+/// Matches Zashi's SYNC_BATCH_SIZE for optimal performance.
+const BATCH_SIZE: u32 = 1000;
+
+/// Smaller batch size for sandblasting periods where blocks are much larger.
+/// Matches Zashi's SYNC_BATCH_SMALL_SIZE.
+const BATCH_SIZE_SANDBLASTING: u32 = 100;
+
+/// Known Zcash mainnet sandblasting period (blocks 1.71M to 2.05M).
+/// During this range, we use smaller batches due to larger block sizes.
+const SANDBLASTING_RANGE: std::ops::RangeInclusive<u32> = 1_710_000..=2_050_000;
 
 /// Number of batches to buffer ahead for download/scan pipelining.
 const LOOKAHEAD_BATCHES: usize = 2;
@@ -404,7 +413,8 @@ impl SyncService {
                                 return;
                             }
 
-                            let batch_end = std::cmp::min(current + BATCH_SIZE, range_end);
+                            let batch_size = effective_batch_size(current);
+                            let batch_end = std::cmp::min(current + batch_size, range_end);
 
                             // Download compact blocks with retry
                             match download_blocks_with_retry(
@@ -545,7 +555,8 @@ impl SyncService {
                                     is_first_batch_in_range = false;
                                     range_chain_state.clone()
                                 } else {
-                                    match fetch_chain_state(&client, prior_height, wallet_id).await {
+                                    match fetch_chain_state(&client, prior_height, wallet_id).await
+                                    {
                                         Ok(state) => state,
                                         Err(err) => {
                                             tracing::error!(
@@ -602,14 +613,21 @@ impl SyncService {
                                         }
                                     }
 
-                                    // Clean up scanned blocks from cache
+                                    // Clean up scanned blocks from cache (metadata)
                                     if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
                                         tracing::debug!(
                                             wallet_id = %wallet_id,
                                             error = ?err,
-                                            "failed to truncate block cache"
+                                            "failed to truncate block cache metadata"
                                         );
                                     }
+
+                                    // Delete the actual block files to prevent accumulation
+                                    delete_cached_block_files(
+                                        &blocks_dir,
+                                        batch.range_start,
+                                        batch.range_end,
+                                    );
                                 }
 
                                 // Update progress after scan
@@ -644,11 +662,19 @@ impl SyncService {
                     }
 
                     if range_cancelled {
+                        // Clean up block cache on cancellation
+                        if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+                            tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache on cancel");
+                        }
                         update(default_progress());
                         break 'sync_loop;
                     }
 
                     if range_error {
+                        // Clean up block cache on error
+                        if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+                            tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache on error");
+                        }
                         update(default_progress());
                         break 'sync_loop;
                     }
@@ -951,6 +977,49 @@ async fn fetch_chain_state(
     );
 
     Ok(state)
+}
+
+/// Get the effective batch size for a given block height.
+/// Uses smaller batches during sandblasting periods when blocks are larger.
+fn effective_batch_size(height: BlockHeight) -> u32 {
+    let h = u32::from(height);
+    if SANDBLASTING_RANGE.contains(&h) {
+        BATCH_SIZE_SANDBLASTING
+    } else {
+        BATCH_SIZE
+    }
+}
+
+/// Delete cached block files for a range of heights.
+/// Called after scanning to prevent file accumulation.
+fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, end: BlockHeight) {
+    let start_u32 = u32::from(start);
+    let end_u32 = u32::from(end);
+
+    // Read directory once and filter matching files
+    let Ok(entries) = std::fs::read_dir(blocks_dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(filename) = path.file_name().and_then(|f| f.to_str()) else {
+            continue;
+        };
+        // Block files are named: {height}-{hash}-compactblock
+        let Some(height_str) = filename.split('-').next() else {
+            continue;
+        };
+        let Ok(height) = height_str.parse::<u32>() else {
+            continue;
+        };
+        if height >= start_u32
+            && height < end_u32
+            && let Err(e) = std::fs::remove_file(&path)
+        {
+            tracing::trace!(path = ?path, error = ?e, "failed to delete block file");
+        }
+    }
 }
 
 /// Download blocks with retry and exponential backoff.
