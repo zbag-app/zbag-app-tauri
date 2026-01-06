@@ -192,7 +192,7 @@ run_benchmark() {
         "$CLI" sync "$wallet_id" \
             --password "$PASSWORD" \
             --data-dir "$BENCHMARK_DATA_DIR" \
-            -v 2>&1 || die "Sync failed"
+            --progress-log 2>&1 || die "Sync failed"
     else
         "$CLI" sync "$wallet_id" \
             --password "$PASSWORD" \

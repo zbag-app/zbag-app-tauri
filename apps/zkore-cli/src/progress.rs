@@ -1,5 +1,7 @@
 //! Progress bar display for sync operations.
 
+use std::time::Duration;
+
 use indicatif::{ProgressBar, ProgressStyle};
 
 use zkore_core::domain::{SyncPhase, SyncProgress};
@@ -45,7 +47,7 @@ pub fn update_sync_progress(pb: &ProgressBar, progress: &SyncProgress) {
 }
 
 /// Format duration in seconds to human-readable string.
-fn format_duration(seconds: u64) -> String {
+pub fn format_duration(seconds: u64) -> String {
     if seconds < 60 {
         format!("{}s", seconds)
     } else if seconds < 3600 {
@@ -55,4 +57,70 @@ fn format_duration(seconds: u64) -> String {
         let minutes = (seconds % 3600) / 60;
         format!("{}h {}m", hours, minutes)
     }
+}
+
+/// Format elapsed time as HH:MM:SS.
+fn format_elapsed(elapsed: Duration) -> String {
+    let total_secs = elapsed.as_secs();
+    let hours = total_secs / 3600;
+    let minutes = (total_secs % 3600) / 60;
+    let seconds = total_secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+/// Format a progress log line for benchmarking/analysis.
+///
+/// Output format: `[HH:MM:SS]  15% | Scanning   | 3,450,000 / 3,868,370 |  2604 blk/s | ETA 2m 41s (161s)`
+pub fn format_progress_log_line(
+    elapsed: Duration,
+    progress: &SyncProgress,
+    start_height: u32,
+    chain_tip: u32,
+) -> String {
+    let phase_str = match progress.phase {
+        SyncPhase::Idle => "Idle",
+        SyncPhase::Preparing => "Preparing",
+        SyncPhase::Downloading => "Downloading",
+        SyncPhase::Scanning => "Scanning",
+        SyncPhase::Enhancing => "Enhancing",
+        SyncPhase::CatchingUp => "Catching up",
+    };
+
+    let current_height = progress.scan_frontier_height;
+    let blocks_scanned = current_height.saturating_sub(start_height);
+
+    let rate = if elapsed.as_secs() > 0 {
+        blocks_scanned as f64 / elapsed.as_secs_f64()
+    } else {
+        0.0
+    };
+
+    let eta_str = progress
+        .eta_seconds
+        .map(|s| format!("ETA {} ({}s)", format_duration(s), s))
+        .unwrap_or_else(|| "ETA --".to_string());
+
+    format!(
+        "[{}] {:>3}% | {:<10} | {:>9} / {:>9} | {:>5.0} blk/s | {}",
+        format_elapsed(elapsed),
+        progress.progress_percent,
+        phase_str,
+        format_with_commas(current_height),
+        format_with_commas(chain_tip),
+        rate,
+        eta_str
+    )
+}
+
+/// Format a number with comma separators.
+fn format_with_commas(n: u32) -> String {
+    let s = n.to_string();
+    let mut result = String::with_capacity(s.len() + s.len() / 3);
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result
 }
