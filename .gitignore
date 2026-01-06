@@ -3,6 +3,11 @@
 .claude
 changes.md
 
+# Working documents (not for version control)
+note.md
+SYNC_OPTIMIZATION_TASKS.md
+SYNC_PERFORMANCE_ANALYSIS.md
+
 # Editor/OS noise
 Thumbs.db
 *.swp

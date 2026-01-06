@@ -44,7 +44,14 @@ pub async fn run(args: BackupArgs, data_dir: &Path, output: &OutputMode) -> Resu
             password,
             seed,
         } => {
-            run_verify(&wallet, password.as_deref(), seed.as_deref(), data_dir, output).await
+            run_verify(
+                &wallet,
+                password.as_deref(),
+                seed.as_deref(),
+                data_dir,
+                output,
+            )
+            .await
         }
     }
 }
