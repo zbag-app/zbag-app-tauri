@@ -971,13 +971,21 @@ impl WalletManager {
             .cached_sync_status
             .get(&wallet_id)
             .cloned()
-            .unwrap_or(SyncStatus::Synced);
+            .unwrap_or_else(|| {
+                tracing::debug!("sync status unknown, defaulting to Synced");
+                SyncStatus::Synced
+            });
 
         let transparent_total_zat =
             self.cached_transparent_total_zat(wallet_id)
                 .unwrap_or_else(|| {
-                    self.transparent_total_from_wallet_db(wallet_id)
-                        .unwrap_or(0)
+                    match self.transparent_total_from_wallet_db(wallet_id) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!(wallet_id = %wallet_id, error = ?e, "failed to get transparent balance, defaulting to 0");
+                            0
+                        }
+                    }
                 });
 
         let shield_status = if transparent_total_zat > 0 {

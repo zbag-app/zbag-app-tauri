@@ -253,7 +253,7 @@ impl SyncService {
             let chain_tip = match client.get_latest_block().await {
                 Ok((height, _hash)) => height,
                 Err(err) => {
-                    tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to get chain tip");
+                    tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to get chain tip");
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -269,7 +269,7 @@ impl SyncService {
                 .unwrap_or(&wallet_db_path)
                 .join("block_cache");
             if let Err(err) = std::fs::create_dir_all(&cache_dir) {
-                tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
+                tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
                 state.jobs.remove(&wallet_id);
@@ -281,7 +281,7 @@ impl SyncService {
             let mut fsblock_db = match FsBlockDb::for_path(&cache_dir) {
                 Ok(db) => db,
                 Err(err) => {
-                    tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
+                    tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -300,7 +300,7 @@ impl SyncService {
             let mut sync_wallet_conn = match open_wallet_db(&wallet_db_path, &wallet_dek) {
                 Ok(conn) => conn,
                 Err(err) => {
-                    tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to open wallet db for sync");
+                    tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to open wallet db for sync");
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -319,7 +319,7 @@ impl SyncService {
 
             // Update chain tip in wallet
             if let Err(err) = wdb.update_chain_tip(chain_tip) {
-                tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to update chain tip");
+                tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to update chain tip");
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
                 state.jobs.remove(&wallet_id);
@@ -341,7 +341,7 @@ impl SyncService {
                 let ranges = match wdb.suggest_scan_ranges() {
                     Ok(ranges) => ranges,
                     Err(err) => {
-                        tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to get scan ranges");
+                        tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to get scan ranges");
                         update(default_progress());
                         break 'sync_loop;
                     }
@@ -504,11 +504,11 @@ impl SyncService {
                                     match write_block_to_cache(&blocks_dir, block) {
                                         Ok(meta) => block_metas.push(meta),
                                         Err(err) => {
-                                            tracing::warn!(
+                                            tracing::error!(
                                                 wallet_id = %wallet_id,
                                                 block_height = block.height,
                                                 error = ?err,
-                                                "failed to cache block"
+                                                "failed to cache block - block may not be scanned"
                                             );
                                         }
                                     }
@@ -518,7 +518,7 @@ impl SyncService {
                                 if !block_metas.is_empty()
                                     && let Err(err) = fsblock_db.write_block_metadata(&block_metas)
                                 {
-                                    tracing::warn!(
+                                    tracing::error!(
                                         wallet_id = %wallet_id,
                                         error = ?err,
                                         "failed to write block metadata"
@@ -576,14 +576,14 @@ impl SyncService {
                                             );
                                         }
                                         Err(err) => {
-                                            tracing::warn!(
+                                            tracing::error!(
                                                 wallet_id = %wallet_id,
                                                 range_start = %u32::from(batch.range_start),
                                                 limit = limit,
                                                 error = ?err,
-                                                "failed to scan blocks"
+                                                "failed to scan blocks - transactions in this range may be missed"
                                             );
-                                            // Continue - partial scan is ok
+                                            // Continue - partial scan is ok, but error is logged
                                         }
                                     }
 

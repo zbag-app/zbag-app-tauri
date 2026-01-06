@@ -36,6 +36,15 @@ pub const MEMO_NOT_ALLOWED: &str = "E3011";
 pub const SYNC_IN_PROGRESS: &str = "E4001";
 pub const SERVER_UNAVAILABLE: &str = "E4002";
 pub const SYNC_FAILED: &str = "E4003";
+// Detailed sync errors
+pub const SYNC_CHAIN_TIP_FAILED: &str = "E4004";
+pub const SYNC_CACHE_INIT_FAILED: &str = "E4005";
+pub const SYNC_DB_INIT_FAILED: &str = "E4006";
+pub const SYNC_WALLET_DB_FAILED: &str = "E4007";
+pub const SYNC_CHAIN_UPDATE_FAILED: &str = "E4008";
+pub const SYNC_SCAN_FAILED: &str = "E4009";
+pub const SYNC_TREE_STATE_FAILED: &str = "E4010";
+pub const SYNC_BLOCK_CACHE_FAILED: &str = "E4011";
 
 // Keystone errors
 pub const INVALID_UFVK: &str = "E5001";
