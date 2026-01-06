@@ -36,7 +36,9 @@ export function StatusWidget(props: {
     if (!status) return null;
     if (status.sync_status === 'Synced') return 'Synced';
     if (typeof status.sync_status === 'object' && 'Syncing' in status.sync_status) {
-      return `Syncing (${status.sync_status.Syncing.progress_percent}%)`;
+      // Cap at 99% while still syncing (matches SyncProgressWidget)
+      const percent = Math.min(status.sync_status.Syncing.progress_percent, 99);
+      return `Syncing (${percent}%)`;
     }
     if (typeof status.sync_status === 'object' && 'Error' in status.sync_status) {
       return `Error: ${status.sync_status.Error.message}`;

@@ -7,6 +7,7 @@ import { SyncProgressWidget } from '../components/wallet/SyncProgressWidget';
 import { NetworkBadge } from '../components/common/NetworkBadge';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
 import { getBalance, getSyncProgress, startSync } from '../services/ipc';
+import { useThrottledCallback } from '../hooks/useThrottle';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
@@ -75,9 +76,15 @@ export function Home(props: {
     };
   }, [wallet.id]);
 
+  // Throttle sync progress updates at 200ms (matches Zashi iOS)
+  const throttledSetSync = useThrottledCallback(
+    (progress: IPC.SyncProgress) => setSync(progress),
+    200
+  );
+
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    onSyncProgress((evt) => setSync(evt.progress))
+    onSyncProgress((evt) => throttledSetSync(evt.progress))
       .then((fn) => {
         unlisten = fn;
       })
@@ -85,7 +92,7 @@ export function Home(props: {
     return () => {
       unlisten?.();
     };
-  }, []);
+  }, [throttledSetSync]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;

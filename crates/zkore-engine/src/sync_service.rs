@@ -243,7 +243,7 @@ impl SyncService {
                 phase: SyncPhase::Preparing,
                 scan_frontier_height: 0,
                 wallet_tip_height: 0,
-                progress_percent: 2,
+                progress_percent: 0,
                 eta_seconds: None,
             });
 
@@ -467,11 +467,12 @@ impl SyncService {
                     });
 
                     // Update phase to downloading/scanning (pipelined)
+                    let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
                     update(SyncProgress {
                         phase: SyncPhase::Downloading,
-                        scan_frontier_height: u32::from(range_start),
+                        scan_frontier_height: fully_scanned,
                         wallet_tip_height: u32::from(wallet_tip),
-                        progress_percent: calculate_progress(&wdb).max(5),
+                        progress_percent,
                         eta_seconds: None,
                     });
 
@@ -538,15 +539,6 @@ impl SyncService {
                                     );
                                 }
 
-                                // Update progress (downloading phase while receiving batches)
-                                update(SyncProgress {
-                                    phase: SyncPhase::Downloading,
-                                    scan_frontier_height: u32::from(batch.range_end),
-                                    wallet_tip_height: u32::from(wallet_tip),
-                                    progress_percent: calculate_progress(&wdb).max(5),
-                                    eta_seconds: None,
-                                });
-
                                 // Scan the batch immediately after caching
                                 // Fetch tree state for each batch to avoid CheckpointConflict
                                 // with existing wallet data during incremental syncs.
@@ -573,14 +565,6 @@ impl SyncService {
                                 let limit = batch.blocks.len();
 
                                 if limit > 0 {
-                                    update(SyncProgress {
-                                        phase: SyncPhase::Scanning,
-                                        scan_frontier_height: u32::from(batch.range_start),
-                                        wallet_tip_height: u32::from(wallet_tip),
-                                        progress_percent: calculate_progress(&wdb).max(10),
-                                        eta_seconds: None,
-                                    });
-
                                     match scan_cached_blocks(
                                         &params,
                                         &fsblock_db,
@@ -631,11 +615,13 @@ impl SyncService {
                                 }
 
                                 // Update progress after scan
+                                let (progress_percent, fully_scanned) =
+                                    calculate_progress_and_height(&wdb);
                                 update(SyncProgress {
                                     phase: SyncPhase::Scanning,
-                                    scan_frontier_height: u32::from(batch.range_end),
+                                    scan_frontier_height: fully_scanned,
                                     wallet_tip_height: u32::from(wallet_tip),
-                                    progress_percent: calculate_progress(&wdb).max(15),
+                                    progress_percent,
                                     eta_seconds: None,
                                 });
                             }
@@ -680,11 +666,12 @@ impl SyncService {
                     }
 
                     // Final progress update for the range
+                    let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
                     update(SyncProgress {
                         phase: SyncPhase::Scanning,
-                        scan_frontier_height: u32::from(range_end),
+                        scan_frontier_height: fully_scanned,
                         wallet_tip_height: u32::from(wallet_tip),
-                        progress_percent: calculate_progress(&wdb).max(15),
+                        progress_percent,
                         eta_seconds: None,
                     });
                 }
@@ -867,15 +854,21 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
     }
 }
 
-/// Calculate sync progress percentage from wallet summary.
-fn calculate_progress<C, R>(
+/// Calculate sync progress percentage and fully scanned height from wallet summary.
+///
+/// Uses Zashi-style safe ratio handling:
+/// - Composes scan + recovery progress for overall percentage
+/// - denominator == 0 means 100% complete (no outputs to scan)
+/// - Clamps ratio to 0.0-1.0 to handle backend anomalies
+/// - Returns fully_scanned_height for monotonic progress display
+fn calculate_progress_and_height<C, R>(
     wdb: &zcash_client_sqlite::WalletDb<
         C,
         zcash_protocol::consensus::Network,
         zcash_client_sqlite::util::SystemClock,
         R,
     >,
-) -> u8
+) -> (u8, u32)
 where
     C: std::borrow::BorrowMut<Connection>,
     R: rand::RngCore + rand::CryptoRng,
@@ -884,18 +877,32 @@ where
         .get_wallet_summary(ConfirmationsPolicy::default())
         .ok()
         .flatten();
-    if summary.is_none() {
-        tracing::debug!("wallet summary unavailable for progress calculation");
-    }
-    if let Some(summary) = summary {
-        let scan_progress = summary.progress().scan();
-        let numerator = *scan_progress.numerator();
-        let denominator = *scan_progress.denominator();
-        if denominator > 0 {
-            return ((numerator as f64 / denominator as f64) * 100.0) as u8;
+
+    match summary {
+        Some(s) => {
+            let scan = s.progress().scan();
+            let recovery = s.progress().recovery();
+
+            // Compose scan + recovery like Zashi
+            let numerator = *scan.numerator() + recovery.map_or(0, |r| *r.numerator());
+            let denominator = *scan.denominator() + recovery.map_or(0, |r| *r.denominator());
+
+            // Zashi: denominator == 0 means 100% complete
+            let pct = if denominator == 0 {
+                100
+            } else {
+                // Clamp to valid range (defensive against backend anomalies)
+                let ratio = (numerator as f64 / denominator as f64).clamp(0.0, 1.0);
+                (ratio * 100.0) as u8
+            };
+
+            (pct, u32::from(s.fully_scanned_height()))
+        }
+        None => {
+            tracing::debug!("wallet summary unavailable for progress calculation");
+            (0, 0)
         }
     }
-    0
 }
 
 /// Write a compact block to the filesystem block cache.
