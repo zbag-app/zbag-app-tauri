@@ -957,12 +957,19 @@ async fn fetch_chain_state(
 async fn download_blocks_with_retry(
     client: &zkore_network::grpc_client::GrpcClient,
     start: BlockHeight,
-    end: BlockHeight,
+    end_exclusive: BlockHeight,
     max_retries: u32,
 ) -> anyhow::Result<Vec<CompactBlock>> {
+    // Guard: empty range returns empty vec
+    if end_exclusive <= start {
+        return Ok(vec![]);
+    }
+    // Convert exclusive end to inclusive for lightwalletd API
+    let end_inclusive = end_exclusive.saturating_sub(1);
+
     let mut attempt = 0;
     loop {
-        match client.get_block_range(start, end).await {
+        match client.get_block_range(start, end_inclusive).await {
             Ok(mut stream) => {
                 let mut blocks = Vec::new();
                 loop {
