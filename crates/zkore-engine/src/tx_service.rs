@@ -1119,10 +1119,22 @@ impl<C: Clock> TxService<C> {
     ) -> anyhow::Result<String> {
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
 
+        // Parse hex txid to bytes (reversed for internal representation)
+        let txid_bytes: Vec<u8> = hex::decode(txid)
+            .map_err(|_| ipc_err(errors::TRANSACTION_FAILED, "invalid txid hex"))?
+            .into_iter()
+            .rev()
+            .collect();
+
+        // Query v_tx_outputs (v_tx_sent was removed in zcash_client_sqlite 0.6.0)
+        // Get hd_account_index which is the user-facing account ID (ZIP-32 account index)
         let account_id: Option<i64> = wallet_db_conn
             .query_row(
-                "SELECT sent_from_account FROM v_tx_sent WHERE txid = ?1 LIMIT 1",
-                [txid],
+                "SELECT a.hd_account_index FROM v_tx_outputs vo \
+                 JOIN accounts a ON a.uuid = vo.from_account_uuid \
+                 WHERE vo.txid = ?1 AND vo.from_account_uuid IS NOT NULL \
+                 LIMIT 1",
+                [&txid_bytes],
                 |row| row.get(0),
             )
             .optional()?;

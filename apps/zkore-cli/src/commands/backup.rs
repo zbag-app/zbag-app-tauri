@@ -136,7 +136,7 @@ async fn run_verify(
                 }
             }
         }
-        return result.map_err(Into::into);
+        return result;
     }
 
     // Get backup challenge
