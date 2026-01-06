@@ -1112,7 +1112,10 @@ impl WalletManager {
     fn maybe_emit_wallet_status(&mut self, wallet_id: Uuid) {
         let status = match self.compute_wallet_status(wallet_id) {
             Ok(status) => status,
-            Err(_) => return,
+            Err(e) => {
+                tracing::debug!(wallet_id = %wallet_id, error = ?e, "failed to compute wallet status");
+                return;
+            }
         };
 
         let changed = match self.last_emitted_status.get(&wallet_id) {

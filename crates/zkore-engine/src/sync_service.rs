@@ -625,7 +625,11 @@ impl SyncService {
                     }
 
                     // Wait for download task to complete
-                    let _ = download_handle.await;
+                    if let Err(e) = download_handle.await
+                        && e.is_panic()
+                    {
+                        tracing::error!(error = ?e, "download task panicked");
+                    }
 
                     if range_cancelled {
                         update(default_progress());
@@ -661,8 +665,8 @@ impl SyncService {
             }
 
             // Clean up block cache directory
-            if let Err(err) = std::fs::remove_dir_all(&cache_dir) {
-                tracing::debug!(wallet_id = %wallet_id, error = ?err, "failed to cleanup block cache");
+            if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+                tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache directory");
             }
 
             // Clear job entry (best effort).

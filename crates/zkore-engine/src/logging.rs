@@ -164,8 +164,8 @@ fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
             continue;
         };
 
-        if date < cutoff {
-            let _ = std::fs::remove_file(path);
+        if date < cutoff && let Err(e) = std::fs::remove_file(&path) {
+            tracing::debug!(path = ?path, error = ?e, "failed to cleanup old log file");
         }
     }
 }

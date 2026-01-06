@@ -37,8 +37,8 @@ pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
 
     match migrate_result {
         Ok(()) => {
-            if existed {
-                let _ = std::fs::remove_file(&snapshot_path);
+            if existed && let Err(e) = std::fs::remove_file(&snapshot_path) {
+                tracing::debug!(path = ?snapshot_path, error = ?e, "failed to cleanup snapshot file");
             }
             Ok(())
         }
@@ -51,7 +51,9 @@ pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
                         db_path.display()
                     )
                 });
-                let _ = std::fs::remove_file(&snapshot_path);
+                if let Err(e) = std::fs::remove_file(&snapshot_path) {
+                    tracing::debug!(path = ?snapshot_path, error = ?e, "failed to cleanup snapshot file");
+                }
                 if let Err(restore_err) = restore_result {
                     bail!("{err}\n{restore_err}");
                 }
