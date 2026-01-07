@@ -906,26 +906,27 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
 
     // Compute height-based progress % (monotonic, stable), falling back to the precomputed
     // WalletSummary output-based progress when we don't have enough context yet.
-    if let (Some(start), Some(target)) = (estimate.start_height, estimate.target_height) {
-        if target > start && progress.scan_frontier_height >= start {
-            let done = progress.scan_frontier_height.saturating_sub(start) as u64;
-            let total = target.saturating_sub(start) as u64;
-            if total > 0 {
-                let mut pct = ((done.saturating_mul(100)) / total) as u8;
-                if pct >= 100 {
-                    pct = if progress.phase == SyncPhase::Idle {
-                        100
-                    } else {
-                        99
-                    };
-                }
-
-                if let Some(last) = estimate.last_percent {
-                    pct = pct.max(last);
-                }
-                estimate.last_percent = Some(pct);
-                progress.progress_percent = pct;
+    if let (Some(start), Some(target)) = (estimate.start_height, estimate.target_height)
+        && target > start
+        && progress.scan_frontier_height >= start
+    {
+        let done = progress.scan_frontier_height.saturating_sub(start) as u64;
+        let total = target.saturating_sub(start) as u64;
+        if total > 0 {
+            let mut pct = ((done.saturating_mul(100)) / total) as u8;
+            if pct >= 100 {
+                pct = if progress.phase == SyncPhase::Idle {
+                    100
+                } else {
+                    99
+                };
             }
+
+            if let Some(last) = estimate.last_percent {
+                pct = pct.max(last);
+            }
+            estimate.last_percent = Some(pct);
+            progress.progress_percent = pct;
         }
     }
 
