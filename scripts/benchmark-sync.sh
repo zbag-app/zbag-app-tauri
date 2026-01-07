@@ -146,6 +146,7 @@ run_benchmark() {
     local wallet_name="bench-$(date +%Y%m%d-%H%M%S)-${run_num}"
     local wallet_id=""
     local birthday_height=""
+    local progress_log_file=""
 
     echo ""
     log "=== Benchmark Run $run_num ==="
@@ -187,30 +188,42 @@ run_benchmark() {
     local start_time end_time sync_duration
     start_time=$(date +%s)
 
-    # Sync command blocks until complete
+    progress_log_file="$(mktemp -t zkore-sync-progress.XXXXXX)"
+    trap 'rm -f "$progress_log_file"' RETURN
+
+    # Sync command blocks until complete. Always enable progress logging so we can
+    # parse the actual chain tip (testnet block times are not stable enough for
+    # genesis+75s estimates).
     if [[ "$VERBOSE" == "true" ]]; then
         "$CLI" sync "$wallet_id" \
             --password "$PASSWORD" \
             --data-dir "$BENCHMARK_DATA_DIR" \
-            --progress-log 2>&1 || die "Sync failed"
+            --progress-log 2>&1 | tee "$progress_log_file" || die "Sync failed"
     else
         "$CLI" sync "$wallet_id" \
             --password "$PASSWORD" \
-            --data-dir "$BENCHMARK_DATA_DIR" 2>&1 || die "Sync failed"
+            --data-dir "$BENCHMARK_DATA_DIR" \
+            --progress-log >"$progress_log_file" 2>&1 || die "Sync failed"
     fi
 
     end_time=$(date +%s)
     sync_duration=$((end_time - start_time))
 
-    # Step 3: Estimate chain tip (using block time formula)
-    # Testnet genesis: 2016-10-28 (1477612800)
-    local current_height_estimate
-    current_height_estimate=$(( ($(date +%s) - 1477612800) * 1000 / 75000 ))
+    # Step 3: Parse actual chain tip from progress log (right-hand side of "current / tip").
+    local last_progress_line height_pair height_pair_clean end_height
+    last_progress_line="$(grep -E "\\|[[:space:]]*[0-9,]+[[:space:]]*/[[:space:]]*[0-9,]+[[:space:]]*\\|" "$progress_log_file" | tail -n 1 || true)"
+    height_pair="$(echo "$last_progress_line" | awk -F'|' '{print $3}' || true)"
+    height_pair_clean="$(echo "$height_pair" | tr -cd '0-9/,' | tr -d ',' || true)"
+    end_height="$(echo "$height_pair_clean" | cut -d/ -f2 || true)"
+
+    if [[ -z "$end_height" ]]; then
+        die "Failed to parse chain tip height from progress log"
+    fi
 
     # Calculate blocks synced
     local blocks_synced=0
     if [[ "$birthday_height" != "unknown" ]]; then
-        blocks_synced=$((current_height_estimate - birthday_height))
+        blocks_synced=$((end_height - birthday_height))
     fi
 
     # Calculate speed (blocks per second)
@@ -234,11 +247,11 @@ run_benchmark() {
     echo "Results:"
     if [[ "$birthday_height" != "unknown" ]]; then
         printf "  Start Height:     %'d\n" "$birthday_height"
-        printf "  End Height:       %'d (estimated)\n" "$current_height_estimate"
+        printf "  End Height:       %'d\n" "$end_height"
         printf "  Blocks Synced:    %'d\n" "$blocks_synced"
     else
         echo "  Start Height:     unknown"
-        printf "  End Height:       %'d (estimated)\n" "$current_height_estimate"
+        printf "  End Height:       %'d\n" "$end_height"
     fi
     echo "  Total Time:       $(format_duration "$sync_duration") ($sync_duration seconds)"
     echo "  Avg Speed:        $blocks_per_second blocks/second"

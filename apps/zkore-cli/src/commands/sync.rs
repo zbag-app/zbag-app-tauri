@@ -1,5 +1,6 @@
 //! Sync command implementation.
 
+use std::io::IsTerminal as _;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -94,10 +95,6 @@ pub async fn run(
             }
         }));
 
-    // Estimate chain tip using block time formula (same as benchmark script)
-    // Testnet genesis: 2016-10-28 (1477612800), 75 second block time
-    let chain_tip_estimate = estimate_chain_tip();
-
     // Record sync start time
     let sync_start = Instant::now();
 
@@ -125,6 +122,7 @@ pub async fn run(
         let start_height = start_height.clone();
 
         Some(tokio::spawn(async move {
+            let stderr_is_tty = std::io::stderr().is_terminal();
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 interval.tick().await;
@@ -137,13 +135,19 @@ pub async fn run(
 
                 let elapsed = sync_start.elapsed();
                 let start_h = start_height.load(Ordering::SeqCst);
-                let line = progress::format_progress_log_line(
-                    elapsed,
-                    &progress,
-                    start_h,
-                    chain_tip_estimate,
-                );
-                pb.println(line);
+                if start_h == 0 {
+                    continue;
+                }
+                let chain_tip = progress
+                    .wallet_tip_height
+                    .max(progress.scan_frontier_height);
+                let line =
+                    progress::format_progress_log_line(elapsed, &progress, start_h, chain_tip);
+                if stderr_is_tty {
+                    pb.println(line);
+                } else {
+                    println!("{line}");
+                }
             }
         }))
     } else {
@@ -182,19 +186,4 @@ pub async fn run(
 
     output.print_sync_complete();
     Ok(())
-}
-
-/// Estimate current chain tip height using block time formula.
-/// Testnet genesis: 2016-10-28 (1477612800 Unix timestamp), 75 second block time.
-fn estimate_chain_tip() -> u32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    const TESTNET_GENESIS: u64 = 1477612800;
-    const BLOCK_TIME_MS: u64 = 75000;
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    ((now - TESTNET_GENESIS) * 1000 / BLOCK_TIME_MS) as u32
 }

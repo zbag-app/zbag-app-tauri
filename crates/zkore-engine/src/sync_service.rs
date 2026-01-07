@@ -318,6 +318,18 @@ impl SyncService {
                 }
             };
 
+            // Backfill account birthday tree sizes from lightwalletd (required for accurate
+            // output-based progress ratios in WalletSummary).
+            if let Err(err) =
+                backfill_birthday_tree_sizes(&mut sync_wallet_conn, &client, wallet_id).await
+            {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    error = ?err,
+                    "failed to backfill account birthday tree sizes; progress percent may be inaccurate"
+                );
+            }
+
             let params = zcash_consensus_network(network);
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut sync_wallet_conn,
@@ -903,6 +915,62 @@ where
             (0, 0)
         }
     }
+}
+
+async fn backfill_birthday_tree_sizes(
+    conn: &mut Connection,
+    client: &zkore_network::grpc_client::GrpcClient,
+    wallet_id: uuid::Uuid,
+) -> anyhow::Result<()> {
+    let birthday_heights = {
+        let mut stmt = conn
+            .prepare(
+                r#"
+            SELECT DISTINCT birthday_height
+            FROM accounts
+            WHERE birthday_sapling_tree_size IS NULL OR birthday_sapling_tree_size = 0
+               OR birthday_orchard_tree_size IS NULL OR birthday_orchard_tree_size = 0
+            "#,
+            )
+            .context("failed to query account birthdays for tree size backfill")?;
+
+        stmt.query_map([], |row| row.get::<_, u32>(0))?
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to read account birthday heights")?
+    };
+
+    for birthday_height in birthday_heights {
+        let prior_height =
+            zcash_protocol::consensus::BlockHeight::from(birthday_height.saturating_sub(1));
+
+        let chain_state = fetch_chain_state(client, prior_height, wallet_id).await?;
+
+        let sapling_tree_size = chain_state.final_sapling_tree().tree_size();
+        let orchard_tree_size = chain_state.final_orchard_tree().tree_size();
+
+        let rows = conn
+            .execute(
+                "UPDATE accounts
+                 SET birthday_sapling_tree_size = ?1,
+                     birthday_orchard_tree_size = ?2
+                 WHERE birthday_height = ?3",
+                rusqlite::params![sapling_tree_size, orchard_tree_size, birthday_height],
+            )
+            .context("failed to update account birthday tree sizes")?;
+
+        if rows > 0 {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                birthday_height,
+                sapling_tree_size,
+                orchard_tree_size,
+                updated_accounts = rows,
+                "backfilled account birthday tree sizes"
+            );
+        }
+    }
+
+    Ok(())
 }
 
 /// Write a compact block to the filesystem block cache.
