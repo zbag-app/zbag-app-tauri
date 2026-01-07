@@ -225,7 +225,7 @@ impl GrpcClient {
         let mut client = self.get_client().await.context("failed to connect")?;
 
         let mut req = tonic::Request::new(Empty {});
-        req.set_timeout(Duration::from_secs(2));
+        req.set_timeout(Duration::from_secs(10));
 
         match client.get_mempool_stream(req).await {
             Ok(_stream) => Ok(()),
@@ -233,6 +233,7 @@ impl GrpcClient {
                 "server missing GetMempoolStream capability"
             )),
             Err(status) if status.code() == Code::DeadlineExceeded => Ok(()),
+            Err(status) if status.code() == Code::Cancelled => Ok(()),
             Err(status) => Err(anyhow::anyhow!(status)).context("mempool probe failed"),
         }
     }
