@@ -1,35 +1,34 @@
 <!--
-SYNC IMPACT REPORT
-==================
-Version change: 0.0.0 -> 1.0.0
-Bump rationale: Initial adoption - MAJOR version for first ratification
+	SYNC IMPACT REPORT
+	==================
+	Version change: 1.3.0 -> 1.3.1
+	Bump rationale: PATCH - clarify transparent-input policy for explicit shielding transactions
 
-Modified principles: N/A (initial creation)
+	Modified principles:
+	  - II. Shielded-by-Default Privacy (clarify shielding exception)
 
-Added sections:
-  - Preamble
-  - Core Principles (7 principles consolidated from 15 articles)
-  - Non-Negotiable Checklist
-  - Governance
+Added sections: N/A
+
+	Modified sections:
+	  - Core Principles -> II. Shielded-by-Default Privacy
+	  - Non-Negotiable Checklist
 
 Templates requiring updates:
   - .specify/templates/plan-template.md: Constitution Check section exists
   - .specify/templates/spec-template.md: No constitution references found
   - .specify/templates/tasks-template.md: No constitution references found
 
-Source document: docs/constitution.md (15-article detailed version)
-
-Follow-up TODOs: None
-==================
+Source document: (formerly) detailed constitution (removed; this file is canonical)
+	==================
 -->
 
 # Zkore Desktop Constitution
 
 ## Preamble
 
-This document defines the non-negotiable principles governing Zkore Desktop development. These principles are consolidated from the detailed 15-article constitution in `docs/constitution.md`. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
+This document defines the non-negotiable principles governing Zkore Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
 
-For detailed implementation rules, enforcement specifics, and article-by-article guidance, refer to the full constitution at `docs/constitution.md`.
+This file is the canonical constitution for Zkore Desktop.
 
 ## Core Principles
 
@@ -38,9 +37,9 @@ For detailed implementation rules, enforcement specifics, and article-by-article
 The Rust backend is the single trust boundary for all secret material. The UI MUST NOT store, log, or compute with spending keys or raw seeds.
 
 **Permitted mnemonic flows (with strict constraints):**
-- Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, and restore entry
+- Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, restore entry, and user-initiated "View seed phrase" (manual wallet-password re-authentication)
 - UI MUST NOT persist mnemonic to durable storage, MUST NOT log it, MUST clear from memory after flow completes
-- Backend MUST NOT re-send mnemonic after initial creation response
+- Backend MUST NOT re-send mnemonic after initial creation response unless the user explicitly initiates the "View seed phrase" flow (manual wallet-password re-authentication required)
 
 **Permitted payload flows:**
 - Raw unsigned/signed payloads MAY cross IPC ONLY for external signing flows (Keystone PCZT)
@@ -52,15 +51,15 @@ The Rust backend is the single trust boundary for all secret material. The UI MU
 - Memory containing secrets MUST use zeroization where feasible
 - Logs MUST redact seeds, keys, full payloads, and raw memos by default
 
-### II. Orchard-Only Privacy
+### II. Shielded-by-Default Privacy
 
-All spending operations MUST use the Orchard shielded pool. Transparent funds MAY be received and displayed but MUST NOT be spent directly.
+All user-initiated payments MUST be funded from shielded pools (Orchard + Sapling). Transparent funds MAY be received and displayed but MUST NOT be used for payments until shielded.
 
 **Enforceable rules:**
 - Default receive address MUST NOT include a transparent receiver
 - Transparent funds require explicit shielding before becoming spendable
-- Any privacy downgrade MUST be explicit, scoped, and user-acknowledged
-- No Sapling spending, no transparent spending (receive-only for compatibility)
+- Any privacy downgrade MUST be explicit, scoped, and user-acknowledged (e.g., sending to transparent recipients)
+- Transparent inputs MAY be spent only in explicit shielding transactions that move funds into shielded pools. Transparent inputs MUST NOT be used for user-initiated payments.
 
 ### III. Fail-Closed Safety
 
@@ -90,7 +89,7 @@ Every milestone MUST include unit tests for domain logic, integration tests for 
 - Privacy regressions (fail-open, unintended transparent usage) MUST have regression tests
 - Key leakage via logs or serialization MUST have regression tests
 - Malformed payload ingestion in signing flows MUST have regression tests
-- CI MUST cover at least two server implementations (Zaino + lightwalletd)
+- CI MUST cover at least two independent lightwalletd deployments (primary + secondary) to catch server-side behavior differences and regressions
 
 ### VI. Data Minimization
 
@@ -117,11 +116,14 @@ Significant changes MUST be documented with problem, options considered, chosen 
 Before merging work that touches wallet, signing, networking, or persistence, confirm:
 
 - [ ] Secrets cannot reach the UI
+- [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
-- [ ] Transparent spending is still impossible
+- [ ] Transparent funds still cannot be used for payments; transparent inputs are only permitted for explicit shielding transactions (transparent -> shielded)
+- [ ] Sending to transparent recipients requires explicit privacy acknowledgement
 - [ ] Tor mode cannot silently downgrade
 - [ ] IPC types are versioned and validated
 - [ ] Migrations are tested
+- [ ] CI covers integration tests against at least two independent lightwalletd deployments (primary + secondary)
 - [ ] Failure modes are user-explainable and safe
 
 ## Governance
@@ -146,8 +148,17 @@ This constitution follows semantic versioning:
 
 ### Reference Documents
 
-- **Detailed constitution**: `docs/constitution.md` (full 15-article version with implementation specifics)
-- **Feature specifications**: `docs/spec.md`
-- **Implementation plan**: `docs/plan.md`
+- **Feature specification**: `specs/001-zkore-desktop-wallet/spec.md`
+- **Implementation plan**: `specs/001-zkore-desktop-wallet/plan.md`
+- **Data model**: `specs/001-zkore-desktop-wallet/data-model.md`
+- **Research**: `specs/001-zkore-desktop-wallet/research.md`
+- **Quickstart**: `specs/001-zkore-desktop-wallet/quickstart.md`
+- **Tasks**: `specs/001-zkore-desktop-wallet/tasks.md`
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-21
+## Security Reporting and Incident Response
+
+- Provide a private channel for vulnerability reports.
+- Acknowledge reports promptly and track remediation steps internally.
+- Public disclosure timing must balance user safety with transparency.
+
+**Version**: 1.3.1 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-26

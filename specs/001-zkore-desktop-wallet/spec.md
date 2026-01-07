@@ -1,8 +1,8 @@
 # Feature Specification: Zkore Desktop Wallet
 
 **Feature Branch**: `001-zkore-desktop-wallet`
-**Status**: Draft
-**Input**: Desktop-first shielded Zcash wallet with Orchard-only transactions, Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
+**Status**: Complete
+**Input**: Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard), Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
 
 ## Clarifications
 
@@ -14,15 +14,24 @@
 - Q: What accessibility requirements are needed for v1? → A: Basic keyboard navigation and screen reader labels
 - Q: How should multi-device usage of the same seed be handled? → A: Allowed but unsupported; no sync, user manages conflicts
 
+### Session 2025-12-23
+
+- Q: How should Zkore protect spend-capable secret material at rest on disk (seed/spending keys)? → A: Encrypt with wallet password; optional OS keychain remember
+- Q: When should Zkore prompt for the wallet password to unlock a spend-capable wallet? → A: Prompt on app launch (keychain remember optional); require manual password re-auth for every spend (no keychain)
+- Q: Can users re-view the seed phrase after the initial wallet creation flow? → A: Yes; "View seed phrase" behind manual wallet-password re-auth (constitution amended)
+- Q: How should Zkore store transaction memos on disk? → A: Encrypt memos at rest using the wallet password
+- Q: Should the wallet database (transaction history, balances, addresses/notes) be encrypted at rest with the wallet password? → A: Yes; encrypt the entire wallet DB at rest
+
 ## Out of Scope
 
 The following features are explicitly excluded from the initial release:
 
 - **Mobile applications**: No iOS or Android versions; desktop-only (macOS, Windows, Linux)
-- **Multi-currency support**: ZEC only; no Bitcoin, Ethereum, or other cryptocurrency support
+- **Multi-currency support**: ZEC-only wallet balances; swap flows may reference non-ZEC assets for quoting/deposit/payout, but these are not tracked as wallet balances
 - **Cloud backup/sync**: No cloud-based seed backup, wallet sync, or cross-device synchronization
 - **Transaction history export**: No CSV, JSON, or other export of transaction data; seed phrase is the sole backup mechanism
 - **Multi-device synchronization**: No cross-device sync or conflict resolution; protocol-level nullifier rejection handles conflicts
+- **BIP-39 passphrase and alternate wordlists**: No “25th word” passphrase support and no non-English BIP-39 wordlists in v1 (24-word English mnemonic only)
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -39,39 +48,45 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 1. **Given** a user launches Zkore for the first time, **When** they select "Create Wallet", **Then** a new wallet is created in under 60 seconds and a shielded receive address is displayed
 2. **Given** a user has created a wallet but not backed up, **When** they view the home screen, **Then** a persistent backup reminder is visible and cannot be dismissed
 3. **Given** a user has created a wallet but not backed up, **When** they attempt to send funds, **Then** they are blocked and prompted to complete backup verification first
-4. **Given** a user is verifying backup, **When** they correctly re-enter specific seed words as requested, **Then** backup is marked complete and spending is enabled
+4. **Given** a user is verifying backup, **When** they correctly re-enter 4 specific seed words requested by a backend-issued challenge (by 1-based word number), **Then** backup is marked complete and spending is enabled
+5. **Given** a user has previously created a wallet, **When** they restart Zkore, **Then** the most recently opened wallet is loaded and they can resume without re-creating a wallet
 
 ---
 
 ### User Story 2 - Send Shielded Transaction with Memo (Priority: P1)
 
-A user with backed-up wallet and shielded funds sends ZEC to another shielded address with an optional memo. The transaction is constructed using Orchard only.
+A user with backed-up wallet and shielded funds sends ZEC to a recipient address (Unified Address, Sapling address, Orchard address, or transparent address) with an optional memo. The wallet prefers shielded receivers (Orchard, then Sapling). Sending to a transparent recipient is allowed but treated as a privacy downgrade that requires explicit user acknowledgment.
 
 **Why this priority**: Core wallet functionality. Sending is as essential as receiving for a functional wallet.
 
-**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to a shielded address, with and without memo, and verifying the transaction appears in both sender and recipient activity.
+**Independent Test**: Can be fully tested by sending testnet ZEC from a funded wallet to (a) a Unified Address, (b) a Sapling address, (c) an Orchard address, and (d) a transparent address (with privacy acknowledgement), with and without memo where supported, and verifying the transaction appears in both sender and recipient activity.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has shielded funds and completed backup, **When** they enter a valid shielded address and amount, **Then** they can send the transaction successfully
-2. **Given** a user is composing a send, **When** they add an optional memo, **Then** the memo is included in the shielded transaction
-3. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
+1. **Given** a user has shielded funds and completed backup, **When** they enter a valid shielded recipient address (UA, Sapling, or Orchard), amount, and optional memo, **Then** they can send the transaction successfully
+2. **Given** a user enters a Unified Address that contains both Orchard and Sapling receivers, **When** the wallet prepares the send, **Then** it selects the Orchard receiver when available (otherwise Sapling)
+3. **Given** a user enters a transparent recipient address, **When** they attempt to proceed, **Then** the wallet requires an explicit privacy-downgrade acknowledgement before preparing the send (and memos are not allowed)
+4. **Given** a user has only transparent funds, **When** they attempt to send ZEC, **Then** the wallet blocks the send and prompts them to shield first (transparent funds are receive-only until explicitly shielded)
+5. **Given** a transaction is broadcast, **When** it enters the mempool, **Then** it appears as "pending" in Activity and transitions to "confirmed" after mining
 
 ---
 
 ### User Story 3 - Shield Transparent Funds (Priority: P1)
 
-A user who has received ZEC to a transparent address (for exchange/legacy wallet compatibility) must shield those funds before they can spend them. The wallet provides a one-click "Shield and Consolidate" action.
+A user who has received ZEC to a transparent address (for exchange/legacy wallet compatibility) must shield those funds before they can spend them. The wallet provides a one-click "Shield and Consolidate" action that sweeps all spendable transparent funds into Orchard (fee deducted from transparent inputs), batching into multiple shielding transactions if needed.
 
 **Why this priority**: Critical for privacy enforcement. Transparent funds being unspendable directly is a core privacy guarantee from the constitution.
 
-**Independent Test**: Can be fully tested by receiving testnet ZEC to the compatibility transparent address, verifying it shows as "unspendable", clicking "Shield Now", and confirming the funds become shielded and spendable.
+**Independent Test**: Can be fully tested by receiving multiple testnet transactions to the compatibility transparent address, verifying transparent funds show as "unspendable", clicking "Shield Now", and confirming all spendable transparent funds are shielded (transparent spendable goes to zero) and become spendable.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user has transparent funds, **When** they view their balance, **Then** transparent funds are displayed separately and marked as "not spendable until shielded"
 2. **Given** a user has transparent funds, **When** they attempt to include them in a send, **Then** the wallet prevents this and prompts them to shield first
 3. **Given** a user clicks "Shield Now", **When** the shielding transaction completes, **Then** the funds appear as shielded and spendable
+4. **Given** a wallet has multiple transparent UTXOs, **When** the user shields, **Then** all spendable transparent funds are swept into Orchard (minus fees) and the transparent spendable balance becomes zero
+5. **Given** a wallet has too many transparent UTXOs to fit in one transaction, **When** the user shields, **Then** the wallet automatically batches into multiple shielding transactions and shows progress until completion
+6. **Given** a wallet’s spendable transparent balance is too small to cover the shielding fee, **When** the user shields, **Then** the wallet fails with a clear error and guidance (including the minimum required amount)
 
 ---
 
@@ -89,21 +104,22 @@ A returning user restores their wallet using their seed phrase. They can provide
 2. **Given** restore is in progress, **When** the user views the home screen, **Then** they see distinct phases, progress percentage, and estimated time remaining
 3. **Given** funds are discovered during restore, **When** spend-before-sync is available, **Then** the user can spend discovered funds before full sync completes
 4. **Given** seed entry is in progress, **When** the user types seed words, **Then** word autocomplete and paste from clipboard are supported
+5. **Given** a user successfully restores a wallet using a valid seed phrase, **When** the wallet is created/restored, **Then** backup is considered complete (no persistent backup reminder) and spending is enabled subject to normal unlock and per-spend re-authentication
 
 ---
 
 ### User Story 5 - Receive to Fresh Shielded Address (Priority: P2)
 
-A user opens the Receive screen to get an address for incoming funds. The default address is a shielded-only Unified Address without transparent receiver. Each time the screen opens, a fresh address is generated (address rotation).
+A user opens the Receive screen to get an address for incoming funds. The default address is a shielded-only Unified Address (Orchard + Sapling receivers, no transparent receiver). Each time the screen opens, a fresh shielded address is generated (address rotation).
 
 **Why this priority**: Receiving is core functionality, but address rotation and shielded-only defaults are privacy enhancements that build on basic receive capability.
 
-**Independent Test**: Can be fully tested by opening Receive screen multiple times, verifying each shows a different address, and confirming funds sent to any generated address arrive in the same wallet.
+**Independent Test**: Can be fully tested by opening Receive screen multiple times, verifying the shielded receive address changes each time (rotation), verifying the transparent compatibility address stays stable, and confirming funds sent to any generated address arrive in the same wallet.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user opens the Receive screen, **When** the screen loads, **Then** a fresh shielded-only Unified Address is displayed
-2. **Given** a user needs a transparent address for compatibility, **When** they explicitly select the compatibility option, **Then** a transparent address is shown with clear labeling
+2. **Given** a user needs a transparent address for compatibility, **When** they explicitly select the compatibility option, **Then** a transparent address is shown with clear labeling (stable per account in v1; no rotation)
 3. **Given** a user views a receive address, **When** they want to share it, **Then** one-click copy and a large scannable QR code are available
 
 ---
@@ -121,6 +137,7 @@ A user imports a Unified Full Viewing Key from their Keystone hardware wallet. Z
 1. **Given** a user initiates Keystone import, **When** they scan or enter the UFVK, **Then** a watch-only account is created and clearly labeled as such
 2. **Given** a watch-only account exists, **When** the user views balances, **Then** balances and transaction history are displayed
 3. **Given** a watch-only account exists, **When** the user attempts to send, **Then** the wallet initiates the air-gapped signing flow
+4. **Given** a wallet has multiple accounts, **When** the user switches the active account, **Then** Home/Receive/Send/Activity reflect the selected account
 
 ---
 
@@ -147,7 +164,7 @@ A user wants to acquire ZEC using another cryptocurrency. They select source ass
 
 **Why this priority**: DEX integration expands utility but is not core wallet functionality. Users can acquire ZEC through other means.
 
-**Independent Test**: Can be fully tested by initiating a testnet/sandbox swap flow, verifying the quote display, and tracking status updates in Activity.
+**Independent Test**: Can be fully tested on mainnet with small amounts, or using mocked 1Click API responses in integration tests.
 
 **Acceptance Scenarios**:
 
@@ -163,13 +180,13 @@ A user wants to convert shielded ZEC to another cryptocurrency. They select targ
 
 **Why this priority**: Off-ramp functionality is valuable but not core to wallet operations.
 
-**Independent Test**: Can be fully tested by initiating an off-ramp flow with testnet ZEC, verifying the shielded spend, and tracking completion.
+**Independent Test**: Can be fully tested on mainnet with small amounts, or using mocked 1Click API responses in integration tests.
 
 **Acceptance Scenarios**:
 
 1. **Given** a user initiates "Swap from ZEC", **When** they enter target asset and destination address, **Then** estimated ZEC cost and fees are displayed
 2. **Given** a swap from ZEC is executed, **When** the transaction is constructed, **Then** it uses shielded ZEC (not transparent)
-3. **Given** ephemeral transparent interaction is required, **When** displayed to user, **Then** privacy tradeoffs are clearly explained
+3. **Given** ephemeral transparent interaction is required, **When** the user attempts to proceed, **Then** privacy tradeoffs are clearly explained and the user MUST explicitly acknowledge before the swap can start
 
 ---
 
@@ -228,42 +245,94 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - What happens when a user enters an invalid or checksum-failed seed phrase during restore?
   - The wallet must validate the seed phrase and display a clear error before proceeding
 - How does the system handle network disconnection during a transaction broadcast?
-  - The transaction is saved locally, and the user is prompted to retry when connectivity resumes
+  - The signed transaction is queued in encrypted wallet storage and the user is prompted to retry when connectivity resumes (never auto re-broadcast). Queued entries are deleted after successful broadcast or after 7 days; retry requires explicit user action and manual wallet-password re-authentication.
 - What happens when Keystone QR scanning fails repeatedly?
   - The wallet offers "slow QR mode" with frame rate/brightness tips and microSD fallback
 - How does the wallet handle if a swap deadline expires?
   - The swap transitions to "Refunded" or "Failed" state with clear explanation and any refund outcome surfaced
 - What happens when transparent funds are received while Tor is enabled?
   - The funds are received and displayed as unspendable until shielded; Tor applies to network operations, not on-chain receiving
-- How does the system handle insufficient shielded balance for shielding fee?
-  - The wallet explains that shielding requires a fee and suggests acquiring minimal additional ZEC
+- What happens when the user includes a memo while sending to a transparent recipient?
+  - Transparent recipients do not support memos; the UI disables memo entry and the backend rejects non-null memos for transparent sends
+- How does the system handle insufficient transparent balance to cover the shielding fee?
+  - The wallet explains that shielding fees are deducted from transparent inputs; if the total is below the minimum, it shows a clear error (including required-minimum amount) and suggests acquiring minimal additional transparent ZEC
+- What happens when there are too many transparent UTXOs to shield in a single transaction?
+  - The wallet automatically batches shielding into multiple transactions and shows progress until all spendable transparent UTXOs are shielded
+
+### High-Impact Edge Case Clarifications *(normative)*
+
+This section is normative. It clarifies edge-case behavior that would otherwise drift across user stories and tests.
+
+#### C1: Transparent funds spend policy (shielded-by-default)
+
+- The wallet MUST NOT construct, sign, or broadcast a payment transaction that consumes transparent UTXOs.
+- Transparent UTXOs MAY only be spent as part of an explicit shielding operation (`ShieldFunds` / “Shield and Consolidate”) that sends funds to a shielded address controlled by the same wallet and `account_id`.
+- `PrepareSend` and `ConfirmSend` MUST select inputs only from shielded spendable funds for the specified `account_id` (transparent balance is receive-only until explicitly shielded).
+
+**Error behavior (send)**:
+- If the requested amount could only be satisfied by spending transparent funds (i.e., shielded spendable is insufficient but total funds including transparent would be sufficient), `PrepareSend` MUST fail with `TRANSPARENT_SPEND_BLOCKED` and instruct the user to shield first.
+- If total funds are insufficient (shielded + transparent), `PrepareSend` MUST fail with `INSUFFICIENT_FUNDS`.
+
+#### U1: Transaction status semantics (Activity)
+
+- `Pending`: Not yet confirmed. This includes outbound transactions once submission is accepted (even if mempool detection is delayed) and inbound/outbound transactions observed in mempool.
+- `Confirmed`: Mined in a block (best-chain inclusion observed via compact block scan). Reorg handling may transition Confirmed → Pending.
+- `Failed`: Outbound broadcast failed. `TransactionInfo.last_error` MUST be populated. `TransactionInfo.can_retry_broadcast` MUST be true only when the signed bytes were persisted for explicit user retry.
+- `Expired`: Outbound tx expiry height has passed without confirmation. In this state `can_retry_broadcast` MUST be false and any queued-broadcast bytes for the tx MUST be deleted.
+
+Incoming transactions MUST NOT transition to `Failed` or `Expired`.
+
+**Outgoing tx lifecycle (simplified)**:
+```
+Prepared -> Pending -> Confirmed
+          \-> Failed --(RetryBroadcast succeeds)-> Pending
+          \-> Expired
+```
+
+#### U2: TTLs (reauth tokens and send proposals)
+
+- `ReauthWallet` tokens MUST be single-use and MUST expire after 2 minutes (`expires_at` is returned over IPC).
+- `PrepareSend` proposals MUST be in-memory only and MUST expire after 5 minutes (`expires_at` is returned over IPC).
+
+#### U3: Required mempool capability (FR-013)
+
+- To satisfy FR-013, the configured lightwalletd server MUST support `CompactTxStreamer.GetMempoolStream` for mempool detection.
+- `AddServer` MUST probe for this capability and reject servers that return `UNIMPLEMENTED` for the method.
+
+#### U4: Account selection and spending scope
+
+- The UI MUST maintain an explicit active `account_id` for the active wallet and use it consistently across Home/Receive/Send/Activity.
+- Spend-authorizing operations MUST act on exactly one account (the explicitly provided `account_id`) and MUST NOT aggregate inputs across accounts.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 **Wallet Creation & Restoration**
-- **FR-001**: System MUST create a new wallet with seed phrase generation in under 60 seconds
+- **FR-001**: System MUST create a new wallet with BIP-39 24-word English mnemonic generation in under 60 seconds (no BIP-39 passphrase support in v1)
 - **FR-002**: System MUST allow receiving funds before backup is completed
 - **FR-003**: System MUST display a persistent, undismissable backup reminder until backup is verified
-- **FR-004**: System MUST block all spending until backup verification is complete (re-entering specific seed words)
-- **FR-005**: System MUST support wallet restoration from BIP-39 seed phrase with word autocomplete and paste support
+- **FR-004**: System MUST block all spending until the user has proven possession of the wallet seed phrase. For newly created wallets, this is satisfied by backup verification via a backend-issued 4-word challenge. For restored wallets (FR-005), successful restore using the full 24-word seed phrase MUST mark backup as complete immediately.
+- **FR-005**: System MUST support wallet restoration from a BIP-39 24-word English mnemonic with word autocomplete and paste support (no BIP-39 passphrase support in v1)
 - **FR-006**: System MUST accept an optional approximate first-transaction date during restore to reduce scan time
 - **FR-007**: System MUST display distinct restore phases, progress percentage, and estimated time remaining
 - **FR-008**: System MUST support spend-before-sync for funds discovered during an ongoing restore
+- **FR-008a**: System MUST support reopening an existing wallet after restart (list wallets, load by id, and persist last_opened_at)
+- **FR-008b**: System MUST provide a user-initiated "View seed phrase" flow after wallet creation, gated by manual wallet-password re-authentication
 
-**Shielded Transactions (Orchard Only)**
-- **FR-009**: System MUST construct all spends using only Orchard shielded funds
+**Shielded Transactions (Zashi-Style)**
+- **FR-009**: System MUST construct outgoing sends using shielded funds (Orchard preferred; Sapling supported as needed)
+- **FR-009a**: System MUST support recipients that are Unified Addresses (UA), Orchard addresses, Sapling addresses, and transparent addresses; for UA recipients, the wallet MUST select the best available receiver in this order: Orchard, then Sapling; transparent sends (including transparent-only UAs and t-addrs) MUST require explicit user acknowledgement of the privacy downgrade
 - **FR-010**: System MUST NOT allow spending transparent funds directly
 - **FR-011**: System MUST provide a one-click "Shield and Consolidate" action for transparent funds
-- **FR-012**: System MUST support optional memos on shielded sends
+- **FR-012**: System MUST support optional memos on shielded sends; memos MUST NOT be allowed for transparent recipients
 - **FR-013**: System MUST display incoming transactions in "pending" state when detected in mempool
 - **FR-014**: System MUST transition pending transactions to "confirmed" state after mining
 
 **Address Management**
-- **FR-015**: System MUST generate a shielded-only Unified Address (no transparent receiver) as the default receive address
+- **FR-015**: System MUST generate a shielded-only Unified Address (Orchard + Sapling receivers, no transparent receiver) as the default receive address
 - **FR-016**: System MUST rotate to a fresh shielded address each time the Receive screen is opened
-- **FR-017**: System MUST provide a separately accessible transparent address for legacy/exchange compatibility
+- **FR-017**: System MUST provide a separately accessible transparent address (single, non-rotating in v1) for legacy/exchange compatibility
 - **FR-018**: System MUST clearly label the transparent address as a "compatibility" option with explanation of when to use it
 - **FR-019**: System MUST provide one-click copy and large QR code for address sharing
 
@@ -278,15 +347,16 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-027**: System MUST show verification checklist before broadcast: recipient, amount, fee, memo presence
 - **FR-028**: System MUST NOT include hardware wallet branding or identifiers in QR payloads or exported files
 
-**NEAR Intents (Swaps and Pay)**
+**NEAR Intents (Swaps)**
 - **FR-029**: System MUST support "Swap to ZEC" flow with source asset selection, quote review, and deposit QR
 - **FR-030**: System MUST support "Swap from ZEC" flow with target asset and destination address input
 - **FR-031**: System MUST use shielded ZEC by default for all swap operations
 - **FR-032**: System MUST use ephemeral (non-reused) transparent addresses for any unavoidable transparent interactions
-- **FR-033**: System MUST display swap/pay entries in Activity with real-time status updates
+- **FR-033**: System MUST display swap entries in Activity with real-time status updates
 - **FR-034**: System MUST support state machine: Draft, Awaiting deposit, Pending, Confirming, Completed, Refunded, Failed
 - **FR-035**: System MUST display deadlines and countdown timers for time-sensitive swap actions
-- **FR-036**: System MUST clearly communicate privacy tradeoffs for any transparent interactions in swap flows
+- **FR-036**: System MUST clearly communicate privacy tradeoffs and require explicit user acknowledgement before proceeding when transparent interactions are required in swap flows
+- **FR-036a**: System MUST disable swap functionality for Testnet wallets; swap requests on Testnet MUST fail with a clear error
 
 **Tor Anonymization**
 - **FR-037**: System MUST provide opt-in Tor toggle in settings, marked as Beta
@@ -308,7 +378,7 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **FR-049**: System MUST NOT allow changing network after wallet creation
 - **FR-050**: System MUST use separate database directories for mainnet and testnet wallets
 - **FR-051**: System MUST visually distinguish mainnet and testnet wallets (color coding, badges)
-- **FR-052**: System MUST allow users to configure custom lightwalletd/Zaino server URLs
+- **FR-052**: System MUST allow users to configure custom lightwalletd server URLs
 - **FR-053**: System MUST display security warning when configuring custom servers
 - **FR-054**: System MUST test server connection before saving custom server configuration
 - **FR-055**: System MUST validate that server network matches wallet network
@@ -327,17 +397,29 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - **NFR-007**: System MUST maintain visible focus indicators during keyboard navigation
 - **NFR-008**: System MUST support standard keyboard shortcuts (Tab, Enter, Escape, arrow keys)
 
+**Security**
+- **NFR-009**: System MUST encrypt spend-capable secret material at rest (seed phrase and any spending-capable keys) using a user-defined wallet password
+- **NFR-010**: System MUST support optional "remember unlock" via OS keychain; wallet password/unlock material MUST NOT be stored in plaintext on disk
+- **NFR-011**: System MUST default to "locked on restart" for spend-capable wallets and prompt for wallet password to unlock on app launch
+- **NFR-012**: System MUST require manual wallet-password re-authentication for every spending attempt (send, shield, swap-from-ZEC); OS keychain "remember unlock" MUST NOT satisfy per-spend re-auth
+- **NFR-013**: System MUST require manual wallet-password re-authentication to display the seed phrase after creation; OS keychain "remember unlock" MUST NOT satisfy seed-display re-auth
+- **NFR-014**: System MUST encrypt transaction memo contents at rest using the wallet password; memo plaintext MUST NOT be written to disk
+- **NFR-015**: System MUST encrypt the entire wallet database at rest using the wallet password; wallet transaction history, balances, addresses, and note metadata MUST NOT be readable without a successful unlock
+- **NFR-016**: System MUST include a forward migration, a rollback strategy, and automated migration tests for every schema change (app metadata DB and wallet DB)
+
+Implementation-oriented security and persistence guidance is in the plan: [Security & Persistence Design Notes (v1)](plan.md#security--persistence-design-notes-v1).
+
 ### Key Entities
 
-- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. Can be spend-capable (full keys) or watch-only (viewing key only). Network (mainnet/testnet) is set at creation and immutable thereafter
-- **Account**: A logical grouping within a wallet, supporting Orchard shielded pool. Each account has derived addresses and maintains balance state
-- **Address**: Either a shielded-only Unified Address (default), a full Unified Address with transparent receiver (not default), or a standalone transparent address (compatibility). Addresses rotate on receive screen access
-- **Transaction**: An Orchard shielded transaction with sender, recipient, amount, optional memo, and lifecycle state (pending/confirmed)
+- **Wallet**: The primary entity containing seed-derived keys, accounts, addresses, and transaction history. In v1, wallets are software (seed-backed); watch-only is modeled as account types created via UFVK import. Network (mainnet/testnet) is set at creation and immutable thereafter
+- **Account**: A logical grouping within a wallet, supporting shielded pools (Sapling + Orchard). Each account has derived addresses and maintains balance state
+- **Address**: A shielded-only Unified Address (default, Orchard + Sapling receivers, no transparent) or a standalone transparent address (compatibility, single non-rotating per account in v1). Shielded addresses rotate on Receive screen access
+- **Transaction**: A shielded transaction (Sapling or Orchard) with sender, recipient, amount, optional memo (shielded recipients only), and lifecycle state (pending/confirmed). Sending to a transparent recipient creates a transparent output and is treated as an explicit privacy downgrade
 - **Transparent UTXO**: A transparent fund that has been received but is not spendable until shielded. Tracked separately from spendable balance
 - **Swap Intent**: A NEAR Intents operation with source/target assets, amounts, deadlines, state machine, and lifecycle tracking
 - **Backup Status**: A durable flag tracking whether the user has verified their seed phrase backup
 - **Tor State**: Current state of Tor connection: Off, Connecting, On, or Error
-- **ServerConfig**: Configuration for lightwalletd/Zaino server including URL and network field. Must match wallet network
+- **ServerConfig**: Configuration for lightwalletd server including URL and network field. Must match wallet network
 
 ## Success Criteria *(mandatory)*
 
@@ -345,10 +427,10 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 
 - **SC-001**: Users can create a new wallet and see a receive address in under 60 seconds
 - **SC-002**: Users can complete wallet restoration with known transaction history in under 10 minutes for typical wallet sizes
-- **SC-003**: 95% of shielded transactions confirm within the expected block time after broadcast
+- **SC-003**: For 95% of outgoing shielded sends, the wallet receives a successful broadcast acknowledgment from the configured server within 10 seconds of user confirmation (assuming server connectivity)
 - **SC-004**: Users can complete the full Keystone signing flow (create transaction, scan to device, sign, scan back, broadcast) in under 3 minutes
 - **SC-005**: Wallet status widget correctly reflects current state within 2 seconds of any state change
-- **SC-006**: No user can spend funds without completing backup verification (100% enforcement)
+- **SC-006**: No user can spend funds without having proven possession of the seed phrase (either via backup verification for newly created wallets or via successful restore from seed phrase) (100% enforcement)
 - **SC-007**: No transparent funds can be spent directly (100% enforcement of shield-first policy)
 - **SC-008**: When Tor is enabled and fails, 100% of network operations fail (zero silent fallback)
 - **SC-009**: Swap status updates appear in Activity within 5 seconds of state changes
@@ -363,18 +445,19 @@ A user creating a new wallet chooses between mainnet and testnet. The network is
 - Users have internet connectivity for wallet operations (sync, send, swap)
 - Keystone hardware wallet firmware supports Zcash Orchard and PCZT signing protocol
 - NEAR Intents API is available and provides the required swap functionality
+- NEAR Intents 1Click API is mainnet-only; swap features must be disabled for Testnet wallets
 - CompactTxStreamer-compatible light client server is available for sync operations
 - Tor integration uses embedded Arti-based client from zcash_client_backend
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)
 - Webcam access is available for QR scanning (with microSD fallback if not)
 - Same seed phrase generates different addresses on mainnet vs testnet (due to BIP-44 coin_type)
-- Default server is zec.rocks with regional endpoints available
+- Default server is https://lwd.zec.pro with https://zec.rocks regional endpoints available
 
 ## Dependencies
 
 - librustzcash ecosystem (zcash_client_backend, zcash_client_sqlite) for wallet engine
 - CompactTxStreamer gRPC protocol for light client sync
-- Zaino (Rust indexer, lightwalletd-compatible) as alternative to lightwalletd
-- Keystone SDK for hardware wallet integration
+- ~~Keystone SDK for hardware wallet integration~~
+- Keystone QR tooling (`@keystonehq/animated-qr`) + minimal `zcash-pczt` UR CBOR codec in the UI for PCZT signing
 - NEAR Intents 1Click API for swap operations
 - Arti-based Tor client for anonymized networking

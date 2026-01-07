@@ -7,11 +7,11 @@
 
 ### Required Tools
 
-- **Rust**: 1.92.0+ (edition 2024, with rustup)
+- **Rust**: 1.92.0 (edition 2024, with rustup)
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2 (installed as dev dependency via `@tauri-apps/cli`, not global)
 
-> **Note**: We use Rust 1.92.0 with edition 2024 to align with the librustzcash ecosystem. While librustzcash MSRV is 1.85.1, we target 1.92.0 for the development toolchain to leverage the latest improvements. Edition 2024 provides improved safety semantics and is production-proven in Zcash infrastructure.
+> **Note**: Zkore pins and enforces Rust **1.92.0** for builds (via `rust-toolchain.toml` and the workspace `rust-version`) to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 ### Platform-Specific
 
@@ -30,6 +30,14 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 **Windows**:
 - Visual Studio Build Tools with C++ workload
 - WebView2 Runtime (usually pre-installed on Windows 11)
+
+### Encryption Prerequisites
+
+- Wallet DB encryption uses **SQLCipher** via `rusqlite` `bundled-sqlcipher` (**required**). Ensure feature unification so the transitive `rusqlite` used by `zcash_client_sqlite` also builds with SQLCipher.
+- KDF crate: `argon2` configured for **Argon2id**.
+- AEAD crate: `chacha20poly1305` for **XChaCha20-Poly1305** wrapping.
+- For DEK wrap/unwrap, bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted per wallet in `wallet_encryption`).
+- Zkore does not support a “system SQLCipher” build path; developers and end users do not install SQLCipher separately.
 
 ## Project Setup
 
@@ -64,23 +72,38 @@ repository = "https://github.com/zkore/zkore-desktop"
 # Using caret constraints for semver-compatible updates
 # Features enabled:
 #   - orchard: Orchard shielded pool support (required)
+#   - Sapling: enabled by default; required for sending to Sapling recipients
 #   - transparent-inputs: Receive transparent funds + shield them (FR-010/FR-011)
 #   - pczt: PCZT signing for Keystone hardware wallet (FR-020-028)
 #   - tor: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)
 zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.19", features = ["transparent-inputs"] }
+zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs"] }
 zcash_primitives = { version = "0.26" }
 zcash_protocol = { version = "0.7" }
 
 # Modules relocated from zcash_primitives in 0.20+
 zip32 = "0.2"
 
+# Mnemonic + randomness
+bip39 = "2"
+rand = "0.8"
+
+# Crypto (KDF + AEAD)
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing-appender = "0.2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Encoding
+base64 = "0.22"
 
 # gRPC (tonic 0.14+ required for prost 0.14 compatibility)
 tonic = "0.14"
@@ -90,7 +113,7 @@ prost = "0.14"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 # Database
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled-sqlcipher"] }
 
 # Error handling
 thiserror = "2"
@@ -141,10 +164,16 @@ bun install
 bun add -D @tauri-apps/cli
 
 # Install additional UI dependencies
-bun add @keystonehq/animated-qr @keystonehq/keystone-sdk
+bun add @keystonehq/animated-qr buffer
 bun add qrcode.react @tanstack/react-query
-bun add -D @types/node
+bun add @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-tabs
+bun add react-hotkeys-hook
+bun add -D @types/node @axe-core/react
 ```
+
+~~bun add @keystonehq/animated-qr @keystonehq/keystone-sdk~~
+
+**Updated approach**: use `@keystonehq/animated-qr` for multi-frame QR and a minimal `zcash-pczt` UR CBOR codec in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps in the Tauri WebView.
 
 > **Note**: We use `@tauri-apps/cli` as a dev dependency rather than `cargo install tauri-cli`. This ensures consistent CLI versions across the team and integrates with bun scripts (`bun tauri dev`, `bun tauri build`).
 
@@ -204,13 +233,29 @@ Create `crates/zkore-core/src/domain/mod.rs`:
 //! Domain models
 
 mod wallet;
+mod account;
+mod address;
+mod backup;
 mod balance;
+mod server;
+mod sync;
+mod wallet_status;
 mod transaction;
+mod transparent_utxo;
 
 pub use wallet::*;
+pub use account::*;
+pub use address::*;
+pub use backup::*;
 pub use balance::*;
+pub use server::*;
+pub use sync::*;
+pub use wallet_status::*;
 pub use transaction::*;
+pub use transparent_utxo::*;
 ```
+
+Note: Additional domain modules (e.g., `swap`, `tor`) are added in later steps as needed by their user stories.
 
 ### Step 2: Tauri Commands Skeleton
 
@@ -229,7 +274,7 @@ pub struct AppState {
 pub async fn zkore_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
-) -> Result<CreateWalletResponse, IpcError> {
+) -> IpcResult<CreateWalletResponse> {
     // Implementation in Milestone 1
     todo!()
 }
@@ -238,7 +283,7 @@ pub async fn zkore_create_wallet(
 pub async fn zkore_get_balance(
     state: State<'_, AppState>,
     request: GetBalanceRequest,
-) -> Result<GetBalanceResponse, IpcError> {
+) -> IpcResult<GetBalanceResponse> {
     // Implementation in Milestone 1
     todo!()
 }
@@ -259,20 +304,55 @@ Create `apps/zkore-app-tauri/src/services/ipc.ts`:
 
 ```typescript
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import * as IPC from '../types/ipc';
 
+// All IPC request/response payloads include `schema_version`.
+function versioned<T extends object>(request: T): T & IPC.VersionedPayload {
+  return { ...request, schema_version: IPC.SCHEMA_VERSION };
+}
+
+export async function listWallets(): Promise<
+  IPC.IpcResult<IPC.ListWalletsResponse>
+> {
+  return invoke(IPC.Commands.LIST_WALLETS, {
+    request: versioned({}),
+  });
+}
+
+export async function loadWallet(
+  request: Omit<IPC.LoadWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.LoadWalletResponse>> {
+  return invoke(IPC.Commands.LOAD_WALLET, {
+    request: versioned(request),
+  });
+}
+
+export async function unlockWallet(
+  request: Omit<IPC.UnlockWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.UnlockWalletResponse>> {
+  return invoke(IPC.Commands.UNLOCK_WALLET, {
+    request: versioned(request),
+  });
+}
+
 export async function createWallet(
-  request: IPC.CreateWalletRequest
-): Promise<IPC.CreateWalletResponse> {
-  return invoke(IPC.Commands.CREATE_WALLET, { request });
+  request: Omit<IPC.CreateWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.CreateWalletResponse>> {
+  return invoke(IPC.Commands.CREATE_WALLET, { request: versioned(request) });
 }
 
 export async function getBalance(
-  request: IPC.GetBalanceRequest
-): Promise<IPC.GetBalanceResponse> {
-  return invoke(IPC.Commands.GET_BALANCE, { request });
+  request: Omit<IPC.GetBalanceRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
+  return invoke(IPC.Commands.GET_BALANCE, { request: versioned(request) });
 }
+```
+
+Create `apps/zkore-app-tauri/src/services/events.ts`:
+
+```typescript
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import * as IPC from '../types/ipc';
 
 // Event subscriptions
 export function onBalanceChanged(
@@ -289,6 +369,42 @@ export function onSyncProgress(
   return listen(IPC.EventChannels.SYNC, (event) => {
     callback(event.payload as IPC.SyncProgressEvent);
   });
+}
+
+export function onWalletStatus(
+  callback: (event: IPC.WalletStatusEvent) => void
+): Promise<UnlistenFn> {
+  return listen(IPC.EventChannels.WALLET_STATUS, (event) => {
+    callback(event.payload as IPC.WalletStatusEvent);
+  });
+}
+```
+
+> **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
+> currently active wallet set by `LoadWallet`, `CreateWallet` (on success), and `RestoreWallet` (on success).
+>
+> `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet in the backend. In other cases, call `LoadWallet` before issuing account-scoped requests. The UI MAY call `LoadWallet` after create/restore to retrieve `accounts` and `lock_status`.
+>
+> If `LoadWalletResponse.lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty list.
+> After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+>
+> Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`.
+
+### App startup: reopen + unlock + reload
+
+On startup, reopen the most recent wallet and handle the “accounts are empty when locked” rule:
+
+```typescript
+const wallets = await listWallets();
+// pick most recent, then:
+const load1 = await loadWallet({ wallet_id });
+if (load1.ok?.lock_status === 'Locked') {
+  // Default to the persisted preference so we don't disable keychain unlock accidentally.
+  // UI may override this with a toggle value.
+  const persistedRememberUnlock = load1.ok.wallet.remember_unlock_enabled;
+  const remember_unlock = rememberUnlockOverride ?? persistedRememberUnlock;
+  await unlockWallet({ wallet_id, password, remember_unlock });
+  const load2 = await loadWallet({ wallet_id }); // load again to get accounts
 }
 ```
 
@@ -309,6 +425,22 @@ cargo test --workspace
 
 # TypeScript tests
 cd apps/zkore-app-tauri && bun test
+```
+
+TypeScript tests use Bun's built-in test runner (`bun test`) in v1.
+
+### Accessibility Testing
+
+```bash
+# Run automated accessibility tests
+cd apps/zkore-app-tauri && bun test:a11y
+
+# Manual keyboard testing checklist:
+# - Tab through all interactive elements
+# - Enter/Space activates buttons and links
+# - Escape closes modals and dropdowns
+# - Arrow keys navigate within components
+# - Focus indicator visible on all focused elements
 ```
 
 ### Building for Production
@@ -349,6 +481,8 @@ bun run tauri build
 │       │   ├── components/
 │       │   ├── pages/
 │       │   ├── services/
+│       │   │   ├── ipc.ts
+│       │   │   └── events.ts
 │       │   └── types/
 │       │       └── ipc.ts
 │       └── package.json
@@ -414,19 +548,25 @@ Edit `apps/zkore-app-tauri/src-tauri/tauri.conf.json`:
 }
 ```
 
+> **CSP note**: The example CSP above is intentionally strict. If you see a blank window or missing assets in Tauri v2, loosen CSP to include the Tauri asset protocols (commonly `asset:` / `tauri:` and sometimes `blob:`) per the Tauri v2 docs, then tighten again.
+
 ### Environment Configuration
 
 Create `.env.development`:
 
 ```bash
 # Light client server
-# Mainnet: zec.rocks (regional: na.zec.rocks, eu.zec.rocks, sa.zec.rocks)
-# Testnet: lwd.testnet.zec.pro (default)
-ZKORE_GRPC_URL=https://lwd.testnet.zec.pro:443
-ZKORE_NETWORK=testnet
+# Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
+# Testnet: https://lwd.testnet.zec.pro (default)
+# Note: this override does NOT set wallet network. Wallet network is selected at wallet creation and is immutable.
+# Note: this is for local development/CI only; release builds should rely on persisted server configuration and must not silently override user-selected servers via environment variables.
+ZKORE_GRPC_URL=https://lwd.testnet.zec.pro
 
 # Logging
 RUST_LOG=info,zkore=debug
+
+# Log file location (logs written here automatically)
+# ~/.zkore/logs/zkore.YYYY-MM-DD.log (rotated daily, 7 days retained)
 ```
 
 ## API Migration Notes (librustzcash 0.21+)
@@ -516,6 +656,12 @@ Add these to the CI pipeline:
 - name: Security audit
   run: cargo audit
 
+- name: Integration tests (lightwalletd matrix)
+  run: |
+    # Constitution Principle V: validate against at least two independent deployments.
+    ZKORE_GRPC_URL=https://lwd.zec.pro cargo test --workspace
+    ZKORE_GRPC_URL=https://zec.rocks cargo test --workspace
+
 - name: Build with lock verification
   run: cargo build --release --locked
 
@@ -535,11 +681,11 @@ components = ["rustfmt", "clippy"]
 
 ## Next Steps
 
-1. **Milestone 1**: Implement wallet creation, receive addresses, sync, and balance display
-2. **Milestone 2**: Add send functionality, memo support, shielding
-3. **Milestone 3**: Backup verification, restore with birthday
-4. **Milestone 4**: Keystone integration
-5. **Milestone 5**: NEAR Intents swaps
-6. **Milestone 6**: Tor integration
+1. **Milestone 1**: Setup + Foundational + US1 (create wallet, receive address display, backup challenge + verification, lock/unlock, basic sync + balance)
+2. **Milestone 2**: US2 + US3 (send with memo, broadcast retry queue, shield and consolidate)
+3. **Milestone 3**: US4 + US5 (restore with birthday + progress, address rotation)
+4. **Milestone 4**: US6 + US7 (Keystone UFVK import + air-gapped signing)
+5. **Milestone 5**: US8 + US9 (swaps)
+6. **Milestone 6**: US10 (Tor)
 
-Refer to `docs/task.md` for detailed implementation tasks per milestone.
+Refer to `tasks.md` for detailed implementation tasks per milestone.

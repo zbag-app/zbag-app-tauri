@@ -29,21 +29,39 @@ export interface IpcError {
 /** Result type for IPC commands */
 export type IpcResult<T> = { ok: T } | { err: IpcError };
 
+/**
+ * Unix epoch timestamp in milliseconds (UTC).
+ *
+ * NOTE: All timestamp fields in this IPC contract use milliseconds unless explicitly stated otherwise.
+ */
+export type UnixTimestampMs = number;
+
 // ============================================================================
 // Wallet Types
 // ============================================================================
 
+// In v1, wallets are always `Software`; watch-only behavior is modeled at the account level.
+// `WatchOnly` wallet type is reserved for future use and MUST NOT be created in v1.
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
+
+// In v1, Keystone UFVK import creates `HardwareSigner` accounts (watch-only; spend via signing flow).
+// `WatchOnly` account type is reserved for future generic viewing-key accounts and MUST NOT be created in v1.
 export type AccountType = 'Software' | 'WatchOnly' | 'HardwareSigner';
+export type WalletLockStatus = 'Locked' | 'Unlocked';
 
 export interface WalletInfo {
   id: string;
   name: string;
   wallet_type: WalletType;
   network: Network;
-  created_at: number;
-  last_opened_at: number | null;
+  /**
+   * Persisted OS keychain-backed auto-unlock preference.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
+  remember_unlock_enabled: boolean;
+  created_at: UnixTimestampMs;
+  last_opened_at: UnixTimestampMs | null;
 }
 
 export interface AccountInfo {
@@ -60,8 +78,8 @@ export interface AccountInfo {
 export type Zatoshis = string;
 
 export interface Balance {
-  orchard_spendable: Zatoshis;
-  orchard_pending: Zatoshis;
+  shielded_spendable: Zatoshis;
+  shielded_pending: Zatoshis;
   transparent_total: Zatoshis;
   total: Zatoshis;
 }
@@ -85,18 +103,25 @@ export interface AddressInfo {
 
 export type TransactionType = 'Send' | 'Receive' | 'Shield' | 'Consolidate';
 export type TransactionStatus = 'Pending' | 'Confirmed' | 'Expired' | 'Failed';
+export type RecipientKind = 'Orchard' | 'Sapling' | 'Transparent';
 
 export interface TransactionInfo {
   txid: string;
+  /** Wallet-local account index (ZIP-32) */
+  account_id: number;
   tx_type: TransactionType;
   value: Zatoshis;
   fee: Zatoshis;
   memo_present: boolean;
   memo: string | null;
   status: TransactionStatus;
+  /** Last error message for failed/queued broadcasts (user-safe, redacted) */
+  last_error: string | null;
+  /** True if user can retry broadcasting this tx (i.e., signed bytes were queued after a broadcast failure) */
+  can_retry_broadcast: boolean;
   mined_height: number | null;
-  created_at: number;
-  confirmed_at: number | null;
+  created_at: UnixTimestampMs;
+  confirmed_at: UnixTimestampMs | null;
 }
 
 // ============================================================================
@@ -123,7 +148,7 @@ export interface SyncProgress {
 // Swap Types
 // ============================================================================
 
-export type SwapType = 'ToZec' | 'FromZec' | 'Pay';
+export type SwapType = 'ToZec' | 'FromZec';
 export type SwapState =
   | 'Draft'
   | 'AwaitingDeposit'
@@ -142,12 +167,14 @@ export interface SwapInfo {
   output_asset: string;
   output_amount: string | null;
   deposit_address: string | null;
+  deposit_memo: string | null;
   destination_address: string | null;
+  refund_address: string | null;
   state: SwapState;
-  deadline: number | null;
+  deadline: UnixTimestampMs | null;
   last_error: string | null;
-  created_at: number;
-  updated_at: number;
+  created_at: UnixTimestampMs;
+  updated_at: UnixTimestampMs;
 }
 
 export interface SwapQuote {
@@ -157,7 +184,7 @@ export interface SwapQuote {
   output_amount: string;
   fee_amount: string;
   fee_asset: string;
-  deadline: number;
+  deadline: UnixTimestampMs;
   rate: string;
 }
 
@@ -177,23 +204,44 @@ export interface TorState {
 // Wallet Status Types
 // ============================================================================
 
-export type BackupAction = { Required: null } | { Complete: null };
+/** NOTE: Rust serde serializes unit enum variants as strings (e.g. "Required"). */
+export type BackupAction = 'Required' | 'Complete';
 export type SyncStatus =
-  | { Synced: null }
+  | 'Synced'
   | { Syncing: { progress_percent: number } }
   | { Error: { message: string } };
 export type ShieldAction =
-  | { None: null }
+  | 'None'
   | { Available: { amount: Zatoshis } }
-  | { InProgress: null };
+  | 'InProgress';
 export type PrivacyPosture = 'Optimal' | 'NeedsAction';
 
 export interface WalletStatus {
+  lock_status: WalletLockStatus;
   backup_status: BackupAction;
   sync_status: SyncStatus;
   shield_status: ShieldAction;
   privacy_posture: PrivacyPosture;
 }
+
+// ============================================================================
+// Backup Types
+// ============================================================================
+
+export interface BackupChallenge {
+  /** Opaque challenge identifier */
+  challenge_id: string;
+  /** Seed word indices requested for verification (exactly 4; 1..=24, 1-based word numbers) */
+  indices: number[];
+  /** Challenge expiry timestamp */
+  expires_at: UnixTimestampMs;
+}
+
+// ============================================================================
+// Re-auth Types
+// ============================================================================
+
+export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase';
 
 // ============================================================================
 // Server Types
@@ -203,8 +251,9 @@ export interface ServerInfo {
   id: string;
   name: string;
   grpc_url: string;
+  network: Network;
   is_default: boolean;
-  last_success_at: number | null;
+  last_success_at: UnixTimestampMs | null;
 }
 
 // ============================================================================
@@ -222,6 +271,7 @@ export interface SigningRequest {
 
 export interface SigningSummary {
   recipient: string;
+  recipient_kind: RecipientKind;
   amount: Zatoshis;
   fee: Zatoshis;
   memo_present: boolean;
@@ -237,17 +287,88 @@ export interface SignedResponse {
 // Command Requests
 // ============================================================================
 
-/** Create a new wallet */
+/**
+ * Create a new wallet.
+ *
+ * On success, this sets the created wallet as the active wallet (equivalent to `LoadWallet`).
+ */
 export interface CreateWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /**
+   * Persist the wallet's OS keychain-backed auto-unlock preference and store unlock material in the OS keychain.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
+  remember_unlock: boolean;
 }
 
-/** Load an existing wallet */
+/**
+ * Load an existing wallet and set it as the active wallet for account-scoped requests/events.
+ *
+ * Loading MAY attempt OS keychain auto-unlock (if enabled for the wallet). `LoadWalletResponse.lock_status`
+ * reflects the post-attempt state.
+ *
+ * Accounts are available only when the encrypted wallet DB is unlocked:
+ * - If `lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty array.
+ * - After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+ */
 export interface LoadWalletRequest extends VersionedPayload {
   wallet_id: string;
 }
 
+/** List all wallets */
+export interface ListWalletsRequest extends VersionedPayload {}
+
+/** Get wallet status for status widget */
+export interface GetWalletStatusRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Unlock an encrypted wallet DB (read-only operations still require unlock) */
+export interface UnlockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  /**
+   * Updates the wallet's persisted OS keychain-backed auto-unlock preference.
+   * If true, ensure keychain unlock material is stored/updated; if false, disable and remove any stored keychain entry.
+   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   */
+  remember_unlock: boolean;
+}
+
+/** Lock a wallet (drops decrypted material from memory) */
+export interface LockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/**
+ * Re-authenticate for a sensitive action (per-action; OS keychain must not satisfy).
+ * Returns a short-lived token that can be used to authorize exactly one action.
+ */
+export interface ReauthWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  purpose: ReauthPurpose;
+}
+
+/** View seed phrase (requires re-auth token with purpose ViewSeedPhrase) */
+export interface ViewSeedPhraseRequest extends VersionedPayload {
+  wallet_id: string;
+  reauth_token: string;
+}
+
+/**
+ * Account-scoped requests (those with account_id) operate on the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * account_id values are wallet-local to the active wallet.
+ */
 /** Get fresh shielded receive address */
 export interface GetReceiveAddressRequest extends VersionedPayload {
   account_id: number;
@@ -256,6 +377,16 @@ export interface GetReceiveAddressRequest extends VersionedPayload {
 
 /** Start wallet sync */
 export interface StartSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Stop wallet sync */
+export interface StopSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Get current sync progress snapshot */
+export interface GetSyncProgressRequest extends VersionedPayload {
   wallet_id: string;
 }
 
@@ -277,9 +408,15 @@ export interface ListTransactionsRequest extends VersionedPayload {
  */
 export interface PrepareSendRequest extends VersionedPayload {
   account_id: number;
+  /** Recipient address (UA, Sapling, Orchard, or Transparent) */
   recipient: string;
   amount: Zatoshis;
   memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
 }
 
 /**
@@ -289,6 +426,8 @@ export interface PrepareSendRequest extends VersionedPayload {
 export interface ConfirmSendRequest extends VersionedPayload {
   /** Proposal ID from PrepareSendResponse */
   proposal_id: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
 }
 
 /**
@@ -298,29 +437,56 @@ export interface CancelSendRequest extends VersionedPayload {
   proposal_id: string;
 }
 
+/**
+ * Retry broadcasting a previously-signed transaction that was queued after a broadcast failure.
+ * Requires explicit user action and manual re-auth.
+ */
+export interface RetryBroadcastRequest extends VersionedPayload {
+  txid: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
 /** Shield transparent funds */
 export interface ShieldFundsRequest extends VersionedPayload {
   account_id: number;
   consolidate: boolean;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Get a fresh backend-generated backup challenge */
+export interface GetBackupChallengeRequest extends VersionedPayload {
+  wallet_id: string;
 }
 
 /** Verify backup words */
 export interface VerifyBackupRequest extends VersionedPayload {
   wallet_id: string;
-  /** Map of word index (0-23) to word */
+  /** Challenge ID issued by the backend (prevents UI-controlled verification) */
+  challenge_id: string;
+  /** Map of word index (1-24) to word */
   word_challenges: Record<number, string>;
 }
 
-/** Restore wallet from seed */
+/**
+ * Restore wallet from seed.
+ *
+ * On success, this sets the restored wallet as the active wallet (equivalent to `LoadWallet`).
+ */
 export interface RestoreWalletRequest extends VersionedPayload {
   name: string;
   network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
+  remember_unlock: boolean;
   seed_phrase: string;
-  /** Approximate date of first transaction (unix timestamp) */
-  birthday_date: number | null;
+  /** Approximate date of first transaction (unix timestamp, ms) */
+  birthday_date: UnixTimestampMs | null;
 }
 
-/** Import UFVK for watch-only */
+/** Import UFVK (Keystone) to create a HardwareSigner account (watch-only; spends via signing flow) within an existing software wallet */
 export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;
@@ -333,11 +499,18 @@ export interface BuildSigningRequestRequest extends VersionedPayload {
   recipient: string;
   amount: Zatoshis;
   memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
 }
 
 /** Finalize signed response from Keystone */
 export interface FinalizeSigningRequest extends VersionedPayload {
   signed_payload: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
 }
 
 /** Request swap quote */
@@ -353,6 +526,17 @@ export interface RequestSwapQuoteRequest extends VersionedPayload {
 /** Start swap from quote */
 export interface StartSwapRequest extends VersionedPayload {
   quote_id: string;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the swap requires transparent interaction (for example, a transparent recipient,
+   * transparent refund path, or generating/using a transparent address).
+   */
+  allow_transparent_interaction: boolean;
+  /**
+   * Re-auth token (purpose: Spend).
+   * Required when the quote results in a ZEC spend (e.g. swap-from-ZEC).
+   */
+  reauth_token: string | null;
 }
 
 /** Get swap status */
@@ -360,12 +544,28 @@ export interface GetSwapStatusRequest extends VersionedPayload {
   swap_id: string;
 }
 
+/**
+ * List swaps for the currently active wallet only.
+ *
+ * Note: SwapInfo does not include a wallet_id, so this call is wallet-scoped.
+ */
+export interface ListSwapsRequest extends VersionedPayload {}
+
 /** Set Tor enabled */
 export interface SetTorEnabledRequest extends VersionedPayload {
   enabled: boolean;
 }
 
-/** Add server */
+/** Get current Tor state */
+export interface GetTorStateRequest extends VersionedPayload {}
+
+/**
+ * Add a custom lightwalletd server configuration.
+ *
+ * The backend MUST probe `grpc_url` to determine and persist the server's `network` (see ServerInfo.network).
+ * Probing MUST also validate required server capabilities for v1, including CompactTxStreamer mempool support for FR-013 (`GetMempoolStream` MUST be supported; reject `UNIMPLEMENTED`).
+ * If probing fails, the request MUST fail rather than guessing.
+ */
 export interface AddServerRequest extends VersionedPayload {
   name: string;
   grpc_url: string;
@@ -381,21 +581,67 @@ export interface TestServerRequest extends VersionedPayload {
   server_id: string;
 }
 
+/**
+ * List all configured servers (Mainnet + Testnet).
+ *
+ * UI SHOULD filter by the active wallet's network when presenting selectable servers.
+ */
+export interface ListServersRequest extends VersionedPayload {}
+
+/** Get log file location for support */
+export interface GetLogLocationRequest extends VersionedPayload {}
+
+export interface GetLogLocationResponse extends VersionedPayload {
+  /** Directory containing log files */
+  log_directory: string;
+  /** Current log file path */
+  current_log_file: string;
+}
+
 // ============================================================================
 // Command Responses
 // ============================================================================
 
 export interface CreateWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
-  /** Seed phrase words (24 words) - ONLY returned on create */
+  /** Seed phrase words (24 words) - returned on create (and via ViewSeedPhrase) */
   seed_phrase: string[];
-  /** Word indices for backup verification challenge */
-  backup_challenge_indices: number[];
+  /** Initial backend-generated backup challenge */
+  backup_challenge: BackupChallenge;
+}
+
+export interface UnlockWalletResponse extends VersionedPayload {
+  unlocked: boolean;
+}
+
+export interface LockWalletResponse extends VersionedPayload {
+  locked: boolean;
+}
+
+export interface ReauthWalletResponse extends VersionedPayload {
+  reauth_token: string;
+  /** Token expiry timestamp (v1: expires_at = issued_at + 120 seconds) */
+  expires_at: UnixTimestampMs;
+}
+
+export interface ViewSeedPhraseResponse extends VersionedPayload {
+  seed_phrase: string[];
 }
 
 export interface LoadWalletResponse extends VersionedPayload {
   wallet: WalletInfo;
+  lock_status: WalletLockStatus;
+
+  /**
+   * Accounts are available only when the wallet DB is unlocked.
+   * If `lock_status` is `Locked`, this MUST be an empty array.
+   * After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+   */
   accounts: AccountInfo[];
+}
+
+export interface ListWalletsResponse extends VersionedPayload {
+  wallets: WalletInfo[];
 }
 
 export interface GetReceiveAddressResponse extends VersionedPayload {
@@ -404,6 +650,14 @@ export interface GetReceiveAddressResponse extends VersionedPayload {
 
 export interface StartSyncResponse extends VersionedPayload {
   started: boolean;
+}
+
+export interface StopSyncResponse extends VersionedPayload {
+  stopped: boolean;
+}
+
+export interface GetSyncProgressResponse extends VersionedPayload {
+  progress: SyncProgress;
 }
 
 export interface GetBalanceResponse extends VersionedPayload {
@@ -426,13 +680,14 @@ export interface PrepareSendResponse extends VersionedPayload {
   fee: Zatoshis;
   /** Summary for user verification */
   summary: TransactionSummary;
-  /** Proposal expiration timestamp (proposals auto-expire after ~5 minutes) */
-  expires_at: number;
+  /** Proposal expiration timestamp (v1: proposals auto-expire after 5 minutes) */
+  expires_at: UnixTimestampMs;
 }
 
 /** Transaction summary for user verification before confirming */
 export interface TransactionSummary {
   recipient: string;
+  recipient_kind: RecipientKind;
   amount: Zatoshis;
   fee: Zatoshis;
   memo_present: boolean;
@@ -447,13 +702,30 @@ export interface CancelSendResponse extends VersionedPayload {
   cancelled: boolean;
 }
 
-export interface ShieldFundsResponse extends VersionedPayload {
+export interface RetryBroadcastResponse extends VersionedPayload {
   txid: string;
+}
+
+export interface ShieldFundsResponse extends VersionedPayload {
+  /**
+   * Txid of the shielding transaction created by this call.
+   *
+   * Note: Shielding may batch into multiple transactions when the transparent input
+   * set is too large to fit in a single transaction; in that case this `txid`
+   * refers to the first transaction in the batch. Additional shielding txids are
+   * observable via `tx.changed` events and `ListTransactions`.
+   */
+  txid: string;
+  /** Fee (zatoshis) for the transaction identified by `txid` */
   fee: Zatoshis;
 }
 
 export interface VerifyBackupResponse extends VersionedPayload {
   verified: boolean;
+}
+
+export interface GetBackupChallengeResponse extends VersionedPayload {
+  challenge: BackupChallenge;
 }
 
 export interface RestoreWalletResponse extends VersionedPayload {
@@ -524,6 +796,16 @@ export interface ListSwapsResponse extends VersionedPayload {
 // Events
 // ============================================================================
 
+/**
+ * Events are emitted for the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * Any account_id values are wallet-local to the active wallet.
+ */
 /** Sync progress update */
 export interface SyncProgressEvent extends VersionedPayload {
   event: 'sync.progress';
@@ -580,6 +862,13 @@ export const ErrorCodes = {
   WALLET_ALREADY_EXISTS: 'E1003',
   INVALID_SEED_PHRASE: 'E1004',
   BACKUP_REQUIRED: 'E1005',
+  BACKUP_CHALLENGE_INVALID: 'E1006',
+  BACKUP_CHALLENGE_EXPIRED: 'E1007',
+  INVALID_WALLET_PASSWORD: 'E1008',
+  REAUTH_REQUIRED: 'E1009',
+  REAUTH_TOKEN_INVALID: 'E1010',
+  REAUTH_TOKEN_EXPIRED: 'E1011',
+  BACKUP_CHALLENGE_TOO_MANY_ATTEMPTS: 'E1012',
 
   // Account errors
   ACCOUNT_NOT_FOUND: 'E2001',
@@ -593,6 +882,10 @@ export const ErrorCodes = {
   MEMO_TOO_LONG: 'E3005',
   PROPOSAL_NOT_FOUND: 'E3006',
   PROPOSAL_EXPIRED: 'E3007',
+  QUEUED_BROADCAST_NOT_FOUND: 'E3008',
+  QUEUED_BROADCAST_EXPIRED: 'E3009',
+  PRIVACY_ACK_REQUIRED: 'E3010',
+  MEMO_NOT_ALLOWED: 'E3011',
 
   // Sync errors
   SYNC_IN_PROGRESS: 'E4001',
@@ -608,6 +901,7 @@ export const ErrorCodes = {
   QUOTE_EXPIRED: 'E6001',
   SWAP_FAILED: 'E6002',
   INVALID_ASSET: 'E6003',
+  SWAP_UNSUPPORTED_NETWORK: 'E6004',
 
   // Tor errors
   TOR_NOT_READY: 'E7001',
@@ -629,6 +923,10 @@ export const Commands = {
   LOAD_WALLET: 'zkore_load_wallet',
   LIST_WALLETS: 'zkore_list_wallets',
   GET_WALLET_STATUS: 'zkore_get_wallet_status',
+  UNLOCK_WALLET: 'zkore_unlock_wallet',
+  LOCK_WALLET: 'zkore_lock_wallet',
+  REAUTH_WALLET: 'zkore_reauth_wallet',
+  VIEW_SEED_PHRASE: 'zkore_view_seed_phrase',
 
   // Address
   GET_RECEIVE_ADDRESS: 'zkore_get_receive_address',
@@ -646,9 +944,11 @@ export const Commands = {
   PREPARE_SEND: 'zkore_prepare_send',
   CONFIRM_SEND: 'zkore_confirm_send',
   CANCEL_SEND: 'zkore_cancel_send',
+  RETRY_BROADCAST: 'zkore_retry_broadcast',
   SHIELD_FUNDS: 'zkore_shield_funds',
 
   // Backup
+  GET_BACKUP_CHALLENGE: 'zkore_get_backup_challenge',
   VERIFY_BACKUP: 'zkore_verify_backup',
   RESTORE_WALLET: 'zkore_restore_wallet',
 
@@ -672,6 +972,9 @@ export const Commands = {
   SET_DEFAULT_SERVER: 'zkore_set_default_server',
   TEST_SERVER: 'zkore_test_server',
   LIST_SERVERS: 'zkore_list_servers',
+
+  // Logs
+  GET_LOG_LOCATION: 'zkore_get_log_location',
 } as const;
 
 // ============================================================================

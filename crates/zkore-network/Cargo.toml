@@ -1,0 +1,25 @@
+[package]
+name = "zkore-network"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bytes = "1"
+http = "1"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tonic = { workspace = true, features = ["tls-native-roots"] }
+prost.workspace = true
+reqwest.workspace = true
+http-body-util = "0.1"
+zcash_client_backend.workspace = true
+zcash_protocol.workspace = true
+zkore-core = { path = "../zkore-core" }
+zkore-tor = { path = "../zkore-tor" }

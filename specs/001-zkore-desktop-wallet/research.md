@@ -32,13 +32,14 @@
 
 ### 2. Keystone PCZT Signing Protocol
 
-**Decision**: Use PCZT (ZIP-320) for unsigned transaction format with Keystone SDK for QR encoding
+**Decision**: Use PCZT (ZIP-320) for unsigned transaction format with ~~Keystone SDK~~ `@keystonehq/animated-qr` for QR framing + a minimal `zcash-pczt` UR CBOR codec in the UI
 
 **Rationale**:
 - PCZT is the official Zcash standard for partially signed transactions (similar to PSBT for Bitcoin)
 - Keystone firmware supports PCZT format for Zcash Orchard transactions
 - @keystonehq/animated-qr handles multi-frame QR for large payloads
-- @keystonehq/keystone-sdk provides encoding/decoding utilities
+- ~~@keystonehq/keystone-sdk provides encoding/decoding utilities~~
+- Encode/decode the `zcash-pczt` UR payload directly in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps (e.g. `events`) that break in the Tauri WebView
 
 **Alternatives Considered**:
 - Custom binary format: Rejected for interoperability concerns
@@ -49,6 +50,9 @@
 - Maximum QR frame size: 2953 bytes (version 40, L error correction)
 - Animated QR frame rate: 10 fps default, 3 fps for "slow mode"
 - File fallback: Export as `.pczt` binary file for microSD transfer
+- Implementation: UI exports/imports binary `.pczt` using the base64 payload fields (`SigningRequest.pczt_payload`, `FinalizeSigningRequest.signed_payload`); no dedicated IPC command required.
+- **FR-028 hygiene**: Do not include hardware-wallet branding or identifiers anywhere in exported files or QR payloads (including filenames, wrapper metadata/comments, or extra non-protocol fields).
+- Renderer note: Tauri WebViews do not provide Node globals; load minimal `Buffer` + `process.env.NODE_ENV` shims before importing QR tooling.
 
 ### 3. NEAR Intents 1Click API Integration
 
@@ -68,23 +72,31 @@
 - API Version: v0 (current production version)
 - Endpoints:
   - `GET /v0/quote` - Get swap quote with parameters
-  - `POST /v0/deposit/submit` - Submit deposit intent after user sends funds
+  - `POST /v0/deposit/submit` - Create/register a deposit intent and return deposit instructions (used by `StartSwap`)
   - `GET /v0/status?depositAddress={addr}` - Poll swap status (optional `depositMemo`)
   - `GET /v0/tokens` - List supported tokens and chains
+- Token discovery (v1): Use a bundled supported-token list in the UI and do not call `GET /v0/tokens` at runtime; the endpoint remains available for a future enhancement.
 - Query parameters for quote:
   - `defuse_asset_identifier_in` - Source asset (e.g., "near:mainnet:native")
   - `defuse_asset_identifier_out` - Target asset (e.g., "zcash:mainnet:native")
   - `exact_amount_in` or `exact_amount_out` - Amount specification
   - `dry=true` for quote-only without commitment
+- **Swap sequence (Zkore integration)**:
+  1. **Quote**: UI calls `RequestSwapQuote`; backend calls `GET /v0/quote?dry=true` and returns `SwapQuote` + `quote_id`.
+  2. **StartSwap / deposit intent**: UI calls `StartSwap(quote_id)`; backend calls `POST /v0/deposit/submit` to create/register the swap and obtain deposit instructions (e.g., `deposit_address`, optional `depositMemo`, and a provider `remote_id`). If `depositMemo` is provided, persist it and surface it to the UI via `SwapInfo.deposit_memo`.
+  3. **AwaitingDeposit**: backend persists the swap and returns `SwapInfo` populated with deposit details for UI to render as a QR.
+  4. **Polling**: backend polls `GET /v0/status?depositAddress=...` (and `depositMemo` if applicable) to drive subsequent state transitions and emit `SwapChangedEvent`.
+  - **IPC contract note**: `ipc-v1.ts` models deposit details as coming from `StartSwap` (`StartSwapResponse.swap.deposit_address` / `StartSwapResponse.swap.deposit_memo`). If deposit instructions are moved to the quote response in the future, update the contract to include them on `SwapQuote`.
 - Poll interval: 5 seconds for active swaps, exponential backoff on errors
 - Timeout: 30 seconds per request
 - **Status mapping (v0 API statuses)**:
   - `PENDING_DEPOSIT` -> `AwaitingDeposit` (waiting for user to send)
   - `PROCESSING` -> `Pending` (swap in progress)
-  - `SUCCESS` -> `Completed` (swap successful)
+  - `SUCCESS` -> `Confirming` (provider indicates success; wallet still awaits on-chain confirmation)
   - `INCOMPLETE_DEPOSIT` -> `Failed` (partial deposit, needs action)
   - `REFUNDED` -> `Refunded` (swap failed, funds returned)
   - `FAILED` -> `Failed` (swap failed)
+  - **Local completion rule**: transition `Confirming -> Completed` only after the wallet observes the corresponding Zcash transaction as confirmed (incoming payout for ToZec, outgoing deposit for FromZec). Prefer a provider-supplied txid if available; otherwise fall back to a best-effort correlation (expected amount + time window).
 - **Testnet caveat**: NEAR Intents has no testnet deployment; swaps are mainnet-only
 - Rate limiting: Respect API rate limits, implement client-side throttling
 - See: https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api
@@ -97,7 +109,7 @@
 - Arti version: 0.35+ (latest in librustzcash)
 - Zashi 2.1 uses this in production (beta feature)
 - Proven fail-closed behavior in production
-- Routes: tx submit, tx fetch, swap APIs, rate APIs
+- Routes: tx submit, tx fetch, swap APIs (and any other third-party HTTP APIs added in the future)
 
 **Alternatives Considered**:
 - System Tor daemon: Rejected for deployment complexity and platform differences
@@ -125,9 +137,10 @@
 
 **Implementation Notes**:
 - Command prefix: `zkore_` for all Tauri commands
-- Event channels: `sync`, `balance`, `tx`, `swap`, `tor`
+- Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`
 - Schema versioning: `schema_version: u32` field in all payloads
 - Error format: `{ code: string, message: string, details?: object }`
+- Command return shape: `IpcResult<T> = { ok: T } | { err: IpcError }` (no thrown errors across IPC)
 
 ### 6. Address Rotation Strategy
 
@@ -145,8 +158,8 @@
 **Implementation Notes**:
 - Store `next_diversifier_index: u64` in app metadata DB
 - Increment on each `get_fresh_shielded_ua()` call
-- Shielded-only UA: Encode with only Orchard receiver
-- Transparent compatibility: Separate derivation path, not embedded in UA
+- Shielded-only UA: Encode with Orchard + Sapling receivers (no transparent receiver)
+- Transparent compatibility: Separate derivation path (not embedded in UA) and a single stable transparent receive address per account (no rotation in v1 to avoid accidental linkage during shielding/restore)
 
 ### 7. Backup Verification Protocol
 
@@ -165,7 +178,7 @@
 - Challenge: Request 4 words at random indices (e.g., words 3, 7, 15, 22)
 - Validation: Backend compares submitted words against stored mnemonic
 - State update: Set `backup_required = false`, `backup_completed_at = now()`
-- UI: Never display full seed phrase after initial creation
+- UI: Display the full seed phrase only in permitted mnemonic flows (CreateWallet display, RestoreWallet entry, and user-initiated ViewSeedPhrase behind manual wallet-password re-auth). Otherwise never display, persist, or log it; clear UI state after the flow completes.
 
 ### 8. Spend-Before-Sync Implementation
 
@@ -182,8 +195,8 @@
 
 **Implementation Notes**:
 - Track `scan_frontier_height` and `wallet_tip_height` separately
-- Compute `spendable_orchard` (notes with valid witnesses)
-- Compute `pending_orchard` (detected but not yet spendable)
+- Compute `spendable_shielded` (shielded notes with valid witnesses)
+- Compute `pending_shielded` (detected but not yet spendable)
 - Phase 1: UI shows distinction, backend enforces spendable-only sends
 - Phase 2: Enable actual spend-before-sync when engine supports it
 
@@ -222,7 +235,8 @@
 **Implementation Notes**:
 - Wallet DB: Managed by zcash_client_sqlite, location per wallet directory
 - App DB: Separate SQLite with custom migration runner
-- App DB tables: `app_flags`, `servers`, `tor_settings`, `swaps`, `receive_rotation`
+- App DB tables: `wallets`, `wallet_encryption`, `backup_status`, `servers`, `tor_settings`, `swaps`, `receive_rotation`, `_app_migrations`
+- `wallet_encryption` stores per-wallet KDF parameters and `wrapped_dek` metadata
 - Migration version table: `_app_migrations(version, applied_at)`
 
 ### 11. Network Selection Strategy
@@ -242,7 +256,7 @@
 **Implementation Notes**:
 - Network selection during wallet creation flow
 - Store network in wallet metadata (immutable field)
-- Database path includes network: `wallets/{wallet_id}/{network}/`
+- Database path includes network: `wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - UI clearly indicates network in wallet list and detail screens
 - No UI affordance for changing network after creation
 
@@ -252,7 +266,6 @@
 
 **Rationale**:
 - Default production endpoints use lightwalletd + Zebra (CompactTxStreamer gRPC)
-- Zaino (Rust-native indexer) is available on experimental endpoints
 - Regional endpoints improve latency and reliability
 - Custom server support enables enterprise and privacy-focused deployments
 - Connection test prevents invalid configurations
@@ -265,31 +278,92 @@
 **Implementation Notes**:
 
 **Mainnet servers (production)**:
-- Primary: `https://zec.rocks` (lightwalletd + Zebra)
-- Regional endpoints: `na.zec.rocks`, `eu.zec.rocks`, `sa.zec.rocks`
-- Note: Zaino migration is in progress but not yet complete on all endpoints
+- Primary: `https://lwd.zec.pro` (team lightwalletd + Zebra)
+- Regional: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
 
 **Testnet servers**:
-- Default: `lwd.testnet.zec.pro` (team lightwalletd + Zebra)
-- Fallback: `https://testnet.zec.rocks` (community endpoint, check Hosh for status)
+- Default: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
+- Optional community endpoint (not shipped as a default): `https://testnet.zec.rocks` (may be added via Custom Servers; check Hosh for status)
 
-**Zaino endpoints (experimental)**:
-- Available for testing Zaino compatibility: check zec.rocks announcements
-- Constitution requires testing against multiple server implementations (Zaino + lightwalletd)
+**Testing**:
+- CI should validate against at least two independent lightwalletd deployments (primary + secondary)
 
 **Development Configuration**:
-- Default testnet: `lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
+- Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
-- Configure override via environment variable: `ZKORE_GRPC_URL`
+- Development/CI only: `ZKORE_GRPC_URL` may override the default lightwalletd endpoint for developer workflows and CI. Production builds should rely on persisted server configuration (FR-052 through FR-055) and MUST NOT silently override user-selected servers via environment variables.
 
 **Connection validation**:
 - Call `GetLightdInfo` before saving server config
 - Server network validation: Must match wallet network (mainnet/testnet)
 - Security warning: Display when user configures non-default server
-- Server stored in app metadata DB per wallet
+- Server list stored in app metadata DB globally per network (shared across wallets; one default per network)
 
 **References**:
 - [zec.rocks Zcashd Deprecation Timeline](https://forum.zcashcommunity.com/t/zec-rocks-zcashd-deprecation-timeline/50907)
+
+### 13. Logging Infrastructure
+
+**Decision**: Use tracing + tracing-subscriber with tracing-appender for file logging
+
+**Rationale**:
+- Standard Rust ecosystem, supports structured logging, file rotation built-in
+- Aligns with NFR-001 (local filesystem only) and NFR-002 (no remote telemetry)
+- tracing-appender's RollingFileAppender provides daily rotation (NFR-004)
+- User-accessible log location for support (NFR-003)
+
+**Alternatives Considered**:
+- env_logger: Rejected for lack of file rotation support
+- Custom logging solution: Rejected for increased complexity and maintenance burden
+- syslog integration: Rejected as not portable across platforms
+
+**Implementation Notes**:
+- Log location: `~/.zkore/logs/zkore.YYYY-MM-DD.log` (daily rotation, retention policy enforced)
+- Use tracing-appender's RollingFileAppender with daily rotation
+- Keep 7 days of logs by default
+- Log levels: ERROR/WARN always, INFO for operations, DEBUG via RUST_LOG
+- Redact sensitive data (memos, addresses beyond first 8 chars) in logs
+- No remote telemetry - constitution principle
+- Provide IPC command to expose log directory path to UI for support workflows
+
+### 13a. Telemetry / Crash Reporting Audit (NFR-002)
+
+**Decision**: No remote telemetry or crash reporting.
+
+**Audit summary**:
+- **Tauri config** (`apps/zkore-app-tauri/src-tauri/tauri.conf.json`): No crash reporter configuration; no remote telemetry settings.
+- **Tauri plugins** (`apps/zkore-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` and `tauri-plugin-shell` (no telemetry/crash plugins).
+- **Frontend deps** (`apps/zkore-app-tauri/package.json`): No analytics/crash SDK dependencies (e.g., Sentry, PostHog, Segment, Amplitude).
+- **Rust deps** (`Cargo.toml`, `Cargo.lock`): No telemetry/crash crates (e.g., `sentry`, `bugsnag`, `rollbar`).
+
+**Enforcement**:
+- Local script: `scripts/check-no-telemetry.sh`
+- CI gate runs the same script to fail fast if a known telemetry integration is introduced.
+
+### 14. Accessibility Patterns
+
+**Decision**: React accessibility with radix-ui primitives and custom focus management
+
+**Rationale**:
+- Radix provides accessible primitives with built-in ARIA (NFR-006)
+- focus-visible CSS provides keyboard-only focus indicators (NFR-007)
+- react-hotkeys-hook supports standard keyboard shortcuts (NFR-008)
+- Ensures full keyboard navigation (NFR-005)
+
+**Alternatives Considered**:
+- React Aria: Rejected for larger bundle size and steeper learning curve
+- Material UI: Rejected for heavier framework weight
+- Custom accessibility implementation: Rejected for reinventing well-tested solutions
+
+**Implementation Notes**:
+- Use radix-ui/react-* for dialogs, menus, tabs (built-in ARIA)
+- focus-visible CSS for keyboard-only focus indicators
+- Custom useFocusTrap hook for modal dialogs
+- Keyboard shortcuts: react-hotkeys-hook for global shortcuts
+- Testing: axe-core for automated accessibility testing, manual keyboard testing
+- All interactive elements must have visible focus states
+- Tab order follows logical reading order
+- Standard shortcuts: Tab (navigation), Enter (activate), Escape (close/cancel), arrow keys (within components)
 
 ## Resolved Clarifications
 
@@ -297,16 +371,16 @@ All technical context items have been resolved. No outstanding clarifications ne
 
 | Original Unknown | Resolution |
 |-----------------|------------|
-| Rust version | 1.92.0+ (development toolchain, MSRV 1.85.1 for librustzcash compatibility) |
+| Rust version | 1.92.0 (pinned toolchain; workspace MSRV enforced via Cargo `rust-version`; librustzcash requires Rust ≥1.85.1) |
 | Rust edition | 2024 (aligned with librustzcash/Zashi) |
 | Package manager | bun 1.3.5+ |
 | Primary dependencies | zcash_client_backend 0.21+, zcash_client_sqlite 0.19+, zcash_primitives 0.26+, zcash_protocol 0.7+, Tauri v2, tonic 0.14+, Arti |
 | Storage | Dual SQLite (wallet + app metadata) |
-| Testing | cargo test + vitest + integration tests |
+| Testing | cargo test + bun test + integration tests |
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
-| Constraints | Secrets in Rust only, Orchard-only, fail-closed Tor |
-| Default server | zec.rocks (Zaino+Zebra) |
+| Constraints | Secrets in Rust only, shielded-by-default (Sapling + Orchard), fail-closed Tor |
+| Default server | https://lwd.zec.pro (lightwalletd+Zebra), https://zec.rocks (regional) |
 | Network selection | Runtime at wallet creation, immutable after |
 | Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |
 
@@ -318,7 +392,7 @@ We use Rust edition 2024 because:
 3. **Production-proven**: Stable since Rust 1.85.0, used in Zcash infrastructure
 4. **Future-ready**: Prepared for generators and better async ergonomics
 
-We target Rust 1.92.0 as the development toolchain while maintaining MSRV 1.85.1 compatibility with librustzcash.
+Zkore pins and enforces Rust **1.92.0** (edition 2024) via `rust-toolchain.toml` and the workspace `rust-version` to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 Key migration considerations:
 - RPIT lifetime capture has new semantics (may need `use<..>` bounds)
@@ -348,10 +422,10 @@ We follow the same approach as Zashi (zcash-light-client-ffi):
 - [Changes to impl Trait in Rust 2024](https://blog.rust-lang.org/2024/09/05/impl-trait-capture-rules.html)
 
 ### Infrastructure
-- [Keystone SDK documentation](https://dev.keyst.one/docs/integration-guide-basics/install-the-sdk)
+- ~~[Keystone SDK documentation](https://dev.keyst.one/docs/integration-guide-basics/install-the-sdk)~~
+- [Keystone QR tooling (`@keystonehq/animated-qr`)](https://github.com/KeystoneHQ/keystone-airgaped-base)
 - [NEAR Intents 1Click API](https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api)
 - [Tauri v2 documentation](https://v2.tauri.app)
 - [Arti (Tor implementation in Rust)](https://gitlab.torproject.org/tpo/core/arti)
-- [Zaino GitHub](https://github.com/zingolabs/zaino)
 - [Zashi 2.1 Tor announcement](https://electriccoin.co/blog/zashi-2-1-enhanced-privacy-with-tor-beta/)
 - [zec.rocks infrastructure](https://zec.rocks)

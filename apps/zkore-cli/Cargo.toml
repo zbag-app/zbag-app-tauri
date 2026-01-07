@@ -1,0 +1,64 @@
+[package]
+name = "zkore-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI for Zkore Zcash wallet"
+
+[[bin]]
+name = "zkore"
+path = "src/main.rs"
+
+[dependencies]
+# Zkore crates
+zkore-core = { path = "../../crates/zkore-core" }
+zkore-engine = { path = "../../crates/zkore-engine" }
+zkore-network = { path = "../../crates/zkore-network" }
+zkore-tor = { path = "../../crates/zkore-tor" }
+
+# CLI framework
+clap = { version = "4", features = ["derive", "env"] }
+
+# Password input
+rpassword = "7"
+
+# Progress display
+indicatif = { version = "0.17", features = ["tokio"] }
+
+# Console output
+console = "0.15"
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Zeroization
+zeroize = { workspace = true }
+
+# Encoding
+base64 = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Database (for direct queries if needed)
+rusqlite = { workspace = true }
+
+# Home directory
+dirs = "6"
