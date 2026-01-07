@@ -117,13 +117,19 @@ impl SyncService {
     }
 
     pub fn get_progress(&self, wallet_id: Uuid) -> SyncProgress {
-        self.state
-            .lock()
-            .expect("mutex poisoned")
+        let mut state = self.state.lock().expect("mutex poisoned");
+        let progress = state
             .progress
             .get(&wallet_id)
             .cloned()
-            .unwrap_or_else(default_progress)
+            .unwrap_or_else(default_progress);
+
+        // Keep ETA/progress estimates fresh even if the sync engine hasn't emitted
+        // a new progress event yet (e.g., during brief stalls). This makes ETA
+        // reflect elapsed time and avoids overly optimistic estimates.
+        let progress = with_eta(&mut state, wallet_id, progress);
+        state.progress.insert(wallet_id, progress.clone());
+        progress
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -951,7 +957,7 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
 
         let delta_h = frontier.saturating_sub(last_height);
         let delta_t = now.duration_since(last_update_at).as_secs_f64();
-        if delta_h > 0 && delta_t >= 0.05 {
+        if delta_t >= 0.05 {
             let inst_rate = delta_h as f64 / delta_t;
 
             // Time-based EWMA so results don't depend on callback frequency.
