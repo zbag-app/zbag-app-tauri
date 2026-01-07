@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as IPC from '../types/ipc';
 import { buildSigningRequest, prepareSend } from '../services/ipc';
+import { parseZecToZatoshis } from '../utils/zec';
 
 export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const { activeAccount } = props;
@@ -15,16 +16,28 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const parsedAmount = useMemo(() => parseZecToZatoshis(amount), [amount]);
+  const amountZatoshis = 'ok' in parsedAmount ? parsedAmount.ok : null;
+  const amountError = useMemo(() => {
+    if (!amount.trim()) return null;
+    if ('err' in parsedAmount) return parsedAmount.err;
+    return null;
+  }, [amount, parsedAmount]);
+
   const canSubmit = useMemo(() => {
     if (activeAccount == null) return false;
     if (!recipient.trim()) return false;
-    if (!amount.trim()) return false;
+    if (!amountZatoshis) return false;
     if (transparentRecipient && !transparentAck) return false;
     return true;
-  }, [activeAccount, recipient, amount, transparentRecipient, transparentAck]);
+  }, [activeAccount, recipient, amountZatoshis, transparentRecipient, transparentAck]);
 
   const submit = async () => {
     if (activeAccount == null) return;
+    if (!amountZatoshis) {
+      setError('Enter a valid amount.');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -39,7 +52,7 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
       const res = await buildSigningRequest({
         account_id: accountId,
         recipient,
-        amount,
+        amount: amountZatoshis,
         memo: memoValue,
         allow_transparent_recipient: allowTransparent,
       });
@@ -78,7 +91,7 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
     const res = await prepareSend({
       account_id: accountId,
       recipient,
-      amount,
+      amount: amountZatoshis,
       memo: memoValue,
       allow_transparent_recipient: allowTransparent,
     });
@@ -135,8 +148,18 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
       </label>
 
       <label style={{ display: 'grid', gap: 4 }}>
-        <span>Amount (zatoshis)</span>
-        <input value={amount} onChange={(e) => setAmount(e.currentTarget.value)} />
+        <span>Amount (ZEC)</span>
+        <input
+          value={amount}
+          onChange={(e) => {
+            setAmount(e.currentTarget.value);
+            setError(null);
+          }}
+          inputMode="decimal"
+          placeholder="0.12345678"
+        />
+        <div style={{ fontSize: 12, opacity: 0.75 }}>Up to 8 decimal places.</div>
+        {amountError ? <div style={{ color: 'crimson', fontSize: 12 }}>{amountError}</div> : null}
       </label>
 
       <label style={{ display: 'grid', gap: 4 }}>

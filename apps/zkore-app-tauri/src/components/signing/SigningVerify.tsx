@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type * as IPC from '../../types/ipc';
+import { formatZatoshisToZec } from '../../utils/zec';
 
 export function SigningVerify(props: { summary: IPC.SigningSummary }) {
   const { summary } = props;
@@ -29,10 +30,10 @@ export function SigningVerify(props: { summary: IPC.SigningSummary }) {
         <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 6 }}>
           <div style={{ opacity: 0.8 }}>Recipient kind</div>
           <div>{summary.recipient_kind}</div>
-          <div style={{ opacity: 0.8 }}>Amount</div>
-          <div>{summary.amount}</div>
-          <div style={{ opacity: 0.8 }}>Fee</div>
-          <div>{summary.fee}</div>
+          <div style={{ opacity: 0.8 }}>Amount (ZEC)</div>
+          <div>{formatZatoshisToZec(summary.amount)}</div>
+          <div style={{ opacity: 0.8 }}>Fee (ZEC)</div>
+          <div>{formatZatoshisToZec(summary.fee)}</div>
           <div style={{ opacity: 0.8 }}>Memo</div>
           <div>{summary.memo_present ? 'Yes' : 'No'}</div>
         </div>
@@ -40,4 +41,3 @@ export function SigningVerify(props: { summary: IPC.SigningSummary }) {
     </div>
   );
 }
-

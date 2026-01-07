@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import * as IPC from '../types/ipc';
 import { cancelSend, confirmSend, reauthWallet } from '../services/ipc';
+import { formatZatoshisToZec } from '../utils/zec';
 
 type LocationState = {
   proposal: IPC.PrepareSendResponse;
@@ -105,12 +106,12 @@ export function SendConfirm(props: { walletId: string }) {
         <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 6 }}>
           <div style={{ opacity: 0.8 }}>Recipient kind</div>
           <div>{summary.recipient_kind}</div>
-          <div style={{ opacity: 0.8 }}>Amount</div>
-          <div>{summary.amount}</div>
-          <div style={{ opacity: 0.8 }}>Fee</div>
-          <div>{summary.fee}</div>
-          <div style={{ opacity: 0.8 }}>Total spend</div>
-          <div>{summary.total_spend}</div>
+          <div style={{ opacity: 0.8 }}>Amount (ZEC)</div>
+          <div>{formatZatoshisToZec(summary.amount)}</div>
+          <div style={{ opacity: 0.8 }}>Fee (ZEC)</div>
+          <div>{formatZatoshisToZec(summary.fee)}</div>
+          <div style={{ opacity: 0.8 }}>Total spend (ZEC)</div>
+          <div>{formatZatoshisToZec(summary.total_spend)}</div>
           <div style={{ opacity: 0.8 }}>Memo</div>
           <div>{summary.memo_present ? 'Yes' : 'No'}</div>
         </div>
