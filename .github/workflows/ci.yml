@@ -22,7 +22,7 @@ jobs:
 
   rust-audit:
     name: Rust Audit
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -35,7 +35,7 @@ jobs:
 
   rust-clippy:
     name: Rust Clippy
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -59,7 +59,7 @@ jobs:
 
   rust-tests:
     name: Rust Tests (${{ matrix.grpc_url }})
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +115,7 @@ jobs:
 
   rust-build:
     name: Rust Build (release)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -139,7 +139,7 @@ jobs:
 
   bun-tests:
     name: Bun Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
