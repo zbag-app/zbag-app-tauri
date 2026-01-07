@@ -62,7 +62,8 @@ pub async fn run(
     };
 
     // Create progress handler
-    let progress_bar = if output.is_json() {
+    let stderr_is_tty = std::io::stderr().is_terminal();
+    let progress_bar = if output.is_json() || !stderr_is_tty {
         None
     } else {
         Some(progress::create_sync_progress_bar())
@@ -115,14 +116,13 @@ pub async fn run(
     }
 
     // Spawn progress logger task if enabled
-    let logger_handle = if args.progress_log && progress_bar.is_some() {
-        let pb = progress_bar.clone().unwrap();
+    let logger_handle = if args.progress_log && !output.is_json() {
+        let pb = progress_bar.clone();
         let sync_service = state.sync_service.clone();
         let wallet_id = wallet_info.id;
         let start_height = start_height.clone();
 
         Some(tokio::spawn(async move {
-            let stderr_is_tty = std::io::stderr().is_terminal();
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 interval.tick().await;
@@ -144,7 +144,11 @@ pub async fn run(
                 let line =
                     progress::format_progress_log_line(elapsed, &progress, start_h, chain_tip);
                 if stderr_is_tty {
-                    pb.println(line);
+                    if let Some(ref pb) = pb {
+                        pb.println(line);
+                    } else {
+                        eprintln!("{line}");
+                    }
                 } else {
                     println!("{line}");
                 }

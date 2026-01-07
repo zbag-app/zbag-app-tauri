@@ -494,9 +494,11 @@ impl SyncService {
 
                     // Update phase to downloading/scanning (pipelined)
                     let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+                    let initial_frontier =
+                        fully_scanned.max(u32::from(range_start.saturating_sub(1)));
                     update(SyncProgress {
                         phase: SyncPhase::Downloading,
-                        scan_frontier_height: fully_scanned,
+                        scan_frontier_height: initial_frontier,
                         wallet_tip_height: u32::from(wallet_tip),
                         progress_percent,
                         eta_seconds: None,
@@ -874,6 +876,11 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
 
     let now = Instant::now();
     let estimate = state.progress_estimates.entry(wallet_id).or_default();
+    let delta_t_for_clamp = estimate
+        .last_update_at
+        .map(|t| now.duration_since(t).as_secs_f64())
+        .unwrap_or(1.0)
+        .max(0.05);
 
     // Capture session start height (first observed non-zero frontier).
     if estimate.start_height.is_none() && progress.scan_frontier_height > 0 {
@@ -946,8 +953,9 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
         let delta_t = now.duration_since(last_update_at).as_secs_f64();
         if delta_h > 0 && delta_t >= 0.05 {
             let inst_rate = delta_h as f64 / delta_t;
+
             // Time-based EWMA so results don't depend on callback frequency.
-            let tau = 10.0;
+            let tau = 20.0;
             let alpha = 1.0 - (-delta_t / tau).exp();
             estimate.ewma_blocks_per_sec = Some(match estimate.ewma_blocks_per_sec {
                 Some(prev) => prev + alpha * (inst_rate - prev),
@@ -977,7 +985,7 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
             if ewma.is_finite() && avg.is_finite() && ewma > 0.0 && avg > 0.0 =>
         {
             // Blend short-term and long-term rates to avoid ETAs that overreact to short stalls.
-            Some((0.6 * ewma) + (0.4 * avg))
+            Some((0.7 * ewma) + (0.3 * avg))
         }
         (Some(ewma), _) if ewma.is_finite() && ewma > 0.0 => Some(ewma),
         (_, Some(avg)) if avg.is_finite() && avg > 0.0 => Some(avg),
@@ -985,6 +993,21 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
     };
 
     let computed_eta_seconds = eta_rate_blocks_per_sec.and_then(|rate| {
+        // Early estimates are extremely noisy; wait for a minimum amount of work/time.
+        const MIN_DONE_BLOCKS: u64 = 10_000;
+        const MIN_ELAPSED_SECS: f64 = 5.0;
+
+        let (Some(start_height), Some(start_instant)) =
+            (estimate.start_height, estimate.start_instant)
+        else {
+            return None;
+        };
+        let done = frontier.saturating_sub(start_height) as u64;
+        let elapsed = now.duration_since(start_instant).as_secs_f64();
+        if done < MIN_DONE_BLOCKS || elapsed < MIN_ELAPSED_SECS {
+            return None;
+        }
+
         let remaining = (target - frontier) as f64;
         let eta = (remaining / rate).round();
         if eta.is_finite() && eta >= 0.0 {
@@ -1006,7 +1029,10 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
             Some(new_eta)
         }
         (Some(prev), Some(mut new_eta)) => {
-            let max_increase = (prev / 5).max(5); // +20% or +5s
+            let max_increase = ((prev as f64) * 0.2 * delta_t_for_clamp).ceil() as u64;
+            let max_increase = max_increase
+                .max((5.0 * delta_t_for_clamp).ceil() as u64)
+                .max(1); // +20%/s or +5s/s
             let allowed = prev.saturating_add(max_increase);
             if new_eta > allowed {
                 new_eta = allowed;
