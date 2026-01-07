@@ -82,6 +82,19 @@ struct State {
     progress: HashMap<Uuid, SyncProgress>,
     balances: HashMap<(Uuid, u32), Balance>,
     started_at: HashMap<Uuid, Instant>,
+    progress_estimates: HashMap<Uuid, SyncProgressEstimate>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct SyncProgressEstimate {
+    start_height: Option<u32>,
+    start_instant: Option<Instant>,
+    target_height: Option<u32>,
+    last_frontier_height: Option<u32>,
+    last_update_at: Option<Instant>,
+    ewma_blocks_per_sec: Option<f64>,
+    last_percent: Option<u8>,
+    last_eta_seconds: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -98,6 +111,7 @@ impl SyncService {
                 progress: HashMap::new(),
                 balances: HashMap::new(),
                 started_at: HashMap::new(),
+                progress_estimates: HashMap::new(),
             })),
         }
     }
@@ -231,7 +245,7 @@ impl SyncService {
 
             let mut update = |progress: SyncProgress| {
                 let mut state = state.lock().expect("mutex poisoned");
-                let progress = with_eta(&state, wallet_id, progress);
+                let progress = with_eta(&mut state, wallet_id, progress);
                 state.progress.insert(wallet_id, progress.clone());
                 drop(state);
                 emit(progress);
@@ -710,6 +724,7 @@ impl SyncService {
             let mut state = state.lock().expect("mutex poisoned");
             state.jobs.remove(&wallet_id);
             state.started_at.remove(&wallet_id);
+            state.progress_estimates.remove(&wallet_id);
 
             tracing::debug!(wallet_id = %wallet_id, "sync task finished");
         });
@@ -762,6 +777,11 @@ impl SyncService {
             .lock()
             .expect("mutex poisoned")
             .started_at
+            .remove(&wallet_id);
+        self.state
+            .lock()
+            .expect("mutex poisoned")
+            .progress_estimates
             .remove(&wallet_id);
 
         self.emit_progress(wallet_id, on_progress.as_ref());
@@ -835,27 +855,167 @@ fn default_progress() -> SyncProgress {
     }
 }
 
-fn with_eta(state: &State, wallet_id: Uuid, mut progress: SyncProgress) -> SyncProgress {
-    if progress.progress_percent == 0 || progress.progress_percent >= 100 {
+fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> SyncProgress {
+    // Reset/clear ETA once syncing is done (or aborted) so we don't leak stale estimates.
+    if progress.phase == SyncPhase::Idle {
         progress.eta_seconds = None;
+        state.progress_estimates.remove(&wallet_id);
         return progress;
     }
 
-    let Some(started_at) = state.started_at.get(&wallet_id) else {
+    // These phases don't have a meaningful block frontier rate.
+    if matches!(progress.phase, SyncPhase::Preparing | SyncPhase::Enhancing) {
+        progress.eta_seconds = None;
+        if let Some(estimate) = state.progress_estimates.get_mut(&wallet_id) {
+            estimate.last_eta_seconds = None;
+        }
+        return progress;
+    }
+
+    let now = Instant::now();
+    let estimate = state.progress_estimates.entry(wallet_id).or_default();
+
+    // Capture session start height (first observed non-zero frontier).
+    if estimate.start_height.is_none() && progress.scan_frontier_height > 0 {
+        estimate.start_height = Some(progress.scan_frontier_height);
+        estimate.start_instant = Some(now);
+    }
+
+    // Track the highest observed target height for stable progress/ETA.
+    if progress.wallet_tip_height > 0 {
+        estimate.target_height = Some(
+            estimate
+                .target_height
+                .unwrap_or(0)
+                .max(progress.wallet_tip_height),
+        );
+    }
+
+    // Compute height-based progress % (monotonic, stable), falling back to the precomputed
+    // WalletSummary output-based progress when we don't have enough context yet.
+    if let (Some(start), Some(target)) = (estimate.start_height, estimate.target_height) {
+        if target > start && progress.scan_frontier_height >= start {
+            let done = progress.scan_frontier_height.saturating_sub(start) as u64;
+            let total = target.saturating_sub(start) as u64;
+            if total > 0 {
+                let mut pct = ((done.saturating_mul(100)) / total) as u8;
+                if pct >= 100 {
+                    pct = if progress.phase == SyncPhase::Idle {
+                        100
+                    } else {
+                        99
+                    };
+                }
+
+                if let Some(last) = estimate.last_percent {
+                    pct = pct.max(last);
+                }
+                estimate.last_percent = Some(pct);
+                progress.progress_percent = pct;
+            }
+        }
+    }
+
+    // ETA: use an EWMA of scan frontier movement (blocks/sec) and remaining blocks.
+    let Some(target) = estimate.target_height else {
         progress.eta_seconds = None;
         return progress;
     };
-
-    let elapsed = started_at.elapsed().as_secs_f64();
-    let done = progress.progress_percent as f64 / 100.0;
-    if done <= 0.0 || elapsed <= 0.0 {
+    let frontier = progress.scan_frontier_height;
+    if target == 0 || frontier == 0 || frontier >= target {
         progress.eta_seconds = None;
         return progress;
     }
 
-    let total_estimated = elapsed / done;
-    let remaining = (total_estimated - elapsed).max(0.0);
-    progress.eta_seconds = Some(remaining.round() as u64);
+    if let (Some(last_height), Some(last_update_at)) =
+        (estimate.last_frontier_height, estimate.last_update_at)
+    {
+        if frontier < last_height {
+            // Height went backwards (reorg/rescan). Reset estimator state.
+            estimate.start_height = Some(frontier);
+            estimate.start_instant = Some(now);
+            estimate.last_frontier_height = Some(frontier);
+            estimate.last_update_at = Some(now);
+            estimate.ewma_blocks_per_sec = None;
+            estimate.last_eta_seconds = None;
+            progress.eta_seconds = None;
+            return progress;
+        }
+
+        let delta_h = frontier.saturating_sub(last_height);
+        let delta_t = now.duration_since(last_update_at).as_secs_f64();
+        if delta_h > 0 && delta_t >= 0.05 {
+            let inst_rate = delta_h as f64 / delta_t;
+            // Time-based EWMA so results don't depend on callback frequency.
+            let tau = 10.0;
+            let alpha = 1.0 - (-delta_t / tau).exp();
+            estimate.ewma_blocks_per_sec = Some(match estimate.ewma_blocks_per_sec {
+                Some(prev) => prev + alpha * (inst_rate - prev),
+                None => inst_rate,
+            });
+        }
+    }
+
+    estimate.last_frontier_height = Some(frontier);
+    estimate.last_update_at = Some(now);
+
+    let avg_rate_blocks_per_sec = match (estimate.start_height, estimate.start_instant) {
+        (Some(start_height), Some(start_instant)) => {
+            let done = frontier.saturating_sub(start_height) as f64;
+            let elapsed = now.duration_since(start_instant).as_secs_f64();
+            if done > 0.0 && elapsed > 0.0 {
+                Some(done / elapsed)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
+    let eta_rate_blocks_per_sec = match (estimate.ewma_blocks_per_sec, avg_rate_blocks_per_sec) {
+        (Some(ewma), Some(avg))
+            if ewma.is_finite() && avg.is_finite() && ewma > 0.0 && avg > 0.0 =>
+        {
+            // Blend short-term and long-term rates to avoid ETAs that overreact to short stalls.
+            Some((0.6 * ewma) + (0.4 * avg))
+        }
+        (Some(ewma), _) if ewma.is_finite() && ewma > 0.0 => Some(ewma),
+        (_, Some(avg)) if avg.is_finite() && avg > 0.0 => Some(avg),
+        _ => None,
+    };
+
+    let computed_eta_seconds = eta_rate_blocks_per_sec.and_then(|rate| {
+        let remaining = (target - frontier) as f64;
+        let eta = (remaining / rate).round();
+        if eta.is_finite() && eta >= 0.0 {
+            Some(eta as u64)
+        } else {
+            None
+        }
+    });
+
+    // Keep ETA stable: allow decreases immediately, but clamp sudden large increases
+    // (common when a single slow batch skews the instantaneous rate).
+    progress.eta_seconds = match (estimate.last_eta_seconds, computed_eta_seconds) {
+        (_, None) => {
+            estimate.last_eta_seconds = None;
+            None
+        }
+        (None, Some(new_eta)) => {
+            estimate.last_eta_seconds = Some(new_eta);
+            Some(new_eta)
+        }
+        (Some(prev), Some(mut new_eta)) => {
+            let max_increase = (prev / 5).max(5); // +20% or +5s
+            let allowed = prev.saturating_add(max_increase);
+            if new_eta > allowed {
+                new_eta = allowed;
+            }
+            estimate.last_eta_seconds = Some(new_eta);
+            Some(new_eta)
+        }
+    };
+
     progress
 }
 

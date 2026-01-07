@@ -1,8 +1,9 @@
 //! Progress bar display for sync operations.
 
+use std::io::IsTerminal as _;
 use std::time::Duration;
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use zkore_core::domain::{SyncPhase, SyncProgress};
 
@@ -15,7 +16,13 @@ pub fn create_sync_progress_bar() -> ProgressBar {
             .expect("valid template")
             .progress_chars("=>-"),
     );
-    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+    // Avoid emitting terminal control sequences when output is piped (e.g. benchmarks).
+    if std::io::stderr().is_terminal() {
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    } else {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    }
     pb
 }
 
