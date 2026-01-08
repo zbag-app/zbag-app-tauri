@@ -3,6 +3,7 @@ import type * as IPC from '../../types/ipc';
 import { reauthWallet, shieldFunds } from '../../services/ipc';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { formatZatoshisToZec } from '../../utils/zec';
 
 type InsufficientFeeDetails = {
   required_minimum_zatoshis?: unknown;
@@ -134,7 +135,7 @@ export function ShieldPrompt(props: {
               <div style={{ display: 'grid', gap: 6 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 6 }}>
                   <div style={{ opacity: 0.8 }}>Transparent total</div>
-                  <div>{transparentTotal}</div>
+                  <div>{formatZatoshisToZec(transparentTotal)} ZEC</div>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.75 }}>
                   If there are too many UTXOs to fit, shielding batches into multiple transactions.
@@ -149,7 +150,7 @@ export function ShieldPrompt(props: {
                       <div style={{ opacity: 0.8 }}>Txid</div>
                       <code style={{ wordBreak: 'break-all' }}>{result.txid}</code>
                       <div style={{ opacity: 0.8 }}>Fee</div>
-                      <div>{result.fee}</div>
+                      <div>{formatZatoshisToZec(result.fee)} ZEC</div>
                     </div>
                     <div style={{ fontSize: 12, opacity: 0.75 }}>
                       Additional shielding transactions (if any) are visible in Activity.
@@ -184,9 +185,9 @@ export function ShieldPrompt(props: {
                         <div style={{ padding: 12, border: '1px solid #ef4444', borderRadius: 8 }}>
                           <strong>Not enough transparent funds to pay the shielding fee</strong>
                           <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
-                            {requiredMinimum ? <div>Required minimum: {requiredMinimum}</div> : null}
-                            {available ? <div>Available: {available}</div> : null}
-                            {estimatedFee ? <div>Estimated fee: {estimatedFee}</div> : null}
+                            {requiredMinimum ? <div>Required minimum: {formatZatoshisToZec(requiredMinimum)} ZEC</div> : null}
+                            {available ? <div>Available: {formatZatoshisToZec(available)} ZEC</div> : null}
+                            {estimatedFee ? <div>Estimated fee: {formatZatoshisToZec(estimatedFee)} ZEC</div> : null}
                           </div>
                           <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>
                             Acquire a minimal amount of additional transparent ZEC and retry.

@@ -8,6 +8,7 @@ import { NetworkBadge } from '../components/common/NetworkBadge';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
 import { getBalance, getSyncProgress } from '../services/ipc';
 import { useThrottledCallback } from '../hooks/useThrottle';
+import { formatZatoshisToZec } from '../utils/zec';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
@@ -135,10 +136,10 @@ export function Home(props: {
         <h2 style={{ margin: 0 }}>Balance</h2>
         {balance ? (
           <div style={{ display: 'grid', gap: 4 }}>
-            <div>Shielded spendable: {balance.shielded_spendable}</div>
-            <div>Shielded pending: {balance.shielded_pending}</div>
+            <div>Shielded spendable: {formatZatoshisToZec(balance.shielded_spendable)} ZEC</div>
+            <div>Shielded pending: {formatZatoshisToZec(balance.shielded_pending)} ZEC</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>Transparent total: {balance.transparent_total}</div>
+              <div>Transparent total: {formatZatoshisToZec(balance.transparent_total)} ZEC</div>
               {needsShielding ? (
                 <span
                   style={{
@@ -162,7 +163,7 @@ export function Home(props: {
                 />
               ) : null}
             </div>
-            <div>Total: {balance.total}</div>
+            <div>Total: {formatZatoshisToZec(balance.total)} ZEC</div>
           </div>
         ) : (
           <div>{activeAccountId === null ? 'No active account.' : 'Loading…'}</div>

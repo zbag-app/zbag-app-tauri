@@ -5,6 +5,7 @@ import { onWalletStatus } from '../../services/events';
 import { getWalletStatus } from '../../services/ipc';
 import { ViewSeedPhraseDialog } from '../common/ViewSeedPhraseDialog';
 import { ShieldPrompt } from './ShieldPrompt';
+import { formatZatoshisToZec } from '../../utils/zec';
 
 function Card(props: { title: string; children: ReactNode }) {
   return (
@@ -109,7 +110,7 @@ export function StatusWidget(props: {
         <Card title="Shielding">
           <div style={{ fontSize: 14 }}>
             Status:{' '}
-            <strong>{shieldAmount && shieldAmount !== '0' ? `Available (${shieldAmount})` : 'None'}</strong>
+            <strong>{shieldAmount && shieldAmount !== '0' ? `Available (${formatZatoshisToZec(shieldAmount)} ZEC)` : 'None'}</strong>
           </div>
           {shieldAmount && shieldAmount !== '0' && activeAccountId !== null ? (
             <ShieldPrompt

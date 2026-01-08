@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type * as IPC from '../types/ipc';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
 import { onSwapChanged, onTransactionChanged } from '../services/events';
+import { formatZatoshisToZec } from '../utils/zec';
 
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
@@ -204,8 +205,8 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                   <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{tx.txid}</code>
                   <div style={{ display: 'flex', gap: 12, fontSize: 14 }}>
                     <span>{tx.tx_type}</span>
-                    <span style={{ opacity: 0.8 }}>Value: {tx.value}</span>
-                    <span style={{ opacity: 0.8 }}>Fee: {tx.fee}</span>
+                    <span style={{ opacity: 0.8 }}>Value: {formatZatoshisToZec(tx.value)} ZEC</span>
+                    <span style={{ opacity: 0.8 }}>Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
                     <span style={{ opacity: 0.8 }}>Memo: {tx.memo_present ? 'Yes' : 'No'}</span>
                   </div>
                 </div>
