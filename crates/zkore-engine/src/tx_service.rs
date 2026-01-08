@@ -1395,7 +1395,7 @@ fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Resu
          WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'
          UNION ALL
          SELECT memo FROM sent_notes
-         JOIN transactions ON transactions.id_tx = sent_notes.tx
+         JOIN transactions ON transactions.id_tx = sent_notes.transaction_id
          WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'",
     )?;
 
