@@ -12,6 +12,10 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  // 2. suppress chunk size warning - not relevant for Tauri desktop apps
+  build: {
+    chunkSizeWarningLimit: 1500,
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
