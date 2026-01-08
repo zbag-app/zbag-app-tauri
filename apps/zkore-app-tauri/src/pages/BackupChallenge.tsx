@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, RefreshCw } from 'lucide-react';
 import * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { getBackupChallenge, verifyBackup } from '../services/ipc';
 
 type ChallengeState = {
@@ -89,55 +94,96 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
 
   if (!challenge) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16 }}>
-        <h1>Backup verification</h1>
-        <div>{loading ? 'Loading…' : 'No challenge.'}</div>
-        {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-        <button type="button" onClick={refresh} disabled={loading}>
-          Get challenge
-        </button>
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Backup Verification</h1>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">
+              {loading ? 'Loading...' : 'No challenge.'}
+            </p>
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive mt-4">
+                {error}
+              </div>
+            )}
+            <Button onClick={refresh} disabled={loading} className="mt-4">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Get challenge
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 520 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      <h1>Backup verification</h1>
-      <p>Enter the requested words from your 24-word seed phrase.</p>
-
-      <div style={{ display: 'grid', gap: 10 }}>
-        {sortedIndices.map((index) => (
-          <label key={index} style={{ display: 'grid', gap: 4 }}>
-            <span>Word #{index}</span>
-            <input
-              value={inputs[index] ?? ''}
-              onChange={(e) =>
-                setInputs((prev) => ({ ...prev, [index]: e.currentTarget.value }))
-              }
-            />
-          </label>
-        ))}
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold">Backup Verification</h1>
       </div>
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Verify Your Seed Phrase</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              Enter the requested words from your 24-word seed phrase.
+            </p>
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="submit" disabled={loading}>
-          Verify
-        </button>
-        <button type="button" onClick={refresh} disabled={loading}>
-          New challenge
-        </button>
-        <button type="button" onClick={() => navigate('/')}>
-          Cancel
-        </button>
-      </div>
-    </form>
+            <div className="space-y-3">
+              {sortedIndices.map((index) => (
+                <div key={index} className="space-y-2">
+                  <Label htmlFor={`word-${index}`}>Word #{index}</Label>
+                  <Input
+                    id={`word-${index}`}
+                    value={inputs[index] ?? ''}
+                    onChange={(e) =>
+                      setInputs((prev) => ({ ...prev, [index]: e.currentTarget.value }))
+                    }
+                    placeholder={`Enter word #${index}`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button type="submit" disabled={loading} className="flex-1">
+                {loading ? 'Verifying...' : 'Verify'}
+              </Button>
+              <Button type="button" variant="outline" onClick={refresh} disabled={loading}>
+                <RefreshCw className="h-4 w-4" />
+                New challenge
+              </Button>
+              <Button type="button" variant="outline" onClick={() => navigate('/')}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

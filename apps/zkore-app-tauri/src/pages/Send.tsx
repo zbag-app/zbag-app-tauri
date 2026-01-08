@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowUp, AlertTriangle } from 'lucide-react';
 import * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { buildSigningRequest, prepareSend } from '../services/ipc';
 import { parseZecToZatoshis } from '../utils/zec';
 
@@ -125,72 +130,101 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   };
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, maxWidth: 560 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      <h1>Send</h1>
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Recipient</span>
-        <input
-          value={recipient}
-          onChange={(e) => {
-            setRecipient(e.currentTarget.value);
-            setTransparentRecipient(false);
-            setTransparentAck(false);
-            setError(null);
-          }}
-          placeholder="UA / Sapling / transparent address"
-        />
-      </label>
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <ArrowUp className="h-5 w-5 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold">Send</h1>
+      </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Amount (ZEC)</span>
-        <input
-          value={amount}
-          onChange={(e) => {
-            setAmount(e.currentTarget.value);
-            setError(null);
-          }}
-          inputMode="decimal"
-          placeholder="0.12345678"
-        />
-        <div style={{ fontSize: 12, opacity: 0.75 }}>Up to 8 decimal places.</div>
-        {amountError ? <div style={{ color: 'crimson', fontSize: 12 }}>{amountError}</div> : null}
-      </label>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Transaction Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="recipient">Recipient</Label>
+              <Input
+                id="recipient"
+                value={recipient}
+                onChange={(e) => {
+                  setRecipient(e.currentTarget.value);
+                  setTransparentRecipient(false);
+                  setTransparentAck(false);
+                  setError(null);
+                }}
+                placeholder="UA / Sapling / transparent address"
+              />
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Memo (optional)</span>
-        <textarea
-          value={memo}
-          onChange={(e) => setMemo(e.currentTarget.value)}
-          disabled={transparentRecipient}
-          rows={3}
-          placeholder={transparentRecipient ? 'Disabled for transparent recipients' : 'Memo (<=512 bytes)'}
-        />
-      </label>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount (ZEC)</Label>
+              <Input
+                id="amount"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.currentTarget.value);
+                  setError(null);
+                }}
+                inputMode="decimal"
+                placeholder="0.12345678"
+              />
+              <p className="text-xs text-muted-foreground">Up to 8 decimal places</p>
+              {amountError && (
+                <p className="text-xs text-destructive">{amountError}</p>
+              )}
+            </div>
 
-      {transparentRecipient ? (
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            type="checkbox"
-            checked={transparentAck}
-            onChange={(e) => setTransparentAck(e.currentTarget.checked)}
-          />
-          <span>
-            I understand sending to a transparent address reduces privacy.
-          </span>
-        </label>
-      ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="memo">Memo (optional)</Label>
+              <textarea
+                id="memo"
+                value={memo}
+                onChange={(e) => setMemo(e.currentTarget.value)}
+                disabled={transparentRecipient}
+                rows={3}
+                placeholder={transparentRecipient ? 'Disabled for transparent recipients' : 'Memo (<=512 bytes)'}
+                className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+            {transparentRecipient && (
+              <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-3">
+                <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transparentAck}
+                    onChange={(e) => setTransparentAck(e.currentTarget.checked)}
+                    className="rounded border-border h-4 w-4 accent-primary"
+                  />
+                  <span className="text-sm">
+                    I understand sending to a transparent address reduces privacy
+                  </span>
+                </label>
+              </div>
+            )}
 
-      <button type="submit" disabled={!canSubmit || submitting}>
-        {submitting ? 'Preparing…' : 'Review'}
-      </button>
-    </form>
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" disabled={!canSubmit || submitting} className="w-full">
+              {submitting ? 'Preparing...' : 'Review'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

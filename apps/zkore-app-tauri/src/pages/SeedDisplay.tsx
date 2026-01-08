@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Key, Home } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 
 export function SeedDisplay(props: { seedPhrase: string[]; onCleared: () => void }) {
   const { seedPhrase, onCleared } = props;
@@ -24,54 +27,67 @@ export function SeedDisplay(props: { seedPhrase: string[]; onCleared: () => void
 
   if (words.length !== 24) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16 }}>
-        <h1>Seed phrase</h1>
-        <div>No seed phrase in memory.</div>
-        <button type="button" onClick={() => navigate('/')}>
-          Go home
-        </button>
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Key className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Seed Phrase</h1>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">No seed phrase in memory.</p>
+            <Button variant="outline" onClick={() => navigate('/')} className="mt-4">
+              <Home className="h-4 w-4" />
+              Go home
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 720 }}>
-      <h1>Write down your seed phrase</h1>
-      <p>
-        This is the only way to recover your wallet. Do not screenshot, copy/paste, or store it in
-        cloud notes.
-      </p>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          gap: 8,
-          userSelect: 'none',
-        }}
-      >
-        {wordRows.map(({ index, word }) => (
-          <div
-            key={index}
-            style={{
-              display: 'flex',
-              gap: 8,
-              padding: 8,
-              border: '1px solid #ddd',
-              borderRadius: 8,
-              background: '#fafafa',
-            }}
-          >
-            <span style={{ width: 28, opacity: 0.7 }}>{index}.</span>
-            <strong>{word}</strong>
-          </div>
-        ))}
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Key className="h-5 w-5 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold">Write Down Your Seed Phrase</h1>
       </div>
 
-      <button type="button" onClick={() => navigate('/backup')}>
+      <Card className="border-warning/50 bg-warning/5">
+        <CardContent className="pt-6">
+          <p className="text-sm text-muted-foreground">
+            This is the only way to recover your wallet. Do not screenshot, copy/paste, or store it in
+            cloud notes.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Your 24-Word Seed Phrase</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-2 select-none">
+            {wordRows.map(({ index, word }) => (
+              <div
+                key={index}
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2"
+              >
+                <span className="w-6 text-sm text-muted-foreground">{index}.</span>
+                <span className="font-mono font-semibold">{word}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={() => navigate('/backup')} className="w-full">
         Continue to backup verification
-      </button>
+      </Button>
     </div>
   );
 }
-

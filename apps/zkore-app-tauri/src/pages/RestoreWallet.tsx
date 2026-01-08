@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { RotateCcw, Shield } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 
 export type RestoreFlowData = {
   name: string;
@@ -67,77 +72,114 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
   };
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <header style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0 }}>Restore wallet</h1>
-        <Link to="/" style={{ fontSize: 14 }}>
-          Create new wallet
-        </Link>
-      </header>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-lg animate-[scale-in_0.3s_ease-out]">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="font-display text-2xl">Restore Wallet</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Recover your wallet from a seed phrase
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="network">Network</Label>
+              <select
+                id="network"
+                value={network}
+                onChange={(e) => setNetwork(e.currentTarget.value as IPC.Network)}
+                className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="Mainnet">Mainnet</option>
+                <option value="Testnet">Testnet</option>
+              </select>
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Network</span>
-        <select value={network} onChange={(e) => setNetwork(e.currentTarget.value as IPC.Network)}>
-          <option value="Mainnet">Mainnet</option>
-          <option value="Testnet">Testnet</option>
-        </select>
-      </label>
+            <div className="space-y-2">
+              <Label htmlFor="name">Wallet name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                placeholder="My Restored Wallet"
+              />
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Wallet name</span>
-        <input value={name} onChange={(e) => setName(e.currentTarget.value)} />
-      </label>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+                placeholder="Enter password"
+              />
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Password</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-        />
-      </label>
+            <div className="space-y-2">
+              <Label htmlFor="passwordConfirm">Confirm password</Label>
+              <Input
+                id="passwordConfirm"
+                type="password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.currentTarget.value)}
+                placeholder="Confirm password"
+              />
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Confirm password</span>
-        <input
-          type="password"
-          value={passwordConfirm}
-          onChange={(e) => setPasswordConfirm(e.currentTarget.value)}
-        />
-      </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberUnlock}
+                onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
+                className="rounded border-border h-4 w-4 accent-primary"
+              />
+              <span className="text-sm text-muted-foreground">
+                Remember unlock (stores unlock material in OS keychain)
+              </span>
+            </label>
 
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="checkbox"
-          checked={rememberUnlock}
-          onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-        />
-        <span>Remember unlock (stores unlock material in OS keychain)</span>
-      </label>
+            <div className="space-y-2">
+              <Label htmlFor="seedPhrase">Seed phrase (24 words)</Label>
+              <textarea
+                id="seedPhrase"
+                value={seedPhrase}
+                onChange={(e) => setSeedPhrase(e.currentTarget.value)}
+                rows={4}
+                placeholder="Enter your 24-word seed phrase..."
+                className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              />
+              <p className="text-xs text-muted-foreground">{seedWordCount} / 24 words</p>
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Seed phrase (24 words)</span>
-        <textarea
-          value={seedPhrase}
-          onChange={(e) => setSeedPhrase(e.currentTarget.value)}
-          rows={4}
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' }}
-          placeholder="Enter your 24-word seed phrase…"
-        />
-        <span style={{ fontSize: 12, opacity: 0.8 }}>{seedWordCount} / 24 words</span>
-      </label>
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+            <Button type="submit" className="w-full">
+              <RotateCcw className="h-4 w-4" />
+              Continue
+            </Button>
 
-      <button type="submit">
-        Continue
-      </button>
-    </form>
+            <div className="text-center">
+              <Link to="/" className="text-sm text-primary hover:underline">
+                Create new wallet instead
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

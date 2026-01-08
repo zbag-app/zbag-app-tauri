@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Calendar, RotateCcw, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { loadWallet, restoreWallet, startSync } from '../services/ipc';
 import type { RestoreFlowData } from './RestoreWallet';
 
@@ -63,47 +68,69 @@ export function RestoreBirthday(props: {
 
   if (!flow) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}>
-        <h1 style={{ margin: 0 }}>Restore wallet</h1>
-        <p style={{ margin: 0 }}>Restore details are missing.</p>
-        <Link to="/restore">Start restore</Link>
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-lg animate-[scale-in_0.3s_ease-out]">
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">Restore details are missing.</p>
+            <Link to="/restore" className="text-sm text-primary hover:underline mt-4 inline-block">
+              Start restore
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 640 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      <h1 style={{ margin: 0 }}>First transaction date (optional)</h1>
-      <p style={{ margin: 0 }}>
-        If you remember roughly when this wallet first received funds, adding a date can reduce
-        restore scan time.
-      </p>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-lg animate-[scale-in_0.3s_ease-out]">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Calendar className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="font-display text-2xl">First Transaction Date</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            If you remember roughly when this wallet first received funds, adding a date can reduce
+            restore scan time.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="birthdayDate">Date (optional)</Label>
+              <Input
+                id="birthdayDate"
+                type="date"
+                value={birthdayDate}
+                onChange={(e) => setBirthdayDate(e.currentTarget.value)}
+              />
+            </div>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Date</span>
-        <input
-          type="date"
-          value={birthdayDate}
-          onChange={(e) => setBirthdayDate(e.currentTarget.value)}
-        />
-      </label>
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button type="button" onClick={goBack} disabled={submitting}>
-          Back
-        </button>
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Restoring…' : 'Restore'}
-        </button>
-      </div>
-    </form>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={goBack} disabled={submitting}>
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <Button type="submit" disabled={submitting} className="flex-1">
+                <RotateCcw className="h-4 w-4" />
+                {submitting ? 'Restoring...' : 'Restore'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

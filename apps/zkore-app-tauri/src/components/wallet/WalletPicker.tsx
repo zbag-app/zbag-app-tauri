@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Shield, Plus, RotateCcw, RefreshCw } from 'lucide-react';
 import type * as IPC from '../../types/ipc';
-import { NetworkBadge } from '../common/NetworkBadge';
+import { Card, CardContent } from '../ui/card';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { listWallets, loadWallet } from '../../services/ipc';
 
 function formatTimestamp(ts: number | null): string {
@@ -67,86 +70,82 @@ export function WalletPicker(props: {
   };
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gap: 24,
-        padding: 32,
-        maxWidth: 560,
-        margin: '0 auto',
-        minHeight: '100vh',
-        alignContent: 'center',
-      }}
-    >
-      <header style={{ textAlign: 'center' }}>
-        <h1 style={{ margin: 0, marginBottom: 8 }}>Zkore</h1>
-        <p style={{ margin: 0, opacity: 0.7 }}>Select a wallet to continue</p>
-      </header>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-lg space-y-6 animate-[scale-in_0.3s_ease-out]">
+        <div className="text-center space-y-2">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="font-display text-3xl font-bold">Zkore</h1>
+          <p className="text-muted-foreground">Select a wallet to continue</p>
+        </div>
 
-      {error ? <div style={{ color: 'crimson', textAlign: 'center' }}>{error}</div> : null}
-
-      <div style={{ display: 'grid', gap: 10 }}>
-        {loading && wallets.length === 0 ? (
-          <div style={{ textAlign: 'center', opacity: 0.7 }}>Loading wallets...</div>
-        ) : (
-          wallets.map((w, index) => (
-            <button
-              key={w.id}
-              type="button"
-              onClick={() => openWallet(w.id)}
-              disabled={loadingWalletId !== null}
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                padding: 14,
-                display: 'grid',
-                gap: 6,
-                background: index === 0 ? '#f8fafc' : 'white',
-                cursor: loadingWalletId !== null ? 'wait' : 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <strong>{w.name}</strong>
-                <NetworkBadge network={w.network} />
-                {index === 0 && w.last_opened_at ? (
-                  <span style={{ fontSize: 12, opacity: 0.6 }}>Last used</span>
-                ) : null}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                Last opened: {formatTimestamp(w.last_opened_at)}
-              </div>
-              {loadingWalletId === w.id ? (
-                <div style={{ fontSize: 12, color: '#3b82f6' }}>Opening...</div>
-              ) : null}
-            </button>
-          ))
+        {error && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive text-center">
+            {error}
+          </div>
         )}
-      </div>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          justifyContent: 'center',
-          borderTop: '1px solid #e5e7eb',
-          paddingTop: 24,
-          marginTop: 8,
-        }}
-      >
-        <button type="button" onClick={onCreateNew} disabled={loadingWalletId !== null}>
-          Create new wallet
-        </button>
-        <button type="button" onClick={onRestore} disabled={loadingWalletId !== null}>
-          Restore from seed
-        </button>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading || loadingWalletId !== null}
-        >
-          Refresh
-        </button>
+        <div className="space-y-3">
+          {loading && wallets.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-muted-foreground">Loading wallets...</p>
+              </CardContent>
+            </Card>
+          ) : (
+            wallets.map((w, index) => (
+              <Card
+                key={w.id}
+                className={`cursor-pointer transition-all hover:border-primary/50 ${
+                  index === 0 ? 'border-primary/30 bg-primary/5' : ''
+                } ${loadingWalletId !== null ? 'pointer-events-none opacity-75' : ''}`}
+                onClick={() => openWallet(w.id)}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{w.name}</span>
+                        <Badge variant={w.network === 'Mainnet' ? 'success' : 'warning'}>
+                          {w.network}
+                        </Badge>
+                        {index === 0 && w.last_opened_at && (
+                          <span className="text-xs text-muted-foreground">Last used</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Last opened: {formatTimestamp(w.last_opened_at)}
+                      </div>
+                    </div>
+                    {loadingWalletId === w.id && (
+                      <span className="text-xs text-primary">Opening...</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+
+        <div className="flex gap-3 justify-center pt-4 border-t border-border">
+          <Button onClick={onCreateNew} disabled={loadingWalletId !== null}>
+            <Plus className="h-4 w-4" />
+            Create new wallet
+          </Button>
+          <Button variant="outline" onClick={onRestore} disabled={loadingWalletId !== null}>
+            <RotateCcw className="h-4 w-4" />
+            Restore from seed
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={refresh}
+            disabled={loading || loadingWalletId !== null}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
     </div>
   );

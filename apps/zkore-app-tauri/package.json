@@ -10,6 +10,8 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/syne": "^5.2.7",
     "@keystonehq/animated-qr": "^0.10.0",
     "@keystonehq/keystone-sdk": "^0.11.6",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -18,19 +20,25 @@
     "@tanstack/react-query": "^5.90.12",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.562.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hotkeys-hook": "^5.2.1",
-    "react-router-dom": "^7.11.0"
+    "react-router-dom": "^7.11.0",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@axe-core/react": "^4.11.0",
+    "@tailwindcss/vite": "^4.1.18",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.0.3",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }

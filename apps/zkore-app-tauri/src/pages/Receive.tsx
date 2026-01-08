@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Download, AlertTriangle } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { AddressDisplay } from '../components/wallet/AddressDisplay';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { getReceiveAddress } from '../services/ipc';
 
 export function Receive(props: { activeAccountId: number | null }) {
@@ -53,31 +55,54 @@ export function Receive(props: { activeAccountId: number | null }) {
   const address = showTransparent ? transparentAddress : shieldedAddress;
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
-      <h1>Receive</h1>
-
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="checkbox"
-          checked={showTransparent}
-          onChange={(e) => setShowTransparent(e.currentTarget.checked)}
-        />
-        <span>Show transparent compatibility address</span>
-      </label>
-      {showTransparent ? (
-        <div style={{ fontSize: 14, opacity: 0.85 }}>
-          Transparent addresses are receive-only in v1. Funds received to a transparent address must be
-          shielded before spending.
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Download className="h-5 w-5 text-primary" />
         </div>
-      ) : null}
+        <h1 className="text-2xl font-bold">Receive</h1>
+      </div>
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Your Address</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showTransparent}
+              onChange={(e) => setShowTransparent(e.currentTarget.checked)}
+              className="rounded border-border h-4 w-4 accent-primary"
+            />
+            <span className="text-sm">Show transparent compatibility address</span>
+          </label>
 
-      {address ? (
-        <AddressDisplay address={address} />
-      ) : (
-        <div>{activeAccountId === null ? 'No active account.' : 'Loading…'}</div>
-      )}
+          {showTransparent && (
+            <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-3">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">
+                Transparent addresses are receive-only. Funds received to a transparent address must be
+                shielded before spending.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {address ? (
+            <AddressDisplay address={address} />
+          ) : (
+            <div className="text-muted-foreground">
+              {activeAccountId === null ? 'No active account' : 'Loading...'}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

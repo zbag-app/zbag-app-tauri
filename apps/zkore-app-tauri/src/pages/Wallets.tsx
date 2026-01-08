@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Wallet, Plus, RotateCcw, RefreshCw, CheckCircle } from 'lucide-react';
 import type * as IPC from '../types/ipc';
-import { NetworkBadge } from '../components/common/NetworkBadge';
+import { Card, CardContent } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
 import { listWallets, loadWallet } from '../services/ipc';
 
 function formatTimestamp(ts: number | null): string {
-  if (!ts) return '—';
+  if (!ts) return '-';
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -58,62 +61,85 @@ export function Wallets(props: { activeWalletId: string | null; onLoaded: (resp:
   };
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      <header style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0 }}>Wallets</h1>
-        <button type="button" onClick={() => navigate('/create')} disabled={loading}>
-          Create
-        </button>
-        <button type="button" onClick={() => navigate('/restore')} disabled={loading}>
-          Restore
-        </button>
-        <button type="button" onClick={refresh} disabled={loading}>
-          Refresh
-        </button>
-      </header>
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Wallet className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Wallets</h1>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/create')} disabled={loading}>
+            <Plus className="h-4 w-4" />
+            Create
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/restore')} disabled={loading}>
+            <RotateCcw className="h-4 w-4" />
+            Restore
+          </Button>
+          <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </div>
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      <div style={{ display: 'grid', gap: 8 }}>
-        {wallets.length === 0 ? <div>No wallets found.</div> : null}
+      <div className="space-y-3">
+        {wallets.length === 0 && !loading && (
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-muted-foreground text-center">No wallets found</p>
+            </CardContent>
+          </Card>
+        )}
+
         {wallets.map((w) => {
           const isActive = w.id === activeWalletId;
           return (
-            <div
+            <Card
               key={w.id}
-              style={{
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                padding: 12,
-                display: 'grid',
-                gap: 6,
-                background: isActive ? '#f8fafc' : 'white',
-              }}
+              className={isActive ? 'border-primary/50 bg-primary/5' : ''}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <strong>{w.name}</strong>
-                  <NetworkBadge network={w.network} />
-                  {isActive ? (
-                    <span style={{ fontSize: 12, opacity: 0.8 }}>
-                      Active
-                    </span>
-                  ) : null}
+              <CardContent className="pt-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h3 className="font-semibold">{w.name}</h3>
+                      <Badge variant={w.network === 'Mainnet' ? 'success' : 'warning'}>
+                        {w.network}
+                      </Badge>
+                      {isActive && (
+                        <Badge variant="default" className="gap-1">
+                          <CheckCircle className="h-3 w-3" />
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>Last opened: {formatTimestamp(w.last_opened_at)}</div>
+                      <div className="font-mono">{w.id}</div>
+                    </div>
+                  </div>
+                  <Button
+                    variant={isActive ? 'secondary' : 'default'}
+                    size="sm"
+                    onClick={() => openWallet(w.id)}
+                    disabled={loading || isActive}
+                  >
+                    {isActive ? 'Active' : 'Open'}
+                  </Button>
                 </div>
-                <button type="button" onClick={() => openWallet(w.id)} disabled={loading || isActive}>
-                  {isActive ? 'Active' : 'Open'}
-                </button>
-              </div>
-
-              <div style={{ fontSize: 12, opacity: 0.8 }}>
-                Last opened: {formatTimestamp(w.last_opened_at)}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Wallet ID: {w.id}</div>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
     </div>
   );
 }
-
