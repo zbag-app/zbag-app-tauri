@@ -8,6 +8,7 @@ import { TorErrorDialog } from './components/common/TorErrorDialog';
 import { NetworkBadge } from './components/common/NetworkBadge';
 import { TorStatusBadge } from './components/common/TorStatusBadge';
 import { AccountSelector } from './components/wallet/AccountSelector';
+import { WalletPicker } from './components/wallet/WalletPicker';
 import { useActiveAccount } from './hooks/useActiveAccount';
 import { getTorState, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus } from './services/events';
@@ -41,16 +42,6 @@ type StartupState =
   | { kind: 'locked'; wallet: IPC.WalletInfo }
   | { kind: 'ready'; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }
   | { kind: 'error'; error: IPC.IpcError };
-
-function pickMostRecentWallet(wallets: IPC.WalletInfo[]): IPC.WalletInfo {
-  return wallets
-    .slice()
-    .sort((a, b) => {
-      const aT = a.last_opened_at ?? a.created_at;
-      const bT = b.last_opened_at ?? b.created_at;
-      return bT - aT;
-    })[0];
-}
 
 function AppInner() {
   const navigate = useNavigate();
@@ -133,22 +124,8 @@ function AppInner() {
         return;
       }
 
-      const mostRecent = pickMostRecentWallet(wallets);
-      const load1 = await loadWallet({ wallet_id: mostRecent.id });
-      if (cancelled) return;
-      if ('err' in load1) {
-        setStartup({ kind: 'error', error: load1.err });
-        return;
-      }
-
-      if (load1.ok.lock_status === 'Locked') {
-        setStartup({ kind: 'locked', wallet: load1.ok.wallet });
-        setAccounts([]);
-        return;
-      }
-
-      setStartup({ kind: 'ready', wallet: load1.ok.wallet, accounts: load1.ok.accounts });
-      setAccounts(load1.ok.accounts);
+      // Show wallet picker instead of auto-loading
+      setStartup({ kind: 'wallet-selection' });
     }
 
     runStartup();
@@ -425,35 +402,40 @@ function WalletSelectionRoutes(props: {
   onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
 }) {
   const { onLoaded, onCreated, onRestoreFlow, restoreFlow, onClearRestoreFlow, onRestored } = props;
+  const navigate = useNavigate();
+
+  const pickerElement = (
+    <WalletPicker
+      onLoaded={onLoaded}
+      onCreateNew={() => navigate('/create')}
+      onRestore={() => navigate('/restore')}
+    />
+  );
 
   return (
-    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
-      <Routes>
-        <Route
-          path="/wallets"
-          element={<Wallets activeWalletId={null} onLoaded={onLoaded} />}
-        />
-        <Route
-          path="/create"
-          element={<CreateWallet onCreated={onCreated} />}
-        />
-        <Route
-          path="/restore"
-          element={<RestoreWallet onContinue={onRestoreFlow} />}
-        />
-        <Route
-          path="/restore/birthday"
-          element={
-            <RestoreBirthday
-              flow={restoreFlow}
-              onClearFlow={onClearRestoreFlow}
-              onRestored={onRestored}
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/wallets" replace />} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route path="/" element={pickerElement} />
+      <Route path="/wallets" element={pickerElement} />
+      <Route
+        path="/create"
+        element={<CreateWallet onCreated={onCreated} />}
+      />
+      <Route
+        path="/restore"
+        element={<RestoreWallet onContinue={onRestoreFlow} />}
+      />
+      <Route
+        path="/restore/birthday"
+        element={
+          <RestoreBirthday
+            flow={restoreFlow}
+            onClearFlow={onClearRestoreFlow}
+            onRestored={onRestored}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
