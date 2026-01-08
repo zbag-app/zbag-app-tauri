@@ -201,6 +201,7 @@ function AppInner() {
             setAccounts([]);
           }
         }}
+        onBack={() => setStartup({ kind: 'wallet-selection' })}
       />
     );
   }
@@ -442,8 +443,9 @@ function WalletSelectionRoutes(props: {
 function UnlockGate(props: {
   wallet: IPC.WalletInfo;
   onUnlocked: (state: Extract<StartupState, { kind: 'ready' | 'locked' }>) => void;
+  onBack: () => void;
 }) {
-  const { wallet, onUnlocked } = props;
+  const { wallet, onUnlocked, onBack } = props;
   const [password, setPassword] = useState('');
   const [rememberUnlock, setRememberUnlock] = useState(wallet.remember_unlock_enabled);
   const [error, setError] = useState<string | null>(null);
@@ -497,9 +499,14 @@ function UnlockGate(props: {
         <span>Remember unlock</span>
       </label>
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-      <button type="button" onClick={submit} disabled={!password}>
-        Unlock
-      </button>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button type="button" onClick={submit} disabled={!password}>
+          Unlock
+        </button>
+        <button type="button" onClick={onBack}>
+          Back
+        </button>
+      </div>
     </div>
   );
 }
