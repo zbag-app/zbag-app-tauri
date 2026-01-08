@@ -6,7 +6,7 @@ import { StatusWidget } from '../components/wallet/StatusWidget';
 import { SyncProgressWidget } from '../components/wallet/SyncProgressWidget';
 import { NetworkBadge } from '../components/common/NetworkBadge';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
-import { getBalance, getSyncProgress, startSync } from '../services/ipc';
+import { getBalance, getSyncProgress } from '../services/ipc';
 import { useThrottledCallback } from '../hooks/useThrottle';
 
 export function Home(props: {
@@ -110,13 +110,6 @@ export function Home(props: {
     };
   }, [activeAccountId]);
 
-  const start = async () => {
-    const res = await startSync({ wallet_id: wallet.id });
-    if ('err' in res) {
-      setError(res.err.message);
-    }
-  };
-
   const backupRequired = status?.backup_status === 'Required';
   const needsShielding = balance?.transparent_total !== undefined && balance.transparent_total !== '0';
 
@@ -129,9 +122,6 @@ export function Home(props: {
           onChange={onChangeAccount}
         />
         <NetworkBadge network={wallet.network} />
-        <button type="button" onClick={start}>
-          Start sync
-        </button>
         <button type="button" disabled={backupRequired}>
           Send (coming soon)
         </button>

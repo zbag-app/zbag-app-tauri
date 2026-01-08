@@ -1036,6 +1036,18 @@ impl WalletManager {
                     SyncStatus::Synced
                 }
             }
+            SyncPhase::CatchingUp => {
+                if progress.wallet_tip_height > 0
+                    && progress.scan_frontier_height >= progress.wallet_tip_height
+                {
+                    self.sync_stop_requested.remove(&wallet_id);
+                    SyncStatus::Synced
+                } else {
+                    SyncStatus::Syncing {
+                        progress_percent: progress.progress_percent,
+                    }
+                }
+            }
             _ => SyncStatus::Syncing {
                 progress_percent: progress.progress_percent,
             },

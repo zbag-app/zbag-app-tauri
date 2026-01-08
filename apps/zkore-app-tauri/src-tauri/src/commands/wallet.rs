@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use tauri::State;
 use tracing::warn;
 
-use zkore_core::domain::{AccountInfo, AccountType, WalletLockStatus};
+use zkore_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
 use zkore_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
@@ -16,6 +16,7 @@ use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_versi
 
 use crate::state::AppState;
 
+use super::sync::start_sync_with_handlers;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "zkore_create_wallet")]
@@ -87,6 +88,7 @@ pub fn zkore_list_wallets(
 
 #[tauri::command(rename = "zkore_load_wallet")]
 pub fn zkore_load_wallet(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: LoadWalletRequest,
 ) -> IpcResult<LoadWalletResponse> {
@@ -96,7 +98,34 @@ pub fn zkore_load_wallet(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        build_load_wallet_response(&mut mgr, request.wallet_id)
+
+        // Stop sync for the previously-active wallet (best effort) so we never
+        // keep decrypting/scanning after a wallet switch.
+        if let Some(prev_wallet_id) = mgr.active_wallet_info().map(|w| w.id)
+            && prev_wallet_id != request.wallet_id
+        {
+            mgr.observe_sync_stop_requested(prev_wallet_id);
+            let _ = state.sync_service.stop_sync(prev_wallet_id, None);
+            mgr.observe_sync_progress(
+                prev_wallet_id,
+                SyncProgress {
+                    phase: SyncPhase::Idle,
+                    scan_frontier_height: 0,
+                    wallet_tip_height: 0,
+                    progress_percent: 0,
+                    eta_seconds: None,
+                },
+            );
+        }
+
+        let resp = build_load_wallet_response(&mut mgr, request.wallet_id)?;
+        if resp.lock_status == WalletLockStatus::Unlocked {
+            // Auto-start sync (best effort). LoadWallet should succeed even if sync can't start.
+            if let Err(err) = start_sync_with_handlers(&app, &state, &mut mgr, &resp.wallet) {
+                warn!(wallet_id = %resp.wallet.id, error = ?err, "auto-sync start failed");
+            }
+        }
+        Ok(resp)
     })
 }
 
@@ -133,7 +162,20 @@ pub fn zkore_lock_wallet(
     }
 
     map_anyhow(|| {
+        // Stop sync first (best effort) to minimize exposure of decrypted material.
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        mgr.observe_sync_stop_requested(request.wallet_id);
+        let _ = state.sync_service.stop_sync(request.wallet_id, None);
+        mgr.observe_sync_progress(
+            request.wallet_id,
+            SyncProgress {
+                phase: SyncPhase::Idle,
+                scan_frontier_height: 0,
+                wallet_tip_height: 0,
+                progress_percent: 0,
+                eta_seconds: None,
+            },
+        );
         let status = mgr.lock_wallet(request.wallet_id)?;
         Ok(LockWalletResponse {
             schema_version: SCHEMA_VERSION,

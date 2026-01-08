@@ -13,6 +13,8 @@ function getDisplayPhase(phase: IPC.SyncPhase): string {
     case 'Downloading':
     case 'Scanning':
       return 'Syncing';
+    case 'CatchingUp':
+      return 'Catching up';
     default:
       return phase;
   }
@@ -23,7 +25,9 @@ export function SyncProgressWidget(props: { progress: IPC.SyncProgress }) {
 
   // Cap at 99% unless Idle to avoid "100% but still syncing" confusion
   const displayPercent =
-    progress.phase === 'Idle' ? progress.progress_percent : Math.min(progress.progress_percent, 99);
+    progress.phase === 'Idle' || progress.phase === 'CatchingUp'
+      ? progress.progress_percent
+      : Math.min(progress.progress_percent, 99);
 
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -43,4 +47,3 @@ export function SyncProgressWidget(props: { progress: IPC.SyncProgress }) {
     </div>
   );
 }
-
