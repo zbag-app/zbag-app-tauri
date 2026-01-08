@@ -6,10 +6,8 @@ import { ShieldPrompt } from '../components/wallet/ShieldPrompt';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
-import { Progress } from '../components/ui/progress';
-import { onBalanceChanged, onSyncProgress } from '../services/events';
-import { getBalance, getSyncProgress, getWalletStatus } from '../services/ipc';
-import { useThrottledCallback } from '../hooks/useThrottle';
+import { onBalanceChanged } from '../services/events';
+import { getBalance, getWalletStatus } from '../services/ipc';
 import { formatZatoshisToZec } from '../utils/zec';
 import { cn } from '../lib/utils';
 
@@ -21,7 +19,6 @@ export function Home(props: {
 
   const [status, setStatus] = useState<IPC.WalletStatus | null>(null);
   const [balance, setBalance] = useState<IPC.Balance | null>(null);
-  const [sync, setSync] = useState<IPC.SyncProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshBalance = async () => {
@@ -78,43 +75,6 @@ export function Home(props: {
       cancelled = true;
     };
   }, [activeAccountId]);
-
-  // Fetch sync progress
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      const res = await getSyncProgress({ wallet_id: wallet.id });
-      if (cancelled) return;
-      if ('err' in res) {
-        return;
-      }
-      setSync(res.ok.progress);
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [wallet.id]);
-
-  // Throttle sync progress updates
-  const throttledSetSync = useThrottledCallback(
-    (progress: IPC.SyncProgress) => setSync(progress),
-    200
-  );
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    onSyncProgress((evt) => throttledSetSync(evt.progress))
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch(() => {});
-    return () => {
-      unlisten?.();
-    };
-  }, [throttledSetSync]);
 
   // Balance change subscription
   useEffect(() => {
@@ -254,29 +214,6 @@ export function Home(props: {
           </CardContent>
         </Card>
       </div>
-
-      {/* Sync Status */}
-      {sync && sync.phase !== 'Idle' && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {sync.phase === 'Downloading' || sync.phase === 'Scanning' ? 'Syncing' : sync.phase}
-                </span>
-                <span className="font-mono">
-                  {Math.min(sync.progress_percent, 99).toFixed(1)}%
-                </span>
-              </div>
-              <Progress value={Math.min(sync.progress_percent, 99)} />
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Block {sync.scan_frontier_height.toLocaleString()}</span>
-                <span>/ {sync.wallet_tip_height.toLocaleString()}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Backup Warning */}
       {backupRequired && (
