@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
-import { AccountSelector } from '../components/wallet/AccountSelector';
 import { ShieldPrompt } from '../components/wallet/ShieldPrompt';
 import { StatusWidget } from '../components/wallet/StatusWidget';
 import { SyncProgressWidget } from '../components/wallet/SyncProgressWidget';
-import { NetworkBadge } from '../components/common/NetworkBadge';
 import { onBalanceChanged, onSyncProgress } from '../services/events';
 import { getBalance, getSyncProgress } from '../services/ipc';
 import { useThrottledCallback } from '../hooks/useThrottle';
@@ -12,11 +10,9 @@ import { formatZatoshisToZec } from '../utils/zec';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
-  accounts: IPC.AccountInfo[];
   activeAccountId: number | null;
-  onChangeAccount: (accountId: number) => void;
 }) {
-  const { wallet, accounts, activeAccountId, onChangeAccount } = props;
+  const { wallet, activeAccountId } = props;
 
   const [status, setStatus] = useState<IPC.WalletStatus | null>(null);
   const [balance, setBalance] = useState<IPC.Balance | null>(null);
@@ -116,18 +112,6 @@ export function Home(props: {
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <AccountSelector
-          accounts={accounts}
-          activeAccountId={activeAccountId}
-          onChange={onChangeAccount}
-        />
-        <NetworkBadge network={wallet.network} />
-        <button type="button" disabled={backupRequired}>
-          Send (coming soon)
-        </button>
-      </div>
-
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
       <StatusWidget walletId={wallet.id} activeAccountId={activeAccountId} onStatusChange={setStatus} />

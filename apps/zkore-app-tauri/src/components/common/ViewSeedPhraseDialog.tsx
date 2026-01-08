@@ -59,6 +59,9 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
         <div
           role="dialog"
           aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -66,6 +69,7 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
             display: 'grid',
             placeItems: 'center',
             padding: 16,
+            zIndex: 9999,
           }}
         >
           <div

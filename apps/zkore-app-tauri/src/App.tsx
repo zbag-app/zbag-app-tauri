@@ -7,7 +7,6 @@ import { ErrorDialog } from './components/common/ErrorDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
 import { NetworkBadge } from './components/common/NetworkBadge';
 import { TorStatusBadge } from './components/common/TorStatusBadge';
-import { AccountSelector } from './components/wallet/AccountSelector';
 import { WalletPicker } from './components/wallet/WalletPicker';
 import { useActiveAccount } from './hooks/useActiveAccount';
 import { getTorState, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
@@ -57,7 +56,7 @@ function AppInner() {
     return null;
   }, [startup]);
 
-  const { activeAccountId, setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
+  const { activeAccountId, setActiveAccountId: _setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
   const activeAccount = useMemo(() => {
     if (activeAccountId == null) return null;
     return accounts.find((a) => a.id === activeAccountId) ?? null;
@@ -250,11 +249,6 @@ function AppInner() {
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <strong>{startup.wallet.name}</strong>
         <NetworkBadge network={startup.wallet.network} />
-        <AccountSelector
-          accounts={accounts}
-          activeAccountId={activeAccountId}
-          onChange={setActiveAccountId}
-        />
         <TorStatusBadge state={torState} />
         <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Link to="/">Home</Link>
@@ -276,9 +270,7 @@ function AppInner() {
           element={
             <Home
               wallet={startup.wallet}
-              accounts={accounts}
               activeAccountId={activeAccountId}
-              onChangeAccount={setActiveAccountId}
             />
           }
         />

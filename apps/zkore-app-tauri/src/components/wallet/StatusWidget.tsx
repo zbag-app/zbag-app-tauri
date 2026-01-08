@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import type * as IPC from '../../types/ipc';
 import { onWalletStatus } from '../../services/events';
 import { getWalletStatus } from '../../services/ipc';
-import { ViewSeedPhraseDialog } from '../common/ViewSeedPhraseDialog';
 import { ShieldPrompt } from './ShieldPrompt';
 import { formatZatoshisToZec } from '../../utils/zec';
 
@@ -84,22 +83,17 @@ export function StatusWidget(props: {
       {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
-        <Card title="Backup">
-          <div style={{ fontSize: 14 }}>
-            Status: <strong>{status?.backup_status ?? 'Loading…'}</strong>
-          </div>
-          {backupRequired ? (
+        {backupRequired ? (
+          <Card title="Backup">
+            <div style={{ fontSize: 14 }}>
+              Status: <strong>Required</strong>
+            </div>
             <div style={{ fontSize: 12, opacity: 0.85 }}>Backup is required before sending funds.</div>
-          ) : null}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {backupRequired ? (
-              <button type="button" onClick={() => navigate('/backup')}>
-                Verify backup
-              </button>
-            ) : null}
-            <ViewSeedPhraseDialog walletId={walletId} triggerLabel="View seed phrase" />
-          </div>
-        </Card>
+            <button type="button" onClick={() => navigate('/backup')}>
+              Verify backup
+            </button>
+          </Card>
+        ) : null}
 
         <Card title="Sync">
           <div style={{ fontSize: 14 }}>

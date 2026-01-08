@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type * as IPC from '../types/ipc';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
 import { onSwapChanged, onTransactionChanged } from '../services/events';
-import { formatZatoshisToZec } from '../utils/zec';
+import { formatRelativeTime, formatZatoshisToZec } from '../utils/zec';
 
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
@@ -202,13 +202,23 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
             <div key={tx.txid} style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ display: 'grid', gap: 4 }}>
-                  <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{tx.txid}</code>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 14 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{tx.txid}</code>
+                    <span style={{ fontSize: 12, opacity: 0.6 }}>{formatRelativeTime(tx.created_at)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 14, flexWrap: 'wrap' }}>
                     <span>{tx.tx_type}</span>
                     <span style={{ opacity: 0.8 }}>Value: {formatZatoshisToZec(tx.value)} ZEC</span>
                     <span style={{ opacity: 0.8 }}>Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
-                    <span style={{ opacity: 0.8 }}>Memo: {tx.memo_present ? 'Yes' : 'No'}</span>
                   </div>
+                  {tx.memo ? (
+                    <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>
+                      <span style={{ fontWeight: 500 }}>Memo: </span>
+                      <span style={{ wordBreak: 'break-word' }}>
+                        {tx.memo.length > 100 ? `${tx.memo.slice(0, 100)}...` : tx.memo}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 600 }}>{tx.status}</div>

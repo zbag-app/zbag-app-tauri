@@ -1349,6 +1349,13 @@ impl<C: Clock> TxService<C> {
                 _ => (None, false),
             };
 
+            // Fetch memo content if memos exist for this transaction
+            let memo = if memo_count > 0 {
+                fetch_transaction_memos(wallet_db_conn, &txid_bytes)?
+            } else {
+                None
+            };
+
             transactions.push(TransactionInfo {
                 txid,
                 account_id,
@@ -1356,7 +1363,7 @@ impl<C: Clock> TxService<C> {
                 value: value_u64.to_string(),
                 fee: fee_u64.to_string(),
                 memo_present: memo_count > 0,
-                memo: None,
+                memo,
                 status,
                 last_error,
                 can_retry_broadcast,
@@ -1371,6 +1378,53 @@ impl<C: Clock> TxService<C> {
             transactions,
             total_count,
         })
+    }
+}
+
+/// Fetches all non-empty memos for a transaction from received and sent notes tables.
+/// Returns memos concatenated with newlines, or None if no memos found.
+fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Result<Option<String>> {
+    // Query all memo sources using UNION - orchard, sapling received notes and sent notes
+    let mut stmt = conn.prepare(
+        "SELECT memo FROM orchard_received_notes
+         JOIN transactions ON transactions.id_tx = orchard_received_notes.transaction_id
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'
+         UNION ALL
+         SELECT memo FROM sapling_received_notes
+         JOIN transactions ON transactions.id_tx = sapling_received_notes.transaction_id
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'
+         UNION ALL
+         SELECT memo FROM sent_notes
+         JOIN transactions ON transactions.id_tx = sent_notes.tx
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'",
+    )?;
+
+    let mut rows = stmt.query([txid_bytes])?;
+    let mut memos = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        let memo_bytes: Vec<u8> = row.get(0)?;
+        // Try to parse as MemoBytes and convert to text
+        if let Ok(memo_bytes_obj) = zcash_protocol::memo::MemoBytes::from_bytes(&memo_bytes)
+            && let Ok(memo) = zcash_protocol::memo::Memo::try_from(memo_bytes_obj)
+        {
+            match memo {
+                zcash_protocol::memo::Memo::Text(text) => {
+                    memos.push(text.to_string());
+                }
+                zcash_protocol::memo::Memo::Empty => {}
+                _ => {
+                    // For Future or Arbitrary memos, show as hex
+                    memos.push(format!("[binary: {} bytes]", memo_bytes.len()));
+                }
+            }
+        }
+    }
+
+    if memos.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(memos.join("\n")))
     }
 }
 
