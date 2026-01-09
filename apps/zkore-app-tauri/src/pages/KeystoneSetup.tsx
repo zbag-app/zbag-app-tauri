@@ -32,7 +32,18 @@ export function KeystoneSetup(props: {
 
   const isValidUfvk = (value: string) => {
     const trimmed = value.trim().toLowerCase();
-    return trimmed.startsWith('uview') || trimmed.startsWith('uivk');
+    return trimmed.startsWith('uview');
+  };
+
+  /**
+   * Detect network from UFVK prefix.
+   * Returns null if the prefix is invalid.
+   */
+  const detectUfvkNetwork = (value: string): IPC.Network | null => {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed.startsWith('uviewtest')) return 'Testnet';
+    if (trimmed.startsWith('uview')) return 'Mainnet';
+    return null;
   };
 
   const canContinueUfvk = ufvk.trim() && isValidUfvk(ufvk);
@@ -149,7 +160,7 @@ export function KeystoneSetup(props: {
                 />
                 {ufvk.trim() && !isValidUfvk(ufvk) && (
                   <p className="text-sm text-destructive">
-                    UFVK should start with "uview" (mainnet) or "uivk" (testnet)
+                    UFVK should start with "uview" (mainnet) or "uviewtest" (testnet)
                   </p>
                 )}
               </div>
@@ -157,6 +168,11 @@ export function KeystoneSetup(props: {
               <UFVKScanner
                 onScanned={(scannedUfvk) => {
                   setUfvk(scannedUfvk);
+                  // Auto-detect network from UFVK prefix
+                  const detectedNetwork = detectUfvkNetwork(scannedUfvk);
+                  if (detectedNetwork) {
+                    setNetwork(detectedNetwork);
+                  }
                   setImportMode('paste');
                 }}
                 onCancel={() => setImportMode('paste')}

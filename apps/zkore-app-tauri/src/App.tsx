@@ -431,6 +431,7 @@ function AppInner() {
           element={
             <ImportKeystone
               walletId={startup.wallet.id}
+              walletNetwork={startup.wallet.network}
               onAccountsUpdated={(next) => setAccounts(next)}
             />
           }

@@ -13,9 +13,10 @@ type ImportMode = 'paste' | 'scan';
 
 export function ImportKeystone(props: {
   walletId: string;
+  walletNetwork: IPC.Network;
   onAccountsUpdated: (accounts: IPC.AccountInfo[]) => void;
 }) {
-  const { walletId, onAccountsUpdated } = props;
+  const { walletId, walletNetwork, onAccountsUpdated } = props;
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<ImportMode>('paste');
@@ -130,6 +131,7 @@ export function ImportKeystone(props: {
                 setMode('paste');
               }}
               onCancel={() => setMode('paste')}
+              expectedNetwork={walletNetwork}
             />
           )}
 

@@ -1,93 +1,94 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { useCallback, useState } from 'react';
+import { AnimatedQRScanner, Purpose } from '@keystonehq/animated-qr';
+import { decodeZcashAccountsUrCbor, ZCASH_ACCOUNTS_UR_TYPE } from './zcashAccountsUr';
 
-function isValidUfvk(text: string): boolean {
-  // UFVKs start with "uview" (mainnet) or "uivk" (testnet)
+type Network = 'Mainnet' | 'Testnet';
+
+/**
+ * Parse UFVK prefix to detect network.
+ * Returns null if the prefix is invalid.
+ */
+function parseUfvkNetwork(text: string): Network | null {
   const trimmed = text.trim().toLowerCase();
-  return trimmed.startsWith('uview') || trimmed.startsWith('uivk');
+  // Must check uviewtest first (it starts with 'uview' too)
+  if (trimmed.startsWith('uviewtest')) return 'Testnet';
+  if (trimmed.startsWith('uview')) return 'Mainnet';
+  return null;
 }
 
 export function UFVKScanner(props: {
   onScanned: (ufvk: string) => void;
   onCancel?: () => void;
+  /** If provided, validates that the scanned UFVK matches this network */
+  expectedNetwork?: Network;
 }) {
-  const { onScanned, onCancel } = props;
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const { onScanned, onCancel, expectedNetwork } = props;
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
 
-  const startScanning = useCallback(async () => {
-    if (!videoRef.current) return;
-
-    try {
-      setError(null);
-      setScanning(true);
-
-      const reader = new BrowserMultiFormatReader();
-      readerRef.current = reader;
-
-      await reader.decodeFromVideoDevice(
-        null, // Use default camera
-        videoRef.current,
-        (result, err) => {
-          if (result) {
-            const text = result.getText();
-            if (isValidUfvk(text)) {
-              reader.reset();
-              setScanning(false);
-              onScanned(text.trim());
-            } else {
-              setError('QR code does not contain a valid UFVK. Expected format: uview... or uivk...');
-            }
-          }
-          if (err && !(err instanceof NotFoundException)) {
-            console.error('QR scan error:', err);
-          }
-        }
-      );
-    } catch (e) {
-      setScanning(false);
-      if (e instanceof Error) {
-        if (e.name === 'NotAllowedError') {
-          setError('Camera access denied. Please allow camera access to scan QR codes.');
-        } else if (e.name === 'NotFoundError') {
-          setError('No camera found. Please connect a camera to scan QR codes.');
-        } else {
-          setError(e.message);
-        }
-      } else {
-        setError('Failed to access camera');
+  const handleScan = useCallback(
+    ({ type, cbor }: { type: string; cbor: string }) => {
+      if (type !== ZCASH_ACCOUNTS_UR_TYPE) {
+        setError(`Unexpected UR type: ${type}. Expected zcash-accounts.`);
+        return;
       }
-    }
-  }, [onScanned]);
 
-  useEffect(() => {
-    startScanning();
+      try {
+        // Convert hex string to Uint8Array (NOT Node.js Buffer)
+        const cborBytes = new Uint8Array(
+          cbor.match(/.{2}/g)!.map((byte) => parseInt(byte, 16))
+        );
 
-    return () => {
-      if (readerRef.current) {
-        readerRef.current.reset();
-        readerRef.current = null;
+        const accounts = decodeZcashAccountsUrCbor(cborBytes);
+
+        if (accounts.length === 0) {
+          setError('No accounts found in QR code');
+          return;
+        }
+
+        const ufvk = accounts[0].ufvk;
+        const detectedNetwork = parseUfvkNetwork(ufvk);
+
+        if (!detectedNetwork) {
+          setError(`Invalid UFVK format: ${ufvk.substring(0, 20)}...`);
+          return;
+        }
+
+        // Network mismatch check (only if expectedNetwork is specified)
+        if (expectedNetwork && detectedNetwork !== expectedNetwork) {
+          setError(
+            `Network mismatch: This is a ${detectedNetwork} key, but you're creating a ${expectedNetwork} wallet. ` +
+            `Please export the correct key from your Keystone device.`
+          );
+          return;
+        }
+
+        onScanned(ufvk);
+      } catch (e) {
+        setError(`Failed to decode QR: ${e instanceof Error ? e.message : String(e)}`);
       }
-    };
-  }, [startScanning]);
+    },
+    [onScanned, expectedNetwork]
+  );
 
   return (
     <div className="space-y-4">
       <div className="relative rounded-lg overflow-hidden bg-muted aspect-square max-w-[320px] mx-auto">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          playsInline
-          muted
+        <AnimatedQRScanner
+          purpose={Purpose.SYNC}
+          urTypes={[ZCASH_ACCOUNTS_UR_TYPE]}
+          handleScan={handleScan}
+          handleError={(e) => setError(e)}
+          onProgress={(p) => setProgress(p)}
+          options={{ width: 320, height: 320 }}
         />
-        {scanning && (
-          <div className="absolute inset-0 border-2 border-primary/50 rounded-lg pointer-events-none">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border-2 border-primary rounded-lg" />
-          </div>
-        )}
       </div>
+
+      {progress > 0 && progress < 100 && (
+        <div className="text-sm text-center text-muted-foreground">
+          Scanning animated QR: {progress}% complete
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
@@ -96,7 +97,7 @@ export function UFVKScanner(props: {
       )}
 
       <p className="text-sm text-muted-foreground text-center">
-        Point your camera at the UFVK QR code from your Keystone device
+        Point your camera at the animated QR code from your Keystone device
       </p>
 
       {onCancel && (
