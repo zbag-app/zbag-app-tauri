@@ -1,6 +1,6 @@
 # Data Model: Zkore Desktop Wallet
 
-**Branch**: `001-zkore-desktop-wallet`
+**Branch**: `main`
 **Status**: Complete
 **Purpose**: Define entities, relationships, validation rules, and state transitions
 
@@ -25,15 +25,15 @@ The root entity containing seed-derived keys and accounts.
 | id | UUID | Unique wallet identifier | Auto-generated |
 | name | String | User-defined wallet name | 1-50 chars, non-empty |
 | directory_path | String | Filesystem path to wallet data (network-specific: `~/.zkore/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`) | Valid path, writable |
-| wallet_type | WalletType | Software (v1); WatchOnly reserved for future | Enum value |
+| wallet_type | WalletType | Software or WatchOnly (Keystone hardware wallet) | Enum value |
 | network | Network | Mainnet or Testnet (IMMUTABLE after creation) | Enum value |
 | remember_unlock_enabled | bool | OS keychain-backed auto-unlock preference (stores unlock material, never satisfies per-action re-auth) | Default false |
 | created_at | Timestamp | Creation timestamp | Auto-set |
 | last_opened_at | Timestamp | Last access timestamp | Updated on open |
 
 **WalletType Enum**:
-- `Software` - Seed-backed wallet for v1
-- `WatchOnly` - Reserved for future (watch-only is modeled via AccountType in v1)
+- `Software` - Seed-backed wallet with local mnemonic
+- `WatchOnly` - UFVK-backed wallet (e.g., Keystone hardware wallet); no local mnemonic, spending requires external signer
 
 **Network Enum**:
 - `Mainnet` - Production Zcash network (addresses start with `u1...`, `zs1...`, `t1...`/`t3...`)
@@ -47,7 +47,8 @@ The root entity containing seed-derived keys and accounts.
 - Seed phrase NEVER stored in app metadata DB
 - Network field is IMMUTABLE after wallet creation
 - `remember_unlock_enabled` persists the OS keychain-backed auto-unlock preference (stores unlock material, never satisfies per-action re-auth)
-- In v1, `wallet_type` is always `Software`; watch-only behavior is represented by `AccountType`
+- `WatchOnly` wallets are created via `CreateKeystoneWallet` IPC command from a UFVK; they have no local mnemonic
+- `WatchOnly` wallets bypass backup verification (marked complete with `verification_method = "keystone_only"`)
 
 ### Key Storage Architecture
 
@@ -118,8 +119,8 @@ A logical grouping within a wallet for shielded operations (Sapling + Orchard).
 
 **Constraints**:
 - Account 0 always exists after wallet creation
-- In v1, `wallet_type` MUST be `Software`; watch-only is represented by `AccountType`
-- In v1, wallets MAY contain `Software` and `HardwareSigner` accounts; `WatchOnly` is reserved for future
+- `Software` wallets contain `Software` accounts; `WatchOnly` wallets contain `HardwareSigner` accounts
+- `AccountType::WatchOnly` is reserved for future (pure view-only without signing capability)
 
 ---
 
@@ -312,12 +313,13 @@ Tracks seed phrase backup state per wallet.
 | wallet_id | UUID | Associated wallet | FK to Wallet |
 | backup_required | bool | Whether backup needed | Default true |
 | backup_completed_at | Option<Timestamp> | When verified | Set on verify |
-| verification_method | Option<String> | How verified | e.g., "word_challenge" |
+| verification_method | Option<String> | How verified | "word_challenge", "restore_seed_phrase", or "keystone_only" |
 
 **Constraints**:
-- All spending blocked while `backup_required = true`
+- All spending blocked while `backup_required = true` (software wallets only)
 - Cannot be unset once `backup_required = false`
 - Restored wallets: On successful `RestoreWallet`, set `backup_required = false`, set `backup_completed_at = now()`, and set `verification_method = "restore_seed_phrase"`
+- Watch-only (Keystone) wallets: On creation, set `backup_required = false`, set `backup_completed_at = now()`, and set `verification_method = "keystone_only"` (no seed to back up)
 
 **State Transitions**:
 ```
@@ -612,3 +614,96 @@ CREATE TABLE _app_migrations (
 | SwapIntent | Shielded ZEC for FromZec, ephemeral transparent |
 | BackupStatus | Blocks spending when required |
 | TorState | Fail-closed when enabled but not On |
+
+---
+
+## Error Codes
+
+Stable error codes for IPC error responses. Format: `E{category}{number}`.
+
+### Wallet Errors (E1xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E1001 | WALLET_NOT_FOUND | Wallet does not exist |
+| E1002 | WALLET_LOCKED | Wallet is locked; unlock required |
+| E1003 | WALLET_ALREADY_EXISTS | Wallet name already in use |
+| E1004 | INVALID_SEED_PHRASE | Seed phrase validation failed |
+| E1005 | BACKUP_REQUIRED | Must complete backup before spending |
+| E1006 | BACKUP_CHALLENGE_INVALID | Incorrect word in backup challenge |
+| E1007 | BACKUP_CHALLENGE_EXPIRED | Backup challenge has expired |
+| E1008 | INVALID_WALLET_PASSWORD | Incorrect password |
+| E1009 | REAUTH_REQUIRED | Re-authentication required for this action |
+| E1010 | REAUTH_TOKEN_INVALID | Invalid re-authentication token |
+| E1011 | REAUTH_TOKEN_EXPIRED | Re-authentication token has expired |
+| E1012 | BACKUP_CHALLENGE_TOO_MANY_ATTEMPTS | Too many failed backup attempts |
+
+### Account Errors (E2xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E2001 | ACCOUNT_NOT_FOUND | Account does not exist |
+| E2002 | WATCH_ONLY_CANNOT_SPEND | Cannot use confirm_send for watch-only account |
+
+### Transaction Errors (E3xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E3001 | INSUFFICIENT_FUNDS | Not enough spendable balance |
+| E3002 | INVALID_RECIPIENT | Invalid recipient address |
+| E3003 | TRANSPARENT_SPEND_BLOCKED | Transparent inputs not allowed (shield first) |
+| E3004 | TRANSACTION_FAILED | Transaction construction or broadcast failed |
+| E3005 | MEMO_TOO_LONG | Memo exceeds 512 bytes |
+| E3006 | PROPOSAL_NOT_FOUND | Transaction proposal not found |
+| E3007 | PROPOSAL_EXPIRED | Transaction proposal has expired |
+| E3008 | QUEUED_BROADCAST_NOT_FOUND | Queued broadcast entry not found |
+| E3009 | QUEUED_BROADCAST_EXPIRED | Queued broadcast entry has expired |
+| E3010 | PRIVACY_ACK_REQUIRED | Privacy acknowledgement required for transparent recipient |
+| E3011 | MEMO_NOT_ALLOWED | Memo not allowed for transparent recipients |
+
+### Sync Errors (E4xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E4001 | SYNC_IN_PROGRESS | Sync already in progress |
+| E4002 | SERVER_UNAVAILABLE | Lightwalletd server unreachable |
+| E4003 | SYNC_FAILED | Sync operation failed |
+| E4004 | SYNC_CHAIN_TIP_FAILED | Failed to get chain tip |
+| E4005 | SYNC_CACHE_INIT_FAILED | Failed to initialize block cache |
+| E4006 | SYNC_DB_INIT_FAILED | Failed to initialize wallet database |
+| E4007 | SYNC_WALLET_DB_FAILED | Wallet database operation failed |
+| E4008 | SYNC_CHAIN_UPDATE_FAILED | Failed to update chain state |
+| E4009 | SYNC_SCAN_FAILED | Block scanning failed |
+| E4010 | SYNC_TREE_STATE_FAILED | Failed to get tree state |
+| E4011 | SYNC_BLOCK_CACHE_FAILED | Block cache operation failed |
+
+### Keystone Errors (E5xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E5001 | INVALID_UFVK | Invalid UFVK or network mismatch |
+| E5002 | INVALID_PCZT | Invalid PCZT payload (bad base64 or structure) |
+| E5003 | SIGNING_FAILED | Failed to build or finalize signing request |
+
+### Swap Errors (E6xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E6001 | QUOTE_EXPIRED | Swap quote has expired |
+| E6002 | SWAP_FAILED | Swap operation failed |
+| E6003 | INVALID_ASSET | Invalid or unsupported asset |
+| E6004 | SWAP_UNSUPPORTED_NETWORK | Swaps not supported on this network |
+
+### Tor Errors (E7xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E7001 | TOR_NOT_READY | Tor not ready (connecting or error) |
+| E7002 | TOR_CONNECTION_FAILED | Tor connection failed |
+
+### Watch-Only Wallet Errors (E9010-E9012)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E9010 | WATCH_ONLY_NO_SEED | Cannot view seed for watch-only wallet |
+| E9011 | WATCH_ONLY_NO_BACKUP | No backup required for watch-only wallet |
+| E9012 | WATCH_ONLY_CANNOT_SHIELD | Shielding not supported for watch-only wallet |
+
+### General Errors (E9xxx)
+| Code | Constant | Description |
+|------|----------|-------------|
+| E9001 | INVALID_REQUEST | Malformed or invalid request |
+| E9002 | INTERNAL_ERROR | Internal error (check logs) |
+| E9003 | SCHEMA_VERSION_MISMATCH | IPC schema version mismatch |

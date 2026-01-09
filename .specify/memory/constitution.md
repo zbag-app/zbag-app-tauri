@@ -1,16 +1,17 @@
 <!--
 	SYNC IMPACT REPORT
 	==================
-	Version change: 1.3.0 -> 1.3.1
-	Bump rationale: PATCH - clarify transparent-input policy for explicit shielding transactions
+	Version change: 1.3.1 -> 2.0.0
+	Bump rationale: MAJOR - Keystone hardware wallet support, structured logging infrastructure
+
+	Added sections:
+	  - VIII. Structured Logging
 
 	Modified principles:
-	  - II. Shielded-by-Default Privacy (clarify shielding exception)
-
-Added sections: N/A
+	  - I. Secrets Stay in Rust (clarify watch-only wallet seed handling)
 
 	Modified sections:
-	  - Core Principles -> II. Shielded-by-Default Privacy
+	  - Core Principles -> I. Secrets Stay in Rust
 	  - Non-Negotiable Checklist
 
 Templates requiring updates:
@@ -40,6 +41,7 @@ The Rust backend is the single trust boundary for all secret material. The UI MU
 - Mnemonic MAY be sent to UI ONLY for: initial creation display, backup verification, restore entry, and user-initiated "View seed phrase" (manual wallet-password re-authentication)
 - UI MUST NOT persist mnemonic to durable storage, MUST NOT log it, MUST clear from memory after flow completes
 - Backend MUST NOT re-send mnemonic after initial creation response unless the user explicitly initiates the "View seed phrase" flow (manual wallet-password re-authentication required)
+- Watch-only wallets (created from UFVK, e.g., Keystone hardware wallet) have no mnemonic; "View seed phrase" MUST return an error for watch-only wallets
 
 **Permitted payload flows:**
 - Raw unsigned/signed payloads MAY cross IPC ONLY for external signing flows (Keystone PCZT)
@@ -111,6 +113,17 @@ Significant changes MUST be documented with problem, options considered, chosen 
 - Every milestone deliverable MUST link implementation, tests, and acceptance criteria
 - Critical security fixes MUST use patch release path
 
+### VIII. Structured Logging
+
+Application logs MUST support structured, redacted, and rotated file output.
+
+**Enforceable rules:**
+- Log files MUST be written to `~/.zkore/logs/` with daily rotation (e.g., `zkore.YYYY-MM-DD.log`)
+- Log retention MUST be limited (default: 7 days)
+- Secrets (mnemonics, seeds, spending keys, raw payloads, full memos) MUST be redacted in all log output
+- Log levels MUST be configurable via `RUST_LOG` environment variable
+- File logging MUST use tracing-appender or equivalent with non-blocking writes
+
 ## Non-Negotiable Checklist
 
 Before merging work that touches wallet, signing, networking, or persistence, confirm:
@@ -161,4 +174,4 @@ This constitution follows semantic versioning:
 - Acknowledge reports promptly and track remediation steps internally.
 - Public disclosure timing must balance user safety with transparency.
 
-**Version**: 1.3.1 | **Ratified**: 2025-12-21 | **Last Amended**: 2025-12-26
+**Version**: 2.0.0 | **Ratified**: 2025-12-21 | **Last Amended**: 2026-01-09
