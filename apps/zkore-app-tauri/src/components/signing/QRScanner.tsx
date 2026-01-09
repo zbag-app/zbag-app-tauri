@@ -31,7 +31,7 @@ export function QRScanner(props: { onScanned: (payloadBase64: string) => void })
         handleError={(e) => setError(e)}
         options={{ width: 320 }}
       />
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      {error ? <div className="text-sm text-destructive">{error}</div> : null}
     </div>
   );
 }

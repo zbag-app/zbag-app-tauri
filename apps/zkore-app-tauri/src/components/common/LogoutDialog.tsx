@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { reauthWallet, logoutWallet, stopSync } from '../../services/ipc';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 
 interface LogoutDialogProps {
   walletId: string;
@@ -58,58 +63,65 @@ export function LogoutDialog(props: LogoutDialogProps) {
   };
 
   return (
-    <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-      <button type="button" onClick={() => setOpen(true)}>
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         {triggerLabel}
-      </button>
+      </Button>
 
-      {open ? (
+      {open && (
         <div
           role="dialog"
           aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
           }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         >
-          <div
-            ref={dialogRef}
-            style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 400, width: '100%' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <h2 style={{ margin: 0 }}>Logout</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close logout dialog">
-                Close
-              </button>
-            </div>
+          <Card ref={dialogRef} className="w-full max-w-md animate-[fade-in-up_0.2s_ease-out]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <CardTitle className="text-lg">Logout</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpen(false)}
+                aria-label="Close logout dialog"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
 
-            <form
-              style={{ display: 'grid', gap: 12, marginTop: 12 }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                void submit();
-              }}
-            >
-              <label style={{ display: 'grid', gap: 4 }}>
-                <span>Wallet password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.currentTarget.value)}
-                />
-              </label>
-              {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-              <button type="submit" disabled={!password || loading}>
-                {loading ? 'Logging out...' : 'Logout'}
-              </button>
-            </form>
-          </div>
+            <CardContent>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void submit();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="logout-password">Wallet password</Label>
+                  <Input
+                    id="logout-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.currentTarget.value)}
+                    autoFocus
+                  />
+                </div>
+                {error && (
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+                <Button type="submit" disabled={!password || loading} className="w-full">
+                  {loading ? 'Logging out...' : 'Logout'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
-      ) : null}
-    </div>
+      )}
+    </>
   );
 }

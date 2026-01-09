@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import type * as IPC from '../../types/ipc';
 import { ViewSeedPhraseDialog } from './ViewSeedPhraseDialog';
+import { Button } from '../ui/button';
 
 export function BackupReminder(props: { walletId: string; status: IPC.WalletStatus }) {
   const { walletId, status } = props;
@@ -9,34 +10,24 @@ export function BackupReminder(props: { walletId: string; status: IPC.WalletStat
   const required = status.backup_status === 'Required';
 
   return (
-    <div
-      style={{
-        border: '1px solid #f1c40f',
-        background: '#fff8e1',
-        borderRadius: 12,
-        padding: 12,
-        display: 'grid',
-        gap: 8,
-      }}
-    >
-      <strong>Backup</strong>
-      <div style={{ fontSize: 14 }}>
+    <div className="rounded-xl border border-warning/50 bg-warning/10 p-3 grid gap-2">
+      <strong className="text-warning">Backup</strong>
+      <div className="text-sm">
         Status: <strong>{status.backup_status}</strong>
       </div>
       {required ? (
-        <div style={{ fontSize: 14 }}>
+        <div className="text-sm text-muted-foreground">
           Backup is required before sending funds.
         </div>
       ) : null}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="flex gap-2 flex-wrap">
         {required ? (
-          <button type="button" onClick={() => navigate('/backup')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/backup')}>
             Verify backup
-          </button>
+          </Button>
         ) : null}
         <ViewSeedPhraseDialog walletId={walletId} triggerLabel="View seed phrase" />
       </div>
     </div>
   );
 }
-

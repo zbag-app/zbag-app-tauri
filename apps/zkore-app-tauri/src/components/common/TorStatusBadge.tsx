@@ -1,10 +1,10 @@
 import type * as IPC from '../../types/ipc';
 
-const COLORS: Record<IPC.TorStatus, string> = {
-  Off: '#777',
-  Connecting: '#b45309',
-  On: '#15803d',
-  Error: '#b91c1c',
+const STATUS_DOT_CLASSES: Record<IPC.TorStatus, string> = {
+  Off: 'bg-muted-foreground',
+  Connecting: 'bg-warning',
+  On: 'bg-success',
+  Error: 'bg-destructive',
 };
 
 export function TorStatusBadge(props: { state: IPC.TorState | null }) {
@@ -13,35 +13,20 @@ export function TorStatusBadge(props: { state: IPC.TorState | null }) {
   const enabled = state?.enabled ?? false;
 
   const label = enabled ? `Tor: ${status}` : 'Tor: Off';
+  const dotClass = enabled ? STATUS_DOT_CLASSES[status] : STATUS_DOT_CLASSES.Off;
 
   return (
     <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '4px 10px',
-        borderRadius: 999,
-        border: '1px solid #ddd',
-        background: '#fff',
-        fontSize: 12,
-      }}
+      className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-border bg-card text-xs"
       aria-label={label}
       title={state?.last_error ? `Tor error: ${state.last_error}` : label}
     >
       <span
         aria-hidden="true"
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: enabled ? COLORS[status] : COLORS.Off,
-          display: 'inline-block',
-        }}
+        className={`w-2 h-2 rounded-full ${dotClass}`}
       />
       <span>{label}</span>
-      <span style={{ opacity: 0.7 }}>(beta)</span>
+      <span className="text-muted-foreground">(beta)</span>
     </span>
   );
 }
-

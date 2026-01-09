@@ -29,7 +29,7 @@ export function FileImport(props: { onImported: (payloadBase64: string) => void 
           }}
         />
       </label>
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      {error ? <div className="text-sm text-destructive">{error}</div> : null}
     </div>
   );
 }

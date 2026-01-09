@@ -71,7 +71,7 @@ export function UnlockWallet(props: {
         />
         <span>Remember unlock</span>
       </label>
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      {error ? <div className="text-sm text-destructive">{error}</div> : null}
       <button type="submit" disabled={!password || submitting}>
         {submitting ? 'Unlocking…' : 'Unlock'}
       </button>

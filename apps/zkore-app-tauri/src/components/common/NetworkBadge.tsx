@@ -2,22 +2,10 @@ import type * as IPC from '../../types/ipc';
 
 export function NetworkBadge(props: { network: IPC.Network }) {
   const { network } = props;
-  const style =
+  const className =
     network === 'Mainnet'
-      ? { background: '#dcfce7', border: '1px solid #16a34a', color: '#166534' }
-      : { background: '#ffedd5', border: '1px solid #f97316', color: '#9a3412' };
+      ? 'text-xs px-2 py-0.5 rounded-full bg-success/20 border border-success/30 text-success'
+      : 'text-xs px-2 py-0.5 rounded-full bg-warning/20 border border-warning/30 text-warning';
 
-  return (
-    <span
-      style={{
-        fontSize: 12,
-        padding: '2px 8px',
-        borderRadius: 999,
-        ...style,
-      }}
-    >
-      {network}
-    </span>
-  );
+  return <span className={className}>{network}</span>;
 }
-
