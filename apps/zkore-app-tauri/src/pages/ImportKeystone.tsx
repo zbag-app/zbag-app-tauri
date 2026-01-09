@@ -22,6 +22,8 @@ export function ImportKeystone(props: {
   const [mode, setMode] = useState<ImportMode>('paste');
   const [name, setName] = useState('Keystone');
   const [ufvk, setUfvk] = useState('');
+  const [seedFingerprint, setSeedFingerprint] = useState<string | null>(null);
+  const [zip32AccountIndex, setZip32AccountIndex] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +38,13 @@ export function ImportKeystone(props: {
     setSubmitting(true);
     setError(null);
 
-    const res = await importUfvk({ wallet_id: walletId, ufvk, name });
+    const res = await importUfvk({
+      wallet_id: walletId,
+      ufvk,
+      name,
+      seed_fingerprint: seedFingerprint,
+      zip32_account_index: zip32AccountIndex,
+    });
     if ('err' in res) {
       setSubmitting(false);
       setError(res.err.message);
@@ -118,16 +126,29 @@ export function ImportKeystone(props: {
               <textarea
                 id="ufvk"
                 value={ufvk}
-                onChange={(e) => setUfvk(e.currentTarget.value)}
+                onChange={(e) => {
+                  setUfvk(e.currentTarget.value);
+                  // Clear QR metadata when user manually edits - stale metadata would
+                  // cause signing to fail with the wrong key
+                  setSeedFingerprint(null);
+                  setZip32AccountIndex(0);
+                }}
                 rows={4}
                 placeholder="uview..."
                 className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
               />
+              {seedFingerprint === null && ufvk.trim() && (
+                <p className="text-sm text-amber-600 dark:text-amber-500">
+                  Pasted UFVK cannot be used for signing. Use QR scan for full Keystone functionality.
+                </p>
+              )}
             </div>
           ) : (
             <UFVKScanner
-              onScanned={(scannedUfvk) => {
-                setUfvk(scannedUfvk);
+              onScanned={(result) => {
+                setUfvk(result.ufvk);
+                setSeedFingerprint(result.seedFingerprint);
+                setZip32AccountIndex(result.accountIndex);
                 setMode('paste');
               }}
               onCancel={() => setMode('paste')}

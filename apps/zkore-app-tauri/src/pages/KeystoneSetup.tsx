@@ -21,6 +21,8 @@ export function KeystoneSetup(props: {
   const [step, setStep] = useState<Step>('ufvk');
   const [importMode, setImportMode] = useState<ImportMode>('paste');
   const [ufvk, setUfvk] = useState('');
+  const [seedFingerprint, setSeedFingerprint] = useState<string | null>(null);
+  const [zip32AccountIndex, setZip32AccountIndex] = useState<number>(0);
   const [name, setName] = useState('Keystone');
   const [network, setNetwork] = useState<IPC.Network>('Testnet');
   const [password, setPassword] = useState('');
@@ -88,6 +90,8 @@ export function KeystoneSetup(props: {
         remember_unlock: rememberUnlock,
         ufvk: ufvk.trim(),
         birthday_height: birthday,
+        seed_fingerprint: seedFingerprint,
+        zip32_account_index: zip32AccountIndex,
       });
 
       if ('err' in created) {
@@ -153,7 +157,13 @@ export function KeystoneSetup(props: {
                 <textarea
                   id="ufvk"
                   value={ufvk}
-                  onChange={(e) => setUfvk(e.currentTarget.value)}
+                  onChange={(e) => {
+                    setUfvk(e.currentTarget.value);
+                    // Clear QR metadata when user manually edits - stale metadata would
+                    // cause signing to fail with the wrong key
+                    setSeedFingerprint(null);
+                    setZip32AccountIndex(0);
+                  }}
                   rows={4}
                   placeholder="uview..."
                   className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
@@ -163,13 +173,20 @@ export function KeystoneSetup(props: {
                     UFVK should start with "uview" (mainnet) or "uviewtest" (testnet)
                   </p>
                 )}
+                {seedFingerprint === null && ufvk.trim() && isValidUfvk(ufvk) && (
+                  <p className="text-sm text-amber-600 dark:text-amber-500">
+                    Pasted UFVK cannot be used for signing. Use QR scan for full Keystone functionality.
+                  </p>
+                )}
               </div>
             ) : (
               <UFVKScanner
-                onScanned={(scannedUfvk) => {
-                  setUfvk(scannedUfvk);
+                onScanned={(result) => {
+                  setUfvk(result.ufvk);
+                  setSeedFingerprint(result.seedFingerprint);
+                  setZip32AccountIndex(result.accountIndex);
                   // Auto-detect network from UFVK prefix
-                  const detectedNetwork = detectUfvkNetwork(scannedUfvk);
+                  const detectedNetwork = detectUfvkNetwork(result.ufvk);
                   if (detectedNetwork) {
                     setNetwork(detectedNetwork);
                   }

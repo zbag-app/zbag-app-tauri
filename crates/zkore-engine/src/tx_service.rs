@@ -679,6 +679,7 @@ impl<C: Clock> TxService<C> {
 
         let prover = zcash_proofs::prover::LocalTxProver::bundled();
         let (sapling_spend_vk, sapling_output_vk) = prover.verifying_keys();
+        let orchard_vk = orchard::circuit::VerifyingKey::build();
 
         let txid =
             zcash_client_backend::data_api::wallet::extract_and_store_transaction_from_pczt::<
@@ -688,7 +689,7 @@ impl<C: Clock> TxService<C> {
                 &mut wdb,
                 pczt,
                 Some((&sapling_spend_vk, &sapling_output_vk)),
-                None,
+                Some(&orchard_vk),
             )
             .map_err(|e| {
                 ipc_err(
@@ -1678,19 +1679,20 @@ fn resolve_wallet_account_uuid(
         else {
             continue;
         };
-        if let Some(derivation) = account.source().key_derivation() {
-            let idx: u32 = derivation.account_index().into();
-            if idx == account_id {
-                return Ok(account_uuid);
-            }
-            continue;
-        }
-
+        // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
         {
             return Ok(account_uuid);
+        }
+
+        // Then check key_derivation (hardware wallets with ZIP-32 derivation)
+        if let Some(derivation) = account.source().key_derivation() {
+            let idx: u32 = derivation.account_index().into();
+            if idx == account_id {
+                return Ok(account_uuid);
+            }
         }
     }
 

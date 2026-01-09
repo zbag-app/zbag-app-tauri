@@ -182,14 +182,7 @@ pub(crate) fn find_account_uuid(
             continue;
         };
 
-        if let Some(derivation) = account.source().key_derivation() {
-            let derived_id: u32 = derivation.account_index().into();
-            if derived_id == account_id {
-                return Ok(account_uuid);
-            }
-            continue;
-        }
-
+        // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
@@ -197,8 +190,13 @@ pub(crate) fn find_account_uuid(
             return Ok(account_uuid);
         }
 
-        // Unknown account ID (not derived, not a Zkore-tagged imported account).
-        continue;
+        // Then check key_derivation (hardware wallets with ZIP-32 derivation)
+        if let Some(derivation) = account.source().key_derivation() {
+            let derived_id: u32 = derivation.account_index().into();
+            if derived_id == account_id {
+                return Ok(account_uuid);
+            }
+        }
     }
 
     Err(ipc_err(errors::ACCOUNT_NOT_FOUND, "account not found"))

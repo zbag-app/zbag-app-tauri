@@ -16,8 +16,14 @@ function parseUfvkNetwork(text: string): Network | null {
   return null;
 }
 
+export interface UFVKScanResult {
+  ufvk: string;
+  seedFingerprint: string | null;
+  accountIndex: number;
+}
+
 export function UFVKScanner(props: {
-  onScanned: (ufvk: string) => void;
+  onScanned: (result: UFVKScanResult) => void;
   onCancel?: () => void;
   /** If provided, validates that the scanned UFVK matches this network */
   expectedNetwork?: Network;
@@ -40,14 +46,15 @@ export function UFVKScanner(props: {
           cbor.match(/.{2}/g)!.map((byte) => parseInt(byte, 16))
         );
 
-        const accounts = decodeZcashAccountsUrCbor(cborBytes);
+        const result = decodeZcashAccountsUrCbor(cborBytes);
 
-        if (accounts.length === 0) {
+        if (result.accounts.length === 0) {
           setError('No accounts found in QR code');
           return;
         }
 
-        const ufvk = accounts[0].ufvk;
+        const account = result.accounts[0];
+        const ufvk = account.ufvk;
         const detectedNetwork = parseUfvkNetwork(ufvk);
 
         if (!detectedNetwork) {
@@ -64,7 +71,20 @@ export function UFVKScanner(props: {
           return;
         }
 
-        onScanned(ufvk);
+        // Validate that account index is present - required for signing
+        if (account.index === undefined) {
+          setError(
+            'QR code missing account index. Cannot determine which key to use for signing. ' +
+            'Please re-export the account from your Keystone device.'
+          );
+          return;
+        }
+
+        onScanned({
+          ufvk,
+          seedFingerprint: result.seedFingerprint,
+          accountIndex: account.index,
+        });
       } catch (e) {
         setError(`Failed to decode QR: ${e instanceof Error ? e.message : String(e)}`);
       }

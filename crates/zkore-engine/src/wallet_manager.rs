@@ -1418,17 +1418,18 @@ impl WalletManager {
             else {
                 continue;
             };
-            if let Some(derivation) = account.source().key_derivation() {
-                let account_index: u32 = derivation.account_index().into();
-                account_indices.push(account_index);
-                continue;
-            }
 
+            // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
             if let Some(key_source) = account.source().key_source()
                 && let Some(account_id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
             {
                 account_indices.push(account_id);
+            }
+            // Then check key_derivation (hardware wallets with ZIP-32 derivation, only if no key_source)
+            else if let Some(derivation) = account.source().key_derivation() {
+                let account_index: u32 = derivation.account_index().into();
+                account_indices.push(account_index);
             }
         }
         account_indices.sort_unstable();
@@ -1484,16 +1485,17 @@ impl WalletManager {
                 continue;
             };
 
-            if let Some(derivation) = account.source().key_derivation() {
-                used_ids.insert(derivation.account_index().into());
-                continue;
-            }
-
+            // Collect BOTH key_source and key_derivation IDs to avoid any collision.
+            // An account may have both (e.g., Keystone accounts with key_source="zkore:N"
+            // AND key_derivation.account_index=M where N != M).
             if let Some(key_source) = account.source().key_source()
                 && let Some(id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
             {
                 used_ids.insert(id);
+            }
+            if let Some(derivation) = account.source().key_derivation() {
+                used_ids.insert(derivation.account_index().into());
             }
         }
 

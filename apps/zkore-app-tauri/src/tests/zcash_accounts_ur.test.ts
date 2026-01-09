@@ -22,12 +22,13 @@ function hexToBytes(hex: string): Uint8Array {
 
 test('extracts UFVK from Keystone account export', () => {
   const cbor = hexToBytes(TEST_CBOR_HEX);
-  const accounts = decodeZcashAccountsUrCbor(cbor);
+  const result = decodeZcashAccountsUrCbor(cbor);
 
-  expect(accounts).toHaveLength(1);
-  expect(accounts[0].ufvk).toBe(TEST_UFVK);
-  expect(accounts[0].index).toBe(0);
-  expect(accounts[0].label).toBe('test');
+  expect(result.seedFingerprint).toBe('54d4db6b2cbdd1ecbf5bde6a8187b8fda21eabe6f265775b531683ca43df889c');
+  expect(result.accounts).toHaveLength(1);
+  expect(result.accounts[0].ufvk).toBe(TEST_UFVK);
+  expect(result.accounts[0].index).toBe(0);
+  expect(result.accounts[0].label).toBe('test');
 });
 
 test('rejects invalid CBOR', () => {
@@ -42,9 +43,9 @@ test('rejects wrong tag', () => {
 });
 
 test('rejects CBOR without accounts array (key 2)', () => {
-  // map(1) { 1: bytes(4) "test" }
-  // a1 = map(1), 01 = key 1, 44 = bytes(4), 74657374 = "test"
-  const noAccountsKey = new Uint8Array([0xa1, 0x01, 0x44, 0x74, 0x65, 0x73, 0x74]);
+  // map(1) { 3: text(4) "test" } - has unknown key 3 but missing key 2 (accounts)
+  // a1 = map(1), 03 = key 3, 64 = text(4), 74657374 = "test"
+  const noAccountsKey = new Uint8Array([0xa1, 0x03, 0x64, 0x74, 0x65, 0x73, 0x74]);
   expect(() => decodeZcashAccountsUrCbor(noAccountsKey)).toThrow(/missing accounts array/i);
 });
 
