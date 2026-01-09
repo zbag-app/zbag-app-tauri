@@ -201,9 +201,46 @@ impl SyncService {
             tracing::debug!(wallet_id = %wallet_id, grpc_url = %grpc_url, "sync task started");
 
             let client = match tor_manager {
-                Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
+                Some(ref tor) => {
+                    zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
+                }
                 None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
             };
+
+            // Wait for Tor to be ready if enabled but not connected
+            if let Some(ref tor) = tor_manager {
+                loop {
+                    if *cancel_rx.borrow() {
+                        tracing::debug!(wallet_id = %wallet_id, "sync cancelled while waiting for Tor");
+                        let mut state = state.lock().expect("mutex poisoned");
+                        state.jobs.remove(&wallet_id);
+                        return;
+                    }
+
+                    let tor_state = tor.state();
+
+                    // If Tor is disabled, proceed with direct connection
+                    if !tor_state.enabled {
+                        break;
+                    }
+
+                    // If Tor is ready, proceed
+                    if tor_state.status == zkore_core::domain::TorStatus::On {
+                        tracing::info!(wallet_id = %wallet_id, "Tor connected, starting sync");
+                        break;
+                    }
+
+                    // If Tor is in error state, log and continue (will fail in main loop)
+                    if tor_state.status == zkore_core::domain::TorStatus::Error {
+                        tracing::warn!(wallet_id = %wallet_id, error = ?tor_state.last_error, "Tor in error state");
+                        break;
+                    }
+
+                    // Tor is connecting - wait silently
+                    tracing::debug!(wallet_id = %wallet_id, status = ?tor_state.status, "waiting for Tor");
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
 
             let emit = |progress: SyncProgress| {
                 if let Some(handler) = on_progress_task.as_ref() {
@@ -894,6 +931,17 @@ impl SyncService {
 
         self.emit_progress(wallet_id, on_progress.as_ref());
         Ok(())
+    }
+
+    /// Returns the IDs of all wallets with currently running sync jobs.
+    pub fn running_wallet_ids(&self) -> Vec<Uuid> {
+        self.state
+            .lock()
+            .expect("mutex poisoned")
+            .jobs
+            .keys()
+            .copied()
+            .collect()
     }
 
     fn emit_progress(&self, wallet_id: Uuid, handler: Option<&SyncEventHandler>) {
