@@ -80,6 +80,15 @@ Update:
 
 `zcash_protocol::{consensus, memo, value}` | `zip32::ExtendedSpendingKey`
 
+## Done Criteria
+
+Work is not complete until:
+1. All tests pass (`make test`)
+2. Pre-commit checks pass (`make pre-commit`)
+3. Full Tauri build succeeds (`make tauri-build`)
+
+Do not consider a task finished until `make tauri-build` completes without errors.
+
 ## Constitution
 
 Before merging wallet/signing/network/persistence:
