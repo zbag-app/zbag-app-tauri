@@ -21,6 +21,10 @@ pub fn zkore_set_tor_enabled(
         return IpcResult::Err { err };
     }
 
+    // Enter the tokio runtime context so TorManager can spawn tasks
+    let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
+    let _guard = handle.enter();
+
     map_anyhow(|| {
         let next_state = state
             .tor_manager
