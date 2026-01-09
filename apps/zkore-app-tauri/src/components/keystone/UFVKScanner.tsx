@@ -25,6 +25,7 @@ export function UFVKScanner(props: {
   const { onScanned, onCancel, expectedNetwork } = props;
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [blurEnabled, setBlurEnabled] = useState(true);
 
   const handleScan = useCallback(
     ({ type, cbor }: { type: string; cbor: string }) => {
@@ -80,8 +81,19 @@ export function UFVKScanner(props: {
           handleScan={handleScan}
           handleError={(e) => setError(e)}
           onProgress={(p) => setProgress(p)}
-          options={{ width: 320, height: 320 }}
+          options={{ width: 320, height: 320, blur: blurEnabled }}
         />
+      </div>
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Camera blurred for privacy</span>
+        <button
+          type="button"
+          onClick={() => setBlurEnabled(!blurEnabled)}
+          className="text-primary hover:underline"
+        >
+          {blurEnabled ? 'Show clear view' : 'Enable privacy blur'}
+        </button>
       </div>
 
       {progress > 0 && progress < 100 && (
