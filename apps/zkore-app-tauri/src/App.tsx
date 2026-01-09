@@ -17,7 +17,9 @@ import { useThrottledCallback } from './hooks/useThrottle';
 import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus, onSyncProgress } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
+import { BackupFlow } from './pages/BackupFlow';
 import { CreateWallet } from './pages/CreateWallet';
+import { OnboardingBackup } from './pages/OnboardingBackup';
 import { Home } from './pages/Home';
 import { Receive } from './pages/Receive';
 import { SeedDisplay } from './pages/SeedDisplay';
@@ -249,6 +251,15 @@ function AppInner() {
             />
           }
         />
+        <Route
+          path="/onboarding-backup"
+          element={
+            <OnboardingBackup
+              seedPhrase={seedPhrase ?? []}
+              onCleared={() => setSeedPhrase(null)}
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -448,6 +459,19 @@ function AppInner() {
         <Route
           path="/backup"
           element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
+        />
+        <Route
+          path="/backup/flow"
+          element={<BackupFlow walletId={startup.wallet.id} />}
+        />
+        <Route
+          path="/onboarding-backup"
+          element={
+            <OnboardingBackup
+              seedPhrase={seedPhrase ?? []}
+              onCleared={() => setSeedPhrase(null)}
+            />
+          }
         />
       </Routes>
     </AppShell>

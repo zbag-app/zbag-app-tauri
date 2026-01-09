@@ -66,7 +66,7 @@ export function CreateWallet(props: {
         seedPhrase: created.ok.seed_phrase,
       });
 
-      navigate('/seed');
+      navigate('/onboarding-backup');
     } finally {
       setSubmitting(false);
     }

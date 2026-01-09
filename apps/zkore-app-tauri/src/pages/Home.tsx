@@ -233,7 +233,7 @@ export function Home(props: {
                 <p className="text-sm text-muted-foreground mt-1">
                   Your wallet is not backed up. Please write down your seed phrase to protect your funds.
                 </p>
-                <Link to="/backup">
+                <Link to="/backup/flow">
                   <Button variant="outline" size="sm" className="mt-3">
                     Backup Now
                   </Button>
