@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tracing::{debug, error, instrument};
 
 pub const ZCASH_PCZT_UR_TYPE: &str = "zcash-pczt";
 
@@ -140,33 +141,41 @@ fn read_head(bytes: &[u8], offset: usize) -> Result<CborHead, ZcashPcztUrCborErr
     }
 }
 
+#[instrument(skip(pczt_bytes), fields(pczt_len = pczt_bytes.len()))]
 pub fn encode_zcash_pczt_ur_cbor(pczt_bytes: &[u8]) -> Vec<u8> {
+    debug!("Encoding PCZT to zcash-pczt UR CBOR");
     let mut out = Vec::with_capacity(1 + 1 + 9 + pczt_bytes.len());
     out.extend_from_slice(&encode_cbor_major_len(5, 1)); // map(1)
     out.extend_from_slice(&encode_cbor_major_len(0, 1)); // key 1
     out.extend_from_slice(&encode_cbor_major_len(2, pczt_bytes.len())); // bytes
     out.extend_from_slice(pczt_bytes);
+    debug!(cbor_len = out.len(), "CBOR encoding complete");
     out
 }
 
+#[instrument(skip(cbor), fields(cbor_len = cbor.len()))]
 pub fn decode_zcash_pczt_ur_cbor(cbor: &[u8]) -> Result<Vec<u8>, ZcashPcztUrCborError> {
+    debug!("Decoding zcash-pczt UR CBOR");
     let mut offset = 0;
 
     let map = read_head(cbor, offset)?;
     offset = map.offset;
     if map.major != 5 || map.indefinite || map.value != 1 {
+        error!("Invalid CBOR: expected map(1)");
         return Err(ZcashPcztUrCborError::Invalid("expected map(1)"));
     }
 
     let key = read_head(cbor, offset)?;
     offset = key.offset;
     if key.major != 0 || key.indefinite || key.value != 1 {
+        error!("Invalid CBOR: expected key 1");
         return Err(ZcashPcztUrCborError::Invalid("expected key 1"));
     }
 
     let value = read_head(cbor, offset)?;
     offset = value.offset;
     if value.major != 2 {
+        error!("Invalid CBOR: expected byte string");
         return Err(ZcashPcztUrCborError::Invalid("expected byte string"));
     }
 
@@ -176,16 +185,20 @@ pub fn decode_zcash_pczt_ur_cbor(cbor: &[u8]) -> Result<Vec<u8>, ZcashPcztUrCbor
             .try_into()
             .map_err(|_| ZcashPcztUrCborError::Invalid("byte string too large"))?;
         if offset + len > cbor.len() {
+            error!("Invalid CBOR: truncated data");
             return Err(ZcashPcztUrCborError::Invalid("truncated data"));
         }
         let bytes = cbor[offset..offset + len].to_vec();
         offset += len;
         if offset != cbor.len() {
+            error!("Invalid CBOR: trailing bytes");
             return Err(ZcashPcztUrCborError::Invalid("trailing bytes"));
         }
+        debug!(pczt_len = bytes.len(), "CBOR decoding complete (definite)");
         return Ok(bytes);
     }
 
+    debug!("Processing indefinite-length byte string");
     let mut chunks: Vec<Vec<u8>> = Vec::new();
     while offset < cbor.len() {
         if cbor[offset] == 0xff {
@@ -196,6 +209,7 @@ pub fn decode_zcash_pczt_ur_cbor(cbor: &[u8]) -> Result<Vec<u8>, ZcashPcztUrCbor
         let chunk = read_head(cbor, offset)?;
         offset = chunk.offset;
         if chunk.major != 2 || chunk.indefinite {
+            error!("Invalid CBOR: invalid chunk");
             return Err(ZcashPcztUrCborError::Invalid("invalid chunk"));
         }
 
@@ -204,6 +218,7 @@ pub fn decode_zcash_pczt_ur_cbor(cbor: &[u8]) -> Result<Vec<u8>, ZcashPcztUrCbor
             .try_into()
             .map_err(|_| ZcashPcztUrCborError::Invalid("chunk too large"))?;
         if offset + len > cbor.len() {
+            error!("Invalid CBOR: truncated chunk");
             return Err(ZcashPcztUrCborError::Invalid("truncated chunk"));
         }
 
@@ -212,13 +227,19 @@ pub fn decode_zcash_pczt_ur_cbor(cbor: &[u8]) -> Result<Vec<u8>, ZcashPcztUrCbor
     }
 
     if offset != cbor.len() {
+        error!("Invalid CBOR: trailing bytes");
         return Err(ZcashPcztUrCborError::Invalid("trailing bytes"));
     }
 
+    let chunk_count = chunks.len();
     let total: usize = chunks.iter().map(|c| c.len()).sum();
     let mut out = Vec::with_capacity(total);
     for c in chunks {
         out.extend_from_slice(&c);
     }
+    debug!(
+        pczt_len = out.len(),
+        chunk_count, "CBOR decoding complete (indefinite)"
+    );
     Ok(out)
 }

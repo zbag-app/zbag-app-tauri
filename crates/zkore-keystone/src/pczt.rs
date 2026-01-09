@@ -1,5 +1,6 @@
 use base64::Engine as _;
 use thiserror::Error;
+use tracing::{debug, error, instrument};
 
 #[derive(Debug, Error)]
 pub enum PcztPayloadError {
@@ -34,21 +35,45 @@ pub fn encode_pczt_base64(pczt: &pczt::Pczt) -> String {
 }
 
 /// Decode a signed PCZT from a hardware signer.
+#[instrument(skip(payload), fields(payload_len = payload.len()))]
 pub fn decode_pczt_base64(payload: &str) -> Result<pczt::Pczt, PcztPayloadError> {
+    debug!("Decoding base64 PCZT payload");
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(payload)
-        .map_err(|_| PcztPayloadError::InvalidBase64)?;
-    let parsed =
-        pczt::Pczt::parse(&bytes).map_err(|e| PcztPayloadError::InvalidPczt(format!("{e:?}")))?;
+        .map_err(|e| {
+            error!("Invalid base64: {}", e);
+            PcztPayloadError::InvalidBase64
+        })?;
+
+    debug!(bytes_len = bytes.len(), "Parsing PCZT from bytes");
+    let parsed = pczt::Pczt::parse(&bytes).map_err(|e| {
+        error!("Failed to parse PCZT: {:?}", e);
+        PcztPayloadError::InvalidPczt(format!("{e:?}"))
+    })?;
+
+    debug!("PCZT decoded successfully");
     Ok(parsed)
 }
 
 /// Decode a full PCZT (with proofs) from base64.
+#[instrument(skip(payload), fields(payload_len = payload.len()))]
 pub fn decode_pczt_full(payload: &str) -> Result<pczt::Pczt, PcztPayloadError> {
+    debug!("Decoding full PCZT payload");
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(payload)
-        .map_err(|_| PcztPayloadError::InvalidBase64)?;
-    pczt::Pczt::parse(&bytes).map_err(|e| PcztPayloadError::InvalidPczt(format!("{e:?}")))
+        .map_err(|e| {
+            error!("Invalid base64: {}", e);
+            PcztPayloadError::InvalidBase64
+        })?;
+
+    debug!(bytes_len = bytes.len(), "Parsing full PCZT from bytes");
+    let parsed = pczt::Pczt::parse(&bytes).map_err(|e| {
+        error!("Failed to parse full PCZT: {:?}", e);
+        PcztPayloadError::InvalidPczt(format!("{e:?}"))
+    })?;
+
+    debug!("Full PCZT decoded successfully");
+    Ok(parsed)
 }
 
 /// Selectively redact a PCZT for sending to a hardware signer.
@@ -92,11 +117,19 @@ fn redact_for_signer(pczt: pczt::Pczt) -> pczt::Pczt {
 /// 2. Redacted PCZT is sent to Keystone for signing
 /// 3. Signed PCZT comes back from Keystone
 /// 4. This function combines the two to get a PCZT with both proofs and signatures
+#[instrument(skip_all)]
 pub fn combine_pczts(
     pczt_with_proofs: pczt::Pczt,
     pczt_with_sigs: pczt::Pczt,
 ) -> Result<pczt::Pczt, PcztPayloadError> {
-    pczt::roles::combiner::Combiner::new(vec![pczt_with_proofs, pczt_with_sigs])
+    debug!("Combining proved PCZT with signed PCZT");
+    let combined = pczt::roles::combiner::Combiner::new(vec![pczt_with_proofs, pczt_with_sigs])
         .combine()
-        .map_err(|e| PcztPayloadError::InvalidPczt(format!("failed to combine PCZTs: {e:?}")))
+        .map_err(|e| {
+            error!("Failed to combine PCZTs: {:?}", e);
+            PcztPayloadError::InvalidPczt(format!("failed to combine PCZTs: {e:?}"))
+        })?;
+
+    debug!("PCZTs combined successfully");
+    Ok(combined)
 }

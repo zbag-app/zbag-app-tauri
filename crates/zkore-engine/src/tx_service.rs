@@ -11,6 +11,7 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::RngCore as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, instrument};
 use uuid::Uuid;
 
 use zkore_core::domain::{
@@ -608,6 +609,7 @@ impl<C: Clock> TxService<C> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[instrument(skip_all, fields(signing_request_id = %signing_request_id, wallet_id = %wallet_id))]
     pub fn finalize_signing(
         &mut self,
         app_db: &AppDb,
@@ -621,6 +623,7 @@ impl<C: Clock> TxService<C> {
         signed_payload: &str,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<FinalizeSigningResponse> {
+        debug!("Starting finalize_signing");
         let _ = on_tx_changed;
 
         ensure_backup_complete(app_db, wallet_id)?;
@@ -651,22 +654,33 @@ impl<C: Clock> TxService<C> {
         }
 
         // Decode both PCZTs
+        debug!("Decoding stored PCZT with proofs");
         let pczt_with_proofs = zkore_keystone::pczt::decode_pczt_full(
             &pending_request.pczt_with_proofs,
         )
-        .map_err(|e| ipc_err(errors::INTERNAL_ERROR, format!("invalid stored PCZT: {e}")))?;
+        .map_err(|e| {
+            error!("Failed to decode stored PCZT: {}", e);
+            ipc_err(errors::INTERNAL_ERROR, format!("invalid stored PCZT: {e}"))
+        })?;
 
-        let pczt_with_sigs = zkore_keystone::pczt::decode_pczt_base64(signed_payload)
-            .map_err(|e| ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}")))?;
+        debug!("Decoding signed PCZT from hardware wallet");
+        let pczt_with_sigs =
+            zkore_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
+                error!("Failed to decode signed payload: {}", e);
+                ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}"))
+            })?;
 
         // Combine the two PCZTs (proofs + signatures)
+        debug!("Combining proved and signed PCZTs");
         let pczt =
             zkore_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(|e| {
+                error!("Failed to combine PCZTs: {}", e);
                 ipc_err(
                     errors::SIGNING_FAILED,
                     format!("failed to combine PCZTs: {e}"),
                 )
             })?;
+        debug!("PCZTs combined successfully");
 
         let params = zcash_consensus_network(network);
 
@@ -681,6 +695,7 @@ impl<C: Clock> TxService<C> {
         let (sapling_spend_vk, sapling_output_vk) = prover.verifying_keys();
         let orchard_vk = orchard::circuit::VerifyingKey::build();
 
+        debug!("Extracting and storing transaction from combined PCZT");
         let txid =
             zcash_client_backend::data_api::wallet::extract_and_store_transaction_from_pczt::<
                 _,
@@ -692,11 +707,13 @@ impl<C: Clock> TxService<C> {
                 Some(&orchard_vk),
             )
             .map_err(|e| {
+                error!("Failed to extract transaction from PCZT: {}", e);
                 ipc_err(
                     errors::SIGNING_FAILED,
                     format!("failed to finalize signing: {e}"),
                 )
             })?;
+        debug!(%txid, "Transaction extracted from PCZT");
 
         #[allow(deprecated)]
         use zcash_client_backend::data_api::WalletRead as _;
@@ -737,6 +754,7 @@ impl<C: Clock> TxService<C> {
 
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
 
+        debug!(txid = %txid_str, "finalize_signing completed successfully");
         Ok(FinalizeSigningResponse {
             schema_version: SCHEMA_VERSION,
             txid: txid_str,

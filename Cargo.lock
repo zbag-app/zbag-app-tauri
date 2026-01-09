@@ -11124,6 +11124,7 @@ dependencies = [
  "base64 0.22.1",
  "pczt",
  "thiserror 2.0.17",
+ "tracing",
  "zcash_client_backend",
  "zcash_protocol",
  "zip32",
