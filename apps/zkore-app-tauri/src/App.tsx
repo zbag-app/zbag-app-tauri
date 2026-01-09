@@ -53,6 +53,7 @@ function AppInner() {
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
   const [restoreFlow, setRestoreFlow] = useState<RestoreFlowData | null>(null);
   const [torState, setTorState] = useState<IPC.TorState | null>(null);
+  const [torToggleError, setTorToggleError] = useState<IPC.IpcError | null>(null);
   const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
   const [dismissedTorError, setDismissedTorError] = useState(false);
 
@@ -136,6 +137,8 @@ function AppInner() {
     const res = await setTorEnabled({ enabled });
     if ('ok' in res) {
       setTorState(res.ok.state);
+    } else {
+      setTorToggleError(res.err);
     }
   };
 
@@ -303,6 +306,15 @@ function AppInner() {
           onClose={() => setDismissedTorError(true)}
           onDisable={() => toggleTor(false)}
           onRetry={() => toggleTor(true)}
+        />
+      ) : null}
+
+      {/* Tor Toggle Error Dialog */}
+      {torToggleError ? (
+        <ErrorDialog
+          title="Tor toggle failed"
+          error={{ code: torToggleError.code, message: torToggleError.message }}
+          primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
         />
       ) : null}
 
