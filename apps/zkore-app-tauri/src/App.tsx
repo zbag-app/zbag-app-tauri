@@ -413,7 +413,7 @@ function AppInner() {
           path="/swap"
           element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
         />
-        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} />} />
+        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/quote" element={<SwapQuote />} />
         <Route path="/swap/deposit" element={<SwapDeposit />} />
         <Route

@@ -22,6 +22,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const [inputAsset, setInputAsset] = useState('near:mainnet:native');
   const [inputAmount, setInputAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState<string>('');
+  const [refundAddress, setRefundAddress] = useState('');
   const [loadingAddress, setLoadingAddress] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -36,8 +37,9 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
     if (!inputAsset.trim()) return false;
     if (!inputAmount.trim()) return false;
     if (!destinationAddress.trim()) return false;
+    if (!refundAddress.trim()) return false;
     return true;
-  }, [wallet.network, swapType, activeAccountId, inputAsset, inputAmount, destinationAddress]);
+  }, [wallet.network, swapType, activeAccountId, inputAsset, inputAmount, destinationAddress, refundAddress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,6 +172,18 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="refundAddress">Refund address (origin chain)</Label>
+                <textarea
+                  id="refundAddress"
+                  rows={2}
+                  value={refundAddress}
+                  onChange={(e) => setRefundAddress(e.currentTarget.value)}
+                  placeholder="Your address on the input asset chain for refunds if the swap fails"
+                  className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                />
+              </div>
+
               {error && (
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
@@ -189,7 +203,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                     input_amount: inputAmount,
                     output_asset: outputAsset,
                     destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                    refund_address: null,
+                    refund_address: refundAddress.trim() ? refundAddress.trim() : null,
                   });
                   setSubmitting(false);
 
