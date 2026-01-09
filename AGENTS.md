@@ -13,7 +13,7 @@
 ## Build, Test, and Development Commands
 
 - Rust toolchain is pinned in `rust-toolchain.toml` (Rust `1.92.0`, includes `rustfmt` + `clippy`).
-- Prefer Makefile targets (they exclude the Tauri crate where appropriate): `make build`, `make test`, `make fmt`, `make clippy`, `make pre-commit`, `make dev`.
+- Prefer Makefile targets (run `make help` for all targets): `make build`, `make test`, `make fmt`, `make clippy`, `make pre-commit`, `make install`, `make build-frontend`, `make dev`, `make tauri-build`.
 - Rust (direct): `cargo build --workspace --exclude zkore-app-tauri` and `cargo test --workspace --exclude zkore-app-tauri` (or scope: `cargo test -p zkore-engine`).
 - Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude zkore-app-tauri`.
 - Frontend (direct): `cd apps/zkore-app-tauri && bun install && bun run dev`.
@@ -46,4 +46,13 @@
 ## Agent-Specific Notes (Codex)
 
 - Project skills live in `.codex/skills/`; if a task matches a skill, read its `SKILL.md` and follow it.
-- For Tauri commands, follow the checklist in `CLAUDE.md` (register in both `apps/zkore-app-tauri/src-tauri/src/lib.rs` and `apps/zkore-app-tauri/src-tauri/src/main.rs`, update IPC types, and update the frontend IPC client/types).
+- For new Tauri commands: register in BOTH `apps/zkore-app-tauri/src-tauri/src/lib.rs` and `apps/zkore-app-tauri/src-tauri/src/main.rs`, then update `crates/zkore-core/src/ipc/v1/commands/` plus `apps/zkore-app-tauri/src/types/ipc.ts` and `apps/zkore-app-tauri/src/services/ipc.ts`.
+
+## Done Criteria
+
+Work is not complete until:
+1. All tests pass (`make test`)
+2. Pre-commit checks pass (`make pre-commit`)
+3. Full Tauri build succeeds (`make tauri-build`)
+
+Do not consider a task finished until `make tauri-build` completes without errors.
