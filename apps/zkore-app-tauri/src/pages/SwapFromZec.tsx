@@ -7,14 +7,14 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { supportedTokens } from '../data/supportedTokens';
+import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
 import { reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
 export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
   const { wallet } = props;
   const navigate = useNavigate();
 
-  const [outputAsset, setOutputAsset] = useState('near:mainnet:native');
+  const [outputAsset, setOutputAsset] = useState(DEFAULT_NON_ZEC_ASSET_ID);
   const [inputAmountZat, setInputAmountZat] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
 
@@ -81,9 +81,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
               className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {supportedTokens
-                .filter((t) => t.id !== 'zcash:mainnet:native')
-                .map((t) => (
+              {getFromZecTokens().map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
                   </option>
@@ -127,7 +125,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
 
               const res = await requestSwapQuote({
                 swap_type: 'FromZec',
-                input_asset: 'zcash:mainnet:native',
+                input_asset: ZEC_ASSET_ID,
                 input_amount: inputAmountZat,
                 output_asset: outputAsset,
                 destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
@@ -164,14 +162,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
-                <span className="text-muted-foreground">Fee</span>
-                <div className="font-semibold">
-                  {quote.fee_amount} {quote.fee_asset}
-                </div>
+                <span className="text-muted-foreground">Min. output</span>
+                <div className="font-semibold">{quote.min_output_amount}</div>
               </div>
               <div className="space-y-1">
-                <span className="text-muted-foreground">Rate</span>
-                <div className="font-semibold">{quote.rate}</div>
+                <span className="text-muted-foreground">Est. time</span>
+                <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
             </div>
           </CardContent>

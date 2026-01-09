@@ -83,14 +83,12 @@ export function SwapQuote() {
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="space-y-1">
-              <span className="text-muted-foreground">Fee</span>
-              <div className="font-semibold">
-                {quote.fee_amount} {quote.fee_asset}
-              </div>
+              <span className="text-muted-foreground">Min. output</span>
+              <div className="font-semibold">{quote.min_output_amount}</div>
             </div>
             <div className="space-y-1">
-              <span className="text-muted-foreground">Rate</span>
-              <div className="font-semibold">{quote.rate}</div>
+              <span className="text-muted-foreground">Est. time</span>
+              <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
             </div>
             <div className="space-y-1 col-span-2">
               <span className="text-muted-foreground flex items-center gap-1">

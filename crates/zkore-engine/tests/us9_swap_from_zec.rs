@@ -104,16 +104,36 @@ fn spawn_mock_1click_server(
             let first = req.lines().next().unwrap_or_default();
             let path = first.split_whitespace().nth(1).unwrap_or("/");
 
-            let deadline_ms = chrono::Utc::now().timestamp_millis() + 60_000;
+            let deadline_iso = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
 
+            // New API returns nested quote response
             let body = if path.starts_with("/v0/quote") {
                 format!(
-                    r#"{{"quote_id":"q1","output_amount":"1","fee_amount":"0","fee_asset":"","deadline":{deadline_ms},"rate":"1"}}"#
+                    r#"{{
+                        "quote": {{
+                            "amountIn": "100000000",
+                            "amountInFormatted": "1",
+                            "amountInUsd": "50.00",
+                            "minAmountIn": "100000000",
+                            "amountOut": "1000000000000000000000000",
+                            "amountOutFormatted": "1",
+                            "amountOutUsd": "50.00",
+                            "minAmountOut": "990000000000000000000000",
+                            "deadline": "{deadline_iso}",
+                            "timeWhenInactive": "{deadline_iso}",
+                            "timeEstimate": 120,
+                            "depositAddress": "{deposit_address}",
+                            "depositMemo": null
+                        }},
+                        "quoteRequest": {{}},
+                        "signature": "mock",
+                        "timestamp": "{deadline_iso}",
+                        "correlationId": "test-correlation-id"
+                    }}"#
                 )
             } else if path.starts_with("/v0/deposit/submit") {
-                format!(
-                    r#"{{"remote_id":"r1","deposit_address":"{deposit_address}","deposit_memo":null,"deadline":{deadline_ms}}}"#
-                )
+                // New API just acknowledges the deposit
+                r#"{"success": true}"#.to_string()
             } else {
                 r#"{"status":"FAILED","message":"unexpected path"}"#.to_string()
             };
@@ -139,11 +159,12 @@ fn setup_from_zec_quote(
 ) -> anyhow::Result<String> {
     let intent = SwapIntent {
         swap_type: SwapType::FromZec,
-        input_asset: "zcash:mainnet:native".to_string(),
-        input_amount: "1000".to_string(),
-        output_asset: "near:mainnet:native".to_string(),
-        destination_address: Some("near_destination".to_string()),
-        refund_address: None,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: "1".to_string(),
+        output_asset: "nep141:wrap.near".to_string(),
+        destination_address: Some("near_destination.near".to_string()),
+        // Refund address is required by the new API
+        refund_address: Some("u1refundaddress".to_string()),
     };
 
     let res = swap.request_swap_quote(wallet_id, network, intent)?;
@@ -171,6 +192,7 @@ fn start_swap_from_zec_requires_privacy_ack() {
         .expect("create wallet")
         .wallet;
 
+    // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
     let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
@@ -209,6 +231,7 @@ fn start_swap_from_zec_requires_reauth_token_when_acknowledged() {
         .expect("create wallet")
         .wallet;
 
+    // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
     let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
@@ -253,7 +276,9 @@ fn start_swap_from_zec_is_blocked_until_backup_complete() {
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth");
 
-    let (base_url, server) = spawn_mock_1click_server("t1fake", 2);
+    // Only 1 request: quote (dry=false returns deposit address)
+    // start_swap should fail with BACKUP_REQUIRED before making any more API calls
+    let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
     let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)

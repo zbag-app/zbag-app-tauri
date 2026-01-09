@@ -180,13 +180,27 @@ export interface SwapInfo {
 
 export interface SwapQuote {
   input_asset: string;
+  /** Input amount in smallest units (e.g., wei for ETH, zatoshis for ZEC) */
   input_amount: string;
+  /** Human-readable input amount (from API's amountInFormatted) */
+  input_amount_formatted: string;
   output_asset: string;
+  /** Output amount in smallest units */
   output_amount: string;
-  fee_amount: string;
-  fee_asset: string;
+  /** Human-readable output amount (from API's amountOutFormatted) */
+  output_amount_formatted: string;
+  /** Minimum output amount in smallest units (accounting for slippage) */
+  min_output_amount: string;
+  /** Deadline as milliseconds since epoch */
   deadline: UnixTimestampMs;
-  rate: string;
+  /** Estimated time for swap completion in seconds */
+  time_estimate_secs: number;
+  /** Deposit address (present when dry=false) */
+  deposit_address: string | null;
+  /** Deposit memo (present when deposit requires a memo) */
+  deposit_memo: string | null;
+  /** Correlation ID for tracking the quote */
+  correlation_id: string;
 }
 
 // ============================================================================
