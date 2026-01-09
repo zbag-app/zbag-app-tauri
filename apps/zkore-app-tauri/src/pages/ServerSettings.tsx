@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Server, Plus, PlayCircle, Star } from 'lucide-react';
 import type * as IPC from '../types/ipc';
-import { NetworkBadge } from '../components/common/NetworkBadge';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
 import { ServerSecurityWarning } from '../components/settings/ServerSecurityWarning';
 import { addServer, listServers, setDefaultServer, testServer } from '../services/ipc';
 
 function formatMaybeMs(ms: number | null | undefined): string {
-  if (!ms) return '—';
+  if (!ms) return '-';
   try {
     return new Date(ms).toLocaleString();
   } catch {
@@ -98,101 +103,144 @@ export function ServerSettings(props: { wallet: IPC.WalletInfo }) {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      <h1 style={{ margin: 0 }}>Servers</h1>
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Server className="h-5 w-5 text-primary" />
+        </div>
+        <h1 className="text-2xl font-bold">Servers</h1>
+      </div>
 
       <ServerSecurityWarning />
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-
-      <section style={{ display: 'grid', gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Active network</h2>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <NetworkBadge network={wallet.network} />
-          <span style={{ fontSize: 12, opacity: 0.8 }}>Showing servers for this network only.</span>
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
         </div>
-      </section>
+      )}
 
-      <section style={{ display: 'grid', gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Add server</h2>
-        <label style={{ display: 'grid', gap: 4, maxWidth: 640 }}>
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.currentTarget.value)} disabled={loading} />
-        </label>
-        <label style={{ display: 'grid', gap: 4, maxWidth: 640 }}>
-          <span>gRPC URL</span>
-          <input
-            value={grpcUrl}
-            onChange={(e) => setGrpcUrl(e.currentTarget.value)}
-            disabled={loading}
-            placeholder="https://lwd.example.com:443"
-          />
-        </label>
-        <button type="button" onClick={submitAdd} disabled={loading || !name.trim() || !grpcUrl.trim()}>
-          {loading ? 'Adding…' : 'Add'}
-        </button>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            Active Network
+            <Badge variant={wallet.network === 'Mainnet' ? 'success' : 'warning'}>
+              {wallet.network}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Showing servers for this network only.
+          </p>
+        </CardContent>
+      </Card>
 
-      <section style={{ display: 'grid', gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Servers ({visibleServers.length})</h2>
-        {visibleServers.length === 0 ? <div>No servers configured for this network.</div> : null}
-        {visibleServers.map((s) => {
-          const last = testResult[s.id];
-          return (
-            <div
-              key={s.id}
-              style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <strong>{s.name}</strong>
-                    <NetworkBadge network={s.network} />
-                    {s.is_default ? (
-                      <span
-                        style={{
-                          fontSize: 12,
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          background: '#e0f2fe',
-                          border: '1px solid #38bdf8',
-                        }}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Add Server</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="serverName">Name</Label>
+            <Input
+              id="serverName"
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+              disabled={loading}
+              placeholder="My Server"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="grpcUrl">gRPC URL</Label>
+            <Input
+              id="grpcUrl"
+              value={grpcUrl}
+              onChange={(e) => setGrpcUrl(e.currentTarget.value)}
+              disabled={loading}
+              placeholder="https://lwd.example.com:443"
+            />
+          </div>
+          <Button onClick={submitAdd} disabled={loading || !name.trim() || !grpcUrl.trim()}>
+            <Plus className="h-4 w-4" />
+            {loading ? 'Adding...' : 'Add'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Servers ({visibleServers.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {visibleServers.length === 0 ? (
+            <p className="text-muted-foreground">No servers configured for this network.</p>
+          ) : (
+            visibleServers.map((s) => {
+              const last = testResult[s.id];
+              return (
+                <div
+                  key={s.id}
+                  className="rounded-lg border border-border p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{s.name}</span>
+                        <Badge variant={s.network === 'Mainnet' ? 'success' : 'warning'}>
+                          {s.network}
+                        </Badge>
+                        {s.is_default && (
+                          <Badge variant="default" className="gap-1">
+                            <Star className="h-3 w-3" />
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      <code className="text-xs text-muted-foreground break-all font-mono">
+                        {s.grpc_url}
+                      </code>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => runTest(s.id)}
+                        disabled={loading}
                       >
-                        Default
-                      </span>
-                    ) : null}
+                        <PlayCircle className="h-4 w-4" />
+                        Test
+                      </Button>
+                      {!s.is_default && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDefault(s.id)}
+                          disabled={loading}
+                        >
+                          <Star className="h-4 w-4" />
+                          Set default
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <code style={{ fontSize: 12, opacity: 0.9, wordBreak: 'break-all' }}>{s.grpc_url}</code>
-                </div>
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button type="button" onClick={() => runTest(s.id)} disabled={loading}>
-                    Test
-                  </button>
-                  {!s.is_default ? (
-                    <button type="button" onClick={() => setDefault(s.id)} disabled={loading}>
-                      Set default
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+                  <div className="text-xs text-muted-foreground">
+                    Last success: {formatMaybeMs(s.last_success_at)}
+                  </div>
 
-              <div style={{ fontSize: 12, opacity: 0.8 }}>
-                Last success: {formatMaybeMs(s.last_success_at)}
-              </div>
-
-              {last ? (
-                <div style={{ fontSize: 12, opacity: 0.85 }}>
-                  Test result: {last.success ? 'OK' : 'FAIL'}
-                  {last.latency_ms !== null ? ` (${last.latency_ms}ms)` : ''}
-                  {last.error ? ` — ${last.error}` : ''}
+                  {last && (
+                    <div className={`text-xs ${last.success ? 'text-success' : 'text-destructive'}`}>
+                      Test result: {last.success ? 'OK' : 'FAIL'}
+                      {last.latency_ms !== null && ` (${last.latency_ms}ms)`}
+                      {last.error && ` - ${last.error}`}
+                    </div>
+                  )}
                 </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </section>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

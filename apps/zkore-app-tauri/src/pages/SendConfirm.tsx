@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, Send, CheckCircle } from 'lucide-react';
 import * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
 import { cancelSend, confirmSend, reauthWallet } from '../services/ipc';
+import { formatZatoshisToZec } from '../utils/zec';
 
 type LocationState = {
   proposal: IPC.PrepareSendResponse;
@@ -72,70 +79,131 @@ export function SendConfirm(props: { walletId: string }) {
 
   if (!proposal || !summary) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
-        <h1>Review send</h1>
-        <div>Missing proposal. Return to <Link to="/send">Send</Link>.</div>
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Send className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Review Send</h1>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">
+              Missing proposal. Return to <Link to="/send" className="text-primary hover:underline">Send</Link>.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <form
-      style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-    >
-      <h1>Review send</h1>
-
-      {warning ? (
-        <div style={{ padding: 12, border: '1px solid #c0841a', borderRadius: 8 }}>
-          <strong>Privacy warning</strong>
-          <div style={{ marginTop: 4 }}>{warning}</div>
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Send className="h-5 w-5 text-primary" />
         </div>
-      ) : null}
-
-      <div style={{ display: 'grid', gap: 8 }}>
-        <div style={{ display: 'grid', gap: 4 }}>
-          <div style={{ fontSize: 14, opacity: 0.8 }}>Recipient</div>
-          <code style={{ wordBreak: 'break-all' }}>{summary.recipient}</code>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 6 }}>
-          <div style={{ opacity: 0.8 }}>Recipient kind</div>
-          <div>{summary.recipient_kind}</div>
-          <div style={{ opacity: 0.8 }}>Amount</div>
-          <div>{summary.amount}</div>
-          <div style={{ opacity: 0.8 }}>Fee</div>
-          <div>{summary.fee}</div>
-          <div style={{ opacity: 0.8 }}>Total spend</div>
-          <div>{summary.total_spend}</div>
-          <div style={{ opacity: 0.8 }}>Memo</div>
-          <div>{summary.memo_present ? 'Yes' : 'No'}</div>
-        </div>
+        <h1 className="text-2xl font-bold">Review Send</h1>
       </div>
 
-      <label style={{ display: 'grid', gap: 4, maxWidth: 420 }}>
-        <span>Password</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-          disabled={submitting}
-        />
-      </label>
+      {warning && (
+        <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-4">
+          <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-warning">Privacy Warning</h3>
+            <p className="text-sm text-muted-foreground mt-1">{warning}</p>
+          </div>
+        </div>
+      )}
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Transaction Summary</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <span className="text-sm text-muted-foreground">Recipient</span>
+            <code className="block text-sm break-all bg-muted px-3 py-2 rounded-lg font-mono">
+              {summary.recipient}
+            </code>
+          </div>
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button type="submit" disabled={!password || submitting}>
-          {submitting ? 'Sending…' : 'Confirm & Send'}
-        </button>
-        <button type="button" onClick={cancel} disabled={submitting}>
-          Cancel
-        </button>
-      </div>
-    </form>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Recipient Kind</span>
+              <div className="flex">
+                <Badge variant={summary.recipient_kind === 'Transparent' ? 'warning' : 'shielded'}>
+                  {summary.recipient_kind}
+                </Badge>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Amount</span>
+              <div className="font-semibold balance-number">{formatZatoshisToZec(summary.amount)} ZEC</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Fee</span>
+              <div className="font-semibold balance-number">{formatZatoshisToZec(summary.fee)} ZEC</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Total Spend</span>
+              <div className="font-semibold balance-number">{formatZatoshisToZec(summary.total_spend)} ZEC</div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Memo</span>
+              <div className="flex">
+                {summary.memo_present ? (
+                  <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Yes</Badge>
+                ) : (
+                  <Badge variant="secondary">No</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Confirm Transaction</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.currentTarget.value)}
+                disabled={submitting}
+                placeholder="Enter your password to confirm"
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button type="submit" disabled={!password || submitting} className="flex-1">
+                {submitting ? 'Sending...' : 'Confirm & Send'}
+              </Button>
+              <Button type="button" variant="outline" onClick={cancel} disabled={submitting}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

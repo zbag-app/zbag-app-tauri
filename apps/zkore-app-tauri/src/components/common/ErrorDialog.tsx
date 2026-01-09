@@ -1,6 +1,9 @@
 import { useRef } from 'react';
+import { X } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
 
 export type ErrorDialogAction = {
   label: string;
@@ -29,49 +32,47 @@ export function ErrorDialog(props: {
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-        zIndex: 100,
+      onClick={(e) => {
+        if (e.target === e.currentTarget) primaryAction.onClick();
       }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div
-        ref={dialogRef}
-        style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 560, width: '100%' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-          <h2 style={{ margin: 0 }}>{title}</h2>
-          <button type="button" onClick={primaryAction.onClick} aria-label="Close error dialog">
-            Close
-          </button>
-        </div>
+      <Card ref={dialogRef} className="w-full max-w-xl animate-[fade-in-up_0.2s_ease-out]">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="text-lg">{title}</CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={primaryAction.onClick}
+            aria-label="Close error dialog"
+            className="h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
 
-        <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 14, opacity: 0.85 }}>
-            If you contact support, share this error code: <code>{error.code}</code>
-          </div>
-          <div style={{ fontSize: 13, background: '#fff5f5', border: '1px solid #fecaca', padding: 10, borderRadius: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Message</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{error.message}</div>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            If you contact support, share this error code: <code className="text-foreground">{error.code}</code>
+          </p>
+
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+            <div className="font-semibold text-sm mb-1">Message</div>
+            <div className="text-sm whitespace-pre-wrap text-destructive">{error.message}</div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="flex gap-2 justify-end flex-wrap">
             {secondaryAction ? (
-              <button type="button" onClick={secondaryAction.onClick}>
+              <Button variant="outline" onClick={secondaryAction.onClick}>
                 {secondaryAction.label}
-              </button>
+              </Button>
             ) : null}
-            <button type="button" onClick={primaryAction.onClick}>
+            <Button onClick={primaryAction.onClick}>
               {primaryAction.label}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

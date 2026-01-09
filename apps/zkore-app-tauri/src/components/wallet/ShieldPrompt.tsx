@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Shield, X } from 'lucide-react';
 import type * as IPC from '../../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { reauthWallet, shieldFunds } from '../../services/ipc';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { formatZatoshisToZec } from '../../utils/zec';
 
 type InsufficientFeeDetails = {
   required_minimum_zatoshis?: unknown;
@@ -90,126 +96,126 @@ export function ShieldPrompt(props: {
   const estimatedFee = formatMaybeString(insufficientFeeDetails?.estimated_fee_zatoshis);
 
   return (
-    <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" onClick={() => setOpen(true)} disabled={disabled}>
-        Shield now
-      </button>
+    <>
+      <Button
+        variant="secondary"
+        className="w-full flex-col h-auto py-3 gap-1"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+      >
+        <Shield className="h-5 w-5" />
+        <span className="text-xs">Shield</span>
+      </Button>
 
-      {open ? (
+      {open && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Shield transparent funds"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
-          }}
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div
-            ref={dialogRef}
-            style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <h2 style={{ margin: 0 }}>Shield and consolidate</h2>
-              <button
-                type="button"
+          <Card ref={dialogRef} className="w-full max-w-lg animate-[scale-in_0.2s_ease-out]">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Shield and Consolidate</CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setOpen(false)}
                 disabled={loading}
                 aria-label="Close shield dialog"
               >
-                Close
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-              <div style={{ fontSize: 14, opacity: 0.9 }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
                 Transparent funds are receive-only until shielded. This action sweeps all spendable transparent
                 funds into Orchard. Fees are deducted from transparent inputs.
-              </div>
+              </p>
 
-              <div style={{ display: 'grid', gap: 6 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 6 }}>
-                  <div style={{ opacity: 0.8 }}>Transparent total</div>
-                  <div>{transparentTotal}</div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Transparent total</span>
+                  <span className="font-semibold">{formatZatoshisToZec(transparentTotal)} ZEC</span>
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                <p className="text-xs text-muted-foreground">
                   If there are too many UTXOs to fit, shielding batches into multiple transactions.
-                </div>
+                </p>
               </div>
 
               {result ? (
-                <div style={{ padding: 12, border: '1px solid #16a34a', borderRadius: 8, background: '#f0fdf4' }}>
-                  <strong>Shielding started</strong>
-                  <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 6 }}>
-                      <div style={{ opacity: 0.8 }}>Txid</div>
-                      <code style={{ wordBreak: 'break-all' }}>{result.txid}</code>
-                      <div style={{ opacity: 0.8 }}>Fee</div>
-                      <div>{result.fee}</div>
+                <div className="rounded-lg border border-success/50 bg-success/10 p-4 space-y-3">
+                  <h4 className="font-semibold text-success">Shielding Started</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Txid</span>
+                      <code className="text-xs font-mono break-all max-w-[200px]">{result.txid}</code>
                     </div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      Additional shielding transactions (if any) are visible in Activity.
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Fee</span>
+                      <span>{formatZatoshisToZec(result.fee)} ZEC</span>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Additional shielding transactions (if any) are visible in Activity.
+                  </p>
                 </div>
               ) : (
                 <form
-                  style={{ display: 'grid', gap: 10 }}
+                  className="space-y-4"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void submit();
                   }}
                 >
-                  <label style={{ display: 'grid', gap: 4, maxWidth: 420 }}>
-                    <span>Wallet password</span>
-                    <input
+                  <div className="space-y-2">
+                    <Label htmlFor="shieldPassword">Wallet password</Label>
+                    <Input
+                      id="shieldPassword"
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.currentTarget.value)}
                       disabled={loading}
+                      placeholder="Enter your password"
                     />
-                  </label>
+                  </div>
 
-                  {error ? (
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      <div style={{ color: 'crimson' }}>
+                  {error && (
+                    <div className="space-y-2">
+                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                         {error.code}: {error.message}
                       </div>
 
-                      {error.code === 'E3001' && (requiredMinimum || available || estimatedFee) ? (
-                        <div style={{ padding: 12, border: '1px solid #ef4444', borderRadius: 8 }}>
-                          <strong>Not enough transparent funds to pay the shielding fee</strong>
-                          <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
-                            {requiredMinimum ? <div>Required minimum: {requiredMinimum}</div> : null}
-                            {available ? <div>Available: {available}</div> : null}
-                            {estimatedFee ? <div>Estimated fee: {estimatedFee}</div> : null}
+                      {error.code === 'E3001' && (requiredMinimum || available || estimatedFee) && (
+                        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 space-y-2">
+                          <h5 className="font-semibold text-sm">Not enough transparent funds to pay the shielding fee</h5>
+                          <div className="text-xs space-y-1">
+                            {requiredMinimum && <div>Required minimum: {formatZatoshisToZec(requiredMinimum)} ZEC</div>}
+                            {available && <div>Available: {formatZatoshisToZec(available)} ZEC</div>}
+                            {estimatedFee && <div>Estimated fee: {formatZatoshisToZec(estimatedFee)} ZEC</div>}
                           </div>
-                          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>
+                          <p className="text-xs text-muted-foreground">
                             Acquire a minimal amount of additional transparent ZEC and retry.
-                          </div>
+                          </p>
                         </div>
-                      ) : null}
+                      )}
                     </div>
-                  ) : null}
+                  )}
 
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button type="submit" disabled={!password || loading}>
-                      {loading ? 'Shielding…' : 'Confirm & Shield'}
-                    </button>
-                    <button type="button" onClick={() => setOpen(false)} disabled={loading}>
+                  <div className="flex gap-3">
+                    <Button type="submit" disabled={!password || loading} className="flex-1">
+                      {loading ? 'Shielding...' : 'Confirm & Shield'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </form>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      ) : null}
-    </div>
+      )}
+    </>
   );
 }

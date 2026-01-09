@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Fingerprint, Download, Camera, ArrowLeft, Radio } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { AnimatedQRDisplay } from '../components/signing/AnimatedQRDisplay';
 import { FileImport } from '../components/signing/FileImport';
 import { QRScanner } from '../components/signing/QRScanner';
@@ -57,134 +62,188 @@ export function Signing(props: { walletId: string }) {
 
   if (!signingRequest || !summary) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
-        <h1>Sign with Keystone</h1>
-        <div>
-          Missing signing request. Return to <Link to="/send">Send</Link>.
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Fingerprint className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Sign with Keystone</h1>
         </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">
+              Missing signing request. Return to <Link to="/send" className="text-primary hover:underline">Send</Link>.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gap: 16,
-        padding: 16,
-        minHeight: '100vh',
-        placeContent: 'start center',
-      }}
-    >
-      <h1>Sign with Keystone</h1>
-
-      <div style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
-        <AnimatedQRDisplay pcztPayloadBase64={signingRequest.pczt_payload} />
-        <div style={{ fontSize: 14, opacity: 0.8, textAlign: 'center', maxWidth: 420 }}>
-          Scan this animated QR with your Keystone to sign the transaction.
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Fingerprint className="h-5 w-5 text-primary" />
         </div>
+        <h1 className="text-2xl font-bold">Sign with Keystone</h1>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Scan QR Code</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-center p-4 bg-white rounded-lg">
+            <AnimatedQRDisplay pcztPayloadBase64={signingRequest.pczt_payload} />
+          </div>
+          <p className="text-sm text-muted-foreground text-center">
+            Scan this animated QR with your Keystone to sign the transaction.
+          </p>
+
+          <div className="flex gap-3 justify-center flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const bytes = decodeBase64ToBytes(signingRequest.pczt_payload);
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'zkore-unsigned.pczt';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Export unsigned PCZT
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => setScannerOpen((v) => !v)}
+            >
+              <Camera className="h-4 w-4" />
+              {scannerOpen ? 'Close scanner' : 'Scan signed QR'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <SigningVerify summary={summary} />
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => {
-            const bytes = decodeBase64ToBytes(signingRequest.pczt_payload);
-            const blob = new Blob([bytes], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'zkore-unsigned.pczt';
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-        >
-          Export unsigned PCZT
-        </button>
+      {scannerOpen && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Scan Signed QR</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QRScanner
+              onScanned={(payloadBase64) => {
+                setSignedPayload(payloadBase64);
+                setScannerOpen(false);
+                setError(null);
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
-        <button type="button" onClick={() => setScannerOpen((v) => !v)}>
-          {scannerOpen ? 'Close scanner' : 'Scan signed QR'}
-        </button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Import Signed Transaction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FileImport
+            onImported={(payloadBase64) => {
+              setSignedPayload(payloadBase64);
+              setScannerOpen(false);
+              setError(null);
+            }}
+          />
 
-      {scannerOpen ? (
-        <QRScanner
-          onScanned={(payloadBase64) => {
-            setSignedPayload(payloadBase64);
-            setScannerOpen(false);
-            setError(null);
-          }}
-        />
-      ) : null}
+          {signedPayload && (
+            <div className="rounded-lg border border-success/50 bg-success/10 p-3 text-sm text-success">
+              Signed payload imported successfully.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      <FileImport
-        onImported={(payloadBase64) => {
-          setSignedPayload(payloadBase64);
-          setScannerOpen(false);
-          setError(null);
-        }}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Broadcast Transaction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              disabled={submitting}
+              placeholder="Enter your password"
+            />
+          </div>
 
-      <label style={{ display: 'grid', gap: 4, maxWidth: 420, width: '100%' }}>
-        <span>Password</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-          disabled={submitting}
-        />
-      </label>
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+          <div className="flex gap-3">
+            <Button
+              disabled={!signedPayload || !password || submitting}
+              onClick={async () => {
+                if (!signedPayload) return;
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button
-          type="button"
-          disabled={!signedPayload || !password || submitting}
-          onClick={async () => {
-            if (!signedPayload) return;
+                setSubmitting(true);
+                setError(null);
 
-            setSubmitting(true);
-            setError(null);
+                const reauth = await reauthWallet({ wallet_id: walletId, password, purpose: 'Spend' });
+                if ('err' in reauth) {
+                  setSubmitting(false);
+                  setError(reauth.err.message);
+                  return;
+                }
 
-            const reauth = await reauthWallet({ wallet_id: walletId, password, purpose: 'Spend' });
-            if ('err' in reauth) {
-              setSubmitting(false);
-              setError(reauth.err.message);
-              return;
-            }
+                const res = await finalizeSigning({
+                  signed_payload: signedPayload,
+                  reauth_token: reauth.ok.reauth_token,
+                });
 
-            const res = await finalizeSigning({
-              signed_payload: signedPayload,
-              reauth_token: reauth.ok.reauth_token,
-            });
+                setSubmitting(false);
 
-            setSubmitting(false);
+                if ('err' in res) {
+                  setError(res.err.message);
+                  return;
+                }
 
-            if ('err' in res) {
-              setError(res.err.message);
-              return;
-            }
-
-            clearSensitive();
-            navigate('/activity');
-          }}
-        >
-          {submitting ? 'Broadcasting…' : 'Broadcast transaction'}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            clearSensitive();
-            navigate('/send');
-          }}
-          disabled={submitting}
-        >
-          Back
-        </button>
-      </div>
+                clearSensitive();
+                navigate('/activity');
+              }}
+              className="flex-1"
+            >
+              <Radio className="h-4 w-4" />
+              {submitting ? 'Broadcasting...' : 'Broadcast transaction'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                clearSensitive();
+                navigate('/send');
+              }}
+              disabled={submitting}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

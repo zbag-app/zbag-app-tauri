@@ -1,16 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
-import { NetworkBadge } from './components/common/NetworkBadge';
-import { TorStatusBadge } from './components/common/TorStatusBadge';
-import { AccountSelector } from './components/wallet/AccountSelector';
+import { WalletPicker } from './components/wallet/WalletPicker';
+import { AppShell } from './components/layout/AppShell';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
+import { Input } from './components/ui/input';
+import { Label } from './components/ui/label';
 import { useActiveAccount } from './hooks/useActiveAccount';
-import { getTorState, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
-import { onTorStatus } from './services/events';
+import { useThrottledCallback } from './hooks/useThrottle';
+import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
+import { onTorStatus, onSyncProgress } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
 import { CreateWallet } from './pages/CreateWallet';
 import { Home } from './pages/Home';
@@ -30,7 +35,6 @@ import { SwapFromZec } from './pages/SwapFromZec';
 import { SwapQuote } from './pages/SwapQuote';
 import { ServerSettings } from './pages/ServerSettings';
 import { Wallets } from './pages/Wallets';
-import './App.css';
 
 const queryClient = new QueryClient();
 
@@ -42,16 +46,6 @@ type StartupState =
   | { kind: 'ready'; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }
   | { kind: 'error'; error: IPC.IpcError };
 
-function pickMostRecentWallet(wallets: IPC.WalletInfo[]): IPC.WalletInfo {
-  return wallets
-    .slice()
-    .sort((a, b) => {
-      const aT = a.last_opened_at ?? a.created_at;
-      const bT = b.last_opened_at ?? b.created_at;
-      return bT - aT;
-    })[0];
-}
-
 function AppInner() {
   const navigate = useNavigate();
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
@@ -59,6 +53,8 @@ function AppInner() {
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
   const [restoreFlow, setRestoreFlow] = useState<RestoreFlowData | null>(null);
   const [torState, setTorState] = useState<IPC.TorState | null>(null);
+  const [torToggleError, setTorToggleError] = useState<IPC.IpcError | null>(null);
+  const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
   const [dismissedTorError, setDismissedTorError] = useState(false);
 
   const activeWalletId = useMemo(() => {
@@ -66,12 +62,13 @@ function AppInner() {
     return null;
   }, [startup]);
 
-  const { activeAccountId, setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
+  const { activeAccountId, setActiveAccountId: _setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
   const activeAccount = useMemo(() => {
     if (activeAccountId == null) return null;
     return accounts.find((a) => a.id === activeAccountId) ?? null;
   }, [accounts, activeAccountId]);
 
+  // Tor state initialization and subscription
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | null = null;
@@ -94,6 +91,42 @@ function AppInner() {
     };
   }, []);
 
+  // Sync progress initialization and subscription
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initSync() {
+      if (startup.kind !== 'ready') return;
+      const res = await getSyncProgress({ wallet_id: startup.wallet.id });
+      if (!cancelled && 'ok' in res) {
+        setSyncProgress(res.ok.progress);
+      }
+    }
+
+    initSync();
+    return () => {
+      cancelled = true;
+    };
+  }, [startup]);
+
+  // Throttled sync progress updates
+  const throttledSetSync = useThrottledCallback(
+    (progress: IPC.SyncProgress) => setSyncProgress(progress),
+    200
+  );
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    onSyncProgress((evt) => throttledSetSync(evt.progress))
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, [throttledSetSync]);
+
   useEffect(() => {
     if (torState?.enabled && torState.status === 'Error') {
       setDismissedTorError(false);
@@ -104,6 +137,8 @@ function AppInner() {
     const res = await setTorEnabled({ enabled });
     if ('ok' in res) {
       setTorState(res.ok.state);
+    } else {
+      setTorToggleError(res.err);
     }
   };
 
@@ -113,6 +148,7 @@ function AppInner() {
     if ('ok' in res && res.ok.locked) {
       setStartup({ kind: 'locked', wallet: startup.wallet });
       setAccounts([]);
+      setSyncProgress(null);
     }
   };
 
@@ -133,22 +169,7 @@ function AppInner() {
         return;
       }
 
-      const mostRecent = pickMostRecentWallet(wallets);
-      const load1 = await loadWallet({ wallet_id: mostRecent.id });
-      if (cancelled) return;
-      if ('err' in load1) {
-        setStartup({ kind: 'error', error: load1.err });
-        return;
-      }
-
-      if (load1.ok.lock_status === 'Locked') {
-        setStartup({ kind: 'locked', wallet: load1.ok.wallet });
-        setAccounts([]);
-        return;
-      }
-
-      setStartup({ kind: 'ready', wallet: load1.ok.wallet, accounts: load1.ok.accounts });
-      setAccounts(load1.ok.accounts);
+      setStartup({ kind: 'wallet-selection' });
     }
 
     runStartup();
@@ -157,8 +178,16 @@ function AppInner() {
     };
   }, []);
 
-  if (startup.kind === 'loading') return <div>Loading…</div>;
+  // Loading state
+  if (startup.kind === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
+  // Error state
   if (startup.kind === 'error') {
     return (
       <ErrorDialog
@@ -169,6 +198,7 @@ function AppInner() {
     );
   }
 
+  // No wallets state
   if (startup.kind === 'no-wallets') {
     return (
       <Routes>
@@ -212,6 +242,7 @@ function AppInner() {
     );
   }
 
+  // Locked state
   if (startup.kind === 'locked') {
     return (
       <UnlockGate
@@ -224,10 +255,12 @@ function AppInner() {
             setAccounts([]);
           }
         }}
+        onBack={() => setStartup({ kind: 'wallet-selection' })}
       />
     );
   }
 
+  // Wallet selection state
   if (startup.kind === 'wallet-selection') {
     return (
       <WalletSelectionRoutes
@@ -258,8 +291,15 @@ function AppInner() {
     );
   }
 
+  // Ready state - Main app with sidebar
   return (
-    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
+    <AppShell
+      wallet={startup.wallet}
+      torState={torState}
+      syncProgress={syncProgress}
+      onLock={handleQuickLock}
+    >
+      {/* Tor Error Dialog */}
       {torState && torState.enabled && torState.status === 'Error' && !dismissedTorError ? (
         <TorErrorDialog
           state={torState}
@@ -269,28 +309,14 @@ function AppInner() {
         />
       ) : null}
 
-      <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-        <strong>{startup.wallet.name}</strong>
-        <NetworkBadge network={startup.wallet.network} />
-        <AccountSelector
-          accounts={accounts}
-          activeAccountId={activeAccountId}
-          onChange={setActiveAccountId}
+      {/* Tor Toggle Error Dialog */}
+      {torToggleError ? (
+        <ErrorDialog
+          title="Tor toggle failed"
+          error={{ code: torToggleError.code, message: torToggleError.message }}
+          primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
         />
-        <TorStatusBadge state={torState} />
-        <nav style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Link to="/">Home</Link>
-          <Link to="/wallets">Wallets</Link>
-          <Link to="/receive">Receive</Link>
-          <Link to="/send">Send</Link>
-          <Link to="/swap">Swap</Link>
-          <Link to="/activity">Activity</Link>
-          <Link to="/settings">Settings</Link>
-          <button type="button" onClick={handleQuickLock} style={{ cursor: 'pointer' }}>
-            Lock
-          </button>
-        </nav>
-      </header>
+      ) : null}
 
       <Routes>
         <Route
@@ -298,9 +324,7 @@ function AppInner() {
           element={
             <Home
               wallet={startup.wallet}
-              accounts={accounts}
               activeAccountId={activeAccountId}
-              onChangeAccount={setActiveAccountId}
             />
           }
         />
@@ -382,6 +406,7 @@ function AppInner() {
               onSetTorEnabled={toggleTor}
               onLogout={() => {
                 setAccounts([]);
+                setSyncProgress(null);
                 setStartup({ kind: 'wallet-selection' });
                 navigate('/wallets');
               }}
@@ -412,7 +437,7 @@ function AppInner() {
           element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
         />
       </Routes>
-    </div>
+    </AppShell>
   );
 }
 
@@ -425,43 +450,49 @@ function WalletSelectionRoutes(props: {
   onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
 }) {
   const { onLoaded, onCreated, onRestoreFlow, restoreFlow, onClearRestoreFlow, onRestored } = props;
+  const navigate = useNavigate();
+
+  const pickerElement = (
+    <WalletPicker
+      onLoaded={onLoaded}
+      onCreateNew={() => navigate('/create')}
+      onRestore={() => navigate('/restore')}
+    />
+  );
 
   return (
-    <div style={{ display: 'grid', gap: 16, padding: 16 }}>
-      <Routes>
-        <Route
-          path="/wallets"
-          element={<Wallets activeWalletId={null} onLoaded={onLoaded} />}
-        />
-        <Route
-          path="/create"
-          element={<CreateWallet onCreated={onCreated} />}
-        />
-        <Route
-          path="/restore"
-          element={<RestoreWallet onContinue={onRestoreFlow} />}
-        />
-        <Route
-          path="/restore/birthday"
-          element={
-            <RestoreBirthday
-              flow={restoreFlow}
-              onClearFlow={onClearRestoreFlow}
-              onRestored={onRestored}
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/wallets" replace />} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route path="/" element={pickerElement} />
+      <Route path="/wallets" element={pickerElement} />
+      <Route
+        path="/create"
+        element={<CreateWallet onCreated={onCreated} />}
+      />
+      <Route
+        path="/restore"
+        element={<RestoreWallet onContinue={onRestoreFlow} />}
+      />
+      <Route
+        path="/restore/birthday"
+        element={
+          <RestoreBirthday
+            flow={restoreFlow}
+            onClearFlow={onClearRestoreFlow}
+            onRestored={onRestored}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
 function UnlockGate(props: {
   wallet: IPC.WalletInfo;
   onUnlocked: (state: Extract<StartupState, { kind: 'ready' | 'locked' }>) => void;
+  onBack: () => void;
 }) {
-  const { wallet, onUnlocked } = props;
+  const { wallet, onUnlocked, onBack } = props;
   const [password, setPassword] = useState('');
   const [rememberUnlock, setRememberUnlock] = useState(wallet.remember_unlock_enabled);
   const [error, setError] = useState<string | null>(null);
@@ -493,31 +524,51 @@ function UnlockGate(props: {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 480 }}>
-      <h1>Unlock wallet</h1>
-      <div>
-        <strong>{wallet.name}</strong>
-      </div>
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Password</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.currentTarget.value)}
-        />
-      </label>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="checkbox"
-          checked={rememberUnlock}
-          onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-        />
-        <span>Remember unlock</span>
-      </label>
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-      <button type="button" onClick={submit} disabled={!password}>
-        Unlock
-      </button>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="font-display text-2xl">Unlock Wallet</CardTitle>
+          <p className="text-sm text-muted-foreground">{wallet.name}</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.currentTarget.value)}
+              placeholder="Enter your password"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && password) {
+                  submit();
+                }
+              }}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberUnlock}
+              onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
+              className="rounded border-border h-4 w-4 accent-primary"
+            />
+            <span className="text-muted-foreground">Remember unlock</span>
+          </label>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex gap-3">
+            <Button onClick={submit} disabled={!password} className="flex-1">
+              Unlock
+            </Button>
+            <Button variant="outline" onClick={onBack}>
+              Back
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

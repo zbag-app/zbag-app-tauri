@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { History, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
 import { onSwapChanged, onTransactionChanged } from '../services/events';
+import { formatRelativeTime, formatZatoshisToZec } from '../utils/zec';
 
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
@@ -129,117 +136,174 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     void load(offset);
   };
 
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'Confirmed':
+        return 'success';
+      case 'Pending':
+        return 'warning';
+      case 'Failed':
+        return 'destructive';
+      default:
+        return 'secondary';
+    }
+  };
+
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 920 }}>
-      <h1>Activity</h1>
-
-      {activeAccountId == null ? <div>No active account.</div> : null}
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button
-          type="button"
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <History className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Activity</h1>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
             void load(offset);
             void loadSwaps();
           }}
           disabled={loading || activeAccountId == null}
         >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
-          Showing {transactions.length} of {totalCount}
+        </Button>
+      </div>
+
+      {activeAccountId == null && (
+        <div className="text-muted-foreground">No active account</div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'grid', gap: 8 }}>
-        <h2 style={{ margin: '8px 0 0' }}>Swaps</h2>
-        {swaps.length === 0 ? <div style={{ fontSize: 13, opacity: 0.7 }}>No swaps.</div> : null}
-        {swaps.map((s) => {
-          const expired = s.deadline != null && Date.now() >= s.deadline;
-          return (
-            <div key={s.id} style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ fontWeight: 600 }}>
-                    {s.swap_type}: {s.input_amount} {s.input_asset} → {s.output_amount ?? '?'} {s.output_asset}
-                  </div>
-                  {s.deposit_address ? (
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      Deposit: <code style={{ wordBreak: 'break-all' }}>{s.deposit_address}</code>
+      {/* Swaps Section */}
+      {swaps.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Swaps</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {swaps.map((s) => {
+              const expired = s.deadline != null && Date.now() >= s.deadline;
+              return (
+                <div key={s.id} className="rounded-lg border border-border p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="font-semibold">
+                        {s.swap_type}: {s.input_amount} {s.input_asset} → {s.output_amount ?? '?'} {s.output_asset}
+                      </div>
+                      {s.deposit_address && (
+                        <div className="text-xs text-muted-foreground">
+                          Deposit: <code className="break-all">{s.deposit_address}</code>
+                        </div>
+                      )}
+                      {s.deposit_memo && (
+                        <div className="text-xs text-muted-foreground">
+                          Memo: <code className="break-all">{s.deposit_memo}</code>
+                        </div>
+                      )}
+                      {s.deadline && (
+                        <div className="text-xs text-muted-foreground">
+                          Deadline: {expired ? <span className="text-destructive">Expired</span> : new Date(s.deadline).toLocaleString()}
+                        </div>
+                      )}
+                      {s.last_error && (
+                        <div className="text-xs text-destructive">Last error: {s.last_error}</div>
+                      )}
                     </div>
-                  ) : null}
-                  {s.deposit_memo ? (
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      Memo: <code style={{ wordBreak: 'break-all' }}>{s.deposit_memo}</code>
-                    </div>
-                  ) : null}
-                  {s.deadline ? (
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      Deadline: {expired ? <span style={{ color: '#b91c1c' }}>Expired</span> : new Date(s.deadline).toLocaleString()}
-                    </div>
-                  ) : null}
-                  {s.last_error ? (
-                    <div style={{ fontSize: 12, color: '#b91c1c' }}>Last error: {s.last_error}</div>
-                  ) : null}
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 600 }}>{s.state}</div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ display: 'grid', gap: 8 }}>
-        {loading && transactions.length === 0 ? <div>Loading…</div> : null}
-        {!loading && transactions.length === 0 && activeAccountId != null ? <div>No transactions.</div> : null}
-
-        {transactions.map((tx) => {
-          return (
-            <div key={tx.txid} style={{ border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <code style={{ wordBreak: 'break-all', fontSize: 12 }}>{tx.txid}</code>
-                  <div style={{ display: 'flex', gap: 12, fontSize: 14 }}>
-                    <span>{tx.tx_type}</span>
-                    <span style={{ opacity: 0.8 }}>Value: {tx.value}</span>
-                    <span style={{ opacity: 0.8 }}>Fee: {tx.fee}</span>
-                    <span style={{ opacity: 0.8 }}>Memo: {tx.memo_present ? 'Yes' : 'No'}</span>
+                    <Badge variant={s.state === 'Completed' ? 'success' : s.state === 'Failed' ? 'destructive' : 'secondary'}>
+                      {s.state}
+                    </Badge>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 600 }}>{tx.status}</div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Transactions Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Transactions</CardTitle>
+            <span className="text-sm text-muted-foreground">
+              {transactions.length} of {totalCount}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loading && transactions.length === 0 && (
+            <div className="text-muted-foreground">Loading...</div>
+          )}
+          {!loading && transactions.length === 0 && activeAccountId != null && (
+            <div className="text-muted-foreground">No transactions</div>
+          )}
+
+          {transactions.map((tx) => (
+            <div key={tx.txid} className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <code className="text-xs break-all font-mono">{tx.txid}</code>
+                    <span className="text-xs text-muted-foreground">{formatRelativeTime(tx.created_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm flex-wrap">
+                    <span className="font-medium">{tx.tx_type}</span>
+                    <span className="text-muted-foreground">Value: {formatZatoshisToZec(tx.value)} ZEC</span>
+                    <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
+                  </div>
+                  {tx.memo && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      <span className="font-medium">Memo: </span>
+                      <span className="break-words">
+                        {tx.memo.length > 100 ? `${tx.memo.slice(0, 100)}...` : tx.memo}
+                      </span>
+                    </div>
+                  )}
                 </div>
+                <Badge variant={getStatusBadgeVariant(tx.status)}>
+                  {tx.status}
+                </Badge>
               </div>
 
-              {tx.can_retry_broadcast ? (
-                <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
-                  {tx.last_error ? (
-                    <div style={{ fontSize: 13, color: '#b91c1c' }}>
-                      Last error: {tx.last_error}
+              {tx.can_retry_broadcast && (
+                <div className="pt-2 border-t border-border space-y-3">
+                  {tx.last_error && (
+                    <div className="flex items-start gap-2 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>Last error: {tx.last_error}</span>
                     </div>
-                  ) : null}
+                  )}
 
                   {retryTxid === tx.txid ? (
-                    <div style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
-                      <label style={{ display: 'grid', gap: 4 }}>
-                        <span>Password</span>
-                        <input
+                    <div className="space-y-3 max-w-md">
+                      <div className="space-y-2">
+                        <Label htmlFor="retry-password">Password</Label>
+                        <Input
+                          id="retry-password"
                           type="password"
                           value={retryPassword}
                           onChange={(e) => setRetryPassword(e.currentTarget.value)}
                           disabled={retrying}
                         />
-                      </label>
-                      {retryError ? <div style={{ color: 'crimson' }}>{retryError}</div> : null}
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <button type="button" onClick={submitRetry} disabled={!retryPassword || retrying}>
-                          {retrying ? 'Retrying…' : 'Retry broadcast'}
-                        </button>
-                        <button
-                          type="button"
+                      </div>
+                      {retryError && (
+                        <div className="text-sm text-destructive">{retryError}</div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button onClick={submitRetry} disabled={!retryPassword || retrying} size="sm">
+                          {retrying ? 'Retrying...' : 'Retry broadcast'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setRetryTxid(null);
                             setRetryPassword('');
@@ -248,12 +312,13 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                           disabled={retrying}
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         setRetryTxid(tx.txid);
                         setRetryPassword('');
@@ -261,31 +326,38 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                       }}
                     >
                       Retry broadcast
-                    </button>
+                    </Button>
                   )}
                 </div>
-              ) : null}
+              )}
             </div>
-          );
-        })}
-      </div>
+          ))}
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button
-          type="button"
-          disabled={!canPagePrev || loading}
-          onClick={() => void load(Math.max(0, offset - limit))}
-        >
-          Prev
-        </button>
-        <button
-          type="button"
-          disabled={!canPageNext || loading}
-          onClick={() => void load(offset + limit)}
-        >
-          Next
-        </button>
-      </div>
+          {/* Pagination */}
+          {(canPagePrev || canPageNext) && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canPagePrev || loading}
+                onClick={() => void load(Math.max(0, offset - limit))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Prev
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canPageNext || loading}
+                onClick={() => void load(offset + limit)}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Key, ArrowLeft, Clipboard, QrCode } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { importUfvk, loadWallet } from '../services/ipc';
 
 type ImportMode = 'paste' | 'scan';
@@ -52,64 +57,95 @@ export function ImportKeystone(props: {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
-      <h1>Import Keystone</h1>
-
-      <div style={{ fontSize: 14, opacity: 0.85 }}>
-        Import a Unified Full Viewing Key (UFVK) to create a watch-only account. Spending from this
-        account requires Keystone signing.
-      </div>
-
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span>Account name</span>
-        <input value={name} onChange={(e) => setName(e.currentTarget.value)} />
-      </label>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={() => setMode('paste')}
-          disabled={mode === 'paste'}
-        >
-          Paste UFVK
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('scan')}
-          disabled={mode === 'scan'}
-        >
-          Scan QR (coming soon)
-        </button>
-      </div>
-
-      {mode === 'paste' ? (
-        <label style={{ display: 'grid', gap: 4 }}>
-          <span>UFVK</span>
-          <textarea
-            value={ufvk}
-            onChange={(e) => setUfvk(e.currentTarget.value)}
-            rows={4}
-            placeholder="uview..."
-            style={{ fontFamily: 'monospace' }}
-          />
-        </label>
-      ) : (
-        <div style={{ fontSize: 14, opacity: 0.85 }}>
-          QR scanning will be available in a future update. For now, paste the UFVK.
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <Key className="h-5 w-5 text-primary" />
         </div>
-      )}
-
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button type="button" onClick={() => navigate(-1)} disabled={submitting}>
-          Back
-        </button>
-        <button type="button" onClick={submit} disabled={!canSubmit}>
-          {submitting ? 'Importing…' : 'Import'}
-        </button>
+        <h1 className="text-2xl font-bold">Import Keystone</h1>
       </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-sm text-muted-foreground">
+            Import a Unified Full Viewing Key (UFVK) to create a watch-only account. Spending from this
+            account requires Keystone signing.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Account Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="accountName">Account name</Label>
+            <Input
+              id="accountName"
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+              placeholder="Keystone"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={mode === 'paste' ? 'default' : 'outline'}
+              onClick={() => setMode('paste')}
+              size="sm"
+            >
+              <Clipboard className="h-4 w-4" />
+              Paste UFVK
+            </Button>
+            <Button
+              type="button"
+              variant={mode === 'scan' ? 'default' : 'outline'}
+              onClick={() => setMode('scan')}
+              size="sm"
+              disabled
+            >
+              <QrCode className="h-4 w-4" />
+              Scan QR (coming soon)
+            </Button>
+          </div>
+
+          {mode === 'paste' ? (
+            <div className="space-y-2">
+              <Label htmlFor="ufvk">UFVK</Label>
+              <textarea
+                id="ufvk"
+                value={ufvk}
+                onChange={(e) => setUfvk(e.currentTarget.value)}
+                rows={4}
+                placeholder="uview..."
+                className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              QR scanning will be available in a future update. For now, paste the UFVK.
+            </p>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => navigate(-1)} disabled={submitting}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <Button onClick={submit} disabled={!canSubmit} className="flex-1">
+              {submitting ? 'Importing...' : 'Import'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

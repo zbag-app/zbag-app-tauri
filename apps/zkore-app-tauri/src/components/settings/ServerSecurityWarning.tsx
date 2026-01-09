@@ -3,21 +3,13 @@ export function ServerSecurityWarning() {
     <div
       role="note"
       aria-label="Custom server security warning"
-      style={{
-        border: '1px solid #f59e0b',
-        background: '#fffbeb',
-        borderRadius: 12,
-        padding: 12,
-        display: 'grid',
-        gap: 8,
-      }}
+      className="rounded-xl border border-warning/50 bg-warning/10 p-3 grid gap-2"
     >
-      <strong>Security warning</strong>
-      <div style={{ fontSize: 14, opacity: 0.9 }}>
+      <strong className="text-warning">Security warning</strong>
+      <div className="text-sm text-muted-foreground">
         Custom lightwalletd servers can see your IP address and may be able to infer wallet activity
         patterns. Prefer trusted defaults, and use Tor for network privacy.
       </div>
     </div>
   );
 }
-

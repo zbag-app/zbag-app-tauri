@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import type * as IPC from '../../types/ipc';
 import { onWalletStatus } from '../../services/events';
 import { getWalletStatus } from '../../services/ipc';
-import { ViewSeedPhraseDialog } from '../common/ViewSeedPhraseDialog';
 import { ShieldPrompt } from './ShieldPrompt';
+import { formatZatoshisToZec } from '../../utils/zec';
+import { Button } from '../ui/button';
 
 function Card(props: { title: string; children: ReactNode }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
+    <div className="rounded-xl border border-border p-3 grid gap-2">
       <strong>{props.title}</strong>
       {props.children}
     </div>
@@ -78,38 +79,33 @@ export function StatusWidget(props: {
   }, [onStatusChange]);
 
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      <h2 style={{ margin: 0 }}>Status</h2>
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+    <div className="grid gap-2.5">
+      <h2 className="text-lg font-semibold m-0">Status</h2>
+      {error ? <div className="text-sm text-destructive">{error}</div> : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
-        <Card title="Backup">
-          <div style={{ fontSize: 14 }}>
-            Status: <strong>{status?.backup_status ?? 'Loading…'}</strong>
-          </div>
-          {backupRequired ? (
-            <div style={{ fontSize: 12, opacity: 0.85 }}>Backup is required before sending funds.</div>
-          ) : null}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {backupRequired ? (
-              <button type="button" onClick={() => navigate('/backup')}>
-                Verify backup
-              </button>
-            ) : null}
-            <ViewSeedPhraseDialog walletId={walletId} triggerLabel="View seed phrase" />
-          </div>
-        </Card>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-2.5">
+        {backupRequired ? (
+          <Card title="Backup">
+            <div className="text-sm">
+              Status: <strong>Required</strong>
+            </div>
+            <div className="text-xs text-muted-foreground">Backup is required before sending funds.</div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/backup')}>
+              Verify backup
+            </Button>
+          </Card>
+        ) : null}
 
         <Card title="Sync">
-          <div style={{ fontSize: 14 }}>
-            Status: <strong>{syncLabel ?? 'Loading…'}</strong>
+          <div className="text-sm">
+            Status: <strong>{syncLabel ?? 'Loading...'}</strong>
           </div>
         </Card>
 
         <Card title="Shielding">
-          <div style={{ fontSize: 14 }}>
+          <div className="text-sm">
             Status:{' '}
-            <strong>{shieldAmount && shieldAmount !== '0' ? `Available (${shieldAmount})` : 'None'}</strong>
+            <strong>{shieldAmount && shieldAmount !== '0' ? `Available (${formatZatoshisToZec(shieldAmount)} ZEC)` : 'None'}</strong>
           </div>
           {shieldAmount && shieldAmount !== '0' && activeAccountId !== null ? (
             <ShieldPrompt
@@ -123,13 +119,13 @@ export function StatusWidget(props: {
         </Card>
 
         <Card title="Privacy">
-          <div style={{ fontSize: 14 }}>
-            Posture: <strong>{status?.privacy_posture ?? 'Loading…'}</strong>
+          <div className="text-sm">
+            Posture: <strong>{status?.privacy_posture ?? 'Loading...'}</strong>
           </div>
           {status?.privacy_posture === 'Optimal' ? (
-            <div style={{ fontSize: 12, opacity: 0.85 }}>Backed up and shielded-by-default.</div>
+            <div className="text-xs text-muted-foreground">Backed up and shielded-by-default.</div>
           ) : (
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
+            <div className="text-xs text-muted-foreground">
               Complete backup and shield transparent funds to improve privacy.
             </div>
           )}

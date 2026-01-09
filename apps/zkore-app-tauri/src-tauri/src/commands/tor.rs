@@ -1,5 +1,6 @@
 use tauri::State;
 
+use zkore_core::domain::WalletLockStatus;
 use zkore_core::errors;
 use zkore_core::ipc::v1::commands::tor::{
     GetTorStateRequest, GetTorStateResponse, SetTorEnabledRequest, SetTorEnabledResponse,
@@ -8,12 +9,14 @@ use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_versi
 use zkore_engine::db::tor_meta;
 use zkore_engine::error::ipc_err;
 
+use super::sync::start_sync_with_handlers;
 use crate::state::AppState;
 
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "zkore_set_tor_enabled")]
 pub fn zkore_set_tor_enabled(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: SetTorEnabledRequest,
 ) -> IpcResult<SetTorEnabledResponse> {
@@ -21,7 +24,22 @@ pub fn zkore_set_tor_enabled(
         return IpcResult::Err { err };
     }
 
+    // Enter the tokio runtime context so TorManager can spawn tasks
+    let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
+    let _guard = handle.enter();
+
     map_anyhow(|| {
+        // Stop any running syncs to kill cached direct channels
+        let running_wallets = if request.enabled {
+            let wallets = state.sync_service.running_wallet_ids();
+            for wallet_id in &wallets {
+                let _ = state.sync_service.stop_sync(*wallet_id, None);
+            }
+            wallets
+        } else {
+            Vec::new()
+        };
+
         let next_state = state
             .tor_manager
             .set_enabled(request.enabled)
@@ -34,6 +52,18 @@ pub fn zkore_set_tor_enabled(
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             tor_meta::upsert_tor_state(mgr.app_db().conn(), &next_state, updated_at_ms)
                 .map_err(|e| anyhow::anyhow!(e))?;
+        }
+
+        // Restart syncs (they will wait for Tor in their own task)
+        if request.enabled && !running_wallets.is_empty() {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            for wallet_id in running_wallets {
+                if let Ok((wallet, lock_status)) = mgr.load_wallet(wallet_id) {
+                    if lock_status == WalletLockStatus::Unlocked {
+                        let _ = start_sync_with_handlers(&app, &state, &mut mgr, &wallet);
+                    }
+                }
+            }
         }
 
         Ok(SetTorEnabledResponse {

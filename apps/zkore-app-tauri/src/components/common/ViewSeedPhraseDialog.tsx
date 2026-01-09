@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { reauthWallet, viewSeedPhrase } from '../../services/ipc';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 
 export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: string }) {
   const { walletId, triggerLabel } = props;
@@ -50,91 +55,86 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
   };
 
   return (
-    <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-      <button type="button" onClick={() => setOpen(true)}>
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         {triggerLabel}
-      </button>
+      </Button>
 
-      {open ? (
+      {open && (
         <div
           role="dialog"
           aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
           }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         >
-          <div
-            ref={dialogRef}
-            style={{ background: 'white', borderRadius: 12, padding: 16, maxWidth: 720, width: '100%' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <h2 style={{ margin: 0 }}>Seed phrase</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close seed phrase dialog">
-                Close
-              </button>
-            </div>
+          <Card ref={dialogRef} className="w-full max-w-2xl animate-[fade-in-up_0.2s_ease-out]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <CardTitle className="text-lg">Seed phrase</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setOpen(false)}
+                aria-label="Close seed phrase dialog"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
 
-            {seedWords ? (
-              <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-                <div style={{ fontSize: 14, opacity: 0.85 }}>
-                  Keep this private. Do not copy/paste or screenshot.
+            <CardContent>
+              {seedWords ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Keep this private. Do not copy/paste or screenshot.
+                  </p>
+                  <div
+                    className="grid grid-cols-3 gap-2 select-none"
+                  >
+                    {seedWords.map((word, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2"
+                      >
+                        <span className="w-6 text-sm text-muted-foreground">{idx + 1}.</span>
+                        <span className="font-medium">{word}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                    gap: 8,
-                    userSelect: 'none',
+              ) : (
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void submit();
                   }}
                 >
-                  {seedWords.map((word, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        gap: 8,
-                        padding: 8,
-                        border: '1px solid #ddd',
-                        borderRadius: 8,
-                        background: '#fafafa',
-                      }}
-                    >
-                      <span style={{ width: 28, opacity: 0.7 }}>{idx + 1}.</span>
-                      <strong>{word}</strong>
+                  <div className="space-y-2">
+                    <Label htmlFor="seed-password">Wallet password</Label>
+                    <Input
+                      id="seed-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.currentTarget.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {error && (
+                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                      {error}
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <form
-                style={{ display: 'grid', gap: 12, marginTop: 12 }}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void submit();
-                }}
-              >
-                <label style={{ display: 'grid', gap: 4 }}>
-                  <span>Wallet password</span>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.currentTarget.value)}
-                  />
-                </label>
-                {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
-                <button type="submit" disabled={!password || loading}>
-                  {loading ? 'Verifying…' : 'View seed phrase'}
-                </button>
-              </form>
-            )}
-          </div>
+                  )}
+                  <Button type="submit" disabled={!password || loading} className="w-full">
+                    {loading ? 'Verifying...' : 'View seed phrase'}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      ) : null}
-    </div>
+      )}
+    </>
   );
 }

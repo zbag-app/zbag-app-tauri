@@ -13,7 +13,13 @@ fn main() {
         .setup(|app| {
             let state = app.state::<zkore_app_tauri_lib::state::AppState>();
 
-            let _ = state.tor_manager.start_if_enabled();
+            // Enter tokio runtime context so TorManager can spawn bootstrap task
+            let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
+            let _guard = handle.enter();
+
+            if let Err(err) = state.tor_manager.start_if_enabled() {
+                tracing::warn!(error = ?err, "failed to start Tor on app launch");
+            }
 
             let app_handle = app.handle().clone();
 

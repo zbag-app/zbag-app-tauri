@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeftRight, Clock, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import { startSwap } from '../services/ipc';
 import type { SwapQuoteLocationState } from './Swap';
 
@@ -39,61 +42,112 @@ export function SwapQuote() {
 
   if (!quoteId || !quote) {
     return (
-      <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
-        <h1>Swap Quote</h1>
-        <div>
-          Missing quote. Return to <Link to="/swap">Swap</Link>.
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <ArrowLeftRight className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Swap Quote</h1>
         </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">
+              Missing quote. Return to <Link to="/swap" className="text-primary hover:underline">Swap</Link>.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12, padding: 16, maxWidth: 760 }}>
-      <h1>Quote</h1>
-
-      <div style={{ display: 'grid', gap: 6 }}>
-        <div>
-          {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
+    <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+          <ArrowLeftRight className="h-5 w-5 text-primary" />
         </div>
-        <div style={{ fontSize: 13, opacity: 0.8 }}>
-          Fee: {quote.fee_amount} {quote.fee_asset}
-        </div>
-        <div style={{ fontSize: 13, opacity: 0.8 }}>Rate: {quote.rate}</div>
-        <div style={{ fontSize: 13, opacity: 0.8 }}>
-          Expires in: {formatDeadline(quote.deadline)}
-        </div>
+        <h1 className="text-2xl font-bold">Quote</h1>
       </div>
 
-      {expired ? <div style={{ color: '#b91c1c' }}>Quote expired.</div> : null}
-      {error ? <div style={{ color: 'crimson' }}>{error}</div> : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Swap Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted/50 p-4">
+            <div className="text-lg font-semibold">
+              {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
+            </div>
+          </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button
-          type="button"
-          disabled={expired || submitting}
-          onClick={async () => {
-            setSubmitting(true);
-            setError(null);
-            const res = await startSwap({
-              quote_id: quoteId,
-              allow_transparent_interaction: false,
-              reauth_token: null,
-            });
-            setSubmitting(false);
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Fee</span>
+              <div className="font-semibold">
+                {quote.fee_amount} {quote.fee_asset}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground">Rate</span>
+              <div className="font-semibold">{quote.rate}</div>
+            </div>
+            <div className="space-y-1 col-span-2">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Expires in
+              </span>
+              <div className={`font-mono font-semibold ${expired ? 'text-destructive' : ''}`}>
+                {expired ? 'Expired' : formatDeadline(quote.deadline)}
+              </div>
+            </div>
+          </div>
 
-            if ('err' in res) {
-              setError(res.err.message);
-              return;
-            }
+          {expired && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              Quote expired.
+            </div>
+          )}
 
-            navigate('/swap/deposit', { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
-          }}
-        >
-          {submitting ? 'Starting…' : 'Start swap'}
-        </button>
-        <Link to="/swap">Back</Link>
-      </div>
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              disabled={expired || submitting}
+              onClick={async () => {
+                setSubmitting(true);
+                setError(null);
+                const res = await startSwap({
+                  quote_id: quoteId,
+                  allow_transparent_interaction: false,
+                  reauth_token: null,
+                });
+                setSubmitting(false);
+
+                if ('err' in res) {
+                  setError(res.err.message);
+                  return;
+                }
+
+                navigate('/swap/deposit', { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
+              }}
+              className="flex-1"
+            >
+              {submitting ? 'Starting...' : 'Start swap'}
+            </Button>
+            <Link to="/swap">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
