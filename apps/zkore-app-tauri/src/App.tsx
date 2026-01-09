@@ -28,6 +28,7 @@ import { Activity } from './pages/Activity';
 import { RestoreBirthday } from './pages/RestoreBirthday';
 import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
+import { KeystoneSetup } from './pages/KeystoneSetup';
 import { Signing } from './pages/Signing';
 import { Swap } from './pages/Swap';
 import { SwapDeposit } from './pages/SwapDeposit';
@@ -231,6 +232,17 @@ function AppInner() {
               flow={restoreFlow}
               onClearFlow={() => setRestoreFlow(null)}
               onRestored={(args) => {
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/keystone/setup"
+          element={
+            <KeystoneSetup
+              onCreated={(args) => {
                 setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
                 setAccounts(args.accounts);
               }}
@@ -481,6 +493,10 @@ function WalletSelectionRoutes(props: {
             onRestored={onRestored}
           />
         }
+      />
+      <Route
+        path="/keystone/setup"
+        element={<KeystoneSetup onCreated={onRestored} />}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

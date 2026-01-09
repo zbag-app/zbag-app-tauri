@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { importUfvk, loadWallet } from '../services/ipc';
+import { UFVKScanner } from '../components/keystone/UFVKScanner';
 
 type ImportMode = 'paste' | 'scan';
 
@@ -104,10 +105,9 @@ export function ImportKeystone(props: {
               variant={mode === 'scan' ? 'default' : 'outline'}
               onClick={() => setMode('scan')}
               size="sm"
-              disabled
             >
               <QrCode className="h-4 w-4" />
-              Scan QR (coming soon)
+              Scan QR
             </Button>
           </div>
 
@@ -124,9 +124,13 @@ export function ImportKeystone(props: {
               />
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              QR scanning will be available in a future update. For now, paste the UFVK.
-            </p>
+            <UFVKScanner
+              onScanned={(scannedUfvk) => {
+                setUfvk(scannedUfvk);
+                setMode('paste');
+              }}
+              onCancel={() => setMode('paste')}
+            />
           )}
 
           {error && (

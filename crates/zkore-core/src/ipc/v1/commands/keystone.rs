@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::{AccountInfo, RecipientKind, TransactionType, Zatoshis};
+use crate::domain::{AccountInfo, Network, RecipientKind, TransactionType, WalletInfo, Zatoshis};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigningSummary {
@@ -64,4 +64,29 @@ pub struct BuildSigningRequestResponse {
 pub struct FinalizeSigningResponse {
     pub schema_version: u32,
     pub txid: String,
+}
+
+/// Create a standalone Keystone hardware wallet from a UFVK.
+///
+/// Unlike software wallets, this does NOT generate a mnemonic.
+/// The UFVK provides view-only access; spending requires Keystone signing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateKeystoneWalletRequest {
+    pub schema_version: u32,
+    pub name: String,
+    pub network: Network,
+    pub password: String,
+    pub remember_unlock: bool,
+    pub ufvk: String,
+    /// Optional birthday height for faster sync.
+    /// If omitted, defaults to Sapling activation height (slower full-chain scan).
+    pub birthday_height: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateKeystoneWalletResponse {
+    pub schema_version: u32,
+    pub wallet: WalletInfo,
+    pub account: AccountInfo,
 }

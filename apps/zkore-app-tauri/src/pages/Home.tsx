@@ -146,7 +146,7 @@ export function Home(props: {
                 <span className="text-xs">Swap</span>
               </Button>
             </Link>
-            {needsShielding && activeAccountId !== null ? (
+            {needsShielding && activeAccountId !== null && wallet.wallet_type !== 'WatchOnly' ? (
               <ShieldPrompt
                 walletId={wallet.id}
                 accountId={activeAccountId}
@@ -155,7 +155,12 @@ export function Home(props: {
                 onShielded={refreshBalance}
               />
             ) : (
-              <Button variant="secondary" className="w-full flex-col h-auto py-3 gap-1" disabled>
+              <Button
+                variant="secondary"
+                className="w-full flex-col h-auto py-3 gap-1"
+                disabled
+                title={wallet.wallet_type === 'WatchOnly' ? 'Shielding not available for hardware wallets' : undefined}
+              >
                 <Shield className="h-5 w-5" />
                 <span className="text-xs">Shield</span>
               </Button>

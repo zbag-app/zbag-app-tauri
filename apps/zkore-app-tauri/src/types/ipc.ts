@@ -40,8 +40,9 @@ export type UnixTimestampMs = number;
 // Wallet Types
 // ============================================================================
 
-// In v1, wallets are always `Software`; watch-only behavior is modeled at the account level.
-// `WatchOnly` wallet type is reserved for future use and MUST NOT be created in v1.
+// `Software`: Wallet with mnemonic seed stored locally. Supports full spend capability.
+// `WatchOnly`: Wallet created from a UFVK (e.g., Keystone hardware wallet). No local seed;
+// spending requires external signing device.
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
 
@@ -755,6 +756,27 @@ export interface FinalizeSigningResponse extends VersionedPayload {
   txid: string;
 }
 
+/**
+ * Create a standalone Keystone hardware wallet from a UFVK.
+ *
+ * Unlike software wallets, this does NOT generate a mnemonic.
+ * The UFVK provides view-only access; spending requires Keystone signing.
+ */
+export interface CreateKeystoneWalletRequest extends VersionedPayload {
+  name: string;
+  network: Network;
+  password: string;
+  remember_unlock: boolean;
+  ufvk: string;
+  /** Optional birthday height for faster sync. If omitted, defaults to Sapling activation height (slower). */
+  birthday_height?: number;
+}
+
+export interface CreateKeystoneWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  account: AccountInfo;
+}
+
 export interface RequestSwapQuoteResponse extends VersionedPayload {
   quote_id: string;
   quote: SwapQuote;
@@ -917,6 +939,11 @@ export const ErrorCodes = {
   TOR_NOT_READY: 'E7001',
   TOR_CONNECTION_FAILED: 'E7002',
 
+  // Watch-only wallet errors
+  WATCH_ONLY_NO_SEED: 'E9010',
+  WATCH_ONLY_NO_BACKUP: 'E9011',
+  WATCH_ONLY_CANNOT_SHIELD: 'E9012',
+
   // General errors
   INVALID_REQUEST: 'E9001',
   INTERNAL_ERROR: 'E9002',
@@ -967,6 +994,7 @@ export const Commands = {
   IMPORT_UFVK: 'zkore_import_ufvk',
   BUILD_SIGNING_REQUEST: 'zkore_build_signing_request',
   FINALIZE_SIGNING: 'zkore_finalize_signing',
+  CREATE_KEYSTONE_WALLET: 'zkore_create_keystone_wallet',
 
   // Swaps
   REQUEST_SWAP_QUOTE: 'zkore_request_swap_quote',

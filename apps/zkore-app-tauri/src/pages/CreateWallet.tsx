@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Shield } from 'lucide-react';
+import { Key, Plus, Shield } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -160,9 +160,13 @@ export function CreateWallet(props: {
               {submitting ? 'Creating...' : 'Create wallet'}
             </Button>
 
-            <div className="text-center">
-              <Link to="/restore" className="text-sm text-primary hover:underline">
+            <div className="text-center space-y-2">
+              <Link to="/restore" className="text-sm text-primary hover:underline block">
                 Restore from seed phrase
+              </Link>
+              <Link to="/keystone/setup" className="text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 transition-colors">
+                <Key className="h-3 w-3" />
+                Connect hardware wallet
               </Link>
             </div>
           </form>

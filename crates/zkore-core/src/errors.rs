@@ -61,6 +61,11 @@ pub const SWAP_UNSUPPORTED_NETWORK: &str = "E6004";
 pub const TOR_NOT_READY: &str = "E7001";
 pub const TOR_CONNECTION_FAILED: &str = "E7002";
 
+// Watch-only wallet errors
+pub const WATCH_ONLY_NO_SEED: &str = "E9010";
+pub const WATCH_ONLY_NO_BACKUP: &str = "E9011";
+pub const WATCH_ONLY_CANNOT_SHIELD: &str = "E9012";
+
 // General errors
 pub const INVALID_REQUEST: &str = "E9001";
 pub const INTERNAL_ERROR: &str = "E9002";

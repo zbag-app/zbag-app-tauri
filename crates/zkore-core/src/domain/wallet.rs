@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 /// Wallet type.
 ///
-/// NOTE: In v1 wallets are always `Software`. `WatchOnly` is reserved for future use.
+/// - `Software`: Wallet with mnemonic seed stored locally. Supports full spend capability.
+/// - `WatchOnly`: Wallet created from a UFVK (e.g., Keystone hardware wallet). No local seed;
+///   spending requires external signing device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WalletType {
     Software,

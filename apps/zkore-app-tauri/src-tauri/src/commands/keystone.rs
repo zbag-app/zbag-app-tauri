@@ -1,8 +1,9 @@
 use tauri::State;
 
 use zkore_core::ipc::v1::commands::keystone::{
-    BuildSigningRequestRequest, BuildSigningRequestResponse, FinalizeSigningRequest,
-    FinalizeSigningResponse, ImportUfvkRequest, ImportUfvkResponse,
+    BuildSigningRequestRequest, BuildSigningRequestResponse, CreateKeystoneWalletRequest,
+    CreateKeystoneWalletResponse, FinalizeSigningRequest, FinalizeSigningResponse,
+    ImportUfvkRequest, ImportUfvkResponse,
 };
 use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
@@ -62,5 +63,33 @@ pub fn zkore_finalize_signing(
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.finalize_signing(&request.signed_payload, &request.reauth_token, None)
+    })
+}
+
+#[tauri::command(rename = "zkore_create_keystone_wallet")]
+pub fn zkore_create_keystone_wallet(
+    state: State<'_, AppState>,
+    request: CreateKeystoneWalletRequest,
+) -> IpcResult<CreateKeystoneWalletResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    map_anyhow(|| {
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let (wallet, account) = mgr.create_keystone_wallet(
+            &request.name,
+            request.network,
+            &request.password,
+            request.remember_unlock,
+            &request.ufvk,
+            request.birthday_height,
+        )?;
+
+        Ok(CreateKeystoneWalletResponse {
+            schema_version: SCHEMA_VERSION,
+            wallet,
+            account,
+        })
     })
 }
