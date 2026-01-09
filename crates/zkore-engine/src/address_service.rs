@@ -4,10 +4,10 @@ use uuid::Uuid;
 use zcash_protocol::consensus::Parameters as _;
 use zip32::DiversifierIndex;
 
-use zkore_core::domain::{AddressInfo, AddressType, Network};
+use zkore_core::domain::{AccountType, AddressInfo, AddressType, Network};
 use zkore_core::errors;
 
-use crate::db::rotation_meta;
+use crate::db::{account_meta, rotation_meta};
 use crate::error::ipc_err;
 
 #[allow(deprecated)]
@@ -41,15 +41,31 @@ pub fn get_receive_address(
 
     let account = find_account_uuid(&mut wdb, account_id)?;
 
+    // Check if this is a HardwareSigner account - if so, use Orchard-only addresses
+    // like Zashi does for Keystone. This is because Keystone UFVKs typically only
+    // have Orchard support, not Sapling.
+    let is_hardware_signer = account_meta::get_account(app_conn, wallet_id, account_id)?
+        .is_some_and(|acc| acc.account_type == AccountType::HardwareSigner);
+
     match address_type {
         AddressType::ShieldedOnly => {
-            // Require Orchard and Sapling; omit transparent receiver.
-            let request = UnifiedAddressRequest::custom(
-                ReceiverRequirement::Require,
-                ReceiverRequirement::Require,
-                ReceiverRequirement::Omit,
-            )
-            .expect("valid receiver requirements");
+            // For HardwareSigner accounts (Keystone), use Orchard-only addresses.
+            // For software wallets, use Orchard+Sapling.
+            let request = if is_hardware_signer {
+                UnifiedAddressRequest::custom(
+                    ReceiverRequirement::Require, // Orchard
+                    ReceiverRequirement::Omit,    // Sapling - omit for hardware signers
+                    ReceiverRequirement::Omit,    // Transparent
+                )
+                .expect("valid receiver requirements")
+            } else {
+                UnifiedAddressRequest::custom(
+                    ReceiverRequirement::Require, // Orchard
+                    ReceiverRequirement::Require, // Sapling
+                    ReceiverRequirement::Omit,    // Transparent
+                )
+                .expect("valid receiver requirements")
+            };
 
             let addresses = wdb
                 .list_addresses(account)

@@ -28,6 +28,11 @@ export interface ZcashAccount {
   label?: string;
 }
 
+export interface ZcashAccountsResult {
+  seedFingerprint: string | null;
+  accounts: ZcashAccount[];
+}
+
 /**
  * Read a CBOR head (major type + additional info).
  * Based on zcashPcztUr.ts pattern.
@@ -113,6 +118,18 @@ function readCborTextString(bytes: Uint8Array, offset: number): { value: string;
   if (head.offset + head.value > bytes.length) throw new Error('Unexpected end of CBOR (text string)');
   const textBytes = bytes.subarray(head.offset, head.offset + head.value);
   return { value: new TextDecoder().decode(textBytes), offset: head.offset + head.value };
+}
+
+/**
+ * Read a CBOR byte string.
+ */
+function readCborByteString(bytes: Uint8Array, offset: number): { value: Uint8Array; offset: number } {
+  const head = readCborHead(bytes, offset);
+  if (head.major !== 2) throw new Error(`Expected byte string (major 2), got major ${head.major}`);
+  if (head.indefinite) throw new Error('Indefinite byte strings not supported');
+  if (head.offset + head.value > bytes.length) throw new Error('Unexpected end of CBOR (byte string)');
+  const byteValue = bytes.subarray(head.offset, head.offset + head.value);
+  return { value: byteValue, offset: head.offset + head.value };
 }
 
 /**
@@ -231,12 +248,21 @@ function parseAccountMap(bytes: Uint8Array, offset: number): { account: ZcashAcc
 }
 
 /**
+ * Convert a Uint8Array to a hex string.
+ */
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
  * Decode a zcash-accounts UR CBOR payload.
  *
  * @param cbor The raw CBOR bytes (decoded from UR hex)
- * @returns Array of accounts with UFVK, index, and label
+ * @returns Object containing seed fingerprint (32-byte hex string) and array of accounts
  */
-export function decodeZcashAccountsUrCbor(cbor: Uint8Array): ZcashAccount[] {
+export function decodeZcashAccountsUrCbor(cbor: Uint8Array): ZcashAccountsResult {
   // 1. Parse outer map
   const outerMapHead = readCborHead(cbor, 0);
   if (outerMapHead.major !== 5) {
@@ -247,17 +273,26 @@ export function decodeZcashAccountsUrCbor(cbor: Uint8Array): ZcashAccount[] {
   }
 
   let offset = outerMapHead.offset;
+  let seedFingerprint: string | null = null;
   let accountsArray: Uint8Array | null = null;
   let accountsArrayOffset = 0;
   let accountsArrayLength = 0;
 
-  // 2. Iterate outer map entries to find key 2 (accounts array)
+  // 2. Iterate outer map entries to find key 1 (seed_fingerprint) and key 2 (accounts array)
   for (let i = 0; i < outerMapHead.value; i++) {
     const keyResult = readCborUint(cbor, offset);
     const key = keyResult.value;
     offset = keyResult.offset;
 
-    if (key === 2) {
+    if (key === 1) {
+      // Found seed fingerprint (32-byte string)
+      const byteResult = readCborByteString(cbor, offset);
+      if (byteResult.value.length !== 32) {
+        throw new Error(`Invalid zcash-accounts CBOR: seed_fingerprint must be 32 bytes, got ${byteResult.value.length}`);
+      }
+      seedFingerprint = bytesToHex(byteResult.value);
+      offset = byteResult.offset;
+    } else if (key === 2) {
       // Found accounts array
       const arrayHead = readCborHead(cbor, offset);
       if (arrayHead.major !== 4) {
@@ -275,7 +310,7 @@ export function decodeZcashAccountsUrCbor(cbor: Uint8Array): ZcashAccount[] {
         offset = skipCborItem(cbor, offset);
       }
     } else {
-      // Skip other keys (e.g., key 1 = seed fingerprint)
+      // Skip unknown keys
       offset = skipCborItem(cbor, offset);
     }
   }
@@ -305,5 +340,5 @@ export function decodeZcashAccountsUrCbor(cbor: Uint8Array): ZcashAccount[] {
     entryOffset = accountResult.offset;
   }
 
-  return accounts;
+  return { seedFingerprint, accounts };
 }

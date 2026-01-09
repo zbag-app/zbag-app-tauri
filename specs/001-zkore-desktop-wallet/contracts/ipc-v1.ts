@@ -491,6 +491,10 @@ export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;
   name: string;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
 }
 
 /** Build unsigned signing request for Keystone */

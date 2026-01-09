@@ -11089,6 +11089,8 @@ dependencies = [
  "chrono",
  "hex",
  "keyring",
+ "orchard",
+ "pczt",
  "prost",
  "rand 0.8.5",
  "rusqlite",

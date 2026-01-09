@@ -143,7 +143,7 @@ fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
     let ufvk_str = ufvk.encode(&ConsensusNetwork::TestNetwork);
 
     let imported = mgr
-        .import_ufvk(created.wallet.id, &ufvk_str, "Keystone")
+        .import_ufvk(created.wallet.id, &ufvk_str, "Keystone", None, None)
         .expect("import ufvk");
 
     assert_eq!(imported.id, 1);
@@ -191,7 +191,7 @@ fn import_ufvk_rejects_network_mismatch() {
     let ufvk_str = ufvk.encode(&ConsensusNetwork::MainNetwork);
 
     let err = mgr
-        .import_ufvk(created.wallet.id, &ufvk_str, "Wrong net")
+        .import_ufvk(created.wallet.id, &ufvk_str, "Wrong net", None, None)
         .expect_err("network mismatch must fail");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::INVALID_UFVK);

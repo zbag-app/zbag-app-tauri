@@ -590,6 +590,8 @@ impl WalletManager {
         remember_unlock: bool,
         ufvk: &str,
         birthday_height: Option<u32>,
+        seed_fingerprint: Option<&str>,
+        zip32_account_index: Option<u32>,
     ) -> anyhow::Result<(WalletInfo, AccountInfo)> {
         if name.trim().is_empty() {
             return Err(ipc_err(
@@ -674,11 +676,12 @@ impl WalletManager {
             use zcash_client_backend::data_api::chain::ChainState;
             #[allow(deprecated)]
             use zcash_client_backend::data_api::{
-                AccountBirthday, AccountPurpose, WalletWrite as _,
+                AccountBirthday, AccountPurpose, WalletWrite as _, Zip32Derivation,
             };
             use zcash_primitives::block::BlockHash;
             use zcash_protocol::consensus::NetworkUpgrade;
             use zcash_protocol::consensus::Parameters as _;
+            use zip32::fingerprint::SeedFingerprint;
 
             let params = zcash_consensus_network(network);
             let sapling_activation = params
@@ -708,6 +711,39 @@ impl WalletManager {
                 rand::rngs::OsRng,
             );
 
+            // Build account purpose with derivation info for Keystone signing.
+            // This enables PCZT to include zip32_derivation fields so Keystone knows which key to use.
+            let account_purpose = match (seed_fingerprint, zip32_account_index) {
+                (Some(fp_hex), Some(idx)) => {
+                    let fp_bytes = hex::decode(fp_hex).map_err(|e| {
+                        ipc_err(
+                            errors::INVALID_REQUEST,
+                            format!("invalid seed_fingerprint hex: {e}"),
+                        )
+                    })?;
+                    if fp_bytes.len() != 32 {
+                        return Err(ipc_err(
+                            errors::INVALID_REQUEST,
+                            "seed_fingerprint must be 32 bytes",
+                        ));
+                    }
+                    let mut fp_arr = [0u8; 32];
+                    fp_arr.copy_from_slice(&fp_bytes);
+                    let seed_fp = SeedFingerprint::from_bytes(fp_arr);
+                    let account_index = zip32::AccountId::try_from(idx).map_err(|_| {
+                        ipc_err(errors::INVALID_REQUEST, "invalid zip32_account_index")
+                    })?;
+                    let derivation = Zip32Derivation::new(seed_fp, account_index);
+                    AccountPurpose::Spending {
+                        derivation: Some(derivation),
+                    }
+                }
+                _ => {
+                    // Fallback: import without derivation info (signing may not work)
+                    AccountPurpose::Spending { derivation: None }
+                }
+            };
+
             // Use account_id=0 directly for the first account
             let key_source = crate::account_key_source::key_source_for_account_id(0);
             let _ = wdb
@@ -715,7 +751,7 @@ impl WalletManager {
                     name,
                     &parsed.ufvk,
                     &birthday,
-                    AccountPurpose::ViewOnly,
+                    account_purpose,
                     Some(&key_source),
                 )
                 .context("failed to import UFVK into wallet db")?;
@@ -1405,6 +1441,8 @@ impl WalletManager {
         wallet_id: Uuid,
         ufvk: &str,
         name: &str,
+        seed_fingerprint: Option<&str>,
+        zip32_account_index: Option<u32>,
     ) -> anyhow::Result<AccountInfo> {
         let name = name.trim();
         if name.is_empty() {
@@ -1468,10 +1506,13 @@ impl WalletManager {
 
         use zcash_client_backend::data_api::chain::ChainState;
         #[allow(deprecated)]
-        use zcash_client_backend::data_api::{AccountBirthday, AccountPurpose, WalletWrite as _};
+        use zcash_client_backend::data_api::{
+            AccountBirthday, AccountPurpose, WalletWrite as _, Zip32Derivation,
+        };
         use zcash_primitives::block::BlockHash;
         use zcash_protocol::consensus::NetworkUpgrade;
         use zcash_protocol::consensus::Parameters as _;
+        use zip32::fingerprint::SeedFingerprint;
 
         let sapling_activation = params
             .activation_height(NetworkUpgrade::Sapling)
@@ -1481,13 +1522,45 @@ impl WalletManager {
             None,
         );
 
+        // Build account purpose with derivation info for Keystone signing.
+        // This enables PCZT to include zip32_derivation fields so Keystone knows which key to use.
+        let account_purpose = match (seed_fingerprint, zip32_account_index) {
+            (Some(fp_hex), Some(idx)) => {
+                let fp_bytes = hex::decode(fp_hex).map_err(|e| {
+                    ipc_err(
+                        errors::INVALID_REQUEST,
+                        format!("invalid seed_fingerprint hex: {e}"),
+                    )
+                })?;
+                if fp_bytes.len() != 32 {
+                    return Err(ipc_err(
+                        errors::INVALID_REQUEST,
+                        "seed_fingerprint must be 32 bytes",
+                    ));
+                }
+                let mut fp_arr = [0u8; 32];
+                fp_arr.copy_from_slice(&fp_bytes);
+                let seed_fp = SeedFingerprint::from_bytes(fp_arr);
+                let account_index = zip32::AccountId::try_from(idx)
+                    .map_err(|_| ipc_err(errors::INVALID_REQUEST, "invalid zip32_account_index"))?;
+                let derivation = Zip32Derivation::new(seed_fp, account_index);
+                AccountPurpose::Spending {
+                    derivation: Some(derivation),
+                }
+            }
+            _ => {
+                // Fallback: import without derivation info (signing may not work)
+                AccountPurpose::Spending { derivation: None }
+            }
+        };
+
         let key_source = crate::account_key_source::key_source_for_account_id(next_account_id);
         let _ = wdb
             .import_account_ufvk(
                 name,
                 &parsed.ufvk,
                 &birthday,
-                AccountPurpose::ViewOnly,
+                account_purpose,
                 Some(&key_source),
             )
             .context("failed to import UFVK into wallet db")?;
@@ -1618,6 +1691,7 @@ impl WalletManager {
 
     pub fn finalize_signing(
         &mut self,
+        signing_request_id: &str,
         signed_payload: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
@@ -1663,6 +1737,7 @@ impl WalletManager {
             &wallet_dek,
             conn,
             &grpc_url,
+            signing_request_id,
             signed_payload,
             on_tx_changed,
         )

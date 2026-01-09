@@ -22,7 +22,13 @@ pub fn zkore_import_ufvk(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let account = mgr.import_ufvk(request.wallet_id, &request.ufvk, &request.name)?;
+        let account = mgr.import_ufvk(
+            request.wallet_id,
+            &request.ufvk,
+            &request.name,
+            request.seed_fingerprint.as_deref(),
+            request.zip32_account_index,
+        )?;
         Ok(ImportUfvkResponse {
             schema_version: SCHEMA_VERSION,
             account,
@@ -62,7 +68,12 @@ pub fn zkore_finalize_signing(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.finalize_signing(&request.signed_payload, &request.reauth_token, None)
+        mgr.finalize_signing(
+            &request.signing_request_id,
+            &request.signed_payload,
+            &request.reauth_token,
+            None,
+        )
     })
 }
 
@@ -84,6 +95,8 @@ pub fn zkore_create_keystone_wallet(
             request.remember_unlock,
             &request.ufvk,
             request.birthday_height,
+            request.seed_fingerprint.as_deref(),
+            request.zip32_account_index,
         )?;
 
         Ok(CreateKeystoneWalletResponse {

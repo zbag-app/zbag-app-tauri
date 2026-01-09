@@ -262,7 +262,9 @@ export interface ServerInfo {
 // ============================================================================
 
 export interface SigningRequest {
-  /** Base64-encoded PCZT payload */
+  /** Unique ID for this signing request, needed to finalize with the correct PCZT proofs */
+  signing_request_id: string;
+  /** Base64-encoded PCZT payload (redacted for signer, proofs stored server-side) */
   pczt_payload: string;
   /** QR frames for animated display */
   qr_frames: string[];
@@ -498,6 +500,10 @@ export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;
   name: string;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
 }
 
 /** Build unsigned signing request for Keystone */
@@ -515,6 +521,8 @@ export interface BuildSigningRequestRequest extends VersionedPayload {
 
 /** Finalize signed response from Keystone */
 export interface FinalizeSigningRequest extends VersionedPayload {
+  /** The signing_request_id returned from build_signing_request */
+  signing_request_id: string;
   signed_payload: string;
   /** Re-auth token (purpose: Spend) */
   reauth_token: string;
@@ -770,6 +778,10 @@ export interface CreateKeystoneWalletRequest extends VersionedPayload {
   ufvk: string;
   /** Optional birthday height for faster sync. If omitted, defaults to Sapling activation height (slower). */
   birthday_height?: number;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
 }
 
 export interface CreateKeystoneWalletResponse extends VersionedPayload {
