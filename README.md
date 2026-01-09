@@ -30,6 +30,8 @@ crates/
 
 apps/
   zkore-app-tauri/  # Tauri shell + React frontend
+  zkore-cli/        # Command-line interface
+  zkore-tui/        # Terminal UI
 ```
 
 ## Key Features
@@ -45,7 +47,7 @@ apps/
 
 ## Status
 
-**Phase**: Specification and design complete. Implementation pending.
+**Phase**: Active development (Tauri desktop app, CLI, and TUI implementations)
 
 Platform targets: macOS, Windows, Linux
 
@@ -68,6 +70,23 @@ Platform targets: macOS, Windows, Linux
 - ~~[Keystone SDK](https://dev.keyst.one) - Hardware wallet integration~~
 - [Keystone QR tooling (`@keystonehq/animated-qr`)](https://github.com/KeystoneHQ/keystone-airgaped-base) - Multi-frame QR for PCZT signing; Zcash `zcash-pczt` UR payload is encoded/decoded in-app to stay browser-compatible
 - [NEAR Intents](https://docs.near-intents.org) - DEX functionality
+
+## Development
+
+A Makefile is provided for common development tasks:
+
+| Target | Description |
+|--------|-------------|
+| `make install` | Install frontend dependencies |
+| `make dev` | Run Tauri development server |
+| `make build` | Build Rust library crates |
+| `make test` | Run all tests |
+| `make pre-commit` | Format and lint before committing |
+| `make check` | Full CI-like validation |
+
+Run `make help` for all available targets.
+
+See [Quickstart](specs/001-zkore-desktop-wallet/quickstart.md) for full setup instructions.
 
 ## Requirements
 

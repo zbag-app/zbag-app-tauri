@@ -1,7 +1,7 @@
 # Quickstart: Zkore Desktop Wallet
 
-**Branch**: `001-zkore-desktop-wallet`
-**Purpose**: Developer setup and initial implementation guide
+**Branch**: `main`
+**Purpose**: Developer onboarding and build reference
 
 ## Prerequisites
 
@@ -39,373 +39,111 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 - For DEK wrap/unwrap, bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted per wallet in `wallet_encryption`).
 - Zkore does not support a “system SQLCipher” build path; developers and end users do not install SQLCipher separately.
 
-## Project Setup
+## Getting Started
 
-### 1. Initialize Rust Workspace
-
-```bash
-# Create workspace root
-mkdir -p crates apps tests
-
-# Create Cargo.toml at root
-cat > Cargo.toml << 'EOF'
-[workspace]
-resolver = "2"
-members = [
-    "crates/zkore-core",
-    "crates/zkore-engine",
-    "crates/zkore-network",
-    "crates/zkore-keystone",
-    "crates/zkore-tor",
-    "apps/zkore-app-tauri/src-tauri",
-]
-
-[workspace.package]
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.92.0"
-license = "MIT"
-repository = "https://github.com/zkore/zkore-desktop"
-
-[workspace.dependencies]
-# Zcash libraries (aligned with librustzcash/Zashi)
-# Using caret constraints for semver-compatible updates
-# Features enabled:
-#   - orchard: Orchard shielded pool support (required)
-#   - Sapling: enabled by default; required for sending to Sapling recipients
-#   - transparent-inputs: Receive transparent funds + shield them (FR-010/FR-011)
-#   - pczt: PCZT signing for Keystone hardware wallet (FR-020-028)
-#   - tor: Embedded Arti Tor client for fail-closed anonymization (FR-037-041)
-zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor"] }
-zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs"] }
-zcash_primitives = { version = "0.26" }
-zcash_protocol = { version = "0.7" }
-
-# Modules relocated from zcash_primitives in 0.20+
-zip32 = "0.2"
-
-# Mnemonic + randomness
-bip39 = "2"
-rand = "0.8"
-
-# Crypto (KDF + AEAD)
-argon2 = "0.5"
-chacha20poly1305 = "0.10"
-
-# Async runtime
-tokio = { version = "1", features = ["full"] }
-
-# Logging
-tracing-appender = "0.2"
-
-# Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-
-# Encoding
-base64 = "0.22"
-
-# gRPC (tonic 0.14+ required for prost 0.14 compatibility)
-tonic = "0.14"
-prost = "0.14"
-
-# HTTP
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-
-# Database
-rusqlite = { version = "0.37", features = ["bundled-sqlcipher"] }
-
-# Error handling
-thiserror = "2"
-anyhow = "1"
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Zeroization
-zeroize = { version = "1", features = ["derive"] }
-secrecy = "0.8"
-
-# UUID
-uuid = { version = "1", features = ["v4", "serde"] }
-
-# Time
-chrono = { version = "0.4", features = ["serde"] }
-
-# FFI (if needed for C bindings)
-# bindgen = "0.72"
-EOF
-```
-
-### 2. Create Backend Crates
+### 1. Clone and Install
 
 ```bash
-# Core domain types and IPC
-cargo new --lib crates/zkore-core
-cargo new --lib crates/zkore-engine
-cargo new --lib crates/zkore-network
-cargo new --lib crates/zkore-keystone
-cargo new --lib crates/zkore-tor
+git clone https://github.com/zkore/zkore-desktop.git
+cd zkore-desktop
+make install    # Install frontend dependencies
 ```
 
-### 3. Initialize Tauri App
+### 2. Build and Run
 
 ```bash
-# Create Tauri app directory
-cd apps
-bun create tauri-app zkore-app-tauri --template react-ts
-cd zkore-app-tauri
+# Development (Tauri desktop app)
+make dev
 
-# Install dependencies (includes @tauri-apps/cli as dev dependency)
-bun install
-
-# Add Tauri CLI as dev dependency (preferred over global cargo install)
-bun add -D @tauri-apps/cli
-
-# Install additional UI dependencies
-bun add @keystonehq/animated-qr buffer
-bun add qrcode.react @tanstack/react-query
-bun add @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-tabs
-bun add react-hotkeys-hook
-bun add -D @types/node @axe-core/react
+# Or run specific apps
+make tui                        # Terminal UI
+make cli-run ARGS="wallet list" # CLI
 ```
 
-~~bun add @keystonehq/animated-qr @keystonehq/keystone-sdk~~
-
-**Updated approach**: use `@keystonehq/animated-qr` for multi-frame QR and a minimal `zcash-pczt` UR CBOR codec in the UI (CBOR map `{1: pczt_bytes}`) to avoid Node-only deps in the Tauri WebView.
-
-> **Note**: We use `@tauri-apps/cli` as a dev dependency rather than `cargo install tauri-cli`. This ensures consistent CLI versions across the team and integrates with bun scripts (`bun tauri dev`, `bun tauri build`).
-
-### 4. Configure Tauri for Workspace
-
-Edit `apps/zkore-app-tauri/src-tauri/Cargo.toml`:
-
-```toml
-[package]
-name = "zkore-app-tauri"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-zkore-core = { path = "../../../crates/zkore-core" }
-zkore-engine = { path = "../../../crates/zkore-engine" }
-zkore-network = { path = "../../../crates/zkore-network" }
-zkore-keystone = { path = "../../../crates/zkore-keystone" }
-zkore-tor = { path = "../../../crates/zkore-tor" }
-
-tauri = { version = "2", features = ["devtools"] }
-tauri-plugin-shell = "2"
-serde.workspace = true
-serde_json.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
-
-[features]
-default = ["custom-protocol"]
-custom-protocol = ["tauri/custom-protocol"]
-```
-
-## Initial Implementation
-
-### Step 1: zkore-core Types
-
-Create `crates/zkore-core/src/lib.rs`:
-
-```rust
-//! Core domain types and IPC contracts for Zkore Desktop
-
-pub mod domain;
-pub mod ipc;
-pub mod errors;
-
-pub use domain::*;
-pub use errors::*;
-```
-
-Create `crates/zkore-core/src/domain/mod.rs`:
-
-```rust
-//! Domain models
-
-mod wallet;
-mod account;
-mod address;
-mod backup;
-mod balance;
-mod server;
-mod sync;
-mod wallet_status;
-mod transaction;
-mod transparent_utxo;
-
-pub use wallet::*;
-pub use account::*;
-pub use address::*;
-pub use backup::*;
-pub use balance::*;
-pub use server::*;
-pub use sync::*;
-pub use wallet_status::*;
-pub use transaction::*;
-pub use transparent_utxo::*;
-```
-
-Note: Additional domain modules (e.g., `swap`, `tor`) are added in later steps as needed by their user stories.
-
-### Step 2: Tauri Commands Skeleton
-
-Create `apps/zkore-app-tauri/src-tauri/src/commands/mod.rs`:
-
-```rust
-use tauri::State;
-use zkore_core::ipc::v1::*;
-
-// Placeholder for wallet state
-pub struct AppState {
-    // Will hold wallet manager, sync service, etc.
-}
-
-#[tauri::command]
-pub async fn zkore_create_wallet(
-    state: State<'_, AppState>,
-    request: CreateWalletRequest,
-) -> IpcResult<CreateWalletResponse> {
-    // Implementation in Milestone 1
-    todo!()
-}
-
-#[tauri::command]
-pub async fn zkore_get_balance(
-    state: State<'_, AppState>,
-    request: GetBalanceRequest,
-) -> IpcResult<GetBalanceResponse> {
-    // Implementation in Milestone 1
-    todo!()
-}
-
-// ... more commands
-```
-
-### Step 3: Frontend IPC Client
-
-Copy IPC types to frontend:
+### 3. Run Tests
 
 ```bash
-cp specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts \
-   apps/zkore-app-tauri/src/types/ipc.ts
+make test       # All Rust library tests
+make check      # Full CI validation (fmt + clippy + tests)
 ```
 
-Create `apps/zkore-app-tauri/src/services/ipc.ts`:
+## Makefile Targets
 
-```typescript
-import { invoke } from '@tauri-apps/api/core';
-import * as IPC from '../types/ipc';
+The project includes a Makefile with shortcuts for common tasks. Run `make help` to see all available targets.
 
-// All IPC request/response payloads include `schema_version`.
-function versioned<T extends object>(request: T): T & IPC.VersionedPayload {
-  return { ...request, schema_version: IPC.SCHEMA_VERSION };
-}
+### Setup
+| Target | Description |
+|--------|-------------|
+| `install` | Install frontend dependencies |
 
-export async function listWallets(): Promise<
-  IPC.IpcResult<IPC.ListWalletsResponse>
-> {
-  return invoke(IPC.Commands.LIST_WALLETS, {
-    request: versioned({}),
-  });
-}
+### Build
+| Target | Description |
+|--------|-------------|
+| `build` | Build Rust library crates |
+| `build-release` | Production build (libs) |
+| `build-frontend` | Build frontend dist |
+| `build-tui` | Build TUI binary |
 
-export async function loadWallet(
-  request: Omit<IPC.LoadWalletRequest, 'schema_version'>
-): Promise<IPC.IpcResult<IPC.LoadWalletResponse>> {
-  return invoke(IPC.Commands.LOAD_WALLET, {
-    request: versioned(request),
-  });
-}
+### Test
+| Target | Description |
+|--------|-------------|
+| `test` | Run all library tests |
+| `test-engine` | Test zkore-engine only |
+| `test-core` | Test zkore-core only |
+| `test-network` | Test zkore-network only |
+| `test-keystone` | Test zkore-keystone only |
+| `test-tor` | Test zkore-tor only |
+| `test-migrations` | Run migration tests |
 
-export async function unlockWallet(
-  request: Omit<IPC.UnlockWalletRequest, 'schema_version'>
-): Promise<IPC.IpcResult<IPC.UnlockWalletResponse>> {
-  return invoke(IPC.Commands.UNLOCK_WALLET, {
-    request: versioned(request),
-  });
-}
+### Development
+| Target | Description |
+|--------|-------------|
+| `dev` | Full Tauri development mode |
+| `tui` | Run terminal UI |
+| `tui-release` | Run TUI (release build) |
+| `cli` | Build CLI (release) |
+| `cli-run ARGS="..."` | Run CLI with arguments |
 
-export async function createWallet(
-  request: Omit<IPC.CreateWalletRequest, 'schema_version'>
-): Promise<IPC.IpcResult<IPC.CreateWalletResponse>> {
-  return invoke(IPC.Commands.CREATE_WALLET, { request: versioned(request) });
-}
+### Lint/Quality
+| Target | Description |
+|--------|-------------|
+| `fmt` | Format Rust code |
+| `fmt-check` | Check formatting (CI) |
+| `clippy` | Run clippy lints |
+| `clippy-strict` | Clippy with warnings as errors |
+| `pre-commit` | Format + lint |
+| `check` | Full CI validation |
+| `audit` | Security audit |
 
-export async function getBalance(
-  request: Omit<IPC.GetBalanceRequest, 'schema_version'>
-): Promise<IPC.IpcResult<IPC.GetBalanceResponse>> {
-  return invoke(IPC.Commands.GET_BALANCE, { request: versioned(request) });
-}
+### Clean
+| Target | Description |
+|--------|-------------|
+| `clean` | Clean Rust build artifacts |
+| `clean-frontend` | Clean frontend dist |
+| `clean-all` | Clean everything |
+
+## Directory Structure
+
 ```
-
-Create `apps/zkore-app-tauri/src/services/events.ts`:
-
-```typescript
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import * as IPC from '../types/ipc';
-
-// Event subscriptions
-export function onBalanceChanged(
-  callback: (event: IPC.BalanceChangedEvent) => void
-): Promise<UnlistenFn> {
-  return listen(IPC.EventChannels.BALANCE, (event) => {
-    callback(event.payload as IPC.BalanceChangedEvent);
-  });
-}
-
-export function onSyncProgress(
-  callback: (event: IPC.SyncProgressEvent) => void
-): Promise<UnlistenFn> {
-  return listen(IPC.EventChannels.SYNC, (event) => {
-    callback(event.payload as IPC.SyncProgressEvent);
-  });
-}
-
-export function onWalletStatus(
-  callback: (event: IPC.WalletStatusEvent) => void
-): Promise<UnlistenFn> {
-  return listen(IPC.EventChannels.WALLET_STATUS, (event) => {
-    callback(event.payload as IPC.WalletStatusEvent);
-  });
-}
-```
-
-> **Note**: Account-scoped IPC requests/events (those with `account_id`) operate on the
-> currently active wallet set by `LoadWallet`, `CreateWallet` (on success), and `RestoreWallet` (on success).
->
-> `CreateWallet` and `RestoreWallet` set the created/restored wallet as the active wallet in the backend. In other cases, call `LoadWallet` before issuing account-scoped requests. The UI MAY call `LoadWallet` after create/restore to retrieve `accounts` and `lock_status`.
->
-> If `LoadWalletResponse.lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty list.
-> After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
->
-> Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`.
-
-### App startup: reopen + unlock + reload
-
-On startup, reopen the most recent wallet and handle the “accounts are empty when locked” rule:
-
-```typescript
-const wallets = await listWallets();
-// pick most recent, then:
-const load1 = await loadWallet({ wallet_id });
-if (load1.ok?.lock_status === 'Locked') {
-  // Default to the persisted preference so we don't disable keychain unlock accidentally.
-  // UI may override this with a toggle value.
-  const persistedRememberUnlock = load1.ok.wallet.remember_unlock_enabled;
-  const remember_unlock = rememberUnlockOverride ?? persistedRememberUnlock;
-  await unlockWallet({ wallet_id, password, remember_unlock });
-  const load2 = await loadWallet({ wallet_id }); // load again to get accounts
-}
+.
+├── Cargo.toml                    # Workspace manifest
+├── Makefile                      # Build shortcuts
+├── crates/
+│   ├── zkore-core/               # Domain types, IPC contracts, errors
+│   ├── zkore-engine/             # Wallet operations (librustzcash wrapper)
+│   ├── zkore-network/            # gRPC/HTTP clients, Tor transport
+│   ├── zkore-keystone/           # Hardware wallet integration (PCZT)
+│   └── zkore-tor/                # Embedded Arti Tor client
+├── apps/
+│   ├── zkore-app-tauri/          # Tauri desktop app
+│   │   ├── src-tauri/            # Rust backend (commands, state)
+│   │   └── src/                  # React frontend (pages, components, services)
+│   ├── zkore-cli/                # Command-line interface
+│   └── zkore-tui/                # Terminal UI
+├── tests/
+│   ├── integration/              # Integration tests
+│   └── e2e/                      # End-to-end tests
+└── specs/                        # Feature specifications
 ```
 
 ## Development Workflow
@@ -413,91 +151,31 @@ if (load1.ok?.lock_status === 'Locked') {
 ### Running Development Server
 
 ```bash
-# From apps/zkore-app-tauri
-bun run tauri dev
+make dev        # Full Tauri development (frontend + backend)
 ```
+
+This starts Vite on port 1420 with hot reload, plus the Tauri Rust backend.
 
 ### Running Tests
 
 ```bash
-# Rust tests
-cargo test --workspace
-
-# TypeScript tests
-cd apps/zkore-app-tauri && bun test
+make test           # All Rust library tests
+make test-engine    # Engine crate only
+bun test            # Frontend tests (from apps/zkore-app-tauri)
 ```
 
-TypeScript tests use Bun's built-in test runner (`bun test`) in v1.
-
-### Accessibility Testing
+### Pre-commit Checks
 
 ```bash
-# Run automated accessibility tests
-cd apps/zkore-app-tauri && bun test:a11y
-
-# Manual keyboard testing checklist:
-# - Tab through all interactive elements
-# - Enter/Space activates buttons and links
-# - Escape closes modals and dropdowns
-# - Arrow keys navigate within components
-# - Focus indicator visible on all focused elements
+make pre-commit     # Format and lint
+make check          # Full CI validation (fmt + clippy + tests)
 ```
 
 ### Building for Production
 
 ```bash
-# Build release
-bun run tauri build
-```
-
-## Directory Structure After Setup
-
-```
-.
-├── Cargo.toml                    # Workspace manifest
-├── crates/
-│   ├── zkore-core/
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── domain/
-│   │       ├── ipc/
-│   │       └── errors.rs
-│   ├── zkore-engine/
-│   ├── zkore-network/
-│   ├── zkore-keystone/
-│   └── zkore-tor/
-├── apps/
-│   └── zkore-app-tauri/
-│       ├── src-tauri/
-│       │   ├── Cargo.toml
-│       │   ├── tauri.conf.json
-│       │   └── src/
-│       │       ├── main.rs
-│       │       └── commands/
-│       ├── src/
-│       │   ├── main.tsx
-│       │   ├── App.tsx
-│       │   ├── components/
-│       │   ├── pages/
-│       │   ├── services/
-│       │   │   ├── ipc.ts
-│       │   │   └── events.ts
-│       │   └── types/
-│       │       └── ipc.ts
-│       └── package.json
-├── tests/
-│   ├── integration/
-│   └── e2e/
-└── specs/
-    └── 001-zkore-desktop-wallet/
-        ├── spec.md
-        ├── plan.md
-        ├── research.md
-        ├── data-model.md
-        ├── quickstart.md
-        └── contracts/
-            └── ipc-v1.ts
+make build-frontend  # Build frontend first (required)
+make tauri-build     # Build Tauri production app
 ```
 
 ## Configuration Files
@@ -679,13 +357,9 @@ channel = "1.92.0"
 components = ["rustfmt", "clippy"]
 ```
 
-## Next Steps
+## Reference
 
-1. **Milestone 1**: Setup + Foundational + US1 (create wallet, receive address display, backup challenge + verification, lock/unlock, basic sync + balance)
-2. **Milestone 2**: US2 + US3 (send with memo, broadcast retry queue, shield and consolidate)
-3. **Milestone 3**: US4 + US5 (restore with birthday + progress, address rotation)
-4. **Milestone 4**: US6 + US7 (Keystone UFVK import + air-gapped signing)
-5. **Milestone 5**: US8 + US9 (swaps)
-6. **Milestone 6**: US10 (Tor)
-
-Refer to `tasks.md` for detailed implementation tasks per milestone.
+- **Constitution**: [../../.specify/memory/constitution.md](../../.specify/memory/constitution.md) - Development principles
+- **Spec**: [spec.md](spec.md) - Feature specification
+- **Data Model**: [data-model.md](data-model.md) - Database schema
+- **Tasks**: [tasks.md](tasks.md) - Implementation task breakdown
