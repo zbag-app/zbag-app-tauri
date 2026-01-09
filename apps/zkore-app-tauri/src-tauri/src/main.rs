@@ -84,6 +84,7 @@ fn main() {
             zkore_app_tauri_lib::commands::keystone::zkore_import_ufvk,
             zkore_app_tauri_lib::commands::keystone::zkore_build_signing_request,
             zkore_app_tauri_lib::commands::keystone::zkore_finalize_signing,
+            zkore_app_tauri_lib::commands::keystone::zkore_create_keystone_wallet,
             // Swaps
             zkore_app_tauri_lib::commands::swap::zkore_request_swap_quote,
             zkore_app_tauri_lib::commands::swap::zkore_start_swap,

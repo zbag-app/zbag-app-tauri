@@ -211,6 +211,7 @@ export function Signing(props: { walletId: string }) {
                 }
 
                 const res = await finalizeSigning({
+                  signing_request_id: signingRequest.signing_request_id,
                   signed_payload: signedPayload,
                   reauth_token: reauth.ok.reauth_token,
                 });

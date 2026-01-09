@@ -18,10 +18,11 @@ function Card(props: { title: string; children: ReactNode }) {
 
 export function StatusWidget(props: {
   walletId: string;
+  walletType: IPC.WalletType;
   activeAccountId: number | null;
   onStatusChange?: (status: IPC.WalletStatus) => void;
 }) {
-  const { walletId, activeAccountId, onStatusChange } = props;
+  const { walletId, walletType, activeAccountId, onStatusChange } = props;
   const navigate = useNavigate();
 
   const [status, setStatus] = useState<IPC.WalletStatus | null>(null);
@@ -105,9 +106,15 @@ export function StatusWidget(props: {
         <Card title="Shielding">
           <div className="text-sm">
             Status:{' '}
-            <strong>{shieldAmount && shieldAmount !== '0' ? `Available (${formatZatoshisToZec(shieldAmount)} ZEC)` : 'None'}</strong>
+            <strong>
+              {walletType === 'WatchOnly'
+                ? 'N/A (hardware wallet)'
+                : shieldAmount && shieldAmount !== '0'
+                  ? `Available (${formatZatoshisToZec(shieldAmount)} ZEC)`
+                  : 'None'}
+            </strong>
           </div>
-          {shieldAmount && shieldAmount !== '0' && activeAccountId !== null ? (
+          {shieldAmount && shieldAmount !== '0' && activeAccountId !== null && walletType !== 'WatchOnly' ? (
             <ShieldPrompt
               walletId={walletId}
               accountId={activeAccountId}

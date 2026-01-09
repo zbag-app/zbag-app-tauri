@@ -35,6 +35,7 @@ pub fn run() {
             commands::backup::zkore_verify_backup,
             // Keystone
             commands::keystone::zkore_import_ufvk,
+            commands::keystone::zkore_create_keystone_wallet,
             // Swaps
             commands::swap::zkore_request_swap_quote,
             commands::swap::zkore_start_swap,

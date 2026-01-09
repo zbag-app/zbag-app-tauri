@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, Plus, RotateCcw, RefreshCw } from 'lucide-react';
+import { Shield, Plus, RotateCcw, RefreshCw, Key } from 'lucide-react';
 import type * as IPC from '../../types/ipc';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -110,6 +110,12 @@ export function WalletPicker(props: {
                         <Badge variant={w.network === 'Mainnet' ? 'success' : 'warning'}>
                           {w.network}
                         </Badge>
+                        {w.wallet_type === 'WatchOnly' && (
+                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                            <Key className="h-3 w-3" />
+                            Hardware
+                          </Badge>
+                        )}
                         {index === 0 && w.last_opened_at && (
                           <span className="text-xs text-muted-foreground">Last used</span>
                         )}

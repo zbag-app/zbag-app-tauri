@@ -31,6 +31,7 @@ use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
+use zcash_protocol::consensus::Parameters as _;
 use zkore_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
@@ -577,6 +578,221 @@ impl WalletManager {
         })
     }
 
+    /// Create a standalone Keystone hardware wallet from a UFVK.
+    ///
+    /// Unlike software wallets, this does NOT generate a mnemonic. The UFVK provides
+    /// view-only access; spending requires the Keystone signing flow.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_keystone_wallet(
+        &mut self,
+        name: &str,
+        network: Network,
+        password: &str,
+        remember_unlock: bool,
+        ufvk: &str,
+        birthday_height: Option<u32>,
+        seed_fingerprint: Option<&str>,
+        zip32_account_index: Option<u32>,
+    ) -> anyhow::Result<(WalletInfo, AccountInfo)> {
+        if name.trim().is_empty() {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet name must not be empty",
+            ));
+        }
+        if name.chars().count() > 50 {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "wallet name must be at most 50 characters",
+            ));
+        }
+        if password.is_empty() {
+            return Err(ipc_err(errors::INVALID_REQUEST, "password required"));
+        }
+
+        // Parse and validate UFVK
+        let parsed = zkore_keystone::ufvk::parse_ufvk(ufvk)
+            .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
+
+        let expected_net = zcash_consensus_network(network).network_type();
+        if parsed.network != expected_net {
+            return Err(ipc_err(errors::INVALID_UFVK, "UFVK network mismatch"));
+        }
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        let wallet = WalletInfo {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            wallet_type: WalletType::WatchOnly,
+            network,
+            remember_unlock_enabled: remember_unlock,
+            created_at: now_ms,
+            last_opened_at: None,
+        };
+
+        let wallet_dir = self.wallet_dir(wallet.id, network);
+        std::fs::create_dir_all(&wallet_dir).with_context(|| {
+            format!(
+                "failed to create wallet directory: {}",
+                wallet_dir.display()
+            )
+        })?;
+
+        let wallet_dir_str = wallet_dir.to_string_lossy().to_string();
+        wallet_meta::insert_wallet(self.app_db.conn(), &wallet, &wallet_dir_str)?;
+
+        // Watch-only wallets don't have a seed to back up, so mark backup complete immediately
+        backup_meta::mark_backup_complete(self.app_db.conn(), wallet.id, now_ms, "keystone_only")?;
+
+        let dek = generate_dek();
+        let kdf = default_kdf_params();
+        let aead = default_aead_params();
+        let wrapped_dek_b64 = wrap_dek(
+            wallet.id,
+            wallet.network,
+            password,
+            &kdf.salt_b64,
+            &aead.nonce_b64,
+            &dek,
+        )?;
+
+        wallet_encryption_meta::insert_wallet_encryption(
+            self.app_db.conn(),
+            wallet.id,
+            &WalletEncryptionMeta {
+                kdf,
+                aead,
+                wrapped_dek_b64,
+            },
+        )?;
+
+        // Open wallet db without seed (watch-only)
+        let mut conn = self
+            .open_wallet_db_with_dek(&wallet_dir, network, &dek, None, true)
+            .context("failed to initialize encrypted wallet db")?;
+
+        // Import UFVK as account_id=0
+        let account = {
+            use zcash_client_backend::data_api::chain::ChainState;
+            #[allow(deprecated)]
+            use zcash_client_backend::data_api::{
+                AccountBirthday, AccountPurpose, WalletWrite as _, Zip32Derivation,
+            };
+            use zcash_primitives::block::BlockHash;
+            use zcash_protocol::consensus::NetworkUpgrade;
+            use zcash_protocol::consensus::Parameters as _;
+            use zip32::fingerprint::SeedFingerprint;
+
+            let params = zcash_consensus_network(network);
+            let sapling_activation = params
+                .activation_height(NetworkUpgrade::Sapling)
+                .unwrap_or(zcash_protocol::consensus::H0);
+
+            // Use provided birthday_height if available, otherwise default to Sapling activation
+            // (slower but correct for existing Keystone wallets that may have transaction history)
+            let birthday_height_u32 = birthday_height
+                .unwrap_or(u32::from(sapling_activation))
+                .max(u32::from(sapling_activation));
+
+            let birthday = AccountBirthday::from_parts(
+                ChainState::empty(
+                    zcash_protocol::consensus::BlockHeight::from(
+                        birthday_height_u32.saturating_sub(1),
+                    ),
+                    BlockHash([0; 32]),
+                ),
+                None,
+            );
+
+            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
+
+            // Build account purpose with derivation info for Keystone signing.
+            // This enables PCZT to include zip32_derivation fields so Keystone knows which key to use.
+            let account_purpose = match (seed_fingerprint, zip32_account_index) {
+                (Some(fp_hex), Some(idx)) => {
+                    let fp_bytes = hex::decode(fp_hex).map_err(|e| {
+                        ipc_err(
+                            errors::INVALID_REQUEST,
+                            format!("invalid seed_fingerprint hex: {e}"),
+                        )
+                    })?;
+                    if fp_bytes.len() != 32 {
+                        return Err(ipc_err(
+                            errors::INVALID_REQUEST,
+                            "seed_fingerprint must be 32 bytes",
+                        ));
+                    }
+                    let mut fp_arr = [0u8; 32];
+                    fp_arr.copy_from_slice(&fp_bytes);
+                    let seed_fp = SeedFingerprint::from_bytes(fp_arr);
+                    let account_index = zip32::AccountId::try_from(idx).map_err(|_| {
+                        ipc_err(errors::INVALID_REQUEST, "invalid zip32_account_index")
+                    })?;
+                    let derivation = Zip32Derivation::new(seed_fp, account_index);
+                    AccountPurpose::Spending {
+                        derivation: Some(derivation),
+                    }
+                }
+                _ => {
+                    // Fallback: import without derivation info (signing may not work)
+                    AccountPurpose::Spending { derivation: None }
+                }
+            };
+
+            // Use account_id=0 directly for the first account
+            let key_source = crate::account_key_source::key_source_for_account_id(0);
+            let _ = wdb
+                .import_account_ufvk(
+                    name,
+                    &parsed.ufvk,
+                    &birthday,
+                    account_purpose,
+                    Some(&key_source),
+                )
+                .context("failed to import UFVK into wallet db")?;
+
+            wdb.update_chain_tip(birthday.height())
+                .context("failed to set initial chain tip")?;
+
+            AccountInfo {
+                id: 0,
+                name: name.to_string(),
+                account_type: AccountType::HardwareSigner,
+            }
+        };
+
+        account_meta::upsert_account(self.app_db.conn(), wallet.id, &account, now_ms)
+            .context("failed to insert account metadata")?;
+
+        if remember_unlock {
+            self.key_store
+                .store_keychain_unlock_material(wallet.id, network, &dek.0)
+                .context("failed to store keychain unlock material")?;
+        }
+
+        self.active_wallet = Some(ActiveWallet {
+            wallet: wallet.clone(),
+            wallet_dir: wallet_dir.clone(),
+            lock_status: WalletLockStatus::Unlocked,
+            dek: Some(dek),
+            wallet_db: Some(conn),
+        });
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet.id, &wallet_dir)
+            .context("failed to scan queued broadcasts")?;
+
+        self.maybe_emit_wallet_status(wallet.id);
+
+        Ok((wallet, account))
+    }
+
     pub fn unlock_wallet(
         &mut self,
         wallet_id: Uuid,
@@ -748,6 +964,17 @@ impl WalletManager {
         wallet_id: Uuid,
         reauth_token: &str,
     ) -> anyhow::Result<Vec<String>> {
+        // Check for watch-only wallet early (before consuming reauth token)
+        if let Some(active) = self.active_wallet.as_ref()
+            && active.wallet.id == wallet_id
+            && active.wallet.wallet_type == WalletType::WatchOnly
+        {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_NO_SEED,
+                "cannot view seed phrase for watch-only wallet",
+            ));
+        }
+
         match self.reauth.validate_and_consume(
             reauth_token,
             wallet_id,
@@ -835,6 +1062,16 @@ impl WalletManager {
     }
 
     pub fn get_backup_challenge(&mut self, wallet_id: Uuid) -> anyhow::Result<BackupChallenge> {
+        // Check for watch-only wallet (no seed to back up)
+        if let Some(active) = self.active_wallet.as_ref()
+            && active.wallet.id == wallet_id
+            && active.wallet.wallet_type == WalletType::WatchOnly
+        {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_NO_BACKUP,
+                "no backup required for watch-only wallet",
+            ));
+        }
         self.issue_backup_challenge(wallet_id)
     }
 
@@ -860,6 +1097,17 @@ impl WalletManager {
         challenge_id: &str,
         word_challenges: &HashMap<u8, String>,
     ) -> anyhow::Result<()> {
+        // Check for watch-only wallet (no seed to back up)
+        if let Some(active) = self.active_wallet.as_ref()
+            && active.wallet.id == wallet_id
+            && active.wallet.wallet_type == WalletType::WatchOnly
+        {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_NO_BACKUP,
+                "no backup required for watch-only wallet",
+            ));
+        }
+
         let now_ms = chrono::Utc::now().timestamp_millis();
 
         let indices = {
@@ -1171,17 +1419,18 @@ impl WalletManager {
             else {
                 continue;
             };
-            if let Some(derivation) = account.source().key_derivation() {
-                let account_index: u32 = derivation.account_index().into();
-                account_indices.push(account_index);
-                continue;
-            }
 
+            // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
             if let Some(key_source) = account.source().key_source()
                 && let Some(account_id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
             {
                 account_indices.push(account_id);
+            }
+            // Then check key_derivation (hardware wallets with ZIP-32 derivation, only if no key_source)
+            else if let Some(derivation) = account.source().key_derivation() {
+                let account_index: u32 = derivation.account_index().into();
+                account_indices.push(account_index);
             }
         }
         account_indices.sort_unstable();
@@ -1194,6 +1443,8 @@ impl WalletManager {
         wallet_id: Uuid,
         ufvk: &str,
         name: &str,
+        seed_fingerprint: Option<&str>,
+        zip32_account_index: Option<u32>,
     ) -> anyhow::Result<AccountInfo> {
         let name = name.trim();
         if name.is_empty() {
@@ -1235,16 +1486,17 @@ impl WalletManager {
                 continue;
             };
 
-            if let Some(derivation) = account.source().key_derivation() {
-                used_ids.insert(derivation.account_index().into());
-                continue;
-            }
-
+            // Collect BOTH key_source and key_derivation IDs to avoid any collision.
+            // An account may have both (e.g., Keystone accounts with key_source="zkore:N"
+            // AND key_derivation.account_index=M where N != M).
             if let Some(key_source) = account.source().key_source()
                 && let Some(id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
             {
                 used_ids.insert(id);
+            }
+            if let Some(derivation) = account.source().key_derivation() {
+                used_ids.insert(derivation.account_index().into());
             }
         }
 
@@ -1257,10 +1509,13 @@ impl WalletManager {
 
         use zcash_client_backend::data_api::chain::ChainState;
         #[allow(deprecated)]
-        use zcash_client_backend::data_api::{AccountBirthday, AccountPurpose, WalletWrite as _};
+        use zcash_client_backend::data_api::{
+            AccountBirthday, AccountPurpose, WalletWrite as _, Zip32Derivation,
+        };
         use zcash_primitives::block::BlockHash;
         use zcash_protocol::consensus::NetworkUpgrade;
         use zcash_protocol::consensus::Parameters as _;
+        use zip32::fingerprint::SeedFingerprint;
 
         let sapling_activation = params
             .activation_height(NetworkUpgrade::Sapling)
@@ -1270,13 +1525,45 @@ impl WalletManager {
             None,
         );
 
+        // Build account purpose with derivation info for Keystone signing.
+        // This enables PCZT to include zip32_derivation fields so Keystone knows which key to use.
+        let account_purpose = match (seed_fingerprint, zip32_account_index) {
+            (Some(fp_hex), Some(idx)) => {
+                let fp_bytes = hex::decode(fp_hex).map_err(|e| {
+                    ipc_err(
+                        errors::INVALID_REQUEST,
+                        format!("invalid seed_fingerprint hex: {e}"),
+                    )
+                })?;
+                if fp_bytes.len() != 32 {
+                    return Err(ipc_err(
+                        errors::INVALID_REQUEST,
+                        "seed_fingerprint must be 32 bytes",
+                    ));
+                }
+                let mut fp_arr = [0u8; 32];
+                fp_arr.copy_from_slice(&fp_bytes);
+                let seed_fp = SeedFingerprint::from_bytes(fp_arr);
+                let account_index = zip32::AccountId::try_from(idx)
+                    .map_err(|_| ipc_err(errors::INVALID_REQUEST, "invalid zip32_account_index"))?;
+                let derivation = Zip32Derivation::new(seed_fp, account_index);
+                AccountPurpose::Spending {
+                    derivation: Some(derivation),
+                }
+            }
+            _ => {
+                // Fallback: import without derivation info (signing may not work)
+                AccountPurpose::Spending { derivation: None }
+            }
+        };
+
         let key_source = crate::account_key_source::key_source_for_account_id(next_account_id);
         let _ = wdb
             .import_account_ufvk(
                 name,
                 &parsed.ufvk,
                 &birthday,
-                AccountPurpose::ViewOnly,
+                account_purpose,
                 Some(&key_source),
             )
             .context("failed to import UFVK into wallet db")?;
@@ -1407,6 +1694,7 @@ impl WalletManager {
 
     pub fn finalize_signing(
         &mut self,
+        signing_request_id: &str,
         signed_payload: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
@@ -1452,6 +1740,7 @@ impl WalletManager {
             &wallet_dek,
             conn,
             &grpc_url,
+            signing_request_id,
             signed_payload,
             on_tx_changed,
         )
@@ -1466,6 +1755,16 @@ impl WalletManager {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
+
+        // Watch-only wallets cannot use confirm_send (no seed for signing)
+        // Use the hardware signing flow (build_signing_request + finalize_signing) instead
+        if active.wallet.wallet_type == WalletType::WatchOnly {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_CANNOT_SPEND,
+                "cannot confirm send for watch-only wallet; use hardware signing flow",
+            ));
+        }
+
         let wallet_id = active.wallet.id;
         let wallet_network = active.wallet.network;
         let wallet_dir = active.wallet_dir.clone();
@@ -1531,6 +1830,16 @@ impl WalletManager {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
+
+        // Shielding is not supported for watch-only wallets
+        // (no Keystone signing flow exists for shielding transactions)
+        if active.wallet.wallet_type == WalletType::WatchOnly {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_CANNOT_SHIELD,
+                "shielding not supported for watch-only wallet",
+            ));
+        }
+
         let wallet_id = active.wallet.id;
         let wallet_network = active.wallet.network;
         let wallet_dir = active.wallet_dir.clone();

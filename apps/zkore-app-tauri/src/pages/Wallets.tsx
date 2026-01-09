@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wallet, Plus, RotateCcw, RefreshCw, CheckCircle } from 'lucide-react';
+import { Wallet, Plus, RotateCcw, RefreshCw, CheckCircle, Key } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -114,6 +114,12 @@ export function Wallets(props: { activeWalletId: string | null; onLoaded: (resp:
                       <Badge variant={w.network === 'Mainnet' ? 'success' : 'warning'}>
                         {w.network}
                       </Badge>
+                      {w.wallet_type === 'WatchOnly' && (
+                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                          <Key className="h-3 w-3" />
+                          Hardware
+                        </Badge>
+                      )}
                       {isActive && (
                         <Badge variant="default" className="gap-1">
                           <CheckCircle className="h-3 w-3" />

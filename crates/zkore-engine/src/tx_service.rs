@@ -11,6 +11,7 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::RngCore as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, instrument};
 use uuid::Uuid;
 
 use zkore_core::domain::{
@@ -42,7 +43,19 @@ pub struct TxService<C: Clock> {
     clock: C,
     proposals: HashMap<String, ProposalRecord>,
     queued_broadcasts: HashMap<Uuid, HashMap<String, QueuedBroadcastEntry>>,
+    /// Pending signing requests: maps signing_request_id to full PCZT with proofs (base64).
+    /// Used in the two-PCZT flow for hardware signing.
+    pending_signing_requests: HashMap<String, PendingSigningRequest>,
     tor_manager: Option<Arc<zkore_tor::TorManager>>,
+}
+
+/// A pending hardware signing request containing the full PCZT with proofs.
+#[derive(Debug, Clone)]
+struct PendingSigningRequest {
+    wallet_id: Uuid,
+    /// Full PCZT with proofs (base64 encoded).
+    pczt_with_proofs: String,
+    expires_at: SystemTime,
 }
 
 #[derive(Debug)]
@@ -75,6 +88,7 @@ impl<C: Clock> TxService<C> {
             clock,
             proposals: HashMap::new(),
             queued_broadcasts: HashMap::new(),
+            pending_signing_requests: HashMap::new(),
             tor_manager: None,
         }
     }
@@ -447,7 +461,7 @@ impl<C: Clock> TxService<C> {
         let confirmations_policy =
             zcash_client_backend::data_api::wallet::ConfirmationsPolicy::default();
 
-        let (proposal, pczt_payload) = {
+        let (proposal, pczt_full, pczt_for_signer) = {
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut *wallet_db_conn,
                 params,
@@ -518,7 +532,42 @@ impl<C: Clock> TxService<C> {
                 )
             })?;
 
-            Ok::<_, anyhow::Error>((proposal, zkore_keystone::pczt::encode_pczt_base64(&pczt)))
+            // Generate proofs for the PCZT (required for finalization).
+            // This matches Zashi's two-PCZT flow: full PCZT stays in backend, redacted goes to signer.
+            let prover = zcash_proofs::prover::LocalTxProver::bundled();
+            let mut pczt_prover = pczt::roles::prover::Prover::new(pczt);
+
+            // Generate Orchard proof if needed
+            if pczt_prover.requires_orchard_proof() {
+                pczt_prover = pczt_prover
+                    .create_orchard_proof(&orchard::circuit::ProvingKey::build())
+                    .map_err(|e| {
+                        ipc_err(
+                            errors::SIGNING_FAILED,
+                            format!("failed to create Orchard proof: {e:?}"),
+                        )
+                    })?;
+            }
+
+            // Generate Sapling proofs if needed
+            if pczt_prover.requires_sapling_proofs() {
+                pczt_prover = pczt_prover
+                    .create_sapling_proofs(&prover, &prover)
+                    .map_err(|e| {
+                        ipc_err(
+                            errors::SIGNING_FAILED,
+                            format!("failed to create Sapling proofs: {e:?}"),
+                        )
+                    })?;
+            }
+
+            let pczt_with_proofs = pczt_prover.finish();
+
+            // Store full PCZT with proofs, return redacted version for signer
+            let pczt_full = zkore_keystone::pczt::encode_pczt_full(&pczt_with_proofs);
+            let pczt_for_signer = zkore_keystone::pczt::encode_pczt_for_signer(&pczt_with_proofs);
+
+            Ok::<_, anyhow::Error>((proposal, pczt_full, pczt_for_signer))
         }?;
 
         let fee = proposal_total_fee(&proposal)?;
@@ -534,10 +583,25 @@ impl<C: Clock> TxService<C> {
             tx_type: TransactionType::Send,
         };
 
+        // Generate a unique signing request ID and store the full PCZT with proofs
+        let signing_request_id = Uuid::new_v4().to_string();
+        let now = self.clock.now();
+        let expires_at = now + PROPOSAL_TTL;
+
+        self.pending_signing_requests.insert(
+            signing_request_id.clone(),
+            PendingSigningRequest {
+                wallet_id,
+                pczt_with_proofs: pczt_full,
+                expires_at,
+            },
+        );
+
         Ok(BuildSigningRequestResponse {
             schema_version: SCHEMA_VERSION,
             signing_request: SigningRequest {
-                pczt_payload,
+                signing_request_id,
+                pczt_payload: pczt_for_signer,
                 qr_frames: vec![],
                 summary,
             },
@@ -545,6 +609,7 @@ impl<C: Clock> TxService<C> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[instrument(skip_all, fields(signing_request_id = %signing_request_id, wallet_id = %wallet_id))]
     pub fn finalize_signing(
         &mut self,
         app_db: &AppDb,
@@ -554,15 +619,68 @@ impl<C: Clock> TxService<C> {
         wallet_dek: &Dek,
         wallet_db_conn: &mut Connection,
         grpc_url: &str,
+        signing_request_id: &str,
         signed_payload: &str,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<FinalizeSigningResponse> {
+        debug!("Starting finalize_signing");
         let _ = on_tx_changed;
 
         ensure_backup_complete(app_db, wallet_id)?;
 
-        let pczt = zkore_keystone::pczt::decode_pczt_base64(signed_payload)
-            .map_err(|e| ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}")))?;
+        // Retrieve the stored PCZT with proofs
+        let now = self.clock.now();
+        let pending_request = self
+            .pending_signing_requests
+            .remove(signing_request_id)
+            .ok_or_else(|| {
+                ipc_err(
+                    errors::PROPOSAL_NOT_FOUND,
+                    "signing request not found or expired",
+                )
+            })?;
+
+        // Check expiration
+        if now > pending_request.expires_at {
+            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "signing request expired"));
+        }
+
+        // Check wallet ID matches
+        if pending_request.wallet_id != wallet_id {
+            return Err(ipc_err(
+                errors::PROPOSAL_NOT_FOUND,
+                "signing request not found",
+            ));
+        }
+
+        // Decode both PCZTs
+        debug!("Decoding stored PCZT with proofs");
+        let pczt_with_proofs = zkore_keystone::pczt::decode_pczt_full(
+            &pending_request.pczt_with_proofs,
+        )
+        .map_err(|e| {
+            error!("Failed to decode stored PCZT: {}", e);
+            ipc_err(errors::INTERNAL_ERROR, format!("invalid stored PCZT: {e}"))
+        })?;
+
+        debug!("Decoding signed PCZT from hardware wallet");
+        let pczt_with_sigs =
+            zkore_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
+                error!("Failed to decode signed payload: {}", e);
+                ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}"))
+            })?;
+
+        // Combine the two PCZTs (proofs + signatures)
+        debug!("Combining proved and signed PCZTs");
+        let pczt =
+            zkore_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(|e| {
+                error!("Failed to combine PCZTs: {}", e);
+                ipc_err(
+                    errors::SIGNING_FAILED,
+                    format!("failed to combine PCZTs: {e}"),
+                )
+            })?;
+        debug!("PCZTs combined successfully");
 
         let params = zcash_consensus_network(network);
 
@@ -575,7 +693,9 @@ impl<C: Clock> TxService<C> {
 
         let prover = zcash_proofs::prover::LocalTxProver::bundled();
         let (sapling_spend_vk, sapling_output_vk) = prover.verifying_keys();
+        let orchard_vk = orchard::circuit::VerifyingKey::build();
 
+        debug!("Extracting and storing transaction from combined PCZT");
         let txid =
             zcash_client_backend::data_api::wallet::extract_and_store_transaction_from_pczt::<
                 _,
@@ -584,14 +704,16 @@ impl<C: Clock> TxService<C> {
                 &mut wdb,
                 pczt,
                 Some((&sapling_spend_vk, &sapling_output_vk)),
-                None,
+                Some(&orchard_vk),
             )
             .map_err(|e| {
+                error!("Failed to extract transaction from PCZT: {}", e);
                 ipc_err(
                     errors::SIGNING_FAILED,
                     format!("failed to finalize signing: {e}"),
                 )
             })?;
+        debug!(%txid, "Transaction extracted from PCZT");
 
         #[allow(deprecated)]
         use zcash_client_backend::data_api::WalletRead as _;
@@ -632,6 +754,7 @@ impl<C: Clock> TxService<C> {
 
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
 
+        debug!(txid = %txid_str, "finalize_signing completed successfully");
         Ok(FinalizeSigningResponse {
             schema_version: SCHEMA_VERSION,
             txid: txid_str,
@@ -1574,19 +1697,20 @@ fn resolve_wallet_account_uuid(
         else {
             continue;
         };
-        if let Some(derivation) = account.source().key_derivation() {
-            let idx: u32 = derivation.account_index().into();
-            if idx == account_id {
-                return Ok(account_uuid);
-            }
-            continue;
-        }
-
+        // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
         {
             return Ok(account_uuid);
+        }
+
+        // Then check key_derivation (hardware wallets with ZIP-32 derivation)
+        if let Some(derivation) = account.source().key_derivation() {
+            let idx: u32 = derivation.account_index().into();
+            if idx == account_id {
+                return Ok(account_uuid);
+            }
         }
     }
 

@@ -17,7 +17,9 @@ import { useThrottledCallback } from './hooks/useThrottle';
 import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus, onSyncProgress } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
+import { BackupFlow } from './pages/BackupFlow';
 import { CreateWallet } from './pages/CreateWallet';
+import { OnboardingBackup } from './pages/OnboardingBackup';
 import { Home } from './pages/Home';
 import { Receive } from './pages/Receive';
 import { SeedDisplay } from './pages/SeedDisplay';
@@ -28,6 +30,7 @@ import { Activity } from './pages/Activity';
 import { RestoreBirthday } from './pages/RestoreBirthday';
 import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
+import { KeystoneSetup } from './pages/KeystoneSetup';
 import { Signing } from './pages/Signing';
 import { Swap } from './pages/Swap';
 import { SwapDeposit } from './pages/SwapDeposit';
@@ -237,6 +240,26 @@ function AppInner() {
             />
           }
         />
+        <Route
+          path="/keystone/setup"
+          element={
+            <KeystoneSetup
+              onCreated={(args) => {
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
+              }}
+            />
+          }
+        />
+        <Route
+          path="/onboarding-backup"
+          element={
+            <OnboardingBackup
+              seedPhrase={seedPhrase ?? []}
+              onCleared={() => setSeedPhrase(null)}
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -390,7 +413,7 @@ function AppInner() {
           path="/swap"
           element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
         />
-        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} />} />
+        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/quote" element={<SwapQuote />} />
         <Route path="/swap/deposit" element={<SwapDeposit />} />
         <Route
@@ -419,6 +442,7 @@ function AppInner() {
           element={
             <ImportKeystone
               walletId={startup.wallet.id}
+              walletNetwork={startup.wallet.network}
               onAccountsUpdated={(next) => setAccounts(next)}
             />
           }
@@ -435,6 +459,19 @@ function AppInner() {
         <Route
           path="/backup"
           element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
+        />
+        <Route
+          path="/backup/flow"
+          element={<BackupFlow walletId={startup.wallet.id} />}
+        />
+        <Route
+          path="/onboarding-backup"
+          element={
+            <OnboardingBackup
+              seedPhrase={seedPhrase ?? []}
+              onCleared={() => setSeedPhrase(null)}
+            />
+          }
         />
       </Routes>
     </AppShell>
@@ -481,6 +518,10 @@ function WalletSelectionRoutes(props: {
             onRestored={onRestored}
           />
         }
+      />
+      <Route
+        path="/keystone/setup"
+        element={<KeystoneSetup onCreated={onRestored} />}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

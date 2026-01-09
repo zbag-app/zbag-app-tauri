@@ -208,7 +208,12 @@ fn regression_no_secret_logging() {
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            let _ = mgr.finalize_signing(signed_payload, &reauth_token, None);
+            let _ = mgr.finalize_signing(
+                "test-signing-request-id",
+                signed_payload,
+                &reauth_token,
+                None,
+            );
         }
 
         // Swap-from / quote paths should fail closed on Testnet without network calls.

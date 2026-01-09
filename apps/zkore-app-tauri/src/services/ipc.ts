@@ -105,6 +105,12 @@ export async function finalizeSigning(
   return invoke(IPC.Commands.FINALIZE_SIGNING, { request: versioned(request) });
 }
 
+export async function createKeystoneWallet(
+  request: Omit<IPC.CreateKeystoneWalletRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.CreateKeystoneWalletResponse>> {
+  return invoke(IPC.Commands.CREATE_KEYSTONE_WALLET, { request: versioned(request) });
+}
+
 export async function startSync(
   request: Omit<IPC.StartSyncRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.StartSyncResponse>> {

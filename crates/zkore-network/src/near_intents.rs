@@ -45,23 +45,62 @@ impl NearIntentsClient {
         })
     }
 
-    pub async fn get_quote(&self, req: QuoteRequest) -> Result<QuoteResponse, NearIntentsError> {
-        let mut url = reqwest::Url::parse(&format!("{}/v0/quote", self.base_url))
+    /// Get a quote from the 1Click API.
+    ///
+    /// Uses POST with JSON body (new API format).
+    /// Set `dry=true` for quote preview, `dry=false` to get deposit address.
+    pub async fn get_quote(
+        &self,
+        mut req: QuoteRequest,
+    ) -> Result<QuoteResponse, NearIntentsError> {
+        let url = reqwest::Url::parse(&format!("{}/v0/quote", self.base_url))
             .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
 
-        {
-            let mut qp = url.query_pairs_mut();
-            qp.append_pair("defuse_asset_identifier_in", &req.input_asset);
-            qp.append_pair("defuse_asset_identifier_out", &req.output_asset);
-            qp.append_pair("exact_amount_in", &req.input_amount);
-            qp.append_pair("dry", "true");
-        }
-
-        let res = self.http.get_json(url).await.map_err(map_http_error)?;
+        let res = self
+            .http
+            .post_json(url, &req)
+            .await
+            .map_err(map_http_error)?;
 
         Self::handle_rate_limit(res.status, res.retry_after)?;
 
         if !(200..300).contains(&res.status) {
+            // The 1Click API sometimes returns a 400 "Failed to get quote" when the quote
+            // cannot be produced within the requested `quoteWaitingTimeMs`. Retry once
+            // with a more forgiving waiting time to reduce flakiness for otherwise-valid
+            // requests.
+            if res.status == 400
+                && res
+                    .body
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|m| m == "Failed to get quote")
+                && req.quote_waiting_time_ms.unwrap_or(0) < 10_000
+            {
+                req.quote_waiting_time_ms = Some(10_000);
+                let url =
+                    reqwest::Url::parse(&format!("{}/v0/quote", self.base_url)).map_err(|_| {
+                        NearIntentsError::InvalidResponse("invalid base url".to_string())
+                    })?;
+
+                let res = self
+                    .http
+                    .post_json(url, &req)
+                    .await
+                    .map_err(map_http_error)?;
+
+                Self::handle_rate_limit(res.status, res.retry_after)?;
+
+                if (200..300).contains(&res.status) {
+                    return parse_quote_response(&res.body);
+                }
+
+                return Err(NearIntentsError::Http {
+                    status: res.status,
+                    message: res.body.to_string(),
+                });
+            }
+
             return Err(NearIntentsError::Http {
                 status: res.status,
                 message: res.body.to_string(),
@@ -134,41 +173,83 @@ impl NearIntentsClient {
     }
 }
 
+/// Quote request for the new 1Click API (POST /v0/quote).
+///
+/// Reference: <https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api>
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct QuoteRequest {
-    pub input_asset: String,
-    pub input_amount: String,
-    pub output_asset: String,
+    pub origin_asset: String,
+    pub destination_asset: String,
+    /// Amount in smallest units (e.g., wei for ETH, zatoshis for ZEC)
+    pub amount: String,
+    pub swap_type: String,
+    pub slippage_tolerance: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quote_waiting_time_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referral: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_fees: Option<Vec<AppFee>>,
+    pub deposit_type: String,
+    pub refund_to: String,
+    pub refund_type: String,
+    pub recipient: String,
+    pub recipient_type: String,
+    /// ISO 8601 timestamp (e.g., "2026-01-09T12:00:00Z")
+    pub deadline: String,
+    pub dry: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppFee {
+    pub recipient: String,
+    /// Basis points (1/100th of a percent, e.g., 100 = 1%)
+    pub fee: u32,
+}
+
+/// Quote response from the new 1Click API.
+///
+/// The API returns a nested structure with `quote`, `quoteRequest`, `signature`, etc.
+/// We extract the relevant fields from `quote` and `correlationId` from the root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QuoteResponse {
-    pub quote_id: String,
-    pub output_amount: String,
-    pub fee_amount: String,
-    pub fee_asset: String,
-    pub deadline_ms: i64,
-    pub rate: String,
+    pub amount_in: String,
+    pub amount_in_formatted: String,
+    pub amount_in_usd: String,
+    pub min_amount_in: String,
+    pub amount_out: String,
+    pub amount_out_formatted: String,
+    pub amount_out_usd: String,
+    pub min_amount_out: String,
+    /// ISO 8601 timestamp, present only when dry=false
+    pub deadline_iso: Option<String>,
+    /// Milliseconds since epoch (parsed from deadline_iso for UI countdown)
+    pub deadline_ms: Option<i64>,
+    /// ISO 8601 timestamp, present only when dry=false
+    pub time_when_inactive_iso: Option<String>,
+    pub time_estimate_secs: u64,
+    /// Deposit address is inside `quote`, present only when dry=false
+    pub deposit_address: Option<String>,
+    pub deposit_memo: Option<String>,
+    pub correlation_id: String,
 }
 
+/// Deposit submit request for FromZec flow (after broadcasting ZEC tx).
+///
+/// The new API expects txHash + depositAddress instead of quote_id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct DepositSubmitRequest {
-    pub quote_id: String,
-    #[serde(default)]
-    pub destination_address: Option<String>,
-    #[serde(default)]
-    pub refund_address: Option<String>,
+    pub tx_hash: String,
+    pub deposit_address: String,
 }
 
+/// Deposit submit response (acknowledgement only - no new data expected).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositSubmitResponse {
-    pub remote_id: Option<String>,
-    pub deposit_address: String,
-    pub deposit_memo: Option<String>,
-    pub deadline_ms: Option<i64>,
-    pub output_amount: Option<String>,
+    pub success: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,21 +264,36 @@ pub struct StatusResponse {
     pub message: Option<String>,
 }
 
+/// Remote status values from the 1Click API.
+///
+/// Reference: <https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteStatus {
-    AwaitingDeposit,
-    Pending,
+    /// Waiting for user to send funds to deposit address
+    PendingDeposit,
+    /// Deposit tx detected but not yet confirmed
+    KnownDepositTx,
+    /// Partial deposit received (wrong amount)
+    IncompleteDeposit,
+    /// Swap is being processed
+    Processing,
+    /// Swap completed successfully
     Success,
+    /// Funds were refunded
     Refunded,
+    /// Swap failed
     Failed,
+    /// Unknown status value
     Unknown(String),
 }
 
 pub fn map_remote_status_to_local_state(status: &RemoteStatus) -> zkore_core::domain::SwapState {
     use zkore_core::domain::SwapState;
     match status {
-        RemoteStatus::AwaitingDeposit => SwapState::AwaitingDeposit,
-        RemoteStatus::Pending => SwapState::Pending,
+        RemoteStatus::PendingDeposit => SwapState::AwaitingDeposit,
+        RemoteStatus::KnownDepositTx => SwapState::Pending,
+        RemoteStatus::IncompleteDeposit => SwapState::Failed,
+        RemoteStatus::Processing => SwapState::Pending,
         RemoteStatus::Success => SwapState::Confirming,
         RemoteStatus::Refunded => SwapState::Refunded,
         RemoteStatus::Failed => SwapState::Failed,
@@ -230,84 +326,156 @@ fn map_http_error(err: HttpClientError) -> NearIntentsError {
     }
 }
 
+/// Parse the nested quote response from the 1Click API.
+///
+/// Response structure:
+/// ```json
+/// {
+///   "quote": {
+///     "amountIn": "...",
+///     "amountInFormatted": "...",
+///     "amountOut": "...",
+///     "depositAddress": "...",  // only when dry=false
+///     "deadline": "2026-01-09T12:00:00Z",  // ISO 8601
+///     ...
+///   },
+///   "correlationId": "uuid"
+/// }
+/// ```
 fn parse_quote_response(body: &serde_json::Value) -> Result<QuoteResponse, NearIntentsError> {
-    let quote_id = body
-        .get("quote_id")
+    let quote = body
+        .get("quote")
+        .ok_or_else(|| NearIntentsError::InvalidResponse("missing quote object".to_string()))?;
+
+    let correlation_id = body
+        .get("correlationId")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| NearIntentsError::InvalidResponse("missing quote_id".to_string()))?
+        .ok_or_else(|| NearIntentsError::InvalidResponse("missing correlationId".to_string()))?
         .to_string();
 
-    let output_amount = body
-        .get("output_amount")
+    let amount_in = quote
+        .get("amountIn")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| NearIntentsError::InvalidResponse("missing output_amount".to_string()))?
+        .ok_or_else(|| NearIntentsError::InvalidResponse("missing quote.amountIn".to_string()))?
         .to_string();
 
-    let fee_amount = body
-        .get("fee_amount")
+    let amount_in_formatted = quote
+        .get("amountInFormatted")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            NearIntentsError::InvalidResponse("missing quote.amountInFormatted".to_string())
+        })?
+        .to_string();
+
+    let amount_in_usd = quote
+        .get("amountInUsd")
         .and_then(|v| v.as_str())
         .unwrap_or("0")
         .to_string();
 
-    let fee_asset = body
-        .get("fee_asset")
+    let min_amount_in = quote
+        .get("minAmountIn")
         .and_then(|v| v.as_str())
-        .unwrap_or_default()
+        .unwrap_or(&amount_in)
         .to_string();
 
-    let deadline_ms = body.get("deadline").and_then(|v| v.as_i64()).unwrap_or(0);
-
-    let rate = body
-        .get("rate")
+    let amount_out = quote
+        .get("amountOut")
         .and_then(|v| v.as_str())
-        .unwrap_or_default()
+        .ok_or_else(|| NearIntentsError::InvalidResponse("missing quote.amountOut".to_string()))?
         .to_string();
+
+    let amount_out_formatted = quote
+        .get("amountOutFormatted")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            NearIntentsError::InvalidResponse("missing quote.amountOutFormatted".to_string())
+        })?
+        .to_string();
+
+    let amount_out_usd = quote
+        .get("amountOutUsd")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0")
+        .to_string();
+
+    let min_amount_out = quote
+        .get("minAmountOut")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&amount_out)
+        .to_string();
+
+    let time_estimate_secs = quote
+        .get("timeEstimate")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(120);
+
+    // Parse ISO 8601 deadline to milliseconds
+    let deadline_iso = quote
+        .get("deadline")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let deadline_ms = deadline_iso.as_ref().and_then(|iso| {
+        chrono::DateTime::parse_from_rfc3339(iso)
+            .ok()
+            .map(|dt| dt.timestamp_millis())
+    });
+
+    let time_when_inactive_iso = quote
+        .get("timeWhenInactive")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // depositAddress is INSIDE the quote object (only present when dry=false)
+    let deposit_address = quote
+        .get("depositAddress")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let deposit_memo = quote
+        .get("depositMemo")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     Ok(QuoteResponse {
-        quote_id,
-        output_amount,
-        fee_amount,
-        fee_asset,
+        amount_in,
+        amount_in_formatted,
+        amount_in_usd,
+        min_amount_in,
+        amount_out,
+        amount_out_formatted,
+        amount_out_usd,
+        min_amount_out,
+        deadline_iso,
         deadline_ms,
-        rate,
-    })
-}
-
-fn parse_deposit_submit_response(
-    body: &serde_json::Value,
-) -> Result<DepositSubmitResponse, NearIntentsError> {
-    let deposit_address = body
-        .get("deposit_address")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| NearIntentsError::InvalidResponse("missing deposit_address".to_string()))?
-        .to_string();
-
-    Ok(DepositSubmitResponse {
-        remote_id: body
-            .get("remote_id")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
+        time_when_inactive_iso,
+        time_estimate_secs,
         deposit_address,
-        deposit_memo: body
-            .get("deposit_memo")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-        deadline_ms: body.get("deadline").and_then(|v| v.as_i64()),
-        output_amount: body
-            .get("output_amount")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
+        deposit_memo,
+        correlation_id,
     })
 }
 
+/// Parse deposit submit response (simple acknowledgement).
+fn parse_deposit_submit_response(
+    _body: &serde_json::Value,
+) -> Result<DepositSubmitResponse, NearIntentsError> {
+    // New API just acknowledges - the actual data was in the quote response
+    Ok(DepositSubmitResponse { success: true })
+}
+
+/// Parse status response from the 1Click API.
 fn parse_status_response(body: &serde_json::Value) -> Result<StatusResponse, NearIntentsError> {
     let raw = body
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("UNKNOWN");
+
     let status = match raw {
-        "AWAITING_DEPOSIT" => RemoteStatus::AwaitingDeposit,
-        "PENDING" => RemoteStatus::Pending,
+        "PENDING_DEPOSIT" => RemoteStatus::PendingDeposit,
+        "KNOWN_DEPOSIT_TX" => RemoteStatus::KnownDepositTx,
+        "INCOMPLETE_DEPOSIT" => RemoteStatus::IncompleteDeposit,
+        "PROCESSING" => RemoteStatus::Processing,
         "SUCCESS" => RemoteStatus::Success,
         "REFUNDED" => RemoteStatus::Refunded,
         "FAILED" => RemoteStatus::Failed,

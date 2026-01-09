@@ -129,7 +129,9 @@ export function Settings(props: {
             Manage your wallet security settings and credentials.
           </p>
           <div className="flex flex-wrap gap-3">
-            <ViewSeedPhraseDialog walletId={wallet.id} triggerLabel="View seed phrase" />
+            {wallet.wallet_type !== 'WatchOnly' && (
+              <ViewSeedPhraseDialog walletId={wallet.id} triggerLabel="View seed phrase" />
+            )}
             <LogoutDialog
               walletId={wallet.id}
               triggerLabel="Logout"

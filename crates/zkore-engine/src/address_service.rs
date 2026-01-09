@@ -4,10 +4,10 @@ use uuid::Uuid;
 use zcash_protocol::consensus::Parameters as _;
 use zip32::DiversifierIndex;
 
-use zkore_core::domain::{AddressInfo, AddressType, Network};
+use zkore_core::domain::{AccountType, AddressInfo, AddressType, Network};
 use zkore_core::errors;
 
-use crate::db::rotation_meta;
+use crate::db::{account_meta, rotation_meta};
 use crate::error::ipc_err;
 
 #[allow(deprecated)]
@@ -41,15 +41,31 @@ pub fn get_receive_address(
 
     let account = find_account_uuid(&mut wdb, account_id)?;
 
+    // Check if this is a HardwareSigner account - if so, use Orchard-only addresses
+    // like Zashi does for Keystone. This is because Keystone UFVKs typically only
+    // have Orchard support, not Sapling.
+    let is_hardware_signer = account_meta::get_account(app_conn, wallet_id, account_id)?
+        .is_some_and(|acc| acc.account_type == AccountType::HardwareSigner);
+
     match address_type {
         AddressType::ShieldedOnly => {
-            // Require Orchard and Sapling; omit transparent receiver.
-            let request = UnifiedAddressRequest::custom(
-                ReceiverRequirement::Require,
-                ReceiverRequirement::Require,
-                ReceiverRequirement::Omit,
-            )
-            .expect("valid receiver requirements");
+            // For HardwareSigner accounts (Keystone), use Orchard-only addresses.
+            // For software wallets, use Orchard+Sapling.
+            let request = if is_hardware_signer {
+                UnifiedAddressRequest::custom(
+                    ReceiverRequirement::Require, // Orchard
+                    ReceiverRequirement::Omit,    // Sapling - omit for hardware signers
+                    ReceiverRequirement::Omit,    // Transparent
+                )
+                .expect("valid receiver requirements")
+            } else {
+                UnifiedAddressRequest::custom(
+                    ReceiverRequirement::Require, // Orchard
+                    ReceiverRequirement::Require, // Sapling
+                    ReceiverRequirement::Omit,    // Transparent
+                )
+                .expect("valid receiver requirements")
+            };
 
             let addresses = wdb
                 .list_addresses(account)
@@ -166,14 +182,7 @@ pub(crate) fn find_account_uuid(
             continue;
         };
 
-        if let Some(derivation) = account.source().key_derivation() {
-            let derived_id: u32 = derivation.account_index().into();
-            if derived_id == account_id {
-                return Ok(account_uuid);
-            }
-            continue;
-        }
-
+        // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
@@ -181,8 +190,13 @@ pub(crate) fn find_account_uuid(
             return Ok(account_uuid);
         }
 
-        // Unknown account ID (not derived, not a Zkore-tagged imported account).
-        continue;
+        // Then check key_derivation (hardware wallets with ZIP-32 derivation)
+        if let Some(derivation) = account.source().key_derivation() {
+            let derived_id: u32 = derivation.account_index().into();
+            if derived_id == account_id {
+                return Ok(account_uuid);
+            }
+        }
     }
 
     Err(ipc_err(errors::ACCOUNT_NOT_FOUND, "account not found"))

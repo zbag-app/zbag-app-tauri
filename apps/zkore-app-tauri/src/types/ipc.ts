@@ -40,8 +40,9 @@ export type UnixTimestampMs = number;
 // Wallet Types
 // ============================================================================
 
-// In v1, wallets are always `Software`; watch-only behavior is modeled at the account level.
-// `WatchOnly` wallet type is reserved for future use and MUST NOT be created in v1.
+// `Software`: Wallet with mnemonic seed stored locally. Supports full spend capability.
+// `WatchOnly`: Wallet created from a UFVK (e.g., Keystone hardware wallet). No local seed;
+// spending requires external signing device.
 export type WalletType = 'Software' | 'WatchOnly';
 export type Network = 'Mainnet' | 'Testnet';
 
@@ -179,13 +180,27 @@ export interface SwapInfo {
 
 export interface SwapQuote {
   input_asset: string;
+  /** Input amount in smallest units (e.g., wei for ETH, zatoshis for ZEC) */
   input_amount: string;
+  /** Human-readable input amount (from API's amountInFormatted) */
+  input_amount_formatted: string;
   output_asset: string;
+  /** Output amount in smallest units */
   output_amount: string;
-  fee_amount: string;
-  fee_asset: string;
+  /** Human-readable output amount (from API's amountOutFormatted) */
+  output_amount_formatted: string;
+  /** Minimum output amount in smallest units (accounting for slippage) */
+  min_output_amount: string;
+  /** Deadline as milliseconds since epoch */
   deadline: UnixTimestampMs;
-  rate: string;
+  /** Estimated time for swap completion in seconds */
+  time_estimate_secs: number;
+  /** Deposit address (present when dry=false) */
+  deposit_address: string | null;
+  /** Deposit memo (present when deposit requires a memo) */
+  deposit_memo: string | null;
+  /** Correlation ID for tracking the quote */
+  correlation_id: string;
 }
 
 // ============================================================================
@@ -261,7 +276,9 @@ export interface ServerInfo {
 // ============================================================================
 
 export interface SigningRequest {
-  /** Base64-encoded PCZT payload */
+  /** Unique ID for this signing request, needed to finalize with the correct PCZT proofs */
+  signing_request_id: string;
+  /** Base64-encoded PCZT payload (redacted for signer, proofs stored server-side) */
   pczt_payload: string;
   /** QR frames for animated display */
   qr_frames: string[];
@@ -497,6 +514,10 @@ export interface ImportUfvkRequest extends VersionedPayload {
   wallet_id: string;
   ufvk: string;
   name: string;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
 }
 
 /** Build unsigned signing request for Keystone */
@@ -514,6 +535,8 @@ export interface BuildSigningRequestRequest extends VersionedPayload {
 
 /** Finalize signed response from Keystone */
 export interface FinalizeSigningRequest extends VersionedPayload {
+  /** The signing_request_id returned from build_signing_request */
+  signing_request_id: string;
   signed_payload: string;
   /** Re-auth token (purpose: Spend) */
   reauth_token: string;
@@ -755,6 +778,31 @@ export interface FinalizeSigningResponse extends VersionedPayload {
   txid: string;
 }
 
+/**
+ * Create a standalone Keystone hardware wallet from a UFVK.
+ *
+ * Unlike software wallets, this does NOT generate a mnemonic.
+ * The UFVK provides view-only access; spending requires Keystone signing.
+ */
+export interface CreateKeystoneWalletRequest extends VersionedPayload {
+  name: string;
+  network: Network;
+  password: string;
+  remember_unlock: boolean;
+  ufvk: string;
+  /** Optional birthday height for faster sync. If omitted, defaults to Sapling activation height (slower). */
+  birthday_height?: number;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
+}
+
+export interface CreateKeystoneWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  account: AccountInfo;
+}
+
 export interface RequestSwapQuoteResponse extends VersionedPayload {
   quote_id: string;
   quote: SwapQuote;
@@ -917,6 +965,11 @@ export const ErrorCodes = {
   TOR_NOT_READY: 'E7001',
   TOR_CONNECTION_FAILED: 'E7002',
 
+  // Watch-only wallet errors
+  WATCH_ONLY_NO_SEED: 'E9010',
+  WATCH_ONLY_NO_BACKUP: 'E9011',
+  WATCH_ONLY_CANNOT_SHIELD: 'E9012',
+
   // General errors
   INVALID_REQUEST: 'E9001',
   INTERNAL_ERROR: 'E9002',
@@ -967,6 +1020,7 @@ export const Commands = {
   IMPORT_UFVK: 'zkore_import_ufvk',
   BUILD_SIGNING_REQUEST: 'zkore_build_signing_request',
   FINALIZE_SIGNING: 'zkore_finalize_signing',
+  CREATE_KEYSTONE_WALLET: 'zkore_create_keystone_wallet',
 
   // Swaps
   REQUEST_SWAP_QUOTE: 'zkore_request_swap_quote',

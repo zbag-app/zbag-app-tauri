@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
@@ -7,16 +7,18 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { supportedTokens } from '../data/supportedTokens';
-import { reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
+import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
+import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
-export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
-  const { wallet } = props;
+export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
+  const { wallet, activeAccountId } = props;
   const navigate = useNavigate();
 
-  const [outputAsset, setOutputAsset] = useState('near:mainnet:native');
+  const [outputAsset, setOutputAsset] = useState(DEFAULT_NON_ZEC_ASSET_ID);
   const [inputAmountZat, setInputAmountZat] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
+  const [refundAddress, setRefundAddress] = useState('');
+  const [loadingRefundAddress, setLoadingRefundAddress] = useState(false);
 
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
@@ -32,11 +34,43 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
 
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
+    if (activeAccountId == null) return false;
     if (!outputAsset.trim()) return false;
     if (!inputAmountZat.trim()) return false;
     if (!destinationAddress.trim()) return false;
+    if (!refundAddress.trim()) return false;
     return true;
-  }, [wallet.network, outputAsset, inputAmountZat, destinationAddress]);
+  }, [wallet.network, activeAccountId, outputAsset, inputAmountZat, destinationAddress, refundAddress]);
+
+  // Auto-populate refund address from wallet's shielded address
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRefundAddress() {
+      if (wallet.network !== 'Mainnet') return;
+      if (activeAccountId == null) return;
+
+      setLoadingRefundAddress(true);
+      const res = await getReceiveAddress({
+        account_id: activeAccountId,
+        address_type: 'ShieldedOnly',
+      });
+      if (cancelled) return;
+      setLoadingRefundAddress(false);
+
+      if ('err' in res) {
+        setError(res.err.message);
+        return;
+      }
+
+      setRefundAddress(res.ok.address.encoded);
+    }
+
+    loadRefundAddress();
+    return () => {
+      cancelled = true;
+    };
+  }, [wallet.network, activeAccountId]);
 
   if (wallet.network !== 'Mainnet') {
     return (
@@ -81,9 +115,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
               className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {supportedTokens
-                .filter((t) => t.id !== 'zcash:mainnet:native')
-                .map((t) => (
+              {getFromZecTokens().map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
                   </option>
@@ -113,6 +145,19 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="refundAddress">Refund address (ZEC)</Label>
+            <textarea
+              id="refundAddress"
+              rows={2}
+              value={refundAddress}
+              onChange={(e) => setRefundAddress(e.currentTarget.value)}
+              placeholder="Your ZEC address for refunds if the swap fails"
+              disabled={loadingRefundAddress}
+              className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+            />
+          </div>
+
           <Button
             disabled={!canQuote || submittingQuote}
             onClick={async () => {
@@ -127,11 +172,11 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
 
               const res = await requestSwapQuote({
                 swap_type: 'FromZec',
-                input_asset: 'zcash:mainnet:native',
+                input_asset: ZEC_ASSET_ID,
                 input_amount: inputAmountZat,
                 output_asset: outputAsset,
                 destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                refund_address: null,
+                refund_address: refundAddress.trim() ? refundAddress.trim() : null,
               });
               setSubmittingQuote(false);
 
@@ -164,14 +209,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo }) {
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
-                <span className="text-muted-foreground">Fee</span>
-                <div className="font-semibold">
-                  {quote.fee_amount} {quote.fee_asset}
-                </div>
+                <span className="text-muted-foreground">Min. output</span>
+                <div className="font-semibold">{quote.min_output_amount}</div>
               </div>
               <div className="space-y-1">
-                <span className="text-muted-foreground">Rate</span>
-                <div className="font-semibold">{quote.rate}</div>
+                <span className="text-muted-foreground">Est. time</span>
+                <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
             </div>
           </CardContent>

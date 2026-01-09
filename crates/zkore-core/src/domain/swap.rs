@@ -48,14 +48,32 @@ pub struct SwapInfo {
     pub updated_at: i64,
 }
 
+/// Quote information from the 1Click API.
+///
+/// This struct maps to the new API response format where amounts are provided
+/// in both raw (smallest units) and formatted (human-readable) forms.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SwapQuote {
     pub input_asset: String,
+    /// Input amount in smallest units (e.g., wei for ETH, zatoshis for ZEC)
     pub input_amount: String,
+    /// Human-readable input amount (from API's amountInFormatted)
+    pub input_amount_formatted: String,
     pub output_asset: String,
+    /// Output amount in smallest units
     pub output_amount: String,
-    pub fee_amount: String,
-    pub fee_asset: String,
+    /// Human-readable output amount (from API's amountOutFormatted)
+    pub output_amount_formatted: String,
+    /// Minimum output amount in smallest units (accounting for slippage)
+    pub min_output_amount: String,
+    /// Deadline as milliseconds since epoch
     pub deadline: i64,
-    pub rate: String,
+    /// Estimated time for swap completion in seconds
+    pub time_estimate_secs: u64,
+    /// Deposit address (present when dry=false)
+    pub deposit_address: Option<String>,
+    /// Deposit memo (present when deposit requires a memo)
+    pub deposit_memo: Option<String>,
+    /// Correlation ID for tracking the quote
+    pub correlation_id: String,
 }

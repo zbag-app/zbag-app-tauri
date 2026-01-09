@@ -101,10 +101,50 @@ impl SwapService {
             return Err(ipc_err(errors::INVALID_REQUEST, "missing input_amount"));
         }
 
+        // For ToZec: recipient is the destination Zcash address, refund goes back to origin chain
+        // For FromZec: recipient is the destination chain address, refund goes back to Zcash
+        let recipient = intent
+            .destination_address
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "destination_address required"))?
+            .to_string();
+
+        // Refund address is required by the new API
+        let refund_to = intent
+            .refund_address
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "refund_address required"))?
+            .to_string();
+
+        // Convert amount to smallest units
+        let decimals = get_decimals_for_asset(&intent.input_asset);
+        let amount_smallest = convert_to_smallest_units(&intent.input_amount, decimals)
+            .map_err(|e| ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}")))?;
+
+        // Calculate deadline (2 hours from now, like Zashi)
+        let deadline = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+
+        // Use dry=false to get deposit address directly (like Zashi)
         let req = zkore_network::near_intents::QuoteRequest {
-            input_asset: intent.input_asset.clone(),
-            input_amount: intent.input_amount.clone(),
-            output_asset: intent.output_asset.clone(),
+            origin_asset: intent.input_asset.clone(),
+            destination_asset: intent.output_asset.clone(),
+            amount: amount_smallest,
+            swap_type: "EXACT_INPUT".to_string(),
+            slippage_tolerance: 100, // 1%
+            quote_waiting_time_ms: Some(3000),
+            referral: Some("zkore".to_string()),
+            app_fees: None,
+            deposit_type: "ORIGIN_CHAIN".to_string(),
+            refund_to,
+            refund_type: "ORIGIN_CHAIN".to_string(),
+            recipient,
+            recipient_type: "DESTINATION_CHAIN".to_string(),
+            deadline,
+            dry: false, // Get deposit address directly
         };
 
         let quote_res =
@@ -117,16 +157,21 @@ impl SwapService {
 
         let quote = SwapQuote {
             input_asset: intent.input_asset.clone(),
-            input_amount: intent.input_amount.clone(),
+            input_amount: quote_res.amount_in.clone(),
+            input_amount_formatted: quote_res.amount_in_formatted.clone(),
             output_asset: intent.output_asset.clone(),
-            output_amount: quote_res.output_amount,
-            fee_amount: quote_res.fee_amount,
-            fee_asset: quote_res.fee_asset,
-            deadline: quote_res.deadline_ms,
-            rate: quote_res.rate,
+            output_amount: quote_res.amount_out.clone(),
+            output_amount_formatted: quote_res.amount_out_formatted.clone(),
+            min_output_amount: quote_res.min_amount_out.clone(),
+            deadline: quote_res.deadline_ms.unwrap_or(0),
+            time_estimate_secs: quote_res.time_estimate_secs,
+            deposit_address: quote_res.deposit_address.clone(),
+            deposit_memo: quote_res.deposit_memo.clone(),
+            correlation_id: quote_res.correlation_id.clone(),
         };
 
-        let quote_id = quote_res.quote_id;
+        // Use correlation_id as the quote_id for tracking
+        let quote_id = quote_res.correlation_id;
 
         self.state.lock().expect("mutex poisoned").quotes.insert(
             quote_id.clone(),
@@ -188,26 +233,27 @@ impl SwapService {
             );
         }
 
-        let deposit_req = zkore_network::near_intents::DepositSubmitRequest {
-            quote_id: quote_id.to_string(),
-            destination_address: record.intent.destination_address.clone(),
-            refund_address: record.intent.refund_address.clone(),
-        };
+        // With the new API, deposit_address is already in the quote (from dry=false)
+        let deposit_address = record
+            .quote
+            .deposit_address
+            .clone()
+            .ok_or_else(|| ipc_err(errors::SWAP_FAILED, "quote missing deposit address"))?;
 
         let now_ms = chrono::Utc::now().timestamp_millis();
-        let mut swap = SwapInfo {
+        let swap = SwapInfo {
             id: Uuid::new_v4(),
-            remote_id: None,
+            remote_id: Some(record.quote.correlation_id.clone()),
             swap_type: record.intent.swap_type,
             input_asset: record.intent.input_asset,
-            input_amount: record.intent.input_amount,
+            input_amount: record.quote.input_amount_formatted.clone(),
             output_asset: record.intent.output_asset,
-            output_amount: Some(record.quote.output_amount),
-            deposit_address: None,
-            deposit_memo: None,
+            output_amount: Some(record.quote.output_amount_formatted.clone()),
+            deposit_address: Some(deposit_address),
+            deposit_memo: record.quote.deposit_memo.clone(),
             destination_address: record.intent.destination_address,
             refund_address: record.intent.refund_address,
-            state: SwapState::Draft,
+            state: SwapState::AwaitingDeposit,
             deadline: Some(record.quote.deadline),
             last_error: None,
             created_at: now_ms,
@@ -217,57 +263,6 @@ impl SwapService {
         let conn = open_app_db(&self.app_db_path)?;
         swap_meta::insert_swap(&conn, wallet_id, &swap).context("failed to insert swap")?;
 
-        if let Some(handler) = on_swap_changed.as_ref() {
-            handler(SwapChangedEvent {
-                schema_version: SCHEMA_VERSION,
-                event: "swap.changed".to_string(),
-                swap: swap.clone(),
-            });
-        }
-
-        let deposit_res = match block_on(async { self.near.submit_deposit(deposit_req).await }) {
-            Ok(res) => res,
-            Err(e) => {
-                swap.state = SwapState::Failed;
-                swap.updated_at = chrono::Utc::now().timestamp_millis();
-                swap.last_error = Some(e.to_string());
-                if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
-                    tracing::error!(
-                        wallet_id = %wallet_id,
-                        swap_id = %swap.id,
-                        error = ?db_err,
-                        "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
-                    );
-                }
-                if let Some(handler) = on_swap_changed.as_ref() {
-                    handler(SwapChangedEvent {
-                        schema_version: SCHEMA_VERSION,
-                        event: "swap.changed".to_string(),
-                        swap: swap.clone(),
-                    });
-                }
-                return Err(match e {
-                    zkore_network::near_intents::NearIntentsError::TorNotReady => {
-                        ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
-                    }
-                    _ => ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")),
-                });
-            }
-        };
-
-        swap.remote_id = deposit_res.remote_id;
-        swap.deposit_address = Some(deposit_res.deposit_address);
-        swap.deposit_memo = deposit_res.deposit_memo;
-        if let Some(output_amount) = deposit_res.output_amount {
-            swap.output_amount = Some(output_amount);
-        }
-        if let Some(deadline) = deposit_res.deadline_ms {
-            swap.deadline = Some(deadline);
-        }
-        swap.state = SwapState::AwaitingDeposit;
-        swap.updated_at = chrono::Utc::now().timestamp_millis();
-
-        swap_meta::update_swap(&conn, wallet_id, &swap).context("failed to update swap")?;
         if let Some(handler) = on_swap_changed.as_ref() {
             handler(SwapChangedEvent {
                 schema_version: SCHEMA_VERSION,
@@ -288,8 +283,8 @@ impl SwapService {
     fn start_swap_from_zec(
         &self,
         wallet_id: Uuid,
-        network: Network,
-        quote_id: &str,
+        _network: Network,
+        _quote_id: &str,
         allow_transparent_interaction: bool,
         reauth_token: Option<&str>,
         on_swap_changed: Option<SwapEventHandler>,
@@ -306,14 +301,12 @@ impl SwapService {
             .filter(|t| !t.trim().is_empty())
             .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "reauth_token required"))?;
 
-        let destination_address = record
-            .intent
-            .destination_address
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "destination_address required"))?
-            .to_string();
+        // With the new API, deposit_address is already in the quote (from dry=false)
+        let deposit_address = record
+            .quote
+            .deposit_address
+            .clone()
+            .ok_or_else(|| ipc_err(errors::SWAP_FAILED, "quote missing deposit address"))?;
 
         let conn = open_app_db(&self.app_db_path)?;
         let accounts =
@@ -329,36 +322,19 @@ impl SwapService {
                 )
             })?;
 
-        let refund_address = {
-            let Ok(mut mgr) = self.wallet_manager.lock() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            };
-            let (wallet, wallet_db_conn) = mgr.require_active_unlocked_wallet_db()?;
-            if wallet.id != wallet_id {
-                return Err(ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"));
-            }
-            derive_ephemeral_transparent_address(wallet_db_conn, network, account_id)?
-        };
-
-        let deposit_req = zkore_network::near_intents::DepositSubmitRequest {
-            quote_id: quote_id.to_string(),
-            destination_address: Some(destination_address),
-            refund_address: Some(refund_address.clone()),
-        };
-
         let now_ms = chrono::Utc::now().timestamp_millis();
         let mut swap = SwapInfo {
             id: Uuid::new_v4(),
-            remote_id: None,
+            remote_id: Some(record.quote.correlation_id.clone()),
             swap_type: record.intent.swap_type,
             input_asset: record.intent.input_asset,
-            input_amount: record.intent.input_amount,
+            input_amount: record.quote.input_amount_formatted.clone(),
             output_asset: record.intent.output_asset,
-            output_amount: Some(record.quote.output_amount),
-            deposit_address: None,
-            deposit_memo: None,
+            output_amount: Some(record.quote.output_amount_formatted.clone()),
+            deposit_address: Some(deposit_address.clone()),
+            deposit_memo: record.quote.deposit_memo.clone(),
             destination_address: record.intent.destination_address,
-            refund_address: Some(refund_address),
+            refund_address: record.intent.refund_address,
             state: SwapState::Draft,
             deadline: Some(record.quote.deadline),
             last_error: None,
@@ -376,12 +352,29 @@ impl SwapService {
             });
         }
 
-        let deposit_res = match block_on(async { self.near.submit_deposit(deposit_req).await }) {
-            Ok(res) => res,
-            Err(e) => {
+        // Send ZEC to the deposit address
+        let send_result = {
+            let Ok(mut mgr) = self.wallet_manager.lock() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+
+            let proposal = mgr.prepare_send(
+                account_id,
+                &deposit_address,
+                &swap.input_amount,
+                swap.deposit_memo.as_deref(),
+                allow_transparent_interaction,
+            )?;
+
+            mgr.confirm_send(&proposal.proposal_id, reauth_token, None)
+        };
+
+        let txid = match send_result {
+            Ok(res) => res.txid,
+            Err(err) => {
                 swap.state = SwapState::Failed;
                 swap.updated_at = chrono::Utc::now().timestamp_millis();
-                swap.last_error = Some(e.to_string());
+                swap.last_error = Some(err.to_string());
                 if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
                     tracing::error!(
                         wallet_id = %wallet_id,
@@ -397,25 +390,27 @@ impl SwapService {
                         swap: swap.clone(),
                     });
                 }
-                return Err(match e {
-                    zkore_network::near_intents::NearIntentsError::TorNotReady => {
-                        ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
-                    }
-                    _ => ipc_err(errors::SWAP_FAILED, format!("failed to start swap: {e}")),
-                });
+                return Err(err);
             }
         };
 
-        swap.remote_id = deposit_res.remote_id;
-        swap.deposit_address = Some(deposit_res.deposit_address);
-        swap.deposit_memo = deposit_res.deposit_memo;
-        if let Some(output_amount) = deposit_res.output_amount {
-            swap.output_amount = Some(output_amount);
+        // Notify the API about the deposit (optional but helps speed up detection)
+        let submit_req = zkore_network::near_intents::DepositSubmitRequest {
+            tx_hash: txid,
+            deposit_address,
+        };
+
+        // Best-effort notification - don't fail the swap if this fails
+        if let Err(e) = block_on(async { self.near.submit_deposit(submit_req).await }) {
+            tracing::warn!(
+                wallet_id = %wallet_id,
+                swap_id = %swap.id,
+                error = ?e,
+                "failed to notify API about deposit (non-fatal)"
+            );
         }
-        if let Some(deadline) = deposit_res.deadline_ms {
-            swap.deadline = Some(deadline);
-        }
-        swap.state = SwapState::AwaitingDeposit;
+
+        swap.state = SwapState::Pending;
         swap.updated_at = chrono::Utc::now().timestamp_millis();
 
         swap_meta::update_swap(&conn, wallet_id, &swap).context("failed to update swap")?;
@@ -425,45 +420,6 @@ impl SwapService {
                 event: "swap.changed".to_string(),
                 swap: swap.clone(),
             });
-        }
-
-        let send_result = {
-            let Ok(mut mgr) = self.wallet_manager.lock() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            };
-
-            let proposal = mgr.prepare_send(
-                account_id,
-                swap.deposit_address.as_deref().unwrap_or_default(),
-                &swap.input_amount,
-                swap.deposit_memo.as_deref(),
-                allow_transparent_interaction,
-            )?;
-
-            mgr.confirm_send(&proposal.proposal_id, reauth_token, None)?;
-            Ok::<(), anyhow::Error>(())
-        };
-
-        if let Err(err) = send_result {
-            swap.state = SwapState::Failed;
-            swap.updated_at = chrono::Utc::now().timestamp_millis();
-            swap.last_error = Some(err.to_string());
-            if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap) {
-                tracing::error!(
-                    wallet_id = %wallet_id,
-                    swap_id = %swap.id,
-                    error = ?db_err,
-                    "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
-                );
-            }
-            if let Some(handler) = on_swap_changed.as_ref() {
-                handler(SwapChangedEvent {
-                    schema_version: SCHEMA_VERSION,
-                    event: "swap.changed".to_string(),
-                    swap: swap.clone(),
-                });
-            }
-            return Err(err);
         }
 
         self.start_polling(wallet_id, swap.clone(), on_swap_changed);
@@ -856,6 +812,7 @@ fn parse_zatoshis(value: &str) -> Option<u64> {
     }
 }
 
+#[allow(dead_code)] // May be used for future FromZec refund address derivation
 fn derive_ephemeral_transparent_address(
     wallet_db_conn: &mut rusqlite::Connection,
     network: Network,
@@ -901,6 +858,7 @@ fn derive_ephemeral_transparent_address(
     Ok(addr.to_zcash_address(params.network_type()).encode())
 }
 
+#[allow(dead_code)] // Used by derive_ephemeral_transparent_address
 fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Network {
     match network {
         Network::Mainnet => zcash_protocol::consensus::Network::MainNetwork,
@@ -928,4 +886,79 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
             .expect("create tokio runtime")
             .block_on(future),
     }
+}
+
+/// Get decimals for a given asset ID.
+///
+/// Asset IDs use the new 1Click API format (e.g., `nep141:zec.omft.near`).
+fn get_decimals_for_asset(asset_id: &str) -> u8 {
+    match asset_id {
+        // ZEC (8 decimals)
+        "nep141:zec.omft.near" => 8,
+        // ETH and ETH variants (18 decimals)
+        "nep141:eth.omft.near" | "nep141:base.omft.near" => 18,
+        // SOL (9 decimals)
+        "nep141:sol.omft.near" => 9,
+        // NEAR (24 decimals)
+        "nep141:wrap.near" => 24,
+        // USDC/USDT variants (6 decimals)
+        s if s.contains("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") => 6, // ETH USDC
+        s if s.contains("0xdac17f958d2ee523a2206206994597c13d831ec7") => 6, // ETH USDT
+        s if s.contains("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913") => 6, // Base USDC
+        s if s.contains("5ce3bf3a31af18be40ba30f721101b4341690186") => 6,   // SOL USDC
+        s if s.contains("c800a4bd850783ccb82c2b2c7e84175443606352") => 6,   // SOL USDT
+        s if s.contains("17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1") => 6, // NEAR USDC
+        // Default to 8 (ZEC-like) for unknown assets
+        _ => 8,
+    }
+}
+
+/// Convert a human-readable amount to smallest units.
+///
+/// For example, "1.5" ETH with 18 decimals becomes "1500000000000000000".
+fn convert_to_smallest_units(amount: &str, decimals: u8) -> anyhow::Result<String> {
+    let amount = amount.trim();
+    if amount.is_empty() {
+        anyhow::bail!("empty amount");
+    }
+
+    let parts: Vec<&str> = amount.split('.').collect();
+    if parts.len() > 2 {
+        anyhow::bail!("invalid amount format");
+    }
+
+    let whole_str = parts[0];
+    if !whole_str.chars().all(|c| c.is_ascii_digit()) {
+        anyhow::bail!("invalid whole part");
+    }
+    let whole: u128 = whole_str
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid whole part"))?;
+
+    let frac_str = if parts.len() > 1 { parts[1] } else { "" };
+    if !frac_str.is_empty() && !frac_str.chars().all(|c| c.is_ascii_digit()) {
+        anyhow::bail!("invalid fractional part");
+    }
+
+    // Multiply whole part by 10^decimals
+    let mut result = whole;
+    for _ in 0..decimals {
+        result = result
+            .checked_mul(10)
+            .ok_or_else(|| anyhow::anyhow!("amount overflow"))?;
+    }
+
+    // Add fractional part (truncate if too many decimals)
+    if !frac_str.is_empty() {
+        let frac_len = frac_str.len().min(decimals as usize);
+        let frac_val: u128 = frac_str[..frac_len]
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid fractional part"))?;
+        let frac_multiplier = 10u128.pow((decimals as u32).saturating_sub(frac_len as u32));
+        result = result
+            .checked_add(frac_val * frac_multiplier)
+            .ok_or_else(|| anyhow::anyhow!("amount overflow"))?;
+    }
+
+    Ok(result.to_string())
 }
