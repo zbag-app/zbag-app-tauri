@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { supportedTokens } from '../data/supportedTokens';
+import { DEFAULT_NON_ZEC_ASSET_ID, getToZecTokens, ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, requestSwapQuote } from '../services/ipc';
 
 export type SwapQuoteLocationState = {
@@ -19,7 +19,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const navigate = useNavigate();
 
   const [swapType, setSwapType] = useState<IPC.SwapType>('ToZec');
-  const [inputAsset, setInputAsset] = useState('near:mainnet:native');
+  const [inputAsset, setInputAsset] = useState(DEFAULT_NON_ZEC_ASSET_ID);
   const [inputAmount, setInputAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState<string>('');
   const [refundAddress, setRefundAddress] = useState('');
@@ -28,7 +28,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const outputAsset = 'zcash:mainnet:native';
+  const outputAsset = ZEC_ASSET_ID;
 
   const canSubmit = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
@@ -139,13 +139,11 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                   onChange={(e) => setInputAsset(e.currentTarget.value)}
                   className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {supportedTokens
-                    .filter((t) => t.id !== outputAsset)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                      </option>
-                    ))}
+                  {getToZecTokens().map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 

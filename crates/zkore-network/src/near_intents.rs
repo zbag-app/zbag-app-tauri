@@ -49,7 +49,10 @@ impl NearIntentsClient {
     ///
     /// Uses POST with JSON body (new API format).
     /// Set `dry=true` for quote preview, `dry=false` to get deposit address.
-    pub async fn get_quote(&self, req: QuoteRequest) -> Result<QuoteResponse, NearIntentsError> {
+    pub async fn get_quote(
+        &self,
+        mut req: QuoteRequest,
+    ) -> Result<QuoteResponse, NearIntentsError> {
         let url = reqwest::Url::parse(&format!("{}/v0/quote", self.base_url))
             .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
 
@@ -62,6 +65,42 @@ impl NearIntentsClient {
         Self::handle_rate_limit(res.status, res.retry_after)?;
 
         if !(200..300).contains(&res.status) {
+            // The 1Click API sometimes returns a 400 "Failed to get quote" when the quote
+            // cannot be produced within the requested `quoteWaitingTimeMs`. Retry once
+            // with a more forgiving waiting time to reduce flakiness for otherwise-valid
+            // requests.
+            if res.status == 400
+                && res
+                    .body
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|m| m == "Failed to get quote")
+                && req.quote_waiting_time_ms.unwrap_or(0) < 10_000
+            {
+                req.quote_waiting_time_ms = Some(10_000);
+                let url =
+                    reqwest::Url::parse(&format!("{}/v0/quote", self.base_url)).map_err(|_| {
+                        NearIntentsError::InvalidResponse("invalid base url".to_string())
+                    })?;
+
+                let res = self
+                    .http
+                    .post_json(url, &req)
+                    .await
+                    .map_err(map_http_error)?;
+
+                Self::handle_rate_limit(res.status, res.retry_after)?;
+
+                if (200..300).contains(&res.status) {
+                    return parse_quote_response(&res.body);
+                }
+
+                return Err(NearIntentsError::Http {
+                    status: res.status,
+                    message: res.body.to_string(),
+                });
+            }
+
             return Err(NearIntentsError::Http {
                 status: res.status,
                 message: res.body.to_string(),
