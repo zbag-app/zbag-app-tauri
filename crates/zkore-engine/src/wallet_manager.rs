@@ -582,6 +582,7 @@ impl WalletManager {
     ///
     /// Unlike software wallets, this does NOT generate a mnemonic. The UFVK provides
     /// view-only access; spending requires the Keystone signing flow.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_keystone_wallet(
         &mut self,
         name: &str,
