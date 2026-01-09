@@ -40,6 +40,13 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
+            IMPORTANT: Communication style requirements:
+            - Do not use emojis in your responses
+            - Maintain an objective, neutral tone. Avoid flattering language, subjective assessments, or statements like "high-quality PR" or "well-thought-out solutions"
+            - Focus on factual observations, technical issues, and concrete recommendations
+            - Be direct and professional without praise or criticism of the author's approach
+            - Since all code is AI-written, there is no need for flattering language
+
             Please review this pull request and provide feedback on:
             - Code quality and best practices
             - Potential bugs or issues
