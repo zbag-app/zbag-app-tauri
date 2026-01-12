@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 
 #[derive(Debug, Clone, Copy)]
 struct TokenRecord {

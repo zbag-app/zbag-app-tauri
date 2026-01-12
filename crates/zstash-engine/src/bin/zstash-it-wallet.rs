@@ -99,33 +99,33 @@ fn main() -> anyhow::Result<()> {
 fn print_help() {
     eprintln!(
         "\
-zkore-it-wallet: create/load a local integration-test wallet and print its unified address.
+zstash-it-wallet: create/load a local integration-test wallet and print its unified address.
 
 USAGE:
-  cargo run -p zkore-engine --bin zkore-it-wallet -- [OPTIONS]
+  cargo run -p zstash-engine --bin zstash-it-wallet -- [OPTIONS]
 
 OPTIONS:
   --network testnet|mainnet    (default: testnet)
   --account N                 (default: 0)
-  --mnemonic-file PATH        (default: $HOME/.zkore/dev/it-wallet.mnemonic)
+  --mnemonic-file PATH        (default: $HOME/.zstash/dev/it-wallet.mnemonic)
   --force-new                 overwrite mnemonic file
   --print-mnemonic            print mnemonic after address
   -h, --help                  show this help
 
 ENV:
-  ZKORE_IT_MNEMONIC           if set, used instead of --mnemonic-file
+  ZSTASH_IT_MNEMONIC           if set, used instead of --mnemonic-file
 "
     );
 }
 
 fn default_mnemonic_path() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".zkore/dev/it-wallet.mnemonic"))
+    Ok(PathBuf::from(home).join(".zstash/dev/it-wallet.mnemonic"))
 }
 
 fn load_or_create_mnemonic(path: &Path, force_new: bool) -> anyhow::Result<(String, &'static str)> {
-    if let Ok(env_phrase) = std::env::var("ZKORE_IT_MNEMONIC") {
-        return Ok((env_phrase, "env:ZKORE_IT_MNEMONIC"));
+    if let Ok(env_phrase) = std::env::var("ZSTASH_IT_MNEMONIC") {
+        return Ok((env_phrase, "env:ZSTASH_IT_MNEMONIC"));
     }
 
     if !force_new {
@@ -179,7 +179,7 @@ fn parse_mnemonic(phrase: &str) -> anyhow::Result<Mnemonic> {
     let mnemonic =
         Mnemonic::parse_in_normalized(bip39::Language::English, trimmed).map_err(|_e| {
             anyhow::anyhow!(
-                "invalid mnemonic (expected 24 English words); set ZKORE_IT_MNEMONIC or delete mnemonic file"
+                "invalid mnemonic (expected 24 English words); set ZSTASH_IT_MNEMONIC or delete mnemonic file"
             )
         })?;
     if mnemonic.words().count() != 24 {

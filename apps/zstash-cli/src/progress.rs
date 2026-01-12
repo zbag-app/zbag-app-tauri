@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-use zkore_core::domain::{SyncPhase, SyncProgress};
+use zstash_core::domain::{SyncPhase, SyncProgress};
 
 /// Create a progress bar for sync operations.
 pub fn create_sync_progress_bar() -> ProgressBar {

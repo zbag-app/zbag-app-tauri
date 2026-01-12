@@ -17,13 +17,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # CLI binary path (prefer release build)
-CLI="${ROOT_DIR}/target/release/zkore"
+CLI="${ROOT_DIR}/target/release/zstash"
 if [[ ! -x "$CLI" ]]; then
-    CLI="${ROOT_DIR}/target/debug/zkore"
+    CLI="${ROOT_DIR}/target/debug/zstash"
 fi
 
 # Benchmark data directory (isolated from user wallets)
-BENCHMARK_DATA_DIR="${HOME}/.zkore-benchmark"
+BENCHMARK_DATA_DIR="${HOME}/.zstash-benchmark"
 
 # Test mnemonic (all-zeros entropy - safe for testnet only)
 TESTNET_TEST_MNEMONIC="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
@@ -215,7 +215,7 @@ generate_seed_phrase() {
     (
         set -euo pipefail
         local tmp_dir out seed
-        tmp_dir="$(mktemp -d -t zkore-seedgen.XXXXXX)"
+        tmp_dir="$(mktemp -d -t zstash-seedgen.XXXXXX)"
         trap 'rm -rf "$tmp_dir"' EXIT
 
         # wallet create outputs the seed phrase; keep it in-memory only and never print it.
@@ -358,7 +358,7 @@ format_duration() {
 # ==============================================================================
 
 if [[ ! -x "$CLI" ]]; then
-    die "zkore CLI binary not found. Run 'make cli' first."
+    die "zstash CLI binary not found. Run 'make cli' first."
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -440,7 +440,7 @@ run_benchmark() {
     local start_time end_time sync_duration
     start_time=$(date +%s)
 
-    progress_log_file="$(mktemp -t zkore-sync-progress.XXXXXX)"
+    progress_log_file="$(mktemp -t zstash-sync-progress.XXXXXX)"
     trap 'rm -f "$progress_log_file"' RETURN
 
     # Sync command blocks until complete. Always enable progress logging so we can
@@ -534,7 +534,7 @@ run_benchmark() {
 # ==============================================================================
 
 echo ""
-echo "Zkore Sync Benchmark"
+echo "zSTASH Sync Benchmark"
 echo "===================="
 log "Using CLI: $CLI"
 log "Data directory: $BENCHMARK_DATA_DIR"

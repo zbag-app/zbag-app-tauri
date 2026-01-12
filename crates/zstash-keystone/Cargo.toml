@@ -1,5 +1,5 @@
 [package]
-name = "zkore-keystone"
+name = "zstash-keystone"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -2,7 +2,7 @@
  * Decode UR fountain-encoded QR frames into PCZT binary.
  * Uses the same bc-ur library as the app.
  *
- * Usage (from apps/zkore-app-tauri):
+ * Usage (from apps/zstash-app-tauri):
  *   bun run scripts/decode-ur-fountain.ts [input_file]
  *
  * Default input: ../../keystone-qr/video_qr_frames.txt

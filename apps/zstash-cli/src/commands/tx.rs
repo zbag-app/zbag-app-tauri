@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -286,13 +286,13 @@ fn load_and_unlock_wallet(
     state: &CliAppState,
     wallet_prefix: Option<&str>,
     password: Option<&str>,
-) -> Result<zkore_core::domain::WalletInfo> {
+) -> Result<zstash_core::domain::WalletInfo> {
     let wallet_info = if let Some(prefix) = wallet_prefix {
         state.get_wallet_by_prefix(prefix)?
     } else {
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zkore wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
             anyhow::bail!("multiple wallets found - specify one with --wallet <ID>");

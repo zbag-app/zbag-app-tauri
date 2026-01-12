@@ -6,9 +6,9 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
 use uuid::Uuid;
 use zeroize::Zeroize;
-use zkore_core::domain::Network;
-use zkore_engine::db::wallet_encryption_meta::get_wallet_encryption;
-use zkore_engine::encryption::{Dek, unwrap_dek};
+use zstash_core::domain::Network;
+use zstash_engine::db::wallet_encryption_meta::get_wallet_encryption;
+use zstash_engine::encryption::{Dek, unwrap_dek};
 
 /// Derive the DEK (Data Encryption Key) for a wallet using the password.
 pub fn derive_wallet_dek(

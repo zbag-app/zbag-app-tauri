@@ -3,11 +3,11 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, ServerInfo};
-use zkore_core::errors;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{Network, ServerInfo};
+use zstash_core::errors;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -77,7 +77,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -96,7 +96,7 @@ fn set_default_server_is_scoped_to_server_network() {
     .expect("create wallet manager");
 
     let before =
-        zkore_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
+        zstash_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_before = before
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)
@@ -112,14 +112,14 @@ fn set_default_server_is_scoped_to_server_network() {
         is_default: false,
         last_success_at: None,
     };
-    zkore_engine::db::server_meta::insert_server(mgr.app_db().conn(), &new_testnet, now_ms)
+    zstash_engine::db::server_meta::insert_server(mgr.app_db().conn(), &new_testnet, now_ms)
         .expect("insert server");
 
-    zkore_engine::db::server_meta::set_default_server(mgr.app_db_mut().conn_mut(), new_testnet.id)
+    zstash_engine::db::server_meta::set_default_server(mgr.app_db_mut().conn_mut(), new_testnet.id)
         .expect("set default");
 
     let after =
-        zkore_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
+        zstash_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_after = after
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)

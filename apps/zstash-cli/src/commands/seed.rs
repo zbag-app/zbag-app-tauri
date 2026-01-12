@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Args;
 use console::style;
 
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -39,10 +39,10 @@ pub async fn run(args: SeedArgs, data_dir: &Path, output: &OutputMode) -> Result
         // Try to find a wallet
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zkore wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
-            anyhow::bail!("multiple wallets found - specify one with: zkore seed --wallet <ID>");
+            anyhow::bail!("multiple wallets found - specify one with: zstash seed --wallet <ID>");
         }
         let info = wallets.into_iter().next().unwrap();
         let (_, unlocked) = state.load_wallet(info.id)?;

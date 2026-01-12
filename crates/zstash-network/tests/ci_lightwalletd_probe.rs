@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use zkore_network::grpc_client::GrpcClient;
+use zstash_network::grpc_client::GrpcClient;
 
 #[test]
 fn ci_probe_lightwalletd_endpoint() {
@@ -8,8 +8,8 @@ fn ci_probe_lightwalletd_endpoint() {
         return;
     }
 
-    let endpoint = std::env::var("ZKORE_GRPC_URL")
-        .expect("ZKORE_GRPC_URL must be set in CI (see .github/workflows/ci.yml)");
+    let endpoint = std::env::var("ZSTASH_GRPC_URL")
+        .expect("ZSTASH_GRPC_URL must be set in CI (see .github/workflows/ci.yml)");
 
     let client = GrpcClient::new(endpoint.clone());
 

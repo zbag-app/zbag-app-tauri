@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use zkore_core::domain::Network;
+use zstash_core::domain::Network;
 
 pub trait KeyStore: Send + Sync {
     fn store_encrypted_mnemonic(

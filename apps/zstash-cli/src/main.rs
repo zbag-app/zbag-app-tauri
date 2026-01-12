@@ -13,8 +13,8 @@ mod progress;
 use output::OutputMode;
 
 #[derive(Parser)]
-#[command(name = "zkore")]
-#[command(author, version, about = "Zkore Zcash wallet CLI")]
+#[command(name = "zstash")]
+#[command(author, version, about = "zSTASH Zcash wallet CLI")]
 #[command(propagate_version = true)]
 struct Cli {
     /// Output in JSON format (for scripting/agent use)
@@ -25,8 +25,8 @@ struct Cli {
     #[arg(long, global = true)]
     tor: bool,
 
-    /// Custom data directory (default: ~/.zkore)
-    #[arg(long, global = true, env = "ZKORE_DATA_DIR")]
+    /// Custom data directory (default: ~/.zstash)
+    #[arg(long, global = true, env = "ZSTASH_DATA_DIR")]
     data_dir: Option<PathBuf>,
 
     /// Verbose output (repeat for more: -v, -vv, -vvv)
@@ -107,7 +107,7 @@ async fn run_command(cli: Cli) -> Result<()> {
 fn default_data_dir() -> PathBuf {
     dirs::home_dir()
         .expect("HOME directory not found")
-        .join(".zkore")
+        .join(".zstash")
 }
 
 fn init_logging(verbosity: u8) {

@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSCameraUsageDescription</key>
-  <string>Zkore needs camera access to scan QR codes from your Keystone hardware wallet.</string>
+  <string>zSTASH needs camera access to scan QR codes from your Keystone hardware wallet.</string>
 </dict>
 </plist>

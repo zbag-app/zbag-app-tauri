@@ -1,14 +1,16 @@
 use tauri::State;
 
-use zkore_core::ipc::v1::commands::address::{GetReceiveAddressRequest, GetReceiveAddressResponse};
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::commands::address::{
+    GetReceiveAddressRequest, GetReceiveAddressResponse,
+};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zkore_get_receive_address")]
-pub fn zkore_get_receive_address(
+#[tauri::command(rename = "zstash_get_receive_address")]
+pub fn zstash_get_receive_address(
     state: State<'_, AppState>,
     request: GetReceiveAddressRequest,
 ) -> IpcResult<GetReceiveAddressResponse> {

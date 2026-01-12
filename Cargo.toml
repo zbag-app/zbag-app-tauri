@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/zkore-core",
-  "crates/zkore-engine",
-  "crates/zkore-network",
-  "crates/zkore-keystone",
-  "crates/zkore-tor",
-  "apps/zkore-app-tauri/src-tauri",
-  "apps/zkore-tui",
-  "apps/zkore-cli",
+  "crates/zstash-core",
+  "crates/zstash-engine",
+  "crates/zstash-network",
+  "crates/zstash-keystone",
+  "crates/zstash-tor",
+  "apps/zstash-app-tauri/src-tauri",
+  "apps/zstash-tui",
+  "apps/zstash-cli",
 ]
 
 [workspace.package]
@@ -16,7 +16,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.92.0"
 license = "MIT"
-repository = "https://github.com/zkore/zkore-desktop"
+repository = "https://github.com/zstash/zstash-desktop"
 
 [workspace.dependencies]
 # Zcash libraries (aligned with librustzcash/Zashi)

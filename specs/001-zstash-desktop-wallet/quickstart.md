@@ -1,4 +1,4 @@
-# Quickstart: Zkore Desktop Wallet
+# Quickstart: zSTASH Desktop Wallet
 
 **Branch**: `main`
 **Purpose**: Developer onboarding and build reference
@@ -11,7 +11,7 @@
 - **Bun**: 1.3.5+
 - **Tauri CLI**: v2 (installed as dev dependency via `@tauri-apps/cli`, not global)
 
-> **Note**: Zkore pins and enforces Rust **1.92.0** for builds (via `rust-toolchain.toml` and the workspace `rust-version`) to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
+> **Note**: zSTASH pins and enforces Rust **1.92.0** for builds (via `rust-toolchain.toml` and the workspace `rust-version`) to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 ### Platform-Specific
 
@@ -37,15 +37,15 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 - KDF crate: `argon2` configured for **Argon2id**.
 - AEAD crate: `chacha20poly1305` for **XChaCha20-Poly1305** wrapping.
 - For DEK wrap/unwrap, bind AEAD associated data to `(wallet_id, network, aead_scheme, aead_version)` (values persisted per wallet in `wallet_encryption`).
-- Zkore does not support a “system SQLCipher” build path; developers and end users do not install SQLCipher separately.
+- zSTASH does not support a “system SQLCipher” build path; developers and end users do not install SQLCipher separately.
 
 ## Getting Started
 
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/zkore/zkore-desktop.git
-cd zkore-desktop
+git clone https://github.com/zstash/zstash-desktop.git
+cd zstash-desktop
 make install    # Install frontend dependencies
 ```
 
@@ -88,11 +88,11 @@ The project includes a Makefile with shortcuts for common tasks. Run `make help`
 | Target | Description |
 |--------|-------------|
 | `test` | Run all library tests |
-| `test-engine` | Test zkore-engine only |
-| `test-core` | Test zkore-core only |
-| `test-network` | Test zkore-network only |
-| `test-keystone` | Test zkore-keystone only |
-| `test-tor` | Test zkore-tor only |
+| `test-engine` | Test zstash-engine only |
+| `test-core` | Test zstash-core only |
+| `test-network` | Test zstash-network only |
+| `test-keystone` | Test zstash-keystone only |
+| `test-tor` | Test zstash-tor only |
 | `test-migrations` | Run migration tests |
 
 ### Development
@@ -129,17 +129,17 @@ The project includes a Makefile with shortcuts for common tasks. Run `make help`
 ├── Cargo.toml                    # Workspace manifest
 ├── Makefile                      # Build shortcuts
 ├── crates/
-│   ├── zkore-core/               # Domain types, IPC contracts, errors
-│   ├── zkore-engine/             # Wallet operations (librustzcash wrapper)
-│   ├── zkore-network/            # gRPC/HTTP clients, Tor transport
-│   ├── zkore-keystone/           # Hardware wallet integration (PCZT)
-│   └── zkore-tor/                # Embedded Arti Tor client
+│   ├── zstash-core/               # Domain types, IPC contracts, errors
+│   ├── zstash-engine/             # Wallet operations (librustzcash wrapper)
+│   ├── zstash-network/            # gRPC/HTTP clients, Tor transport
+│   ├── zstash-keystone/           # Hardware wallet integration (PCZT)
+│   └── zstash-tor/                # Embedded Arti Tor client
 ├── apps/
-│   ├── zkore-app-tauri/          # Tauri desktop app
+│   ├── zstash-app-tauri/          # Tauri desktop app
 │   │   ├── src-tauri/            # Rust backend (commands, state)
 │   │   └── src/                  # React frontend (pages, components, services)
-│   ├── zkore-cli/                # Command-line interface
-│   └── zkore-tui/                # Terminal UI
+│   ├── zstash-cli/                # Command-line interface
+│   └── zstash-tui/                # Terminal UI
 ├── tests/
 │   ├── integration/              # Integration tests
 │   └── e2e/                      # End-to-end tests
@@ -161,7 +161,7 @@ This starts Vite on port 1420 with hot reload, plus the Tauri Rust backend.
 ```bash
 make test           # All Rust library tests
 make test-engine    # Engine crate only
-bun test            # Frontend tests (from apps/zkore-app-tauri)
+bun test            # Frontend tests (from apps/zstash-app-tauri)
 ```
 
 ### Pre-commit Checks
@@ -182,13 +182,13 @@ make tauri-build     # Build Tauri production app
 
 ### Tauri Configuration
 
-Edit `apps/zkore-app-tauri/src-tauri/tauri.conf.json`:
+Edit `apps/zstash-app-tauri/src-tauri/tauri.conf.json`:
 
 ```json
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Zkore Desktop",
-  "identifier": "com.zkore.desktop",
+  "productName": "zSTASH Desktop",
+  "identifier": "com.zstash.desktop",
   "version": "0.1.0",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -199,7 +199,7 @@ Edit `apps/zkore-app-tauri/src-tauri/tauri.conf.json`:
   "app": {
     "windows": [
       {
-        "title": "Zkore Desktop",
+        "title": "zSTASH Desktop",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -238,13 +238,13 @@ Create `.env.development`:
 # Testnet: https://lwd.testnet.zec.pro (default)
 # Note: this override does NOT set wallet network. Wallet network is selected at wallet creation and is immutable.
 # Note: this is for local development/CI only; release builds should rely on persisted server configuration and must not silently override user-selected servers via environment variables.
-ZKORE_GRPC_URL=https://lwd.testnet.zec.pro
+ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
 
 # Logging
-RUST_LOG=info,zkore=debug
+RUST_LOG=info,zstash=debug
 
 # Log file location (logs written here automatically)
-# ~/.zkore/logs/zkore.YYYY-MM-DD.log (rotated daily, 7 days retained)
+# ~/.zstash/logs/zstash.YYYY-MM-DD.log (rotated daily, 7 days retained)
 ```
 
 ## API Migration Notes (librustzcash 0.21+)
@@ -337,8 +337,8 @@ Add these to the CI pipeline:
 - name: Integration tests (lightwalletd matrix)
   run: |
     # Constitution Principle V: validate against at least two independent deployments.
-    ZKORE_GRPC_URL=https://lwd.zec.pro cargo test --workspace
-    ZKORE_GRPC_URL=https://zec.rocks cargo test --workspace
+    ZSTASH_GRPC_URL=https://lwd.zec.pro cargo test --workspace
+    ZSTASH_GRPC_URL=https://zec.rocks cargo test --workspace
 
 - name: Build with lock verification
   run: cargo build --release --locked

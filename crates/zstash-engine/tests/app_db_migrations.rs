@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use zkore_engine::db::migrations;
+use zstash_engine::db::migrations;
 
 fn temp_db_path() -> PathBuf {
-    std::env::temp_dir().join(format!("zkore_app_db_test_{}.sqlite", Uuid::new_v4()))
+    std::env::temp_dir().join(format!("zstash_app_db_test_{}.sqlite", Uuid::new_v4()))
 }
 
 #[test]

@@ -1,15 +1,15 @@
 //! Quick tool to decrypt wallet and print DEK or query accounts.
 //!
-//! Usage: cargo run -p zkore-tui --example decrypt_wallet
+//! Usage: cargo run -p zstash-tui --example decrypt_wallet
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use zkore_core::domain::Network;
-use zkore_engine::db::AppDb;
-use zkore_engine::db::wallet_encryption_meta::get_wallet_encryption;
-use zkore_engine::encryption::unwrap_dek;
+use zstash_core::domain::Network;
+use zstash_engine::db::AppDb;
+use zstash_engine::db::wallet_encryption_meta::get_wallet_encryption;
+use zstash_engine::encryption::unwrap_dek;
 
 fn home_dir() -> PathBuf {
     std::env::var("HOME")
@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     let wallet_name = std::env::args().nth(1).unwrap_or_else(|| "3".to_string());
     let password = std::env::args().nth(2).unwrap_or_else(|| "pw".to_string());
 
-    let app_db_path = home_dir().join(".zkore/app.db");
+    let app_db_path = home_dir().join(".zstash/app.db");
 
     println!("Opening app.db: {}", app_db_path.display());
     let app_db = AppDb::open(&app_db_path)?;
@@ -71,7 +71,7 @@ fn main() -> Result<()> {
 
     // Now open the wallet DB and query accounts
     let wallet_db_path: PathBuf = home_dir()
-        .join(".zkore/wallets")
+        .join(".zstash/wallets")
         .join(if network == Network::Testnet {
             "testnet"
         } else {

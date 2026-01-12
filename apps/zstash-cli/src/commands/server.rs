@@ -8,8 +8,8 @@ use clap::{Args, Subcommand};
 use console::style;
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, ServerInfo};
-use zkore_network::grpc_client::GrpcClient;
+use zstash_core::domain::{Network, ServerInfo};
+use zstash_network::grpc_client::GrpcClient;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -65,7 +65,7 @@ async fn list_servers(data_dir: &Path, output: &OutputMode) -> Result<()> {
 
     let servers = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::list_servers(wm.app_db().conn())
+        zstash_engine::db::server_meta::list_servers(wm.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?
     };
 
@@ -114,7 +114,7 @@ async fn add_server(data_dir: &Path, name: &str, url: &str, output: &OutputMode)
 
     {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::insert_server(wm.app_db().conn(), &server, now_ms)
+        zstash_engine::db::server_meta::insert_server(wm.app_db().conn(), &server, now_ms)
             .map_err(|e| anyhow::anyhow!(e))?;
     }
 
@@ -133,14 +133,14 @@ async fn set_default_server(
 
     let server = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
+        zstash_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
 
     {
         let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::set_default_server(wm.app_db_mut().conn_mut(), server_id)
+        zstash_engine::db::server_meta::set_default_server(wm.app_db_mut().conn_mut(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?;
     }
 
@@ -155,7 +155,7 @@ async fn test_server(data_dir: &Path, server_id_str: &str, output: &OutputMode) 
 
     let server = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
+        zstash_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
@@ -188,7 +188,7 @@ async fn test_server(data_dir: &Path, server_id_str: &str, output: &OutputMode) 
             let now_ms = chrono::Utc::now().timestamp_millis();
             {
                 let wm = state.wallet_manager.lock().expect("mutex poisoned");
-                let _ = zkore_engine::db::server_meta::update_last_success_at(
+                let _ = zstash_engine::db::server_meta::update_last_success_at(
                     wm.app_db().conn(),
                     server.id,
                     now_ms,
@@ -231,7 +231,7 @@ fn parse_server_id(state: &CliAppState, id_str: &str) -> Result<Uuid> {
     // Otherwise, try prefix matching
     let servers = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::list_servers(wm.app_db().conn())
+        zstash_engine::db::server_meta::list_servers(wm.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?
     };
 
@@ -263,7 +263,7 @@ fn print_server_list(output: &OutputMode, servers: &[ServerInfo]) {
             println!();
             println!(
                 "Add one with: {} server add --name <NAME> --url <URL>",
-                style("zkore").cyan()
+                style("zstash").cyan()
             );
             return;
         }
@@ -317,7 +317,7 @@ fn print_server_added(output: &OutputMode, server: &ServerInfo, latency_ms: u64)
         println!();
         println!(
             "To set as default: {} server set-default {}",
-            style("zkore").cyan(),
+            style("zstash").cyan(),
             &server.id.to_string()[..8]
         );
     }

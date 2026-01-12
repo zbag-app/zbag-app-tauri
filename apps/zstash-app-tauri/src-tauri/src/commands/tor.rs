@@ -1,21 +1,21 @@
 use tauri::State;
 
-use zkore_core::domain::WalletLockStatus;
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::tor::{
+use zstash_core::domain::WalletLockStatus;
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::tor::{
     GetTorStateRequest, GetTorStateResponse, SetTorEnabledRequest, SetTorEnabledResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zkore_engine::db::tor_meta;
-use zkore_engine::error::ipc_err;
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_engine::db::tor_meta;
+use zstash_engine::error::ipc_err;
 
 use super::sync::start_sync_with_handlers;
 use crate::state::AppState;
 
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
-#[tauri::command(rename = "zkore_set_tor_enabled")]
-pub fn zkore_set_tor_enabled(
+#[tauri::command(rename = "zstash_set_tor_enabled")]
+pub fn zstash_set_tor_enabled(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: SetTorEnabledRequest,
@@ -73,8 +73,8 @@ pub fn zkore_set_tor_enabled(
     })
 }
 
-#[tauri::command(rename = "zkore_get_tor_state")]
-pub fn zkore_get_tor_state(
+#[tauri::command(rename = "zstash_get_tor_state")]
+pub fn zstash_get_tor_state(
     state: State<'_, AppState>,
     request: GetTorStateRequest,
 ) -> IpcResult<GetTorStateResponse> {

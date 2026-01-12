@@ -1,5 +1,5 @@
 [package]
-name = "zkore-tui"
+name = "zstash-tui"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,13 +7,13 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "zkore-tui"
+name = "zstash-tui"
 path = "src/main.rs"
 
 [dependencies]
-# Zkore crates
-zkore-core = { path = "../../crates/zkore-core" }
-zkore-engine = { path = "../../crates/zkore-engine" }
+# zSTASH crates
+zstash-core = { path = "../../crates/zstash-core" }
+zstash-engine = { path = "../../crates/zstash-engine" }
 
 # TUI framework
 ratatui = "0.29"

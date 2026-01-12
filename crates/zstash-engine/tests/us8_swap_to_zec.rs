@@ -6,10 +6,10 @@ use std::thread;
 
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, SwapIntent, SwapType};
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::swap_service::SwapService;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{Network, SwapIntent, SwapType};
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::swap_service::SwapService;
+use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -79,7 +79,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -147,7 +147,10 @@ fn spawn_mock_1click_quote_server(
             Some("DESTINATION_CHAIN")
         );
         assert_eq!(json.get("dry").and_then(|v| v.as_bool()), Some(false));
-        assert_eq!(json.get("referral").and_then(|v| v.as_str()), Some("zkore"));
+        assert_eq!(
+            json.get("referral").and_then(|v| v.as_str()),
+            Some("zstash")
+        );
         assert!(
             json.get("deadline").and_then(|v| v.as_str()).is_some(),
             "deadline must be present"
@@ -220,7 +223,7 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
     // Ensure the engine converts 0.001 ETH -> 1_000_000_000_000_000 wei.
     let expected_amount = "1000000000000000";
     let (base_url, server) = spawn_mock_1click_quote_server(expected_amount, recipient, refund_to);
-    let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

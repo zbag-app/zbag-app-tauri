@@ -2,7 +2,7 @@ use std::io::{Read as _, Write as _};
 use std::net::TcpListener;
 use std::thread;
 
-use zkore_network::near_intents::{NearIntentsClient, QuoteRequest};
+use zstash_network::near_intents::{NearIntentsClient, QuoteRequest};
 
 fn spawn_mock_1click_quote_retry_server() -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
@@ -105,7 +105,7 @@ async fn get_quote_retries_failed_to_get_quote_with_longer_wait() {
         swap_type: "EXACT_INPUT".to_string(),
         slippage_tolerance: 100,
         quote_waiting_time_ms: Some(3000),
-        referral: Some("zkore".to_string()),
+        referral: Some("zstash".to_string()),
         app_fees: None,
         deposit_type: "ORIGIN_CHAIN".to_string(),
         refund_to: "0x3350Fe9Fc38cBa6518471693d748f3f3073C8fdB".to_string(),

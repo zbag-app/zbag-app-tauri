@@ -4,11 +4,11 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zkore_core::domain::{AddressType, BackupAction, Network};
-use zkore_core::errors;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{AddressType, BackupAction, Network};
+use zstash_core::errors;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -105,7 +105,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -206,7 +206,7 @@ fn restore_wallet_returns_birthday_height_estimate() {
 
     let birthday_date_ms: i64 = 1_704_067_200_000; // 2024-01-01T00:00:00Z
     let expected =
-        zkore_engine::birthday::estimate_birthday_height(Network::Mainnet, birthday_date_ms);
+        zstash_engine::birthday::estimate_birthday_height(Network::Mainnet, birthday_date_ms);
 
     let restored = mgr
         .restore_wallet(

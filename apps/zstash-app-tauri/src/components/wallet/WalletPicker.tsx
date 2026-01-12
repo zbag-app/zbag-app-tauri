@@ -76,7 +76,7 @@ export function WalletPicker(props: {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
             <Shield className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="font-display text-3xl font-bold">Zkore</h1>
+          <h1 className="font-display text-3xl font-bold">zSTASH</h1>
           <p className="text-muted-foreground">Select a wallet to continue</p>
         </div>
 

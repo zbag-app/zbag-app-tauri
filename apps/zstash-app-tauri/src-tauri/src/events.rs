@@ -1,15 +1,15 @@
 use tauri::Emitter;
-use zkore_core::ipc::v1::events::{
+use zstash_core::ipc::v1::events::{
     BalanceChangedEvent, SwapChangedEvent, SyncProgressEvent, TorStatusEvent,
     TransactionChangedEvent, WalletStatusEvent,
 };
 
-pub const CHANNEL_SYNC: &str = "zkore://sync";
-pub const CHANNEL_BALANCE: &str = "zkore://balance";
-pub const CHANNEL_TX: &str = "zkore://tx";
-pub const CHANNEL_SWAP: &str = "zkore://swap";
-pub const CHANNEL_TOR: &str = "zkore://tor";
-pub const CHANNEL_WALLET_STATUS: &str = "zkore://wallet-status";
+pub const CHANNEL_SYNC: &str = "zstash://sync";
+pub const CHANNEL_BALANCE: &str = "zstash://balance";
+pub const CHANNEL_TX: &str = "zstash://tx";
+pub const CHANNEL_SWAP: &str = "zstash://swap";
+pub const CHANNEL_TOR: &str = "zstash://tor";
+pub const CHANNEL_WALLET_STATUS: &str = "zstash://wallet-status";
 
 pub fn emit_sync_progress(
     app: &tauri::AppHandle,

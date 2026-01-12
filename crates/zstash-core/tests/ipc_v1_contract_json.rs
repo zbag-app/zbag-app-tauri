@@ -1,12 +1,12 @@
 use serde_json::json;
 
-use zkore_core::domain::{BackupAction, ShieldAction, SyncStatus, WalletLockStatus, WalletStatus};
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::balance::GetBalanceResponse;
-use zkore_core::ipc::v1::commands::wallet::{
+use zstash_core::domain::{BackupAction, ShieldAction, SyncStatus, WalletLockStatus, WalletStatus};
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
+use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
 };
-use zkore_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
 #[test]
 fn schema_version_enforcement() {
@@ -52,17 +52,17 @@ fn enum_json_shapes_match_contract() {
 fn seed_phrase_only_in_allowed_backend_payloads() {
     let create_wallet = CreateWalletResponse {
         schema_version: SCHEMA_VERSION,
-        wallet: zkore_core::domain::WalletInfo {
+        wallet: zstash_core::domain::WalletInfo {
             id: uuid::Uuid::nil(),
             name: "w".to_string(),
-            wallet_type: zkore_core::domain::WalletType::Software,
-            network: zkore_core::domain::Network::Testnet,
+            wallet_type: zstash_core::domain::WalletType::Software,
+            network: zstash_core::domain::Network::Testnet,
             remember_unlock_enabled: false,
             created_at: 0,
             last_opened_at: None,
         },
         seed_phrase: vec!["abandon".to_string(); 24],
-        backup_challenge: zkore_core::ipc::v1::commands::wallet::BackupChallenge {
+        backup_challenge: zstash_core::ipc::v1::commands::wallet::BackupChallenge {
             challenge_id: "c".to_string(),
             indices: vec![1, 2, 3, 4],
             expires_at: 0,
@@ -76,7 +76,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
 
     let get_balance = GetBalanceResponse {
         schema_version: SCHEMA_VERSION,
-        balance: zkore_core::domain::Balance {
+        balance: zstash_core::domain::Balance {
             shielded_spendable: "0".to_string(),
             shielded_pending: "0".to_string(),
             transparent_total: "0".to_string(),
@@ -89,7 +89,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
         backup_status: BackupAction::Required,
         sync_status: SyncStatus::Synced,
         shield_status: ShieldAction::None,
-        privacy_posture: zkore_core::domain::PrivacyPosture::Optimal,
+        privacy_posture: zstash_core::domain::PrivacyPosture::Optimal,
     };
 
     let create_json = serde_json::to_string(&create_wallet).unwrap();

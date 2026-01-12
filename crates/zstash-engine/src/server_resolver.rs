@@ -1,12 +1,12 @@
 use anyhow::Context as _;
 
-use zkore_core::domain::Network;
+use zstash_core::domain::Network;
 
 use crate::db;
 
 pub fn resolve_grpc_url(app_db: &db::AppDb, network: Network) -> anyhow::Result<String> {
     if cfg!(debug_assertions)
-        && let Ok(override_url) = std::env::var("ZKORE_GRPC_URL")
+        && let Ok(override_url) = std::env::var("ZSTASH_GRPC_URL")
         && !override_url.trim().is_empty()
     {
         return Ok(override_url);

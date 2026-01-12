@@ -1,18 +1,18 @@
 use tauri::State;
 
-use zkore_core::ipc::v1::commands::keystone::{
+use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestRequest, BuildSigningRequestResponse, CreateKeystoneWalletRequest,
     CreateKeystoneWalletResponse, FinalizeSigningRequest, FinalizeSigningResponse,
     ImportUfvkRequest, ImportUfvkResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zkore_import_ufvk")]
-pub fn zkore_import_ufvk(
+#[tauri::command(rename = "zstash_import_ufvk")]
+pub fn zstash_import_ufvk(
     state: State<'_, AppState>,
     request: ImportUfvkRequest,
 ) -> IpcResult<ImportUfvkResponse> {
@@ -36,8 +36,8 @@ pub fn zkore_import_ufvk(
     })
 }
 
-#[tauri::command(rename = "zkore_build_signing_request")]
-pub fn zkore_build_signing_request(
+#[tauri::command(rename = "zstash_build_signing_request")]
+pub fn zstash_build_signing_request(
     state: State<'_, AppState>,
     request: BuildSigningRequestRequest,
 ) -> IpcResult<BuildSigningRequestResponse> {
@@ -57,8 +57,8 @@ pub fn zkore_build_signing_request(
     })
 }
 
-#[tauri::command(rename = "zkore_finalize_signing")]
-pub fn zkore_finalize_signing(
+#[tauri::command(rename = "zstash_finalize_signing")]
+pub fn zstash_finalize_signing(
     state: State<'_, AppState>,
     request: FinalizeSigningRequest,
 ) -> IpcResult<FinalizeSigningResponse> {
@@ -77,8 +77,8 @@ pub fn zkore_finalize_signing(
     })
 }
 
-#[tauri::command(rename = "zkore_create_keystone_wallet")]
-pub fn zkore_create_keystone_wallet(
+#[tauri::command(rename = "zstash_create_keystone_wallet")]
+pub fn zstash_create_keystone_wallet(
     state: State<'_, AppState>,
     request: CreateKeystoneWalletRequest,
 ) -> IpcResult<CreateKeystoneWalletResponse> {

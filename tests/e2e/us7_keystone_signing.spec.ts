@@ -7,7 +7,7 @@
 // Suggested future approach:
 // - Create wallet, complete backup verification, and import a Keystone UFVK (US6)
 // - Attempt to send from HardwareSigner account -> Signing screen
-// - Validate animated QR renders and file export name is generic (`zkore-unsigned.pczt`)
+// - Validate animated QR renders and file export name is generic (`zstash-unsigned.pczt`)
 // - Import a signed PCZT via QR/file and broadcast; validate Activity entry
 // - Exercise transparent-recipient privacy acknowledgement and memo blocking
 // - Exercise malformed payloads and verify stable, user-safe errors

@@ -1,5 +1,5 @@
 [package]
-name = "zkore-engine"
+name = "zstash-engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -30,10 +30,10 @@ keyring.workspace = true
 zip32.workspace = true
 zcash_proofs.workspace = true
 prost.workspace = true
-zkore-core = { path = "../zkore-core" }
-zkore-keystone = { path = "../zkore-keystone" }
-zkore-network = { path = "../zkore-network" }
-zkore-tor = { path = "../zkore-tor" }
+zstash-core = { path = "../zstash-core" }
+zstash-keystone = { path = "../zstash-keystone" }
+zstash-network = { path = "../zstash-network" }
+zstash-tor = { path = "../zstash-tor" }
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true
 zcash_primitives.workspace = true

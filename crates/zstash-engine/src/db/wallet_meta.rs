@@ -1,7 +1,7 @@
 use rusqlite::{Connection, params};
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, WalletInfo, WalletType};
+use zstash_core::domain::{Network, WalletInfo, WalletType};
 
 pub fn insert_wallet(
     conn: &Connection,

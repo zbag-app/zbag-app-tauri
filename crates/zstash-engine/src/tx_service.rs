@@ -14,19 +14,19 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, instrument};
 use uuid::Uuid;
 
-use zkore_core::domain::{
+use zstash_core::domain::{
     Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
 };
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::keystone::{
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse, SigningRequest, SigningSummary,
 };
-use zkore_core::ipc::v1::commands::transaction::{
+use zstash_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
     TransactionSummary,
 };
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
-use zkore_core::ipc::v1::events::TransactionChangedEvent;
+use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use zstash_core::ipc::v1::events::TransactionChangedEvent;
 
 use crate::db::AppDb;
 use crate::encryption::Dek;
@@ -46,7 +46,7 @@ pub struct TxService<C: Clock> {
     /// Pending signing requests: maps signing_request_id to full PCZT with proofs (base64).
     /// Used in the two-PCZT flow for hardware signing.
     pending_signing_requests: HashMap<String, PendingSigningRequest>,
-    tor_manager: Option<Arc<zkore_tor::TorManager>>,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
 }
 
 /// A pending hardware signing request containing the full PCZT with proofs.
@@ -93,7 +93,7 @@ impl<C: Clock> TxService<C> {
         }
     }
 
-    pub fn set_tor_manager(&mut self, tor_manager: Arc<zkore_tor::TorManager>) {
+    pub fn set_tor_manager(&mut self, tor_manager: Arc<zstash_tor::TorManager>) {
         self.tor_manager = Some(tor_manager);
     }
 
@@ -564,8 +564,8 @@ impl<C: Clock> TxService<C> {
             let pczt_with_proofs = pczt_prover.finish();
 
             // Store full PCZT with proofs, return redacted version for signer
-            let pczt_full = zkore_keystone::pczt::encode_pczt_full(&pczt_with_proofs);
-            let pczt_for_signer = zkore_keystone::pczt::encode_pczt_for_signer(&pczt_with_proofs);
+            let pczt_full = zstash_keystone::pczt::encode_pczt_full(&pczt_with_proofs);
+            let pczt_for_signer = zstash_keystone::pczt::encode_pczt_for_signer(&pczt_with_proofs);
 
             Ok::<_, anyhow::Error>((proposal, pczt_full, pczt_for_signer))
         }?;
@@ -655,7 +655,7 @@ impl<C: Clock> TxService<C> {
 
         // Decode both PCZTs
         debug!("Decoding stored PCZT with proofs");
-        let pczt_with_proofs = zkore_keystone::pczt::decode_pczt_full(
+        let pczt_with_proofs = zstash_keystone::pczt::decode_pczt_full(
             &pending_request.pczt_with_proofs,
         )
         .map_err(|e| {
@@ -665,21 +665,22 @@ impl<C: Clock> TxService<C> {
 
         debug!("Decoding signed PCZT from hardware wallet");
         let pczt_with_sigs =
-            zkore_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
+            zstash_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
                 error!("Failed to decode signed payload: {}", e);
                 ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}"))
             })?;
 
         // Combine the two PCZTs (proofs + signatures)
         debug!("Combining proved and signed PCZTs");
-        let pczt =
-            zkore_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(|e| {
+        let pczt = zstash_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(
+            |e| {
                 error!("Failed to combine PCZTs: {}", e);
                 ipc_err(
                     errors::SIGNING_FAILED,
                     format!("failed to combine PCZTs: {e}"),
                 )
-            })?;
+            },
+        )?;
         debug!("PCZTs combined successfully");
 
         let params = zcash_consensus_network(network);
@@ -1697,7 +1698,7 @@ fn resolve_wallet_account_uuid(
         else {
             continue;
         };
-        // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
+        // Check key_source first (software wallets, zSTASH-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
@@ -1823,11 +1824,11 @@ fn decrypt_queued_tx_bytes(
 impl<C: Clock> TxService<C> {
     fn send_transaction_bytes(&self, grpc_url: &str, tx_bytes: &[u8]) -> anyhow::Result<()> {
         let client = match self.tor_manager.as_ref() {
-            Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(
+            Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
                 grpc_url.to_string(),
                 Arc::clone(tor),
             ),
-            None => zkore_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
+            None => zstash_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
         };
 
         let tx_bytes = tx_bytes.to_vec();

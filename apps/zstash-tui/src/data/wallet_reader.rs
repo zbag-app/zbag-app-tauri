@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use rusqlite::Connection;
 use uuid::Uuid;
-use zkore_core::domain::{Network, WalletInfo};
-use zkore_engine::db::AppDb;
-use zkore_engine::db::wallet_meta;
+use zstash_core::domain::{Network, WalletInfo};
+use zstash_engine::db::AppDb;
+use zstash_engine::db::wallet_meta;
 
 /// Account information from the wallet database.
 #[derive(Debug, Clone)]

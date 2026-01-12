@@ -20,7 +20,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let bg = Paragraph::new(format!("Unlocking: {}", wallet_name))
         .block(
             Block::default()
-                .title(" zkore-tui ")
+                .title(" zstash-tui ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         )

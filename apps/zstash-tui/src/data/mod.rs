@@ -1,4 +1,4 @@
-//! Data layer for zkore-tui.
+//! Data layer for zstash-tui.
 //!
 //! Provides read and write operations for wallet data,
 //! including encryption utilities for accessing encrypted wallet databases.

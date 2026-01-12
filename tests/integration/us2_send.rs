@@ -9,7 +9,7 @@
 //! - Privacy acknowledgement for transparent recipients (no silent broadcast)
 //! - Retry-broadcast queue persistence and manual re-auth requirement
 //!
-//! See `crates/zkore-engine/tests/us2_send_proposals.rs` for executable unit coverage.
+//! See `crates/zstash-engine/tests/us2_send_proposals.rs` for executable unit coverage.
 
 #[test]
 fn placeholder() {}

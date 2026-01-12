@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use zkore_core::domain::{Network, WalletInfo};
+use zstash_core::domain::{Network, WalletInfo};
 
 use crate::views::birthday_editor::BirthdayEditorState;
 use crate::views::dashboard::DashboardData;
@@ -114,8 +114,8 @@ impl AppConfig {
         let home = std::env::var_os("HOME")?;
         let home = PathBuf::from(home);
         Some(Self {
-            app_db_path: home.join(".zkore").join("app.db"),
-            wallets_dir: home.join(".zkore").join("wallets"),
+            app_db_path: home.join(".zstash").join("app.db"),
+            wallets_dir: home.join(".zstash").join("wallets"),
         })
     }
 }

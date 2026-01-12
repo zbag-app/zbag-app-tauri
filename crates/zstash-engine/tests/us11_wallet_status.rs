@@ -5,11 +5,13 @@ use rusqlite::{Connection, OpenFlags};
 use uuid::Uuid;
 use zeroize::Zeroize;
 
-use zkore_core::domain::{AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus};
-use zkore_engine::db::{backup_meta, wallet_encryption_meta};
-use zkore_engine::encryption;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{
+    AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus,
+};
+use zstash_engine::db::{backup_meta, wallet_encryption_meta};
+use zstash_engine::encryption;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -79,7 +81,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -261,11 +263,11 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
     assert_eq!(
         status.backup_status,
-        zkore_core::domain::BackupAction::Required
+        zstash_core::domain::BackupAction::Required
     );
     assert_eq!(
         status.privacy_posture,
-        zkore_core::domain::PrivacyPosture::NeedsAction
+        zstash_core::domain::PrivacyPosture::NeedsAction
     );
 
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -273,11 +275,11 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
     assert_eq!(
         status.backup_status,
-        zkore_core::domain::BackupAction::Complete
+        zstash_core::domain::BackupAction::Complete
     );
     assert_eq!(
         status.privacy_posture,
-        zkore_core::domain::PrivacyPosture::Optimal
+        zstash_core::domain::PrivacyPosture::Optimal
     );
 
     let transparent = mgr
@@ -302,7 +304,7 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     }
     assert_eq!(
         status.privacy_posture,
-        zkore_core::domain::PrivacyPosture::NeedsAction
+        zstash_core::domain::PrivacyPosture::NeedsAction
     );
 }
 

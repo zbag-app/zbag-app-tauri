@@ -9,15 +9,15 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use zkore_core::domain::{
+use zstash_core::domain::{
     AccountType, Network, SwapInfo, SwapIntent, SwapQuote, SwapState, SwapType,
 };
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::swap::{
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::swap::{
     GetSwapStatusResponse, ListSwapsResponse, RequestSwapQuoteResponse, StartSwapResponse,
 };
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
-use zkore_core::ipc::v1::events::SwapChangedEvent;
+use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use zstash_core::ipc::v1::events::SwapChangedEvent;
 
 use crate::db::{account_meta, swap_meta};
 use crate::error::ipc_err;
@@ -28,7 +28,7 @@ pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
 #[derive(Clone)]
 pub struct SwapService {
     app_db_path: PathBuf,
-    near: zkore_network::near_intents::NearIntentsClient,
+    near: zstash_network::near_intents::NearIntentsClient,
     state: Arc<Mutex<State>>,
     wallet_manager: Arc<Mutex<WalletManager>>,
 }
@@ -61,14 +61,14 @@ impl SwapService {
         Self::new_with_near_client(
             app_db_path,
             wallet_manager,
-            zkore_network::near_intents::NearIntentsClient::new()?,
+            zstash_network::near_intents::NearIntentsClient::new()?,
         )
     }
 
     pub fn new_with_near_client(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
-        near: zkore_network::near_intents::NearIntentsClient,
+        near: zstash_network::near_intents::NearIntentsClient,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             app_db_path,
@@ -129,14 +129,14 @@ impl SwapService {
         let deadline = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
 
         // Use dry=false to get deposit address directly (like Zashi)
-        let req = zkore_network::near_intents::QuoteRequest {
+        let req = zstash_network::near_intents::QuoteRequest {
             origin_asset: intent.input_asset.clone(),
             destination_asset: intent.output_asset.clone(),
             amount: amount_smallest,
             swap_type: "EXACT_INPUT".to_string(),
             slippage_tolerance: 100, // 1%
             quote_waiting_time_ms: Some(3000),
-            referral: Some("zkore".to_string()),
+            referral: Some("zstash".to_string()),
             app_fees: None,
             deposit_type: "ORIGIN_CHAIN".to_string(),
             refund_to,
@@ -149,7 +149,7 @@ impl SwapService {
 
         let quote_res =
             block_on(async { self.near.get_quote(req).await }).map_err(|e| match e {
-                zkore_network::near_intents::NearIntentsError::TorNotReady => {
+                zstash_network::near_intents::NearIntentsError::TorNotReady => {
                     ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
                 }
                 _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
@@ -395,7 +395,7 @@ impl SwapService {
         };
 
         // Notify the API about the deposit (optional but helps speed up detection)
-        let submit_req = zkore_network::near_intents::DepositSubmitRequest {
+        let submit_req = zstash_network::near_intents::DepositSubmitRequest {
             tx_hash: txid,
             deposit_address,
         };
@@ -500,7 +500,7 @@ impl SwapService {
                 };
 
                 let status_res = near
-                    .get_status(zkore_network::near_intents::StatusRequest {
+                    .get_status(zstash_network::near_intents::StatusRequest {
                         deposit_address,
                         deposit_memo: swap.deposit_memo.clone(),
                     })
@@ -510,7 +510,7 @@ impl SwapService {
                     Ok(status) => {
                         backoff = Duration::from_secs(5);
 
-                        let mapped = zkore_network::near_intents::map_remote_status_to_local_state(
+                        let mapped = zstash_network::near_intents::map_remote_status_to_local_state(
                             &status.status,
                         );
                         let mut next_state = mapped;
@@ -567,7 +567,7 @@ impl SwapService {
                             break;
                         }
                     }
-                    Err(zkore_network::near_intents::NearIntentsError::RateLimited {
+                    Err(zstash_network::near_intents::NearIntentsError::RateLimited {
                         retry_after,
                     }) => {
                         backoff = retry_after

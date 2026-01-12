@@ -5,16 +5,16 @@ use rusqlite::{Connection, OpenFlags};
 use uuid::Uuid;
 use zeroize::Zeroize;
 
-use zkore_core::domain::{AddressType, Network};
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zkore_engine::db::backup_meta;
-use zkore_engine::db::wallet_encryption_meta;
-use zkore_engine::encryption;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::tx_service::TxEventHandler;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{AddressType, Network};
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::db::backup_meta;
+use zstash_engine::db::wallet_encryption_meta;
+use zstash_engine::encryption;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::tx_service::TxEventHandler;
+use zstash_engine::wallet_manager::WalletManager;
 
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -28,9 +28,9 @@ struct GrpcUrlOverrideGuard {
 
 impl GrpcUrlOverrideGuard {
     fn set(url: &str) -> Self {
-        let prev = std::env::var("ZKORE_GRPC_URL").ok();
+        let prev = std::env::var("ZSTASH_GRPC_URL").ok();
         unsafe {
-            std::env::set_var("ZKORE_GRPC_URL", url);
+            std::env::set_var("ZSTASH_GRPC_URL", url);
         }
         Self { prev }
     }
@@ -39,8 +39,8 @@ impl GrpcUrlOverrideGuard {
 impl Drop for GrpcUrlOverrideGuard {
     fn drop(&mut self) {
         match self.prev.take() {
-            Some(value) => unsafe { std::env::set_var("ZKORE_GRPC_URL", value) },
-            None => unsafe { std::env::remove_var("ZKORE_GRPC_URL") },
+            Some(value) => unsafe { std::env::set_var("ZSTASH_GRPC_URL", value) },
+            None => unsafe { std::env::remove_var("ZSTASH_GRPC_URL") },
         }
     }
 }
@@ -113,7 +113,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -395,7 +395,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
 
-    let events: Arc<Mutex<Vec<zkore_core::ipc::v1::events::TransactionChangedEvent>>> =
+    let events: Arc<Mutex<Vec<zstash_core::ipc::v1::events::TransactionChangedEvent>>> =
         Arc::new(Mutex::new(Vec::new()));
     let events_clone = Arc::clone(&events);
     let handler: TxEventHandler = Arc::new(move |evt| {
@@ -570,7 +570,7 @@ fn shield_funds_batches_large_input_sets() {
         .transactions;
     let shield_txs: Vec<_> = txs
         .iter()
-        .filter(|t| t.tx_type == zkore_core::domain::TransactionType::Shield)
+        .filter(|t| t.tx_type == zstash_core::domain::TransactionType::Shield)
         .collect();
     assert!(
         shield_txs.len() >= 2,

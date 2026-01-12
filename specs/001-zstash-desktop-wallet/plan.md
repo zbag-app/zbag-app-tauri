@@ -1,7 +1,7 @@
-# Implementation Plan: Zkore Desktop Wallet
+# Implementation Plan: zSTASH Desktop Wallet
 
-**Branch**: `001-zkore-desktop-wallet` | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/001-zkore-desktop-wallet/spec.md`
+**Branch**: `001-zstash-desktop-wallet` | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/specs/001-zstash-desktop-wallet/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/scripts/bash/setup-plan.sh` for the setup workflow.
 
@@ -22,8 +22,8 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
   - Wallet DB encryption uses SQLCipher with a per-wallet DEK wrapped by a password-derived KEK (Argon2id; parameters versioned per wallet). Optional OS keychain “remember unlock” stores unlock material in the OS credential store and MUST NOT satisfy per-action re-auth.
   - All schema changes include forward migration + rollback strategy + automated migration tests (gated in CI).
   - Wallet directory structure with network separation:
-    - `~/.zkore/wallets/mainnet/{wallet-id}/` (mainnet wallets)
-    - `~/.zkore/wallets/testnet/{wallet-id}/` (testnet wallets)
+    - `~/.zstash/wallets/mainnet/{wallet-id}/` (mainnet wallets)
+    - `~/.zstash/wallets/testnet/{wallet-id}/` (testnet wallets)
   - Network selection at wallet creation (immutable after creation)
   - Separate database files per network
 **Testing**: cargo test (Rust), bun test (TypeScript), integration tests against lightwalletd endpoints (at least two independent deployments in CI)
@@ -32,7 +32,7 @@ Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling
 **Performance Goals**: Wallet creation <60s, restore scan <10min for typical wallets, responsive UI during sync (60fps), balance/status updates <=2s (target <1s)
 **Constraints**: No spending secrets in UI layer, payments funded from shielded pools (Sapling + Orchard; transparent inputs allowed only for explicit shielding transactions), fail-closed Tor mode, typed IPC only, memory zeroization for secrets, encrypt wallet DB at rest, manual wallet-password re-auth required per spend/seed-view (OS keychain must not satisfy re-auth)
 **Scale/Scope**: Single-user desktop wallet, ~15 screens, supports typical wallet sizes up to 1GB database
-**Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zkore/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.
+**Logging**: tracing + tracing-appender for structured file logging with daily rotation. Logs stored at `~/.zstash/logs/`. No remote telemetry. Sensitive data (memos, full addresses) redacted by default.
 **Accessibility**: Full keyboard navigation, ARIA labels via radix-ui primitives, visible focus indicators, standard shortcuts (Tab/Enter/Escape/arrows)
 
 ## Constitution Check
@@ -46,7 +46,7 @@ Verify compliance with `.specify/memory/constitution.md` core principles:
 | I. Secrets Stay in Rust | [x] Pass | Spending keys and raw signing payloads handled exclusively in Rust backend. UI receives only derived addresses, balances, transaction summaries. Mnemonic is returned during CreateWallet for backup display, accepted for restore entry, and may be re-displayed only via explicit user action (manual wallet-password re-authentication); mnemonic is never persisted or logged by the UI. Memory zeroization for secret types. Logs redact sensitive data by default. |
 | II. Shielded-by-Default Privacy | [x] Pass | Spending uses shielded pools (prefer Orchard; allow Sapling). Transparent funds are receive-only until explicitly shielded; transparent recipients are allowed only with explicit privacy-downgrade acknowledgement. Default receive address is shielded-only UA without transparent receiver. Transparent receive address is a labeled compatibility option (single non-rotating in v1). |
 | III. Fail-Closed Safety | [x] Pass | Tor mode enabled: fails if Tor unhealthy, no silent fallback to direct connections. Actionable error prompts (retry, disable, change endpoint). Wallet state integrity preserved on failures. Beta features (Tor) clearly labeled with defined failure modes. |
-| IV. Typed IPC Contracts | [x] Pass | All IPC commands/events use versioned, strongly typed request/response models in zkore-core. schema_version field in every top-level payload. Strict deserialization rejecting unknown fields. Command boundary uses IpcResult<T> (no thrown errors across IPC). Events are emitted on fixed channels: sync, balance, tx, swap, tor, wallet-status. |
+| IV. Typed IPC Contracts | [x] Pass | All IPC commands/events use versioned, strongly typed request/response models in zstash-core. schema_version field in every top-level payload. Strict deserialization rejecting unknown fields. Command boundary uses IpcResult<T> (no thrown errors across IPC). Events are emitted on fixed channels: sync, balance, tx, swap, tor, wallet-status. |
 | V. Test-Driven Quality | [x] Pass | Unit tests for domain logic and IPC serialization. Integration tests for database/sync boundaries against lightwalletd endpoints (at least two independent deployments in CI). Regression tests for privacy (fail-open, unintended transparent), key leakage via logs, malformed PCZT payload ingestion. CI covers multiple independent lightwalletd deployments. |
 | VI. Data Minimization | [x] Pass | Wallet state in encrypted zcash_client_sqlite wallet DB. App state (prefs, backup flags, swap records, server config) in separate SQLite store. No raw payloads, memo bodies in logs, or hardware wallet identifiers stored. Schema changes require forward migration + rollback strategy + tests. |
 | VII. Decision Traceability | [x] Pass | Architectural decisions documented with ADR/RFC format. Security-sensitive reviews require maintainer familiar with key management, tx construction, networking, signing. Every milestone links implementation, tests, acceptance criteria. Changelog highlights privacy/security impacts. |
@@ -58,7 +58,7 @@ For detailed rules, see `.specify/memory/constitution.md`.
 ### Documentation (this feature)
 
 ```text
-specs/001-zkore-desktop-wallet/
+specs/001-zstash-desktop-wallet/
 ├── plan.md              # This file (/speckit.plan command output)
 ├── research.md          # Phase 0 output (/speckit.plan command)
 ├── data-model.md        # Phase 1 output (/speckit.plan command)
@@ -72,7 +72,7 @@ specs/001-zkore-desktop-wallet/
 
 ```text
 crates/
-├── zkore-core/                    # Domain types and IPC contracts
+├── zstash-core/                    # Domain types and IPC contracts
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── domain/                # Wallet, Account, Transaction, Swap models
@@ -84,7 +84,7 @@ crates/
 │   │   │       └── events/        # Event payload structs
 │   │   └── errors.rs              # Stable error codes + user-safe messages
 │   └── tests/
-├── zkore-engine/                  # Wallet engine wrapping librustzcash
+├── zstash-engine/                  # Wallet engine wrapping librustzcash
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── wallet_manager.rs      # Create, load, lock/unlock wallet
@@ -107,7 +107,7 @@ crates/
 │   │   │   └── tor_meta.rs
 │   │   └── balance.rs             # Balance computation (shielded/transparent)
 │   └── tests/
-├── zkore-network/                 # gRPC + HTTP clients, transport abstraction
+├── zstash-network/                 # gRPC + HTTP clients, transport abstraction
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── grpc_client.rs         # CompactTxStreamer gRPC client
@@ -115,21 +115,21 @@ crates/
 │   │   ├── near_intents.rs        # 1Click typed API client
 │   │   └── transport.rs           # Tor-aware transport abstraction
 │   └── tests/
-├── zkore-keystone/                # Hardware wallet integration
+├── zstash-keystone/                # Hardware wallet integration
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── ufvk.rs                # UFVK import/validation
 │   │   ├── pczt.rs                # PCZT create/finalize helpers
 │   │   └── payload.rs             # QR/file encoding helpers
 │   └── tests/
-└── zkore-tor/                     # Tor manager (embedded Arti)
+└── zstash-tor/                     # Tor manager (embedded Arti)
     ├── src/
     │   ├── lib.rs
     │   └── manager.rs             # Off/Connecting/On/Error state machine
     └── tests/
 
 apps/
-├── zkore-app-tauri/               # Tauri application shell
+├── zstash-app-tauri/               # Tauri application shell
 │   ├── src-tauri/
 │   │   ├── src/
 │   │   │   ├── main.rs
@@ -163,7 +163,7 @@ apps/
 │       │   ├── useFocusTrap.ts    # Focus management for modals
 │       │   └── useKeyboardShortcuts.ts  # Global keyboard shortcuts
 │       └── types/                 # TypeScript type definitions
-└── zkore-ui/                      # (Optional) shared UI package if needed
+└── zstash-ui/                      # (Optional) shared UI package if needed
 
 tests/
 ├── integration/                   # Cross-crate integration tests
@@ -173,7 +173,7 @@ tests/
 └── e2e/                           # End-to-end tests (Tauri + UI)
 ```
 
-**Structure Decision**: Desktop application with Rust workspace for backend crates (zkore-core, zkore-engine, zkore-network, zkore-keystone, zkore-tor) and Tauri app with React TypeScript frontend. Clear separation between wallet state (encrypted zcash_client_sqlite wallet DB) and app metadata (separate SQLite). Spending secrets stay in Rust crates; mnemonic words are handled only in explicitly permitted, transient flows in the UI via typed IPC.
+**Structure Decision**: Desktop application with Rust workspace for backend crates (zstash-core, zstash-engine, zstash-network, zstash-keystone, zstash-tor) and Tauri app with React TypeScript frontend. Clear separation between wallet state (encrypted zcash_client_sqlite wallet DB) and app metadata (separate SQLite). Spending secrets stay in Rust crates; mnemonic words are handled only in explicitly permitted, transient flows in the UI via typed IPC.
 
 ## Complexity Tracking
 
@@ -182,11 +182,11 @@ tests/
 No constitution violations. All principles pass.
 
 The multi-crate workspace structure (5 backend crates + 1 Tauri app) is justified by the clear separation of concerns required by the constitution:
-- **zkore-core**: Domain types and IPC contracts (Principle IV)
-- **zkore-engine**: Wallet operations with secrets (Principle I)
-- **zkore-network**: Transport abstraction for Tor fail-closed (Principle III)
-- **zkore-keystone**: PCZT/signing with anti-fingerprinting (Principle I)
-- **zkore-tor**: Isolated Tor state machine (Principle III)
+- **zstash-core**: Domain types and IPC contracts (Principle IV)
+- **zstash-engine**: Wallet operations with secrets (Principle I)
+- **zstash-network**: Transport abstraction for Tor fail-closed (Principle III)
+- **zstash-keystone**: PCZT/signing with anti-fingerprinting (Principle I)
+- **zstash-tor**: Isolated Tor state machine (Principle III)
 
 ## Constitution Check - Post-Design Re-evaluation
 
@@ -227,8 +227,8 @@ This section is **non-normative**. It clarifies how the requirements above are i
 
 #### Wallet DB encryption approach (zcash_client_sqlite-backed)
 
-- Zkore uses **SQLCipher** (SQLite page-level encryption) for the wallet DB (transaction history, balances, addresses, note metadata). The encryption mechanism MUST encrypt the entire DB file at rest (not just selected columns).
-- Zkore uses a per-wallet **key hierarchy**:
+- zSTASH uses **SQLCipher** (SQLite page-level encryption) for the wallet DB (transaction history, balances, addresses, note metadata). The encryption mechanism MUST encrypt the entire DB file at rest (not just selected columns).
+- zSTASH uses a per-wallet **key hierarchy**:
   - **Wallet password** → KDF → **Key Encryption Key (KEK)**
   - Random 32-byte **Data Encryption Key (DEK)** provided as the raw SQLCipher key for the wallet DB (and used to encrypt any other wallet-private blobs)
   - The DEK is stored only as **wrapped_dek** (encrypted with the KEK) in app metadata; the DEK itself is never written to disk in plaintext
@@ -339,7 +339,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
   - Regional endpoints: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
 - **Testnet**: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
   - SSL via reverse proxy recommended for production-like testing
-  - Development/CI only: configure default server override via `ZKORE_GRPC_URL` environment variable; production builds should rely on persisted server configuration and MUST NOT silently override user-selected servers via environment variables
+  - Development/CI only: configure default server override via `ZSTASH_GRPC_URL` environment variable; production builds should rely on persisted server configuration and MUST NOT silently override user-selected servers via environment variables
 - **Custom Server**: User can configure alternative lightwalletd endpoint
   - Security warning displayed when using custom servers
   - Validation of server connectivity, required RPC capabilities (including mempool APIs needed for FR-013), and network match before saving

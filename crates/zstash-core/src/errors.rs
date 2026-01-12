@@ -1,5 +1,5 @@
 // Error codes are part of the stable IPC contract and must match
-// `specs/001-zkore-desktop-wallet/contracts/ipc-v1.ts`.
+// `specs/001-zstash-desktop-wallet/contracts/ipc-v1.ts`.
 
 // Wallet errors
 pub const WALLET_NOT_FOUND: &str = "E1001";

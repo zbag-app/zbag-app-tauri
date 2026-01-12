@@ -19,12 +19,12 @@ Security reminder (see `.specify/memory/constitution.md`): do not log or persist
 From repo root:
 
 ```sh
-cargo run -p zkore-engine --bin zkore-it-wallet -- --network testnet
+cargo run -p zstash-engine --bin zkore-it-wallet -- --network testnet
 ```
 
 This uses (and will create if missing) a local mnemonic file at:
 
-- `~/.zkore/dev/it-wallet.mnemonic`
+- `~/.zstash/dev/it-wallet.mnemonic`
 
 The **current** derived address (account `0`, shielded-only UA) is:
 
@@ -35,13 +35,13 @@ If you delete/overwrite the mnemonic file, the address will change.
 ### Optional: show the mnemonic (keep private)
 
 ```sh
-cargo run -p zkore-engine --bin zkore-it-wallet -- --network testnet --print-mnemonic
+cargo run -p zstash-engine --bin zkore-it-wallet -- --network testnet --print-mnemonic
 ```
 
 ### Regenerate (rotates address)
 
 ```sh
-cargo run -p zkore-engine --bin zkore-it-wallet -- --network testnet --force-new
+cargo run -p zstash-engine --bin zkore-it-wallet -- --network testnet --force-new
 ```
 
 ---
@@ -79,7 +79,7 @@ Note: the app uses `https://lwd.testnet.zec.pro` as the configured gRPC URL; TLS
 Run the app:
 
 ```sh
-cd apps/zkore-app-tauri
+cd apps/zstash-app-tauri
 bun run tauri dev
 ```
 
@@ -88,7 +88,7 @@ Logging notes:
 - You can override verbosity with `RUST_LOG`, for example:
 
 ```sh
-export RUST_LOG='zkore_engine=debug,zkore_network=debug,zkore_tor=debug,zkore_app_tauri_lib=debug'
+export RUST_LOG='zkore_engine=debug,zkore_network=debug,zkore_tor=debug,zstash_app_tauri_lib=debug'
 export RUST_BACKTRACE=full
 ```
 
@@ -98,19 +98,19 @@ export RUST_BACKTRACE=full
 
 ### Phase A — “Probe” tests (no funds required)
 
-- Keep/extend the existing gated network probe tests in `crates/zkore-network/tests/`.
+- Keep/extend the existing gated network probe tests in `crates/zstash-network/tests/`.
 - Ensure probes cover:
   - TLS + connect (`GrpcClient::connect`)
   - basic RPC call (`GetLightdInfo`)
   - (optionally) a small range scan against tip.
 
-These should remain **CI-gated** (only run when `CI=1` and `ZKORE_GRPC_URL` is set) to avoid flakiness locally/CI.
+These should remain **CI-gated** (only run when `CI=1` and `ZSTASH_GRPC_URL` is set) to avoid flakiness locally/CI.
 
 ### Phase B — Funded wallet tests (requires mnemonic + funds)
 
 Add a separate test suite gated behind explicit env vars, e.g.:
-- `ZKORE_IT_MNEMONIC` (or read `~/.zkore/dev/it-wallet.mnemonic` locally)
-- `ZKORE_GRPC_URL=https://lwd.testnet.zec.pro`
+- `ZSTASH_IT_MNEMONIC` (or read `~/.zstash/dev/it-wallet.mnemonic` locally)
+- `ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro`
 
 Planned coverage (Rust, integration-level):
 - **Sync**:
@@ -142,7 +142,7 @@ Important constraints:
 
 ## References
 
-- CLI tool source: `crates/zkore-engine/src/bin/zkore-it-wallet.rs`
+- CLI tool source: `crates/zstash-engine/src/bin/zkore-it-wallet.rs`
 - Security rules: `.specify/memory/constitution.md`
-- Network crate tests: `crates/zkore-network/tests/`
+- Network crate tests: `crates/zstash-network/tests/`
 

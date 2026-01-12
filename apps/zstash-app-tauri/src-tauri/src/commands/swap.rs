@@ -2,21 +2,21 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zkore_core::domain::SwapIntent;
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::swap::{
+use zstash_core::domain::SwapIntent;
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::swap::{
     GetSwapStatusRequest, GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse,
     RequestSwapQuoteRequest, RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zkore_request_swap_quote")]
-pub fn zkore_request_swap_quote(
+#[tauri::command(rename = "zstash_request_swap_quote")]
+pub fn zstash_request_swap_quote(
     state: State<'_, AppState>,
     request: RequestSwapQuoteRequest,
 ) -> IpcResult<RequestSwapQuoteResponse> {
@@ -28,7 +28,7 @@ pub fn zkore_request_swap_quote(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -47,8 +47,8 @@ pub fn zkore_request_swap_quote(
     })
 }
 
-#[tauri::command(rename = "zkore_start_swap")]
-pub fn zkore_start_swap(
+#[tauri::command(rename = "zstash_start_swap")]
+pub fn zstash_start_swap(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: StartSwapRequest,
@@ -65,7 +65,7 @@ pub fn zkore_start_swap(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -80,8 +80,8 @@ pub fn zkore_start_swap(
     })
 }
 
-#[tauri::command(rename = "zkore_get_swap_status")]
-pub fn zkore_get_swap_status(
+#[tauri::command(rename = "zstash_get_swap_status")]
+pub fn zstash_get_swap_status(
     state: State<'_, AppState>,
     request: GetSwapStatusRequest,
 ) -> IpcResult<GetSwapStatusResponse> {
@@ -93,7 +93,7 @@ pub fn zkore_get_swap_status(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -103,8 +103,8 @@ pub fn zkore_get_swap_status(
     })
 }
 
-#[tauri::command(rename = "zkore_list_swaps")]
-pub fn zkore_list_swaps(
+#[tauri::command(rename = "zstash_list_swaps")]
+pub fn zstash_list_swaps(
     state: State<'_, AppState>,
     request: ListSwapsRequest,
 ) -> IpcResult<ListSwapsResponse> {
@@ -116,7 +116,7 @@ pub fn zkore_list_swaps(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 

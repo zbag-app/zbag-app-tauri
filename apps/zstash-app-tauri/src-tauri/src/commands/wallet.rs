@@ -4,23 +4,23 @@ use anyhow::Context as _;
 use tauri::State;
 use tracing::warn;
 
-use zkore_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
-use zkore_core::ipc::v1::commands::wallet::{
+use zstash_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
+use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
     LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
     ReauthPurpose, ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest,
     UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::sync::start_sync_with_handlers;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
-#[tauri::command(rename = "zkore_create_wallet")]
-pub fn zkore_create_wallet(
+#[tauri::command(rename = "zstash_create_wallet")]
+pub fn zstash_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
 ) -> IpcResult<CreateWalletResponse> {
@@ -32,7 +32,7 @@ pub fn zkore_create_wallet(
     let (grpc_url, tor_manager) = {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let grpc_url =
-            zkore_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
+            zstash_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
         (grpc_url, Some(state.tor_manager.clone()))
     };
 
@@ -40,7 +40,7 @@ pub fn zkore_create_wallet(
     // This avoids scanning the entire blockchain for a brand new wallet
     let birthday_height = match grpc_url {
         Ok(url) => tauri::async_runtime::block_on(
-            zkore_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager),
+            zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager),
         ),
         Err(err) => {
             warn!(error = ?err, "failed to resolve gRPC URL for birthday fetch");
@@ -67,8 +67,8 @@ pub fn zkore_create_wallet(
     })
 }
 
-#[tauri::command(rename = "zkore_list_wallets")]
-pub fn zkore_list_wallets(
+#[tauri::command(rename = "zstash_list_wallets")]
+pub fn zstash_list_wallets(
     state: State<'_, AppState>,
     request: ListWalletsRequest,
 ) -> IpcResult<ListWalletsResponse> {
@@ -86,8 +86,8 @@ pub fn zkore_list_wallets(
     })
 }
 
-#[tauri::command(rename = "zkore_load_wallet")]
-pub fn zkore_load_wallet(
+#[tauri::command(rename = "zstash_load_wallet")]
+pub fn zstash_load_wallet(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: LoadWalletRequest,
@@ -129,8 +129,8 @@ pub fn zkore_load_wallet(
     })
 }
 
-#[tauri::command(rename = "zkore_unlock_wallet")]
-pub fn zkore_unlock_wallet(
+#[tauri::command(rename = "zstash_unlock_wallet")]
+pub fn zstash_unlock_wallet(
     state: State<'_, AppState>,
     request: UnlockWalletRequest,
 ) -> IpcResult<UnlockWalletResponse> {
@@ -152,8 +152,8 @@ pub fn zkore_unlock_wallet(
     })
 }
 
-#[tauri::command(rename = "zkore_lock_wallet")]
-pub fn zkore_lock_wallet(
+#[tauri::command(rename = "zstash_lock_wallet")]
+pub fn zstash_lock_wallet(
     state: State<'_, AppState>,
     request: LockWalletRequest,
 ) -> IpcResult<LockWalletResponse> {
@@ -184,8 +184,8 @@ pub fn zkore_lock_wallet(
     })
 }
 
-#[tauri::command(rename = "zkore_reauth_wallet")]
-pub fn zkore_reauth_wallet(
+#[tauri::command(rename = "zstash_reauth_wallet")]
+pub fn zstash_reauth_wallet(
     state: State<'_, AppState>,
     request: ReauthWalletRequest,
 ) -> IpcResult<ReauthWalletResponse> {
@@ -205,8 +205,8 @@ pub fn zkore_reauth_wallet(
     })
 }
 
-#[tauri::command(rename = "zkore_view_seed_phrase")]
-pub fn zkore_view_seed_phrase(
+#[tauri::command(rename = "zstash_view_seed_phrase")]
+pub fn zstash_view_seed_phrase(
     state: State<'_, AppState>,
     request: ViewSeedPhraseRequest,
 ) -> IpcResult<ViewSeedPhraseResponse> {
@@ -224,8 +224,8 @@ pub fn zkore_view_seed_phrase(
     })
 }
 
-#[tauri::command(rename = "zkore_get_wallet_status")]
-pub fn zkore_get_wallet_status(
+#[tauri::command(rename = "zstash_get_wallet_status")]
+pub fn zstash_get_wallet_status(
     state: State<'_, AppState>,
     request: GetWalletStatusRequest,
 ) -> IpcResult<GetWalletStatusResponse> {
@@ -243,8 +243,8 @@ pub fn zkore_get_wallet_status(
     })
 }
 
-#[tauri::command(rename = "zkore_logout_wallet")]
-pub fn zkore_logout_wallet(
+#[tauri::command(rename = "zstash_logout_wallet")]
+pub fn zstash_logout_wallet(
     state: State<'_, AppState>,
     request: LogoutWalletRequest,
 ) -> IpcResult<LogoutWalletResponse> {
@@ -276,12 +276,12 @@ pub fn zkore_logout_wallet(
 }
 
 fn load_accounts_for_wallet(
-    mgr: &mut zkore_engine::wallet_manager::WalletManager,
+    mgr: &mut zstash_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<Vec<AccountInfo>> {
     let wallet_db_accounts = mgr.list_wallet_db_account_ids(wallet_id)?;
     let meta_accounts =
-        zkore_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
+        zstash_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
             .map_err(|e| anyhow::anyhow!(e))
             .context("failed to load account metadata")?;
 
@@ -311,7 +311,7 @@ fn load_accounts_for_wallet(
 }
 
 fn build_load_wallet_response(
-    mgr: &mut zkore_engine::wallet_manager::WalletManager,
+    mgr: &mut zstash_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<LoadWalletResponse> {
     let (wallet, lock_status) = mgr.load_wallet(wallet_id)?;
@@ -338,9 +338,9 @@ mod tests {
 
     use uuid::Uuid;
 
-    use zkore_core::domain::Network;
-    use zkore_engine::key_store::KeyStore;
-    use zkore_engine::wallet_manager::WalletManager;
+    use zstash_core::domain::Network;
+    use zstash_engine::key_store::KeyStore;
+    use zstash_engine::wallet_manager::WalletManager;
 
     use super::*;
 
@@ -443,7 +443,7 @@ mod tests {
     }
 
     fn temp_root(prefix: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp root");
         root
     }

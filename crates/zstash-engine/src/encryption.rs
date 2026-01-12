@@ -6,7 +6,7 @@ use rand::RngCore;
 use uuid::Uuid;
 use zeroize::Zeroize;
 
-use zkore_core::domain::Network;
+use zstash_core::domain::Network;
 
 pub const KDF_ALGORITHM: &str = "argon2id";
 pub const KDF_VERSION: u32 = 1;

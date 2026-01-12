@@ -10,9 +10,9 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::warn;
 
-use zkore_core::domain::{TorState, TorStatus};
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
-use zkore_core::ipc::v1::events::TorStatusEvent;
+use zstash_core::domain::{TorState, TorStatus};
+use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use zstash_core::ipc::v1::events::TorStatusEvent;
 
 type BootstrapFuture =
     Pin<Box<dyn Future<Output = Result<zcash_client_backend::tor::Client, String>> + Send>>;

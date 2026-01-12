@@ -11,7 +11,7 @@
 //! - Spend-before-sync semantics (spendable vs pending)
 //! - Restored wallets are not blocked by BACKUP_REQUIRED
 //!
-//! See `crates/zkore-engine/tests/us4_restore.rs` for the executable unit coverage.
+//! See `crates/zstash-engine/tests/us4_restore.rs` for the executable unit coverage.
 
 #[test]
 fn placeholder() {

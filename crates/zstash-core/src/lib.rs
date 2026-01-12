@@ -1,4 +1,4 @@
-//! Core domain types and IPC contracts for Zkore Desktop.
+//! Core domain types and IPC contracts for zSTASH Desktop.
 
 pub mod domain;
 pub mod errors;

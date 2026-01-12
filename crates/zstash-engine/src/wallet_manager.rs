@@ -13,12 +13,12 @@ use secrecy::SecretVec;
 use uuid::Uuid;
 use zeroize::Zeroize;
 
-use zkore_core::domain::{
+use zstash_core::domain::{
     AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
     PrivacyPosture, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletInfo,
     WalletLockStatus, WalletStatus, WalletType,
 };
-use zkore_core::errors;
+use zstash_core::errors;
 
 use crate::birthday;
 use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
@@ -32,15 +32,15 @@ use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
-use zkore_core::ipc::v1::commands::keystone::{
+use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
-use zkore_core::ipc::v1::commands::transaction::{
+use zstash_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
 };
-use zkore_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
-use zkore_core::ipc::v1::events::WalletStatusEvent;
+use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use zstash_core::ipc::v1::events::WalletStatusEvent;
 
 pub struct WalletManager {
     app_db: AppDb,
@@ -611,7 +611,7 @@ impl WalletManager {
         }
 
         // Parse and validate UFVK
-        let parsed = zkore_keystone::ufvk::parse_ufvk(ufvk)
+        let parsed = zstash_keystone::ufvk::parse_ufvk(ufvk)
             .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
 
         let expected_net = zcash_consensus_network(network).network_type();
@@ -1420,7 +1420,7 @@ impl WalletManager {
                 continue;
             };
 
-            // Check key_source first (software wallets, Zkore-tagged imports including HardwareSigner)
+            // Check key_source first (software wallets, zSTASH-tagged imports including HardwareSigner)
             if let Some(key_source) = account.source().key_source()
                 && let Some(account_id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
@@ -1453,7 +1453,7 @@ impl WalletManager {
 
         let (wallet, conn) = self.require_unlocked_wallet_db(wallet_id)?;
 
-        let parsed = zkore_keystone::ufvk::parse_ufvk(ufvk)
+        let parsed = zstash_keystone::ufvk::parse_ufvk(ufvk)
             .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
 
         let expected_net = zcash_consensus_network(wallet.network).network_type();
@@ -1487,7 +1487,7 @@ impl WalletManager {
             };
 
             // Collect BOTH key_source and key_derivation IDs to avoid any collision.
-            // An account may have both (e.g., Keystone accounts with key_source="zkore:N"
+            // An account may have both (e.g., Keystone accounts with key_source="zstash:N"
             // AND key_derivation.account_index=M where N != M).
             if let Some(key_source) = account.source().key_source()
                 && let Some(id) =
@@ -2000,7 +2000,7 @@ impl WalletManager {
         self.key_store.as_ref()
     }
 
-    pub fn set_tor_manager(&mut self, tor_manager: std::sync::Arc<zkore_tor::TorManager>) {
+    pub fn set_tor_manager(&mut self, tor_manager: std::sync::Arc<zstash_tor::TorManager>) {
         self.tx_service.set_tor_manager(tor_manager);
     }
 
@@ -2290,7 +2290,7 @@ impl WalletManager {
 
 fn default_wallets_root() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".zkore").join("wallets"))
+    Ok(PathBuf::from(home).join(".zstash").join("wallets"))
 }
 
 fn network_dir_name(network: Network) -> &'static str {
@@ -2389,11 +2389,11 @@ const NEW_WALLET_BIRTHDAY_MARGIN: u32 = 100;
 /// since a new wallet cannot have any funds before its creation.
 pub async fn fetch_birthday_height_for_new_wallet(
     grpc_url: &str,
-    tor_manager: Option<std::sync::Arc<zkore_tor::TorManager>>,
+    tor_manager: Option<std::sync::Arc<zstash_tor::TorManager>>,
 ) -> Option<u32> {
     let client = match tor_manager {
-        Some(tor) => zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
-        None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
+        Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
+        None => zstash_network::grpc_client::GrpcClient::new(grpc_url),
     };
 
     match client.get_latest_block().await {

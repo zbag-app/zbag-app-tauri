@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, SwapIntent, SwapType};
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zkore_engine::db::backup_meta;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::swap_service::SwapService;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{Network, SwapIntent, SwapType};
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::db::backup_meta;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::swap_service::SwapService;
+use zstash_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -126,7 +126,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -151,8 +151,8 @@ fn regression_no_secret_logging() {
         let signed_payload = "signed-payload-SECRET-12345";
         let restore_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
 
-        tracing::info!(memo = %zkore_engine::logging::redact_memo(memo));
-        tracing::info!(address = %zkore_engine::logging::redact_address(full_address));
+        tracing::info!(memo = %zstash_engine::logging::redact_memo(memo));
+        tracing::info!(address = %zstash_engine::logging::redact_address(full_address));
 
         // Create wallet (exercise mnemonic/password handling).
         let root = temp_root("no_secret_logging_create");
@@ -194,7 +194,7 @@ fn regression_no_secret_logging() {
         };
         *reauth_token_seen.lock().expect("mutex poisoned") = reauth_token.clone();
 
-        tracing::info!(reauth_token = %zkore_engine::logging::Redacted(&reauth_token));
+        tracing::info!(reauth_token = %zstash_engine::logging::Redacted(&reauth_token));
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");

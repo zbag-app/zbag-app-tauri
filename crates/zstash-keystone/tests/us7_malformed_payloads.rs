@@ -1,4 +1,4 @@
-use zkore_keystone::payload::decode_zcash_pczt_ur_cbor;
+use zstash_keystone::payload::decode_zcash_pczt_ur_cbor;
 
 #[test]
 fn zcash_pczt_ur_cbor_rejects_truncated_data() {

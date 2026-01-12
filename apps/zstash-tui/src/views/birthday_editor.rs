@@ -43,8 +43,8 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, account_id: u32) {
     let state = &app.birthday_editor_state;
 
     let min_height = match network {
-        Some(zkore_core::domain::Network::Mainnet) => MAINNET_MIN_BIRTHDAY,
-        Some(zkore_core::domain::Network::Testnet) => TESTNET_MIN_BIRTHDAY,
+        Some(zstash_core::domain::Network::Mainnet) => MAINNET_MIN_BIRTHDAY,
+        Some(zstash_core::domain::Network::Testnet) => TESTNET_MIN_BIRTHDAY,
         None => 0,
     };
 
@@ -296,8 +296,8 @@ fn validate_birthday(app: &App, input: &str) -> Result<u32, String> {
 
     let network = app.current_wallet.as_ref().map(|w| w.network);
     let min_height = match network {
-        Some(zkore_core::domain::Network::Mainnet) => MAINNET_MIN_BIRTHDAY,
-        Some(zkore_core::domain::Network::Testnet) => TESTNET_MIN_BIRTHDAY,
+        Some(zstash_core::domain::Network::Mainnet) => MAINNET_MIN_BIRTHDAY,
+        Some(zstash_core::domain::Network::Testnet) => TESTNET_MIN_BIRTHDAY,
         None => return Err("Unknown network".to_string()),
     };
 
@@ -337,7 +337,7 @@ fn perform_birthday_update(
         .ok_or_else(|| anyhow::anyhow!("Session expired - please unlock wallet again"))?;
 
     // Reconstruct the DEK from cached bytes
-    let dek = zkore_engine::encryption::Dek(*dek_bytes);
+    let dek = zstash_engine::encryption::Dek(*dek_bytes);
 
     // Open wallet database
     let db_path = data::wallet_db_path(&app.config.wallets_dir, wallet.network, wallet.id);

@@ -1,6 +1,6 @@
-# Feature Specification: Zkore Desktop Wallet
+# Feature Specification: zSTASH Desktop Wallet
 
-**Feature Branch**: `001-zkore-desktop-wallet`
+**Feature Branch**: `001-zstash-desktop-wallet`
 **Status**: Complete
 **Input**: Desktop-first shielded Zcash wallet with Zashi-style privacy-by-default (Sapling + Orchard), Keystone hardware wallet support, NEAR Intents DEX integration, and Tor anonymization
 
@@ -16,10 +16,10 @@
 
 ### Session 2025-12-23
 
-- Q: How should Zkore protect spend-capable secret material at rest on disk (seed/spending keys)? → A: Encrypt with wallet password; optional OS keychain remember
-- Q: When should Zkore prompt for the wallet password to unlock a spend-capable wallet? → A: Prompt on app launch (keychain remember optional); require manual password re-auth for every spend (no keychain)
+- Q: How should zSTASH protect spend-capable secret material at rest on disk (seed/spending keys)? → A: Encrypt with wallet password; optional OS keychain remember
+- Q: When should zSTASH prompt for the wallet password to unlock a spend-capable wallet? → A: Prompt on app launch (keychain remember optional); require manual password re-auth for every spend (no keychain)
 - Q: Can users re-view the seed phrase after the initial wallet creation flow? → A: Yes; "View seed phrase" behind manual wallet-password re-auth (constitution amended)
-- Q: How should Zkore store transaction memos on disk? → A: Encrypt memos at rest using the wallet password
+- Q: How should zSTASH store transaction memos on disk? → A: Encrypt memos at rest using the wallet password
 - Q: Should the wallet database (transaction history, balances, addresses/notes) be encrypted at rest with the wallet password? → A: Yes; encrypt the entire wallet DB at rest
 
 ## Out of Scope
@@ -37,7 +37,7 @@ The following features are explicitly excluded from the initial release:
 
 ### User Story 1 - Create New Wallet and Receive Funds (Priority: P1)
 
-A new user downloads Zkore Desktop and creates a wallet. They can immediately receive shielded ZEC without being forced to complete backup first, but the app persistently reminds them to back up until they verify their seed phrase. They can only spend after backup verification.
+A new user downloads zSTASH Desktop and creates a wallet. They can immediately receive shielded ZEC without being forced to complete backup first, but the app persistently reminds them to back up until they verify their seed phrase. They can only spend after backup verification.
 
 **Why this priority**: This is the foundational user journey. Without wallet creation, no other functionality is accessible. Fast onboarding reduces friction while backup gating protects users from fund loss.
 
@@ -45,11 +45,11 @@ A new user downloads Zkore Desktop and creates a wallet. They can immediately re
 
 **Acceptance Scenarios**:
 
-1. **Given** a user launches Zkore for the first time, **When** they select "Create Wallet", **Then** a new wallet is created in under 60 seconds and a shielded receive address is displayed
+1. **Given** a user launches zSTASH for the first time, **When** they select "Create Wallet", **Then** a new wallet is created in under 60 seconds and a shielded receive address is displayed
 2. **Given** a user has created a wallet but not backed up, **When** they view the home screen, **Then** a persistent backup reminder is visible and cannot be dismissed
 3. **Given** a user has created a wallet but not backed up, **When** they attempt to send funds, **Then** they are blocked and prompted to complete backup verification first
 4. **Given** a user is verifying backup, **When** they correctly re-enter 4 specific seed words requested by a backend-issued challenge (by 1-based word number), **Then** backup is marked complete and spending is enabled
-5. **Given** a user has previously created a wallet, **When** they restart Zkore, **Then** the most recently opened wallet is loaded and they can resume without re-creating a wallet
+5. **Given** a user has previously created a wallet, **When** they restart zSTASH, **Then** the most recently opened wallet is loaded and they can resume without re-creating a wallet
 
 ---
 
@@ -126,7 +126,7 @@ A user opens the Receive screen to get an address for incoming funds. The defaul
 
 ### User Story 6 - Keystone Hardware Wallet Watch-Only (Priority: P2)
 
-A user imports a Unified Full Viewing Key from their Keystone hardware wallet. Zkore displays balances and transactions but cannot spend. Spending requires air-gapped signing via the Keystone device.
+A user imports a Unified Full Viewing Key from their Keystone hardware wallet. zSTASH displays balances and transactions but cannot spend. Spending requires air-gapped signing via the Keystone device.
 
 **Why this priority**: Hardware wallet support significantly increases security for high-value holdings, but is an advanced feature not needed by all users.
 
@@ -143,7 +143,7 @@ A user imports a Unified Full Viewing Key from their Keystone hardware wallet. Z
 
 ### User Story 7 - Keystone Air-Gapped Signing (Priority: P2)
 
-A user with a Keystone watch-only account initiates a send. Zkore generates an unsigned transaction displayed as a QR code. The user scans this on Keystone, signs, and scans the signed response back into Zkore using webcam or imports via microSD.
+A user with a Keystone watch-only account initiates a send. zSTASH generates an unsigned transaction displayed as a QR code. The user scans this on Keystone, signs, and scans the signed response back into zSTASH using webcam or imports via microSD.
 
 **Why this priority**: Completes the Keystone integration for actual spending, essential for hardware wallet security model.
 

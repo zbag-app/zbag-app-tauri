@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 use uuid::Uuid;
 
-use zkore_core::domain::{SwapInfo, SwapState, SwapType};
+use zstash_core::domain::{SwapInfo, SwapState, SwapType};
 
 pub fn insert_swap(conn: &Connection, wallet_id: Uuid, swap: &SwapInfo) -> rusqlite::Result<()> {
     conn.execute(

@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use base64::Engine as _;
 use uuid::Uuid;
 
-use zkore_core::domain::Network;
+use zstash_core::domain::Network;
 
 use crate::key_store::KeyStore;
 
@@ -18,7 +18,7 @@ impl KeyStoreKeychain {
     pub fn new(wallets_root: PathBuf) -> Self {
         Self {
             wallets_root,
-            service: "zkore".to_string(),
+            service: "zstash".to_string(),
         }
     }
 

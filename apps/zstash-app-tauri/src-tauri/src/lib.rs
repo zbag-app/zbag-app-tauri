@@ -13,36 +13,36 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             // Wallet
-            commands::wallet::zkore_create_wallet,
-            commands::wallet::zkore_load_wallet,
-            commands::wallet::zkore_list_wallets,
-            commands::wallet::zkore_get_wallet_status,
-            commands::wallet::zkore_unlock_wallet,
-            commands::wallet::zkore_lock_wallet,
-            commands::wallet::zkore_reauth_wallet,
-            commands::wallet::zkore_view_seed_phrase,
-            commands::wallet::zkore_logout_wallet,
+            commands::wallet::zstash_create_wallet,
+            commands::wallet::zstash_load_wallet,
+            commands::wallet::zstash_list_wallets,
+            commands::wallet::zstash_get_wallet_status,
+            commands::wallet::zstash_unlock_wallet,
+            commands::wallet::zstash_lock_wallet,
+            commands::wallet::zstash_reauth_wallet,
+            commands::wallet::zstash_view_seed_phrase,
+            commands::wallet::zstash_logout_wallet,
             // Address
-            commands::address::zkore_get_receive_address,
+            commands::address::zstash_get_receive_address,
             // Sync
-            commands::sync::zkore_start_sync,
-            commands::sync::zkore_stop_sync,
-            commands::sync::zkore_get_sync_progress,
+            commands::sync::zstash_start_sync,
+            commands::sync::zstash_stop_sync,
+            commands::sync::zstash_get_sync_progress,
             // Balance
-            commands::balance::zkore_get_balance,
+            commands::balance::zstash_get_balance,
             // Backup
-            commands::backup::zkore_get_backup_challenge,
-            commands::backup::zkore_verify_backup,
+            commands::backup::zstash_get_backup_challenge,
+            commands::backup::zstash_verify_backup,
             // Keystone
-            commands::keystone::zkore_import_ufvk,
-            commands::keystone::zkore_create_keystone_wallet,
+            commands::keystone::zstash_import_ufvk,
+            commands::keystone::zstash_create_keystone_wallet,
             // Swaps
-            commands::swap::zkore_request_swap_quote,
-            commands::swap::zkore_start_swap,
-            commands::swap::zkore_get_swap_status,
-            commands::swap::zkore_list_swaps,
+            commands::swap::zstash_request_swap_quote,
+            commands::swap::zstash_start_swap,
+            commands::swap::zstash_get_swap_status,
+            commands::swap::zstash_list_swaps,
             // Logs
-            commands::logs::zkore_get_log_location,
+            commands::logs::zstash_get_log_location,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

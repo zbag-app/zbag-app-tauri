@@ -98,7 +98,7 @@ export function Sidebar({
           <Shield className="h-5 w-5 text-primary" />
         </div>
         <div className="flex flex-col">
-          <span className="font-display text-lg font-bold tracking-tight">Zkore</span>
+          <span className="font-display text-lg font-bold tracking-tight">zSTASH</span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground truncate max-w-[100px]">{walletName}</span>
             <Badge variant={network === "Mainnet" ? "success" : "warning"} className="text-[10px] px-1.5 py-0">

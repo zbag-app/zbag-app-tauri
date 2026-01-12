@@ -39,11 +39,11 @@ pub async fn run(args: BalanceArgs, data_dir: &Path, output: &OutputMode) -> Res
         // Try to find an active wallet
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zkore wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
             anyhow::bail!(
-                "multiple wallets found - specify one with: zkore balance {} --wallet <ID>",
+                "multiple wallets found - specify one with: zstash balance {} --wallet <ID>",
                 args.account_id
             );
         }

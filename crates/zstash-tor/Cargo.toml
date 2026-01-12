@@ -1,5 +1,5 @@
 [package]
-name = "zkore-tor"
+name = "zstash-tor"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,5 +12,5 @@ http = "1"
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-zkore-core = { path = "../zkore-core" }
+zstash-core = { path = "../zstash-core" }
 zcash_client_backend.workspace = true

@@ -6,13 +6,13 @@ use std::thread;
 
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, SwapIntent, SwapType};
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::swap_service::SwapService;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{Network, SwapIntent, SwapType};
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::swap_service::SwapService;
+use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -82,7 +82,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -194,7 +194,7 @@ fn start_swap_from_zec_requires_privacy_ack() {
 
     // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -233,7 +233,7 @@ fn start_swap_from_zec_requires_reauth_token_when_acknowledged() {
 
     // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -279,7 +279,7 @@ fn start_swap_from_zec_is_blocked_until_backup_complete() {
     // Only 1 request: quote (dry=false returns deposit address)
     // start_swap should fail with BACKUP_REQUIRED before making any more API calls
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zkore_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

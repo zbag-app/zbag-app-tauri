@@ -7,7 +7,7 @@ use crate::app::{App, AppAction, AppState, DashboardTab};
 use crate::data;
 use crate::event::KeyAction;
 use crate::ui::centered_rect;
-use zkore_engine::encryption::Dek;
+use zstash_engine::encryption::Dek;
 
 /// State for sync reset
 #[derive(Default)]

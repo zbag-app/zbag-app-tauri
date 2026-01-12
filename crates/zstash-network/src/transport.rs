@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use zkore_core::domain::TorStatus;
+use zstash_core::domain::TorStatus;
 
-use zkore_tor::TorManager;
+use zstash_tor::TorManager;
 
 #[derive(Debug, Clone)]
 pub struct TransportConfig {

@@ -111,7 +111,7 @@ export function Signing(props: { walletId: string }) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'zkore-unsigned.pczt';
+                a.download = 'zstash-unsigned.pczt';
                 a.click();
                 URL.revokeObjectURL(url);
               }}

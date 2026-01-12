@@ -3,8 +3,8 @@ use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zkore_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zkore_engine::reauth::{Clock, ReauthError, ReauthManager};
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::reauth::{Clock, ReauthError, ReauthManager};
 
 #[derive(Debug, Clone)]
 struct TestClock(Arc<Mutex<SystemTime>>);

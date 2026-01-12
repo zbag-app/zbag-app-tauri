@@ -17,7 +17,7 @@ impl HelpOverlay {
         let lines = vec![
             Line::from(""),
             Line::from(Span::styled(
-                "zkore-tui - Keyboard Shortcuts",
+                "zstash-tui - Keyboard Shortcuts",
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Line::from(""),

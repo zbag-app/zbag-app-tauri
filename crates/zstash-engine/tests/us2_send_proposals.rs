@@ -4,14 +4,14 @@ use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zkore_core::domain::{AddressType, Network};
-use zkore_core::errors;
-use zkore_engine::db::backup_meta;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::reauth::Clock;
-use zkore_engine::tx_service::TxService;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{AddressType, Network};
+use zstash_core::errors;
+use zstash_engine::db::backup_meta;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::reauth::Clock;
+use zstash_engine::tx_service::TxService;
+use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -81,7 +81,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use zkore_core::domain::{TorState, TorStatus};
-use zkore_tor::{TorManager, TorManagerConfig};
+use zstash_core::domain::{TorState, TorStatus};
+use zstash_tor::{TorManager, TorManagerConfig};
 
 #[tokio::test]
 async fn state_machine_transitions_to_error_on_bootstrap_failure() {
-    let mut config = TorManagerConfig::new(std::env::temp_dir().join("zkore-tor-test"));
+    let mut config = TorManagerConfig::new(std::env::temp_dir().join("zstash-tor-test"));
     config.bootstrap_timeout = Duration::from_secs(1);
     config.bootstrap = Arc::new(|_dir| {
         Box::pin(async {

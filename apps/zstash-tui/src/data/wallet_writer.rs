@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use rusqlite::{Connection, params};
 use uuid::Uuid;
-use zkore_engine::db::AppDb;
+use zstash_engine::db::AppDb;
 
 /// Update the birthday height for an account.
 ///

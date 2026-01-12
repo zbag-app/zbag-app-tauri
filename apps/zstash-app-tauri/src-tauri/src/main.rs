@@ -5,13 +5,13 @@ use std::sync::Arc;
 use tauri::Manager;
 
 fn main() {
-    let state = zkore_app_tauri_lib::state::AppState::new()
+    let state = zstash_app_tauri_lib::state::AppState::new()
         .expect("failed to initialize application state");
 
     tauri::Builder::default()
         .manage(state)
         .setup(|app| {
-            let state = app.state::<zkore_app_tauri_lib::state::AppState>();
+            let state = app.state::<zstash_app_tauri_lib::state::AppState>();
 
             // Enter tokio runtime context so TorManager can spawn bootstrap task
             let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
@@ -28,7 +28,8 @@ fn main() {
                 let app_handle = app_handle.clone();
                 if let Ok(mut mgr) = wallet_manager.lock() {
                     mgr.set_wallet_status_handler(Arc::new(move |event| {
-                        let _ = zkore_app_tauri_lib::events::emit_wallet_status(&app_handle, event);
+                        let _ =
+                            zstash_app_tauri_lib::events::emit_wallet_status(&app_handle, event);
                     }));
                 }
             }
@@ -37,9 +38,9 @@ fn main() {
 
             tauri::async_runtime::spawn(async move {
                 let _ =
-                    zkore_app_tauri_lib::events::emit_tor_status(&app_handle, rx.borrow().clone());
+                    zstash_app_tauri_lib::events::emit_tor_status(&app_handle, rx.borrow().clone());
                 while rx.changed().await.is_ok() {
-                    let _ = zkore_app_tauri_lib::events::emit_tor_status(
+                    let _ = zstash_app_tauri_lib::events::emit_tor_status(
                         &app_handle,
                         rx.borrow().clone(),
                     );
@@ -52,54 +53,54 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             // Wallet
-            zkore_app_tauri_lib::commands::wallet::zkore_create_wallet,
-            zkore_app_tauri_lib::commands::wallet::zkore_load_wallet,
-            zkore_app_tauri_lib::commands::wallet::zkore_list_wallets,
-            zkore_app_tauri_lib::commands::wallet::zkore_get_wallet_status,
-            zkore_app_tauri_lib::commands::wallet::zkore_unlock_wallet,
-            zkore_app_tauri_lib::commands::wallet::zkore_lock_wallet,
-            zkore_app_tauri_lib::commands::wallet::zkore_reauth_wallet,
-            zkore_app_tauri_lib::commands::wallet::zkore_view_seed_phrase,
-            zkore_app_tauri_lib::commands::wallet::zkore_logout_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_create_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_load_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_list_wallets,
+            zstash_app_tauri_lib::commands::wallet::zstash_get_wallet_status,
+            zstash_app_tauri_lib::commands::wallet::zstash_unlock_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_lock_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_reauth_wallet,
+            zstash_app_tauri_lib::commands::wallet::zstash_view_seed_phrase,
+            zstash_app_tauri_lib::commands::wallet::zstash_logout_wallet,
             // Address
-            zkore_app_tauri_lib::commands::address::zkore_get_receive_address,
+            zstash_app_tauri_lib::commands::address::zstash_get_receive_address,
             // Sync
-            zkore_app_tauri_lib::commands::sync::zkore_start_sync,
-            zkore_app_tauri_lib::commands::sync::zkore_stop_sync,
-            zkore_app_tauri_lib::commands::sync::zkore_get_sync_progress,
+            zstash_app_tauri_lib::commands::sync::zstash_start_sync,
+            zstash_app_tauri_lib::commands::sync::zstash_stop_sync,
+            zstash_app_tauri_lib::commands::sync::zstash_get_sync_progress,
             // Balance
-            zkore_app_tauri_lib::commands::balance::zkore_get_balance,
+            zstash_app_tauri_lib::commands::balance::zstash_get_balance,
             // Transactions
-            zkore_app_tauri_lib::commands::transaction::zkore_list_transactions,
-            zkore_app_tauri_lib::commands::transaction::zkore_prepare_send,
-            zkore_app_tauri_lib::commands::transaction::zkore_confirm_send,
-            zkore_app_tauri_lib::commands::transaction::zkore_cancel_send,
-            zkore_app_tauri_lib::commands::transaction::zkore_retry_broadcast,
-            zkore_app_tauri_lib::commands::transaction::zkore_shield_funds,
+            zstash_app_tauri_lib::commands::transaction::zstash_list_transactions,
+            zstash_app_tauri_lib::commands::transaction::zstash_prepare_send,
+            zstash_app_tauri_lib::commands::transaction::zstash_confirm_send,
+            zstash_app_tauri_lib::commands::transaction::zstash_cancel_send,
+            zstash_app_tauri_lib::commands::transaction::zstash_retry_broadcast,
+            zstash_app_tauri_lib::commands::transaction::zstash_shield_funds,
             // Backup
-            zkore_app_tauri_lib::commands::backup::zkore_get_backup_challenge,
-            zkore_app_tauri_lib::commands::backup::zkore_verify_backup,
-            zkore_app_tauri_lib::commands::backup::zkore_restore_wallet,
+            zstash_app_tauri_lib::commands::backup::zstash_get_backup_challenge,
+            zstash_app_tauri_lib::commands::backup::zstash_verify_backup,
+            zstash_app_tauri_lib::commands::backup::zstash_restore_wallet,
             // Keystone
-            zkore_app_tauri_lib::commands::keystone::zkore_import_ufvk,
-            zkore_app_tauri_lib::commands::keystone::zkore_build_signing_request,
-            zkore_app_tauri_lib::commands::keystone::zkore_finalize_signing,
-            zkore_app_tauri_lib::commands::keystone::zkore_create_keystone_wallet,
+            zstash_app_tauri_lib::commands::keystone::zstash_import_ufvk,
+            zstash_app_tauri_lib::commands::keystone::zstash_build_signing_request,
+            zstash_app_tauri_lib::commands::keystone::zstash_finalize_signing,
+            zstash_app_tauri_lib::commands::keystone::zstash_create_keystone_wallet,
             // Swaps
-            zkore_app_tauri_lib::commands::swap::zkore_request_swap_quote,
-            zkore_app_tauri_lib::commands::swap::zkore_start_swap,
-            zkore_app_tauri_lib::commands::swap::zkore_get_swap_status,
-            zkore_app_tauri_lib::commands::swap::zkore_list_swaps,
+            zstash_app_tauri_lib::commands::swap::zstash_request_swap_quote,
+            zstash_app_tauri_lib::commands::swap::zstash_start_swap,
+            zstash_app_tauri_lib::commands::swap::zstash_get_swap_status,
+            zstash_app_tauri_lib::commands::swap::zstash_list_swaps,
             // Tor
-            zkore_app_tauri_lib::commands::tor::zkore_set_tor_enabled,
-            zkore_app_tauri_lib::commands::tor::zkore_get_tor_state,
+            zstash_app_tauri_lib::commands::tor::zstash_set_tor_enabled,
+            zstash_app_tauri_lib::commands::tor::zstash_get_tor_state,
             // Logs
-            zkore_app_tauri_lib::commands::logs::zkore_get_log_location,
+            zstash_app_tauri_lib::commands::logs::zstash_get_log_location,
             // Servers
-            zkore_app_tauri_lib::commands::server::zkore_add_server,
-            zkore_app_tauri_lib::commands::server::zkore_set_default_server,
-            zkore_app_tauri_lib::commands::server::zkore_test_server,
-            zkore_app_tauri_lib::commands::server::zkore_list_servers,
+            zstash_app_tauri_lib::commands::server::zstash_add_server,
+            zstash_app_tauri_lib::commands::server::zstash_set_default_server,
+            zstash_app_tauri_lib::commands::server::zstash_test_server,
+            zstash_app_tauri_lib::commands::server::zstash_list_servers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

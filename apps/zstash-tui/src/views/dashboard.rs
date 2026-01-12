@@ -46,13 +46,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, tab: DashboardTab, data:
 
     // Header
     let network_str = match wallet.network {
-        zkore_core::domain::Network::Mainnet => "Mainnet",
-        zkore_core::domain::Network::Testnet => "Testnet",
+        zstash_core::domain::Network::Mainnet => "Mainnet",
+        zstash_core::domain::Network::Testnet => "Testnet",
     };
     let header = Paragraph::new(format!("{} ({})", wallet.name, network_str))
         .block(
             Block::default()
-                .title(" zkore-tui - Dashboard ")
+                .title(" zstash-tui - Dashboard ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         )
@@ -102,7 +102,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, tab: DashboardTab, data:
 }
 
 fn render_overview(
-    wallet: &zkore_core::domain::WalletInfo,
+    wallet: &zstash_core::domain::WalletInfo,
     frame: &mut Frame,
     area: Rect,
     data: &DashboardData,
@@ -276,7 +276,7 @@ fn render_sync(frame: &mut Frame, area: Rect, data: &DashboardData) {
     frame.render_widget(content, area);
 }
 
-fn render_settings(wallet: &zkore_core::domain::WalletInfo, frame: &mut Frame, area: Rect) {
+fn render_settings(wallet: &zstash_core::domain::WalletInfo, frame: &mut Frame, area: Rect) {
     let remember_unlock = if wallet.remember_unlock_enabled {
         "Enabled"
     } else {
@@ -374,7 +374,7 @@ pub fn handle_key(app: &mut App, action: KeyAction) -> AppAction {
 /// Load dashboard data from the wallet database
 pub fn load_data(
     wallet_db: &Connection,
-    network: zkore_core::domain::Network,
+    network: zstash_core::domain::Network,
 ) -> anyhow::Result<DashboardData> {
     let accounts = data::get_accounts(wallet_db, network)?;
     let sync_state = data::get_sync_state(wallet_db)?;

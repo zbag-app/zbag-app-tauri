@@ -91,7 +91,7 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
 
     cleanup_old_logs(&log_directory, 7);
 
-    let file_appender = tracing_appender::rolling::daily(&log_directory, "zkore");
+    let file_appender = tracing_appender::rolling::daily(&log_directory, "zstash");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -124,7 +124,7 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
 fn default_env_filter() -> tracing_subscriber::EnvFilter {
     if cfg!(debug_assertions) {
         tracing_subscriber::EnvFilter::new(
-            "info,zkore_engine=debug,zkore_network=debug,zkore_tor=debug,zkore_app_tauri_lib=debug",
+            "info,zstash_engine=debug,zstash_network=debug,zstash_tor=debug,zstash_app_tauri_lib=debug",
         )
     } else {
         tracing_subscriber::EnvFilter::new("info")
@@ -133,13 +133,13 @@ fn default_env_filter() -> tracing_subscriber::EnvFilter {
 
 fn default_log_directory() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".zkore").join("logs"))
+    Ok(PathBuf::from(home).join(".zstash").join("logs"))
 }
 
 fn current_log_file_path(log_directory: &Path) -> PathBuf {
     // Best-effort name; tracing-appender uses `{prefix}.{date}.log`.
     let today = chrono::Utc::now().date_naive();
-    log_directory.join(format!("zkore.{today}.log"))
+    log_directory.join(format!("zstash.{today}.log"))
 }
 
 fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
@@ -155,11 +155,11 @@ fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
             continue;
         };
 
-        if !name.starts_with("zkore.") || !name.ends_with(".log") {
+        if !name.starts_with("zstash.") || !name.ends_with(".log") {
             continue;
         }
 
-        let date_str = name.trim_start_matches("zkore.").trim_end_matches(".log");
+        let date_str = name.trim_start_matches("zstash.").trim_end_matches(".log");
         let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") else {
             continue;
         };

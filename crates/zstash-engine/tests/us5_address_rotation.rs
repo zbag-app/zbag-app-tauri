@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zkore_core::domain::{AddressType, Network};
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{AddressType, Network};
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -89,7 +89,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }

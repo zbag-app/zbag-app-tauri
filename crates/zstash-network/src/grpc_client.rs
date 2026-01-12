@@ -46,7 +46,7 @@ impl GrpcClient {
         }
     }
 
-    pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<zkore_tor::TorManager>) -> Self {
+    pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<zstash_tor::TorManager>) -> Self {
         Self {
             endpoint: endpoint.into(),
             transport: TransportSelector::with_tor(TransportConfig::default(), tor),

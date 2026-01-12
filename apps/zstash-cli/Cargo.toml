@@ -1,22 +1,22 @@
 [package]
-name = "zkore-cli"
+name = "zstash-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI for Zkore Zcash wallet"
+description = "CLI for zSTASH Zcash wallet"
 
 [[bin]]
-name = "zkore"
+name = "zstash"
 path = "src/main.rs"
 
 [dependencies]
-# Zkore crates
-zkore-core = { path = "../../crates/zkore-core" }
-zkore-engine = { path = "../../crates/zkore-engine" }
-zkore-network = { path = "../../crates/zkore-network" }
-zkore-tor = { path = "../../crates/zkore-tor" }
+# zSTASH crates
+zstash-core = { path = "../../crates/zstash-core" }
+zstash-engine = { path = "../../crates/zstash-engine" }
+zstash-network = { path = "../../crates/zstash-network" }
+zstash-tor = { path = "../../crates/zstash-tor" }
 
 # CLI framework
 clap = { version = "4", features = ["derive", "env"] }

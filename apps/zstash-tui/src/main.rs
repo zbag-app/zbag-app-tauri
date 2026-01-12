@@ -1,6 +1,6 @@
-//! # zkore-tui
+//! # zstash-tui
 //!
-//! A terminal user interface for inspecting and managing Zkore wallet data.
+//! A terminal user interface for inspecting and managing zSTASH wallet data.
 //!
 //! ## Features
 //!
@@ -13,9 +13,9 @@
 //! ## Usage
 //!
 //! ```bash
-//! cargo run -p zkore-tui
+//! cargo run -p zstash-tui
 //! # Or with custom paths:
-//! cargo run -p zkore-tui -- --app-db /path/to/app.db --wallets-dir /path/to/wallets
+//! cargo run -p zstash-tui -- --app-db /path/to/app.db --wallets-dir /path/to/wallets
 //! ```
 //!
 //! ## Keybindings
@@ -52,14 +52,14 @@ use crate::event::{EventResult, KeyAction, poll_event};
 use crate::ui::widgets::HelpOverlay;
 
 #[derive(Parser, Debug)]
-#[command(name = "zkore-tui")]
-#[command(about = "TUI tool for inspecting and managing Zkore wallet data")]
+#[command(name = "zstash-tui")]
+#[command(about = "TUI tool for inspecting and managing zSTASH wallet data")]
 struct Args {
-    /// Path to the app database (defaults to ~/.zkore/app.db)
+    /// Path to the app database (defaults to ~/.zstash/app.db)
     #[arg(long)]
     app_db: Option<std::path::PathBuf>,
 
-    /// Path to the wallets directory (defaults to ~/.zkore/wallets)
+    /// Path to the wallets directory (defaults to ~/.zstash/wallets)
     #[arg(long)]
     wallets_dir: Option<std::path::PathBuf>,
 }
@@ -263,7 +263,7 @@ fn handle_key(app: &mut app::App, action: KeyAction) -> AppAction {
 fn render_placeholder(frame: &mut Frame, area: Rect, state_name: &str) {
     let text = format!("State: {}\n\nPress Esc to go back, q to quit", state_name);
     let block = Block::default()
-        .title(" zkore-tui ")
+        .title(" zstash-tui ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
     let paragraph = Paragraph::new(text)
@@ -273,9 +273,9 @@ fn render_placeholder(frame: &mut Frame, area: Rect, state_name: &str) {
 }
 
 fn default_app_db_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".zkore").join("app.db"))
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".zstash").join("app.db"))
 }
 
 fn default_wallets_dir() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".zkore").join("wallets"))
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".zstash").join("wallets"))
 }

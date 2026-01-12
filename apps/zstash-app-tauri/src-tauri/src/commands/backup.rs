@@ -2,18 +2,18 @@ use std::collections::HashMap;
 
 use tauri::State;
 
-use zkore_core::ipc::v1::commands::backup::{
+use zstash_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zkore_get_backup_challenge")]
-pub fn zkore_get_backup_challenge(
+#[tauri::command(rename = "zstash_get_backup_challenge")]
+pub fn zstash_get_backup_challenge(
     state: State<'_, AppState>,
     request: GetBackupChallengeRequest,
 ) -> IpcResult<GetBackupChallengeResponse> {
@@ -26,7 +26,7 @@ pub fn zkore_get_backup_challenge(
         let challenge = mgr.get_backup_challenge(request.wallet_id)?;
         Ok(GetBackupChallengeResponse {
             schema_version: SCHEMA_VERSION,
-            challenge: zkore_core::ipc::v1::commands::backup::BackupChallenge {
+            challenge: zstash_core::ipc::v1::commands::backup::BackupChallenge {
                 challenge_id: challenge.challenge_id,
                 indices: challenge.indices,
                 expires_at: challenge.expires_at,
@@ -35,8 +35,8 @@ pub fn zkore_get_backup_challenge(
     })
 }
 
-#[tauri::command(rename = "zkore_verify_backup")]
-pub fn zkore_verify_backup(
+#[tauri::command(rename = "zstash_verify_backup")]
+pub fn zstash_verify_backup(
     state: State<'_, AppState>,
     request: VerifyBackupRequest,
 ) -> IpcResult<VerifyBackupResponse> {
@@ -55,8 +55,8 @@ pub fn zkore_verify_backup(
     })
 }
 
-#[tauri::command(rename = "zkore_restore_wallet")]
-pub fn zkore_restore_wallet(
+#[tauri::command(rename = "zstash_restore_wallet")]
+pub fn zstash_restore_wallet(
     state: State<'_, AppState>,
     request: RestoreWalletRequest,
 ) -> IpcResult<RestoreWalletResponse> {

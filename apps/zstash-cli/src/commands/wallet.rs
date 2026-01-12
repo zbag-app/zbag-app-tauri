@@ -5,8 +5,8 @@ use std::path::Path;
 use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
 
-use zkore_core::domain::Network;
-use zkore_engine::wallet_manager::fetch_birthday_height_for_new_wallet;
+use zstash_core::domain::Network;
+use zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -217,7 +217,7 @@ pub async fn run(
 
 fn resolve_grpc_url(state: &CliAppState, network: Network) -> Result<String> {
     let wm = state.wallet_manager.lock().expect("mutex poisoned");
-    zkore_engine::server_resolver::resolve_grpc_url(wm.app_db(), network)
+    zstash_engine::server_resolver::resolve_grpc_url(wm.app_db(), network)
 }
 
 fn parse_birthday_date(date_str: &str) -> Result<i64> {

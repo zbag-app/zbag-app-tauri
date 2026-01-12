@@ -198,7 +198,7 @@ async fn run_verify(
             println!();
             println!("Please check that you entered the correct words.");
             println!(
-                "You can try again with: zkore backup verify --wallet {}",
+                "You can try again with: zstash backup verify --wallet {}",
                 wallet_prefix
             );
             return Err(e);

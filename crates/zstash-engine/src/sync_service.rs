@@ -24,10 +24,10 @@ use zcash_client_sqlite::chain::init::init_blockmeta_db;
 use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::BlockHeight;
 
-use zkore_core::domain::{Balance, Network, SyncPhase, SyncProgress};
-use zkore_core::errors;
-use zkore_core::ipc::v1::common::SCHEMA_VERSION;
-use zkore_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
+use zstash_core::domain::{Balance, Network, SyncPhase, SyncProgress};
+use zstash_core::errors;
+use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 
 use crate::db::AppDb;
 use crate::encryption::Dek;
@@ -147,7 +147,7 @@ impl SyncService {
         wallet_db_path: PathBuf,
         wallet_dek: Dek,
         account_ids: Vec<u32>,
-        tor_manager: Option<std::sync::Arc<zkore_tor::TorManager>>,
+        tor_manager: Option<std::sync::Arc<zstash_tor::TorManager>>,
         on_progress: Option<SyncEventHandler>,
         on_balance_changed: Option<BalanceEventHandler>,
     ) -> anyhow::Result<()> {
@@ -202,9 +202,9 @@ impl SyncService {
 
             let client = match tor_manager {
                 Some(ref tor) => {
-                    zkore_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
+                    zstash_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
                 }
-                None => zkore_network::grpc_client::GrpcClient::new(grpc_url),
+                None => zstash_network::grpc_client::GrpcClient::new(grpc_url),
             };
 
             // Wait for Tor to be ready if enabled but not connected
@@ -225,13 +225,13 @@ impl SyncService {
                     }
 
                     // If Tor is ready, proceed
-                    if tor_state.status == zkore_core::domain::TorStatus::On {
+                    if tor_state.status == zstash_core::domain::TorStatus::On {
                         tracing::info!(wallet_id = %wallet_id, "Tor connected, starting sync");
                         break;
                     }
 
                     // If Tor is in error state, log and continue (will fail in main loop)
-                    if tor_state.status == zkore_core::domain::TorStatus::Error {
+                    if tor_state.status == zstash_core::domain::TorStatus::Error {
                         tracing::warn!(wallet_id = %wallet_id, error = ?tor_state.last_error, "Tor in error state");
                         break;
                     }
@@ -1272,7 +1272,7 @@ where
 
 async fn backfill_birthday_tree_sizes(
     conn: &mut Connection,
-    client: &zkore_network::grpc_client::GrpcClient,
+    client: &zstash_network::grpc_client::GrpcClient,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<()> {
     let birthday_heights = {
@@ -1373,7 +1373,7 @@ fn empty_chain_state(height: BlockHeight) -> ChainState {
 /// For the very first scan from genesis (height 0), empty state is correct.
 /// For incremental syncs, we need the actual tree state for proper witness computation.
 async fn fetch_chain_state(
-    client: &zkore_network::grpc_client::GrpcClient,
+    client: &zstash_network::grpc_client::GrpcClient,
     height: BlockHeight,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<ChainState> {
@@ -1452,7 +1452,7 @@ fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, e
 
 /// Download blocks with retry and exponential backoff.
 async fn download_blocks_with_retry(
-    client: &zkore_network::grpc_client::GrpcClient,
+    client: &zstash_network::grpc_client::GrpcClient,
     start: BlockHeight,
     end_exclusive: BlockHeight,
     max_retries: u32,

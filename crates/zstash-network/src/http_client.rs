@@ -28,7 +28,7 @@ impl HttpClient {
         Self::new_with_transport(TransportSelector::new(TransportConfig::default()))
     }
 
-    pub fn new_with_tor(tor: std::sync::Arc<zkore_tor::TorManager>) -> anyhow::Result<Self> {
+    pub fn new_with_tor(tor: std::sync::Arc<zstash_tor::TorManager>) -> anyhow::Result<Self> {
         Self::new_with_transport(TransportSelector::with_tor(TransportConfig::default(), tor))
     }
 

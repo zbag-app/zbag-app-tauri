@@ -21,7 +21,7 @@ impl NearIntentsClient {
         })
     }
 
-    pub fn new_with_tor(tor: std::sync::Arc<zkore_tor::TorManager>) -> anyhow::Result<Self> {
+    pub fn new_with_tor(tor: std::sync::Arc<zstash_tor::TorManager>) -> anyhow::Result<Self> {
         Ok(Self {
             base_url: DEFAULT_BASE_URL.to_string(),
             http: HttpClient::new_with_tor(tor)?,
@@ -287,8 +287,8 @@ pub enum RemoteStatus {
     Unknown(String),
 }
 
-pub fn map_remote_status_to_local_state(status: &RemoteStatus) -> zkore_core::domain::SwapState {
-    use zkore_core::domain::SwapState;
+pub fn map_remote_status_to_local_state(status: &RemoteStatus) -> zstash_core::domain::SwapState {
+    use zstash_core::domain::SwapState;
     match status {
         RemoteStatus::PendingDeposit => SwapState::AwaitingDeposit,
         RemoteStatus::KnownDepositTx => SwapState::Pending,

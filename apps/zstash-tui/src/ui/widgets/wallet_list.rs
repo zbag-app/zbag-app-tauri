@@ -4,7 +4,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, List, ListItem, ListState},
 };
-use zkore_core::domain::{Network, WalletInfo};
+use zstash_core::domain::{Network, WalletInfo};
 
 pub struct WalletListWidget<'a> {
     wallets: &'a [WalletInfo],

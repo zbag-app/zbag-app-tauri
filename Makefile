@@ -1,9 +1,9 @@
-# Makefile for Zkore Desktop
+# Makefile for zSTASH Desktop
 # Tauri v2 + Rust workspace
 
 .DEFAULT_GOAL := help
 
-TAURI_DIR := apps/zkore-app-tauri
+TAURI_DIR := apps/zstash-app-tauri
 
 .PHONY: help install build build-release build-frontend build-tui \
         test test-engine test-core test-network test-keystone test-tor test-migrations \
@@ -25,10 +25,10 @@ install: ## Install frontend dependencies
 # ============================================================================
 
 build: ## Build Rust library crates
-	@cargo build --workspace --exclude zkore-app-tauri
+	@cargo build --workspace --exclude zstash-app-tauri
 
 build-release: ## Production release build (libs)
-	@cargo build --release --locked --workspace --exclude zkore-app-tauri
+	@cargo build --release --locked --workspace --exclude zstash-app-tauri
 
 build-frontend: ## Build frontend dist (for Tauri)
 	@cd $(TAURI_DIR) && bun run build
@@ -38,25 +38,25 @@ build-frontend: ## Build frontend dist (for Tauri)
 # ============================================================================
 
 test: ## Run all Rust library tests
-	@cargo test --workspace --exclude zkore-app-tauri
+	@cargo test --workspace --exclude zstash-app-tauri
 
-test-engine: ## Test zkore-engine crate
-	@cargo test -p zkore-engine
+test-engine: ## Test zstash-engine crate
+	@cargo test -p zstash-engine
 
-test-core: ## Test zkore-core crate
-	@cargo test -p zkore-core
+test-core: ## Test zstash-core crate
+	@cargo test -p zstash-core
 
-test-network: ## Test zkore-network crate
-	@cargo test -p zkore-network
+test-network: ## Test zstash-network crate
+	@cargo test -p zstash-network
 
-test-keystone: ## Test zkore-keystone crate
-	@cargo test -p zkore-keystone
+test-keystone: ## Test zstash-keystone crate
+	@cargo test -p zstash-keystone
 
-test-tor: ## Test zkore-tor crate
-	@cargo test -p zkore-tor
+test-tor: ## Test zstash-tor crate
+	@cargo test -p zstash-tor
 
 test-migrations: ## Run migration tests
-	@cargo test -p zkore-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+	@cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
 # ============================================================================
 # Lint/Format (Rust)
@@ -69,10 +69,10 @@ fmt-check: ## Check Rust formatting (CI)
 	@cargo fmt --all -- --check
 
 clippy: ## Run clippy lints
-	@cargo clippy --workspace --all-targets --exclude zkore-app-tauri
+	@cargo clippy --workspace --all-targets --exclude zstash-app-tauri
 
 clippy-strict: ## Clippy with warnings as errors
-	@cargo clippy --workspace --all-targets --exclude zkore-app-tauri -- -D warnings
+	@cargo clippy --workspace --all-targets --exclude zstash-app-tauri -- -D warnings
 
 lint: fmt-check clippy ## Run all lints
 
@@ -104,27 +104,27 @@ tauri-build: ## Tauri production build
 # TUI
 # ============================================================================
 
-build-tui: ## Build zkore-tui binary
-	@cargo build -p zkore-tui
+build-tui: ## Build zstash-tui binary
+	@cargo build -p zstash-tui
 
-tui: ## Run zkore-tui
-	@cargo run -p zkore-tui
+tui: ## Run zstash-tui
+	@cargo run -p zstash-tui
 
-tui-release: ## Run zkore-tui (release build)
-	@cargo run --release -p zkore-tui
+tui-release: ## Run zstash-tui (release build)
+	@cargo run --release -p zstash-tui
 
 # ============================================================================
 # CLI
 # ============================================================================
 
-CLI_RELEASE := ./target/release/zkore
-CLI_DEBUG := ./target/debug/zkore
+CLI_RELEASE := ./target/release/zstash
+CLI_DEBUG := ./target/debug/zstash
 
-cli: ## Build zkore-cli binary (release)
-	@cargo build --release -p zkore-cli
+cli: ## Build zstash-cli binary (release)
+	@cargo build --release -p zstash-cli
 
-cli-dev: ## Build zkore-cli binary (debug)
-	@cargo build -p zkore-cli
+cli-dev: ## Build zstash-cli binary (debug)
+	@cargo build -p zstash-cli
 
 cli-run: cli ## Run CLI with ARGS (e.g., make cli-run ARGS="wallet list")
 	@$(CLI_RELEASE) $(ARGS)
@@ -164,6 +164,6 @@ clean-all: clean clean-frontend ## Clean everything
 # ============================================================================
 
 help: ## Show available make targets
-	@echo "Zkore Desktop - Makefile targets"
+	@echo "zSTASH Desktop - Makefile targets"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'

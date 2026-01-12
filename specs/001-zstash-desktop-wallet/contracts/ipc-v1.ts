@@ -1,8 +1,8 @@
 /**
- * Zkore Desktop Wallet - IPC Contract v1
+ * zSTASH Desktop Wallet - IPC Contract v1
  *
  * TypeScript type definitions for Tauri IPC commands and events.
- * These types MUST match the Rust definitions in zkore-core/src/ipc/v1/
+ * These types MUST match the Rust definitions in zstash-core/src/ipc/v1/
  *
  * @version 1
  */
@@ -923,62 +923,62 @@ export const ErrorCodes = {
 
 export const Commands = {
   // Wallet
-  CREATE_WALLET: 'zkore_create_wallet',
-  LOAD_WALLET: 'zkore_load_wallet',
-  LIST_WALLETS: 'zkore_list_wallets',
-  GET_WALLET_STATUS: 'zkore_get_wallet_status',
-  UNLOCK_WALLET: 'zkore_unlock_wallet',
-  LOCK_WALLET: 'zkore_lock_wallet',
-  REAUTH_WALLET: 'zkore_reauth_wallet',
-  VIEW_SEED_PHRASE: 'zkore_view_seed_phrase',
+  CREATE_WALLET: 'zstash_create_wallet',
+  LOAD_WALLET: 'zstash_load_wallet',
+  LIST_WALLETS: 'zstash_list_wallets',
+  GET_WALLET_STATUS: 'zstash_get_wallet_status',
+  UNLOCK_WALLET: 'zstash_unlock_wallet',
+  LOCK_WALLET: 'zstash_lock_wallet',
+  REAUTH_WALLET: 'zstash_reauth_wallet',
+  VIEW_SEED_PHRASE: 'zstash_view_seed_phrase',
 
   // Address
-  GET_RECEIVE_ADDRESS: 'zkore_get_receive_address',
+  GET_RECEIVE_ADDRESS: 'zstash_get_receive_address',
 
   // Sync
-  START_SYNC: 'zkore_start_sync',
-  STOP_SYNC: 'zkore_stop_sync',
-  GET_SYNC_PROGRESS: 'zkore_get_sync_progress',
+  START_SYNC: 'zstash_start_sync',
+  STOP_SYNC: 'zstash_stop_sync',
+  GET_SYNC_PROGRESS: 'zstash_get_sync_progress',
 
   // Balance
-  GET_BALANCE: 'zkore_get_balance',
+  GET_BALANCE: 'zstash_get_balance',
 
   // Transactions
-  LIST_TRANSACTIONS: 'zkore_list_transactions',
-  PREPARE_SEND: 'zkore_prepare_send',
-  CONFIRM_SEND: 'zkore_confirm_send',
-  CANCEL_SEND: 'zkore_cancel_send',
-  RETRY_BROADCAST: 'zkore_retry_broadcast',
-  SHIELD_FUNDS: 'zkore_shield_funds',
+  LIST_TRANSACTIONS: 'zstash_list_transactions',
+  PREPARE_SEND: 'zstash_prepare_send',
+  CONFIRM_SEND: 'zstash_confirm_send',
+  CANCEL_SEND: 'zstash_cancel_send',
+  RETRY_BROADCAST: 'zstash_retry_broadcast',
+  SHIELD_FUNDS: 'zstash_shield_funds',
 
   // Backup
-  GET_BACKUP_CHALLENGE: 'zkore_get_backup_challenge',
-  VERIFY_BACKUP: 'zkore_verify_backup',
-  RESTORE_WALLET: 'zkore_restore_wallet',
+  GET_BACKUP_CHALLENGE: 'zstash_get_backup_challenge',
+  VERIFY_BACKUP: 'zstash_verify_backup',
+  RESTORE_WALLET: 'zstash_restore_wallet',
 
   // Keystone
-  IMPORT_UFVK: 'zkore_import_ufvk',
-  BUILD_SIGNING_REQUEST: 'zkore_build_signing_request',
-  FINALIZE_SIGNING: 'zkore_finalize_signing',
+  IMPORT_UFVK: 'zstash_import_ufvk',
+  BUILD_SIGNING_REQUEST: 'zstash_build_signing_request',
+  FINALIZE_SIGNING: 'zstash_finalize_signing',
 
   // Swaps
-  REQUEST_SWAP_QUOTE: 'zkore_request_swap_quote',
-  START_SWAP: 'zkore_start_swap',
-  GET_SWAP_STATUS: 'zkore_get_swap_status',
-  LIST_SWAPS: 'zkore_list_swaps',
+  REQUEST_SWAP_QUOTE: 'zstash_request_swap_quote',
+  START_SWAP: 'zstash_start_swap',
+  GET_SWAP_STATUS: 'zstash_get_swap_status',
+  LIST_SWAPS: 'zstash_list_swaps',
 
   // Tor
-  SET_TOR_ENABLED: 'zkore_set_tor_enabled',
-  GET_TOR_STATE: 'zkore_get_tor_state',
+  SET_TOR_ENABLED: 'zstash_set_tor_enabled',
+  GET_TOR_STATE: 'zstash_get_tor_state',
 
   // Servers
-  ADD_SERVER: 'zkore_add_server',
-  SET_DEFAULT_SERVER: 'zkore_set_default_server',
-  TEST_SERVER: 'zkore_test_server',
-  LIST_SERVERS: 'zkore_list_servers',
+  ADD_SERVER: 'zstash_add_server',
+  SET_DEFAULT_SERVER: 'zstash_set_default_server',
+  TEST_SERVER: 'zstash_test_server',
+  LIST_SERVERS: 'zstash_list_servers',
 
   // Logs
-  GET_LOG_LOCATION: 'zkore_get_log_location',
+  GET_LOG_LOCATION: 'zstash_get_log_location',
 } as const;
 
 // ============================================================================
@@ -986,10 +986,10 @@ export const Commands = {
 // ============================================================================
 
 export const EventChannels = {
-  SYNC: 'zkore://sync',
-  BALANCE: 'zkore://balance',
-  TRANSACTION: 'zkore://tx',
-  SWAP: 'zkore://swap',
-  TOR: 'zkore://tor',
-  WALLET_STATUS: 'zkore://wallet-status',
+  SYNC: 'zstash://sync',
+  BALANCE: 'zstash://balance',
+  TRANSACTION: 'zstash://tx',
+  SWAP: 'zstash://swap',
+  TOR: 'zstash://tor',
+  WALLET_STATUS: 'zstash://wallet-status',
 } as const;

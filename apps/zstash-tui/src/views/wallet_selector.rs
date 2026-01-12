@@ -21,7 +21,7 @@ pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
     let header = Paragraph::new("Select a wallet to inspect")
         .block(
             Block::default()
-                .title(" zkore-tui ")
+                .title(" zstash-tui ")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         )

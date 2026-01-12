@@ -3,7 +3,7 @@
 use console::style;
 use serde::Serialize;
 
-use zkore_core::domain::{Balance, Network, SyncProgress, WalletInfo};
+use zstash_core::domain::{Balance, Network, SyncProgress, WalletInfo};
 
 /// Output mode for CLI.
 #[derive(Clone)]
@@ -54,7 +54,7 @@ impl OutputMode {
                 println!();
                 println!(
                     "Create one with: {} wallet create --name <NAME>",
-                    style("zkore").cyan()
+                    style("zstash").cyan()
                 );
                 return;
             }
@@ -128,7 +128,7 @@ impl OutputMode {
             println!();
             println!(
                 "Next step: {} sync {}",
-                style("zkore").cyan(),
+                style("zstash").cyan(),
                 short_uuid(&wallet.id)
             );
         }
@@ -153,7 +153,7 @@ impl OutputMode {
             println!();
             println!(
                 "Next step: {} sync {}",
-                style("zkore").cyan(),
+                style("zstash").cyan(),
                 short_uuid(&wallet.id)
             );
         }

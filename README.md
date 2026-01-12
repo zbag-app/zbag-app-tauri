@@ -1,10 +1,10 @@
-# Zkore Desktop
+# zSTASH Desktop
 
 A desktop-first privacy-by-design Zcash wallet with hardware wallet support and integrated DEX functionality.
 
 ## Overview
 
-Zkore Desktop provides a privacy-focused Zcash experience built on strong security principles:
+zSTASH Desktop provides a privacy-focused Zcash experience built on strong security principles:
 
 - **Shielded spending** - Transparent funds must be shielded before use; sending to transparent recipients is allowed only with explicit acknowledgement
 - **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and are never persisted or logged by the UI
@@ -22,16 +22,16 @@ Zkore Desktop provides a privacy-focused Zcash experience built on strong securi
 
 ```
 crates/
-  zkore-core/       # Domain types and IPC contracts
-  zkore-engine/     # Wallet operations (librustzcash wrapper)
-  zkore-network/    # gRPC/HTTP clients, Tor transport
-  zkore-keystone/   # Hardware wallet integration
-  zkore-tor/        # Embedded Arti Tor client
+  zstash-core/       # Domain types and IPC contracts
+  zstash-engine/     # Wallet operations (librustzcash wrapper)
+  zstash-network/    # gRPC/HTTP clients, Tor transport
+  zstash-keystone/   # Hardware wallet integration
+  zstash-tor/        # Embedded Arti Tor client
 
 apps/
-  zkore-app-tauri/  # Tauri shell + React frontend
-  zkore-cli/        # Command-line interface
-  zkore-tui/        # Terminal UI
+  zstash-app-tauri/  # Tauri shell + React frontend
+  zstash-cli/        # Command-line interface
+  zstash-tui/        # Terminal UI
 ```
 
 ## Key Features
@@ -56,11 +56,11 @@ Platform targets: macOS, Windows, Linux
 | Document | Description |
 |----------|-------------|
 | [Constitution](.specify/memory/constitution.md) | Non-negotiable principles governing development |
-| [Feature Specification](specs/001-zkore-desktop-wallet/spec.md) | User stories and requirements |
-| [Implementation Plan](specs/001-zkore-desktop-wallet/plan.md) | Architecture and project structure |
-| [Data Model](specs/001-zkore-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
-| [Research](specs/001-zkore-desktop-wallet/research.md) | Technology decisions and rationale |
-| [Quickstart](specs/001-zkore-desktop-wallet/quickstart.md) | Developer setup guide |
+| [Feature Specification](specs/001-zstash-desktop-wallet/spec.md) | User stories and requirements |
+| [Implementation Plan](specs/001-zstash-desktop-wallet/plan.md) | Architecture and project structure |
+| [Data Model](specs/001-zstash-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
+| [Research](specs/001-zstash-desktop-wallet/research.md) | Technology decisions and rationale |
+| [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) | Developer setup guide |
 
 ## Core Dependencies
 
@@ -86,11 +86,11 @@ A Makefile is provided for common development tasks:
 
 Run `make help` for all available targets.
 
-See [Quickstart](specs/001-zkore-desktop-wallet/quickstart.md) for full setup instructions.
+See [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) for full setup instructions.
 
 ## Requirements
 
-- Platform-specific dependencies (see [Quickstart](specs/001-zkore-desktop-wallet/quickstart.md))
+- Platform-specific dependencies (see [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md))
 
 ## License
 

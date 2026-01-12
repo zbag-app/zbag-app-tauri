@@ -6,11 +6,11 @@ use uuid::Uuid;
 use zip32::AccountId;
 
 use zcash_protocol::consensus::Network as ConsensusNetwork;
-use zkore_core::domain::{AccountType, AddressType, Network};
-use zkore_core::errors;
-use zkore_engine::error::find_engine_ipc_error;
-use zkore_engine::key_store::KeyStore;
-use zkore_engine::wallet_manager::WalletManager;
+use zstash_core::domain::{AccountType, AddressType, Network};
+use zstash_core::errors;
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::key_store::KeyStore;
+use zstash_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -96,7 +96,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zkore_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }

@@ -4,14 +4,14 @@ use std::time::Instant;
 use tauri::State;
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, ServerInfo};
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::server::{
+use zstash_core::domain::{Network, ServerInfo};
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::server::{
     AddServerRequest, AddServerResponse, ListServersRequest, ListServersResponse,
     SetDefaultServerRequest, SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zkore_engine::error::ipc_err;
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_engine::error::ipc_err;
 
 use crate::state::AppState;
 
@@ -30,8 +30,8 @@ fn parse_network(chain_name: &str) -> anyhow::Result<Network> {
     }
 }
 
-#[tauri::command(rename = "zkore_add_server")]
-pub fn zkore_add_server(
+#[tauri::command(rename = "zstash_add_server")]
+pub fn zstash_add_server(
     state: State<'_, AppState>,
     request: AddServerRequest,
 ) -> IpcResult<AddServerResponse> {
@@ -49,7 +49,7 @@ pub fn zkore_add_server(
             return Err(ipc_err(errors::INVALID_REQUEST, "grpc_url required"));
         }
 
-        let client = zkore_network::grpc_client::GrpcClient::new_with_tor(
+        let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
             grpc_url.to_string(),
             Arc::clone(&state.tor_manager),
         );
@@ -77,7 +77,7 @@ pub fn zkore_add_server(
         };
 
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        zkore_engine::db::server_meta::insert_server(mgr.app_db().conn(), &server, now_ms)
+        zstash_engine::db::server_meta::insert_server(mgr.app_db().conn(), &server, now_ms)
             .map_err(|e| anyhow::anyhow!(e))?;
 
         Ok(AddServerResponse {
@@ -87,8 +87,8 @@ pub fn zkore_add_server(
     })
 }
 
-#[tauri::command(rename = "zkore_set_default_server")]
-pub fn zkore_set_default_server(
+#[tauri::command(rename = "zstash_set_default_server")]
+pub fn zstash_set_default_server(
     state: State<'_, AppState>,
     request: SetDefaultServerRequest,
 ) -> IpcResult<SetDefaultServerResponse> {
@@ -99,12 +99,12 @@ pub fn zkore_set_default_server(
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let server =
-            zkore_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
+            zstash_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
                 .map_err(|e| anyhow::anyhow!(e))?
                 .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?;
         mgr.ensure_server_network_matches_active_wallet(server.network)?;
 
-        zkore_engine::db::server_meta::set_default_server(
+        zstash_engine::db::server_meta::set_default_server(
             mgr.app_db_mut().conn_mut(),
             request.server_id,
         )
@@ -117,8 +117,8 @@ pub fn zkore_set_default_server(
     })
 }
 
-#[tauri::command(rename = "zkore_list_servers")]
-pub fn zkore_list_servers(
+#[tauri::command(rename = "zstash_list_servers")]
+pub fn zstash_list_servers(
     state: State<'_, AppState>,
     request: ListServersRequest,
 ) -> IpcResult<ListServersResponse> {
@@ -128,7 +128,7 @@ pub fn zkore_list_servers(
 
     map_anyhow(|| {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let servers = zkore_engine::db::server_meta::list_servers(mgr.app_db().conn())
+        let servers = zstash_engine::db::server_meta::list_servers(mgr.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?;
 
         Ok(ListServersResponse {
@@ -138,8 +138,8 @@ pub fn zkore_list_servers(
     })
 }
 
-#[tauri::command(rename = "zkore_test_server")]
-pub fn zkore_test_server(
+#[tauri::command(rename = "zstash_test_server")]
+pub fn zstash_test_server(
     state: State<'_, AppState>,
     request: TestServerRequest,
 ) -> IpcResult<TestServerResponse> {
@@ -150,12 +150,12 @@ pub fn zkore_test_server(
     map_anyhow(|| {
         let server = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            zkore_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
+            zstash_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
                 .map_err(|e| anyhow::anyhow!(e))?
                 .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?
         };
 
-        let client = zkore_network::grpc_client::GrpcClient::new_with_tor(
+        let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
             server.grpc_url.clone(),
             Arc::clone(&state.tor_manager),
         );
@@ -178,7 +178,7 @@ pub fn zkore_test_server(
 
                 let now_ms = system_time_to_unix_ms(std::time::SystemTime::now())?;
                 let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-                let _ = zkore_engine::db::server_meta::update_last_success_at(
+                let _ = zstash_engine::db::server_meta::update_last_success_at(
                     mgr.app_db().conn(),
                     server.id,
                     now_ms,

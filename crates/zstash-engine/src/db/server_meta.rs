@@ -1,7 +1,7 @@
 use rusqlite::{Connection, params};
 use uuid::Uuid;
 
-use zkore_core::domain::{Network, ServerInfo};
+use zstash_core::domain::{Network, ServerInfo};
 
 pub fn insert_server(
     conn: &Connection,

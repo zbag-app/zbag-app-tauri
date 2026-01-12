@@ -3,14 +3,14 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zkore_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
-use zkore_core::errors;
-use zkore_core::ipc::v1::commands::sync::{
+use zstash_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
+use zstash_core::errors;
+use zstash_core::ipc::v1::commands::sync::{
     GetSyncProgressRequest, GetSyncProgressResponse, StartSyncRequest, StartSyncResponse,
     StopSyncRequest, StopSyncResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zkore_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 
 use crate::events;
 use crate::state::AppState;
@@ -20,14 +20,14 @@ use super::util::map_anyhow;
 pub(crate) fn start_sync_with_handlers(
     app: &tauri::AppHandle,
     state: &AppState,
-    mgr: &mut zkore_engine::wallet_manager::WalletManager,
-    wallet: &zkore_core::domain::WalletInfo,
+    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    wallet: &zstash_core::domain::WalletInfo,
 ) -> anyhow::Result<bool> {
-    let wallet_db_path = zkore_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+    let wallet_db_path = zstash_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
         .map_err(|e| anyhow::anyhow!(e))?
         .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
         .ok_or_else(|| {
-            zkore_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
+            zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
         })?;
 
     let wallet_dek = mgr.unlocked_wallet_dek(wallet.id)?;
@@ -88,7 +88,7 @@ pub(crate) fn start_sync_with_handlers(
             Ok(true)
         }
         Err(err)
-            if zkore_engine::error::find_engine_ipc_error(&err)
+            if zstash_engine::error::find_engine_ipc_error(&err)
                 .is_some_and(|e| e.code == errors::SYNC_IN_PROGRESS) =>
         {
             Ok(false)
@@ -97,8 +97,8 @@ pub(crate) fn start_sync_with_handlers(
     }
 }
 
-#[tauri::command(rename = "zkore_start_sync")]
-pub fn zkore_start_sync(
+#[tauri::command(rename = "zstash_start_sync")]
+pub fn zstash_start_sync(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: StartSyncRequest,
@@ -111,7 +111,7 @@ pub fn zkore_start_sync(
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let (wallet, lock_status) = mgr.load_wallet(request.wallet_id)?;
         if lock_status != WalletLockStatus::Unlocked {
-            return Err(zkore_engine::error::ipc_err(
+            return Err(zstash_engine::error::ipc_err(
                 errors::WALLET_LOCKED,
                 "wallet locked",
             ));
@@ -126,8 +126,8 @@ pub fn zkore_start_sync(
     })
 }
 
-#[tauri::command(rename = "zkore_stop_sync")]
-pub fn zkore_stop_sync(
+#[tauri::command(rename = "zstash_stop_sync")]
+pub fn zstash_stop_sync(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: StopSyncRequest,
@@ -162,8 +162,8 @@ pub fn zkore_stop_sync(
     })
 }
 
-#[tauri::command(rename = "zkore_get_sync_progress")]
-pub fn zkore_get_sync_progress(
+#[tauri::command(rename = "zstash_get_sync_progress")]
+pub fn zstash_get_sync_progress(
     state: State<'_, AppState>,
     request: GetSyncProgressRequest,
 ) -> IpcResult<GetSyncProgressResponse> {

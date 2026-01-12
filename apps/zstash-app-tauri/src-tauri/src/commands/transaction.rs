@@ -2,20 +2,20 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zkore_core::ipc::v1::commands::transaction::{
+use zstash_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zkore_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zkore_prepare_send")]
-pub fn zkore_prepare_send(
+#[tauri::command(rename = "zstash_prepare_send")]
+pub fn zstash_prepare_send(
     state: State<'_, AppState>,
     request: PrepareSendRequest,
 ) -> IpcResult<PrepareSendResponse> {
@@ -35,8 +35,8 @@ pub fn zkore_prepare_send(
     })
 }
 
-#[tauri::command(rename = "zkore_confirm_send")]
-pub fn zkore_confirm_send(
+#[tauri::command(rename = "zstash_confirm_send")]
+pub fn zstash_confirm_send(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ConfirmSendRequest,
@@ -55,8 +55,8 @@ pub fn zkore_confirm_send(
     })
 }
 
-#[tauri::command(rename = "zkore_cancel_send")]
-pub fn zkore_cancel_send(
+#[tauri::command(rename = "zstash_cancel_send")]
+pub fn zstash_cancel_send(
     state: State<'_, AppState>,
     request: CancelSendRequest,
 ) -> IpcResult<CancelSendResponse> {
@@ -73,8 +73,8 @@ pub fn zkore_cancel_send(
     })
 }
 
-#[tauri::command(rename = "zkore_retry_broadcast")]
-pub fn zkore_retry_broadcast(
+#[tauri::command(rename = "zstash_retry_broadcast")]
+pub fn zstash_retry_broadcast(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: RetryBroadcastRequest,
@@ -97,8 +97,8 @@ pub fn zkore_retry_broadcast(
     })
 }
 
-#[tauri::command(rename = "zkore_list_transactions")]
-pub fn zkore_list_transactions(
+#[tauri::command(rename = "zstash_list_transactions")]
+pub fn zstash_list_transactions(
     state: State<'_, AppState>,
     request: ListTransactionsRequest,
 ) -> IpcResult<ListTransactionsResponse> {
@@ -112,8 +112,8 @@ pub fn zkore_list_transactions(
     })
 }
 
-#[tauri::command(rename = "zkore_shield_funds")]
-pub fn zkore_shield_funds(
+#[tauri::command(rename = "zstash_shield_funds")]
+pub fn zstash_shield_funds(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ShieldFundsRequest,
