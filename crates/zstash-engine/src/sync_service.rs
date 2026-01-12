@@ -13,7 +13,9 @@ use zeroize::Zeroize;
 use std::io::Write as _;
 
 use prost::Message as _;
-use zcash_client_backend::data_api::chain::{ChainState, scan_cached_blocks};
+use zcash_client_backend::data_api::chain::{
+    ChainState, error::Error as ChainError, scan_cached_blocks,
+};
 use zcash_client_backend::data_api::scanning::ScanPriority;
 use zcash_client_backend::data_api::wallet::ConfirmationsPolicy;
 use zcash_client_backend::data_api::{WalletRead as _, WalletWrite as _};
@@ -737,6 +739,54 @@ impl SyncService {
                                                     received_orchard = scan_result.received_orchard_note_count(),
                                                     "scanned blocks"
                                                 );
+                                            }
+                                            Err(ChainError::Scan(scan_err))
+                                                if scan_err.is_continuity_error() =>
+                                            {
+                                                // Chain reorg detected. Rewind the wallet to recover.
+                                                let rewind_height =
+                                                    scan_err.at_height().saturating_sub(10);
+                                                tracing::warn!(
+                                                    wallet_id = %wallet_id,
+                                                    error_height = %u32::from(scan_err.at_height()),
+                                                    rewind_height = %u32::from(rewind_height),
+                                                    "chain reorg detected, rewinding wallet"
+                                                );
+
+                                                // Truncate the wallet database to the rewind height.
+                                                if let Err(truncate_err) =
+                                                    wdb.truncate_to_height(rewind_height)
+                                                {
+                                                    tracing::error!(
+                                                        wallet_id = %wallet_id,
+                                                        error = ?truncate_err,
+                                                        "failed to truncate wallet for reorg recovery"
+                                                    );
+                                                    range_error = true;
+                                                    break;
+                                                }
+
+                                                // Clear the block cache from rewind height onwards.
+                                                if let Err(cache_err) =
+                                                    fsblock_db.truncate_to_height(rewind_height)
+                                                {
+                                                    tracing::debug!(
+                                                        wallet_id = %wallet_id,
+                                                        error = ?cache_err,
+                                                        "failed to truncate block cache after reorg"
+                                                    );
+                                                }
+
+                                                // Delete cached block files that are now invalid.
+                                                delete_cached_block_files(
+                                                    &blocks_dir,
+                                                    rewind_height + 1,
+                                                    batch.range_end,
+                                                );
+
+                                                // Break to re-fetch scan ranges with the rewound state.
+                                                // Don't set range_error - this is a recoverable situation.
+                                                break;
                                             }
                                             Err(err) => {
                                                 tracing::error!(
