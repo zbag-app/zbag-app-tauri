@@ -5,11 +5,11 @@
 
 TAURI_DIR := apps/zstash-app-tauri
 
-.PHONY: help install build build-release build-frontend build-tui \
+.PHONY: help install build build-release build-frontend \
         test test-engine test-core test-network test-keystone test-tor test-migrations \
         fmt fmt-check clippy clippy-strict lint \
         pre-commit check audit check-telemetry \
-        dev tauri-build tui tui-release \
+        dev tauri-build \
         cli cli-dev cli-run cli-wallet-list cli-wallet-create cli-sync cli-balance cli-address \
         clean clean-frontend clean-all
 
@@ -99,19 +99,6 @@ dev: ## Full Tauri development
 
 tauri-build: ## Tauri production build
 	@cd $(TAURI_DIR) && bun run tauri build
-
-# ============================================================================
-# TUI
-# ============================================================================
-
-build-tui: ## Build zstash-tui binary
-	@cargo build -p zstash-tui
-
-tui: ## Run zstash-tui
-	@cargo run -p zstash-tui
-
-tui-release: ## Run zstash-tui (release build)
-	@cargo run --release -p zstash-tui
 
 # ============================================================================
 # CLI

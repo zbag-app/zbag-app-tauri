@@ -31,7 +31,6 @@ crates/
 apps/
   zstash-app-tauri/  # Tauri shell + React frontend
   zstash-cli/        # Command-line interface
-  zstash-tui/        # Terminal UI
 ```
 
 ## Key Features
@@ -47,7 +46,7 @@ apps/
 
 ## Status
 
-**Phase**: Active development (Tauri desktop app, CLI, and TUI implementations)
+**Phase**: Active development (Tauri desktop app and CLI implementations)
 
 Platform targets: macOS, Windows, Linux
 

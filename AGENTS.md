@@ -5,7 +5,6 @@
 - `crates/`: Rust workspace libraries (`zstash-core`, `zstash-engine`, `zstash-network`, `zstash-keystone`, `zstash-tor`).
 - `apps/zstash-app-tauri/`: Tauri desktop shell + React/TypeScript UI (`src/` for UI, `src-tauri/` for the app backend).
 - `apps/zstash-cli/`: Command-line interface.
-- `apps/zstash-tui/`: Terminal UI.
 - `specs/`: Source-of-truth wallet specifications (start at `specs/001-zstash-desktop-wallet/`).
 - `.specify/memory/constitution.md`: Non-negotiable security and product principles.
 - `tests/`: Spec-kit scaffolds for future integration/e2e coverage.

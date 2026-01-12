@@ -7,7 +7,6 @@ members = [
   "crates/zstash-keystone",
   "crates/zstash-tor",
   "apps/zstash-app-tauri/src-tauri",
-  "apps/zstash-tui",
   "apps/zstash-cli",
 ]
 

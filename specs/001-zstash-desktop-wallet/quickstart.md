@@ -55,8 +55,7 @@ make install    # Install frontend dependencies
 # Development (Tauri desktop app)
 make dev
 
-# Or run specific apps
-make tui                        # Terminal UI
+# Or run CLI
 make cli-run ARGS="wallet list" # CLI
 ```
 
@@ -82,7 +81,6 @@ The project includes a Makefile with shortcuts for common tasks. Run `make help`
 | `build` | Build Rust library crates |
 | `build-release` | Production build (libs) |
 | `build-frontend` | Build frontend dist |
-| `build-tui` | Build TUI binary |
 
 ### Test
 | Target | Description |
@@ -99,8 +97,6 @@ The project includes a Makefile with shortcuts for common tasks. Run `make help`
 | Target | Description |
 |--------|-------------|
 | `dev` | Full Tauri development mode |
-| `tui` | Run terminal UI |
-| `tui-release` | Run TUI (release build) |
 | `cli` | Build CLI (release) |
 | `cli-run ARGS="..."` | Run CLI with arguments |
 
@@ -138,8 +134,7 @@ The project includes a Makefile with shortcuts for common tasks. Run `make help`
 │   ├── zstash-app-tauri/          # Tauri desktop app
 │   │   ├── src-tauri/            # Rust backend (commands, state)
 │   │   └── src/                  # React frontend (pages, components, services)
-│   ├── zstash-cli/                # Command-line interface
-│   └── zstash-tui/                # Terminal UI
+│   └── zstash-cli/                # Command-line interface
 ├── tests/
 │   ├── integration/              # Integration tests
 │   └── e2e/                      # End-to-end tests
