@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, RotateCcw, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -10,19 +10,37 @@ import { loadWallet, restoreWallet, startSync } from '../services/ipc';
 import type { RestoreFlowData } from './RestoreWallet';
 
 export function RestoreBirthday(props: {
-  flow: RestoreFlowData | null;
-  onClearFlow: () => void;
   onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
 }) {
-  const { flow, onClearFlow, onRestored } = props;
+  const { onRestored } = props;
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Read flow data from navigation state (cleared when navigating away)
+  const [flow, setFlow] = useState<RestoreFlowData | null>(
+    (location.state as RestoreFlowData | null) ?? null
+  );
+
+  // Clear navigation state after reading to prevent re-renders from restoring it
+  useEffect(() => {
+    if (location.state) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  // Clear flow data on unmount to minimize memory lifetime
+  useEffect(() => {
+    return () => {
+      setFlow(null);
+    };
+  }, []);
 
   const [birthdayDate, setBirthdayDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const goBack = () => {
-    onClearFlow();
+    setFlow(null);
     setBirthdayDate('');
     navigate('/restore');
   };
@@ -48,10 +66,6 @@ export function RestoreBirthday(props: {
         return;
       }
 
-      // Clear flow data immediately after seed is persisted.
-      // If loadWallet fails, the seed phrase no longer needs to remain in state.
-      onClearFlow();
-
       const walletId = restored.ok.wallet.id;
 
       const load = await loadWallet({ wallet_id: walletId });
@@ -60,6 +74,7 @@ export function RestoreBirthday(props: {
         return;
       }
 
+      setFlow(null);
       onRestored({ wallet: load.ok.wallet, accounts: load.ok.accounts });
 
       await startSync({ wallet_id: walletId });

@@ -23,8 +23,7 @@ function countWords(value: string): number {
     .filter(Boolean).length;
 }
 
-export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => void }) {
-  const { onContinue } = props;
+export function RestoreWallet() {
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
@@ -55,19 +54,21 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
       return;
     }
 
-    onContinue({
+    const flowData: RestoreFlowData = {
       name: name.trim(),
       network,
       password,
       remember_unlock: false,
       seed_phrase: seedPhrase.trim(),
-    });
+    };
 
+    // Clear sensitive inputs before navigating
     setSeedPhrase('');
     setPassword('');
     setPasswordConfirm('');
 
-    navigate('/restore/birthday');
+    // Pass flow data via navigation state (automatically cleared on navigation change)
+    navigate('/restore/birthday', { state: flowData });
   };
 
   return (

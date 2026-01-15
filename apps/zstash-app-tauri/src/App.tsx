@@ -23,13 +23,12 @@ import { CreateWallet } from './pages/CreateWallet';
 import { OnboardingBackup } from './pages/OnboardingBackup';
 import { Home } from './pages/Home';
 import { Receive } from './pages/Receive';
-import { SeedDisplay } from './pages/SeedDisplay';
 import { Send } from './pages/Send';
 import { SendConfirm } from './pages/SendConfirm';
 import { Settings } from './pages/Settings';
 import { Activity } from './pages/Activity';
 import { RestoreBirthday } from './pages/RestoreBirthday';
-import { RestoreWallet, type RestoreFlowData } from './pages/RestoreWallet';
+import { RestoreWallet } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
 import { KeystoneSetup } from './pages/KeystoneSetup';
 import { Signing } from './pages/Signing';
@@ -56,7 +55,6 @@ function AppInner() {
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
   const [accounts, setAccounts] = useState<IPC.AccountInfo[]>([]);
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
-  const [restoreFlow, setRestoreFlow] = useState<RestoreFlowData | null>(null);
   const [torState, setTorState] = useState<IPC.TorState | null>(null);
   const [torToggleError, setTorToggleError] = useState<IPC.IpcError | null>(null);
   const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
@@ -219,22 +217,11 @@ function AppInner() {
             />
           }
         />
-        <Route
-          path="/restore"
-          element={
-            <RestoreWallet
-              onContinue={(data) => {
-                setRestoreFlow(data);
-              }}
-            />
-          }
-        />
+        <Route path="/restore" element={<RestoreWallet />} />
         <Route
           path="/restore/birthday"
           element={
             <RestoreBirthday
-              flow={restoreFlow}
-              onClearFlow={() => setRestoreFlow(null)}
               onRestored={(args) => {
                 setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
                 setAccounts(args.accounts);
@@ -291,7 +278,6 @@ function AppInner() {
       <WalletSelectionRoutes
         onLoaded={(resp) => {
           setSeedPhrase(null);
-          setRestoreFlow(null);
           if (resp.lock_status === 'Locked') {
             setStartup({ kind: 'locked', wallet: resp.wallet });
             setAccounts([]);
@@ -305,9 +291,6 @@ function AppInner() {
           setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
           setAccounts(args.accounts);
         }}
-        onRestoreFlow={setRestoreFlow}
-        restoreFlow={restoreFlow}
-        onClearRestoreFlow={() => setRestoreFlow(null)}
         onRestored={(args) => {
           setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
           setAccounts(args.accounts);
@@ -361,7 +344,6 @@ function AppInner() {
               activeWalletId={startup.wallet.id}
               onLoaded={(resp) => {
                 setSeedPhrase(null);
-                setRestoreFlow(null);
                 if (resp.lock_status === 'Locked') {
                   setStartup({ kind: 'locked', wallet: resp.wallet });
                   setAccounts([]);
@@ -385,22 +367,11 @@ function AppInner() {
             />
           }
         />
-        <Route
-          path="/restore"
-          element={
-            <RestoreWallet
-              onContinue={(data) => {
-                setRestoreFlow(data);
-              }}
-            />
-          }
-        />
+        <Route path="/restore" element={<RestoreWallet />} />
         <Route
           path="/restore/birthday"
           element={
             <RestoreBirthday
-              flow={restoreFlow}
-              onClearFlow={() => setRestoreFlow(null)}
               onRestored={(args) => {
                 setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
                 setAccounts(args.accounts);
@@ -451,17 +422,8 @@ function AppInner() {
           }
         />
         <Route
-          path="/seed"
-          element={
-            <SeedDisplay
-              seedPhrase={seedPhrase ?? []}
-              onCleared={() => setSeedPhrase(null)}
-            />
-          }
-        />
-        <Route
           path="/backup"
-          element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => {}} />}
+          element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => setSeedPhrase(null)} />}
         />
         <Route
           path="/backup/flow"
@@ -485,12 +447,9 @@ function AppInner() {
 function WalletSelectionRoutes(props: {
   onLoaded: (resp: IPC.LoadWalletResponse) => void;
   onCreated: (args: { seedPhrase: string[]; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
-  onRestoreFlow: (data: RestoreFlowData) => void;
-  restoreFlow: RestoreFlowData | null;
-  onClearRestoreFlow: () => void;
   onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
 }) {
-  const { onLoaded, onCreated, onRestoreFlow, restoreFlow, onClearRestoreFlow, onRestored } = props;
+  const { onLoaded, onCreated, onRestored } = props;
   const navigate = useNavigate();
 
   const pickerElement = (
@@ -509,19 +468,10 @@ function WalletSelectionRoutes(props: {
         path="/create"
         element={<CreateWallet onCreated={onCreated} />}
       />
-      <Route
-        path="/restore"
-        element={<RestoreWallet onContinue={onRestoreFlow} />}
-      />
+      <Route path="/restore" element={<RestoreWallet />} />
       <Route
         path="/restore/birthday"
-        element={
-          <RestoreBirthday
-            flow={restoreFlow}
-            onClearFlow={onClearRestoreFlow}
-            onRestored={onRestored}
-          />
-        }
+        element={<RestoreBirthday onRestored={onRestored} />}
       />
       <Route
         path="/keystone/setup"
