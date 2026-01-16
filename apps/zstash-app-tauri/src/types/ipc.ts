@@ -230,6 +230,22 @@ export interface SwapQuote {
   app_fee_bps: number | null;
 }
 
+/** Supported token for swaps from the 1Click API */
+export interface SupportedToken {
+  /** Asset ID (e.g., "nep141:wrap.near") */
+  asset_id: string;
+  /** Token symbol (e.g., "NEAR") */
+  symbol: string;
+  /** Chain identifier (e.g., "near", "eth", "sol") */
+  chain: string;
+  /** Token decimals */
+  decimals: number;
+  /** USD price (may be null/zero) */
+  usd_price: number | null;
+  /** Token icon URL (optional) */
+  icon: string | null;
+}
+
 // ============================================================================
 // Tor Types
 // ============================================================================
@@ -710,6 +726,9 @@ export interface GetSwapStatusRequest extends VersionedPayload {
  */
 export interface ListSwapsRequest extends VersionedPayload {}
 
+/** Get supported tokens for swaps from the 1Click API */
+export interface GetSupportedTokensRequest extends VersionedPayload {}
+
 /** Set Tor enabled */
 export interface SetTorEnabledRequest extends VersionedPayload {
   enabled: boolean;
@@ -1052,6 +1071,10 @@ export interface ListSwapsResponse extends VersionedPayload {
   swaps: SwapInfo[];
 }
 
+export interface GetSupportedTokensResponse extends VersionedPayload {
+  tokens: SupportedToken[];
+}
+
 // ============================================================================
 // Job Command Responses
 // ============================================================================
@@ -1275,6 +1298,7 @@ export const Commands = {
   START_SWAP: 'zstash_start_swap',
   GET_SWAP_STATUS: 'zstash_get_swap_status',
   LIST_SWAPS: 'zstash_list_swaps',
+  GET_SUPPORTED_TOKENS: 'zstash_get_supported_tokens',
 
   // Tor
   SET_TOR_ENABLED: 'zstash_set_tor_enabled',

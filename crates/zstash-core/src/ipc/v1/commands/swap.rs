@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::{SwapInfo, SwapQuote, SwapType};
+use crate::domain::{SupportedToken, SwapInfo, SwapQuote, SwapType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -13,6 +13,12 @@ pub struct RequestSwapQuoteRequest {
     pub output_asset: String,
     pub destination_address: Option<String>,
     pub refund_address: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GetSupportedTokensRequest {
+    pub schema_version: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,4 +66,10 @@ pub struct GetSwapStatusResponse {
 pub struct ListSwapsResponse {
     pub schema_version: u32,
     pub swaps: Vec<SwapInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GetSupportedTokensResponse {
+    pub schema_version: u32,
+    pub tokens: Vec<SupportedToken>,
 }

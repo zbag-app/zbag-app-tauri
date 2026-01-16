@@ -7,6 +7,7 @@ use zstash_engine::swap_service::SwapService;
 use zstash_engine::sync_service::SyncService;
 use zstash_engine::wallet_manager::WalletManager;
 use zstash_network::exchange_rate::ExchangeRateService;
+use zstash_network::near_intents::NearIntentsClient;
 
 pub struct AppState {
     pub wallet_manager: Arc<Mutex<WalletManager>>,
@@ -14,6 +15,7 @@ pub struct AppState {
     pub swap_service: SwapService,
     pub tor_manager: Arc<zstash_tor::TorManager>,
     pub exchange_rate_service: ExchangeRateService,
+    pub near_client: NearIntentsClient,
     pub logging_guard: Mutex<LoggingGuard>,
 }
 
@@ -38,11 +40,12 @@ impl AppState {
         wallet_manager.set_tor_manager(Arc::clone(&tor_manager));
 
         let wallet_manager = Arc::new(Mutex::new(wallet_manager));
-        let near = zstash_network::near_intents::NearIntentsClient::new_with_tor(Arc::clone(
-            &tor_manager,
-        ))?;
-        let swap_service =
-            SwapService::new_with_near_client(app_db_path, Arc::clone(&wallet_manager), near)?;
+        let near_client = NearIntentsClient::new_with_tor(Arc::clone(&tor_manager))?;
+        let swap_service = SwapService::new_with_near_client(
+            app_db_path,
+            Arc::clone(&wallet_manager),
+            near_client.clone(),
+        )?;
 
         let exchange_rate_service = ExchangeRateService::new_with_tor(Arc::clone(&tor_manager))?;
 
@@ -52,6 +55,7 @@ impl AppState {
             swap_service,
             tor_manager,
             exchange_rate_service,
+            near_client,
             logging_guard: Mutex::new(logging_guard),
         })
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
+import { ArrowLeftRight, ArrowLeft, Loader2 } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { ErrorCodes } from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -8,8 +8,16 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
-import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
+import {
+  ZEC_ASSET_ID,
+  DEFAULT_NON_ZEC_ASSET_ID,
+  FALLBACK_TOKENS,
+  filterSwapTokens,
+  sortTokensByPrice,
+  getTokenLabel,
+  type SupportedToken,
+} from '../data/supportedTokens';
+import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap, getSupportedTokens } from '../services/ipc';
 import { parseZecToZatoshis } from '../utils/zec';
 import { parseSwapError, PRIVACY_ACK_REQUIRED_MESSAGE } from '../utils/swap';
 import { formatAtomicAmountForToken } from '../utils/amounts';
@@ -23,6 +31,9 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   const [destinationAddress, setDestinationAddress] = useState('');
   const [refundAddress, setRefundAddress] = useState('');
   const [loadingRefundAddress, setLoadingRefundAddress] = useState(false);
+
+  const [tokens, setTokens] = useState<SupportedToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(true);
 
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
@@ -59,6 +70,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   const amountError = parsedAmount.error;
   const inputAmountZatoshis = parsedAmount.zatoshis;
 
+  // Filter and sort tokens for display
+  const availableTokens = useMemo(() => {
+    const filtered = filterSwapTokens(tokens);
+    return sortTokensByPrice(filtered);
+  }, [tokens]);
+
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
@@ -75,6 +92,37 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     destinationAddressTrimmed,
     refundAddressTrimmed,
   ]);
+
+  // Load supported tokens from API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTokens() {
+      setLoadingTokens(true);
+      const res = await getSupportedTokens();
+      if (cancelled) return;
+      setLoadingTokens(false);
+
+      if ('err' in res) {
+        // Fall back to static list on error
+        setTokens(FALLBACK_TOKENS);
+        return;
+      }
+
+      if (res.ok.tokens.length === 0) {
+        // Fall back if API returns empty
+        setTokens(FALLBACK_TOKENS);
+        return;
+      }
+
+      setTokens(res.ok.tokens);
+    }
+
+    loadTokens();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Auto-populate refund address from wallet's shielded address
   useEffect(() => {
@@ -206,19 +254,26 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="outputAsset">Target asset</Label>
-            <select
-              id="outputAsset"
-              value={outputAsset}
-              onChange={(e) => setOutputAsset(e.currentTarget.value)}
-              disabled={submittingQuote || starting}
-              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {getFromZecTokens().map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            {loadingTokens ? (
+              <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading tokens...
+              </div>
+            ) : (
+              <select
+                id="outputAsset"
+                value={outputAsset}
+                onChange={(e) => setOutputAsset(e.currentTarget.value)}
+                disabled={submittingQuote || starting}
+                className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {availableTokens.map((t) => (
+                  <option key={t.asset_id} value={t.asset_id}>
+                    {getTokenLabel(t)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -266,7 +321,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
           />
 
           <Button
-            disabled={!canQuote || submittingQuote || starting}
+            disabled={!canQuote || submittingQuote || starting || loadingTokens}
             onClick={async () => {
               if (!canQuote || !inputAmountZatoshis) return;
               setSubmittingQuote(true);

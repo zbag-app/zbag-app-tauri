@@ -242,6 +242,10 @@ export async function listSwaps(): Promise<IPC.IpcResult<IPC.ListSwapsResponse>>
   return invoke(IPC.Commands.LIST_SWAPS, { request: versioned({}) });
 }
 
+export async function getSupportedTokens(): Promise<IPC.IpcResult<IPC.GetSupportedTokensResponse>> {
+  return invoke(IPC.Commands.GET_SUPPORTED_TOKENS, { request: versioned({}) });
+}
+
 export async function setTorEnabled(
   request: Omit<IPC.SetTorEnabledRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.SetTorEnabledResponse>> {

@@ -48,6 +48,25 @@ pub struct SwapInfo {
     pub updated_at: i64,
 }
 
+/// Supported token information for swaps.
+///
+/// This struct is populated from the 1Click `/v0/tokens` endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SupportedToken {
+    /// Asset ID (e.g., "nep141:wrap.near")
+    pub asset_id: String,
+    /// Token symbol (e.g., "NEAR")
+    pub symbol: String,
+    /// Chain identifier (e.g., "near", "eth", "sol")
+    pub chain: String,
+    /// Token decimals
+    pub decimals: u8,
+    /// USD price (may be null/zero for filtering)
+    pub usd_price: Option<f64>,
+    /// Token icon URL (optional)
+    pub icon: Option<String>,
+}
+
 /// Quote information from the 1Click API.
 ///
 /// This struct maps to the new API response format where amounts are provided

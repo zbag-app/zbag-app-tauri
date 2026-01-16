@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, AlertCircle, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeftRight, AlertCircle, ArrowRight, Check, Loader2 } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { DEFAULT_NON_ZEC_ASSET_ID, getToZecTokens, ZEC_ASSET_ID } from '../data/supportedTokens';
-import { getReceiveAddress, requestSwapQuote } from '../services/ipc';
+import {
+  DEFAULT_NON_ZEC_ASSET_ID,
+  ZEC_ASSET_ID,
+  FALLBACK_TOKENS,
+  filterSwapTokens,
+  sortTokensByPrice,
+  getTokenLabel,
+  type SupportedToken,
+} from '../data/supportedTokens';
+import { getReceiveAddress, requestSwapQuote, getSupportedTokens } from '../services/ipc';
 import { parseSwapError } from '../utils/swap';
 
 export type SwapQuoteLocationState = {
@@ -25,11 +33,20 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const [refundAddress, setRefundAddress] = useState('');
   const [loadingAddress, setLoadingAddress] = useState(false);
 
+  const [tokens, setTokens] = useState<SupportedToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(true);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Swap-to-ZEC always targets ZEC in v1.
   const outputAsset = ZEC_ASSET_ID;
+
+  // Filter and sort tokens for display
+  const availableTokens = useMemo(() => {
+    const filtered = filterSwapTokens(tokens);
+    return sortTokensByPrice(filtered);
+  }, [tokens]);
 
   const canSubmit = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
@@ -40,6 +57,37 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
     if (!refundAddress.trim()) return false;
     return true;
   }, [wallet.network, activeAccountId, inputAsset, inputAmount, destinationAddress, refundAddress]);
+
+  // Load supported tokens from API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTokens() {
+      setLoadingTokens(true);
+      const res = await getSupportedTokens();
+      if (cancelled) return;
+      setLoadingTokens(false);
+
+      if ('err' in res) {
+        // Fall back to static list on error
+        setTokens(FALLBACK_TOKENS);
+        return;
+      }
+
+      if (res.ok.tokens.length === 0) {
+        // Fall back if API returns empty
+        setTokens(FALLBACK_TOKENS);
+        return;
+      }
+
+      setTokens(res.ok.tokens);
+    }
+
+    loadTokens();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,19 +194,26 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="inputAsset">Input asset</Label>
-            <select
-              id="inputAsset"
-              value={inputAsset}
-              onChange={(e) => setInputAsset(e.currentTarget.value)}
-              disabled={submitting}
-              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {getToZecTokens().map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            {loadingTokens ? (
+              <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading tokens...
+              </div>
+            ) : (
+              <select
+                id="inputAsset"
+                value={inputAsset}
+                onChange={(e) => setInputAsset(e.currentTarget.value)}
+                disabled={submitting}
+                className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {availableTokens.map((t) => (
+                  <option key={t.asset_id} value={t.asset_id}>
+                    {getTokenLabel(t)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -204,7 +259,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
           )}
 
           <Button
-            disabled={!canSubmit || submitting}
+            disabled={!canSubmit || submitting || loadingTokens}
             onClick={async () => {
               if (!canSubmit) return;
               setSubmitting(true);

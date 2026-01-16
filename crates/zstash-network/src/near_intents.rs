@@ -171,6 +171,27 @@ impl NearIntentsClient {
 
         Err(NearIntentsError::RateLimited { retry_after })
     }
+
+    /// Get supported tokens from the 1Click API.
+    ///
+    /// Reference: <https://docs.near-intents.org/near-intents/integration/distribution-channels/1click-api>
+    pub async fn get_supported_tokens(&self) -> Result<Vec<TokenInfo>, NearIntentsError> {
+        let url = reqwest::Url::parse(&format!("{}/v0/tokens", self.base_url))
+            .map_err(|_| NearIntentsError::InvalidResponse("invalid base url".to_string()))?;
+
+        let res = self.http.get_json(url).await.map_err(map_http_error)?;
+
+        Self::handle_rate_limit(res.status, res.retry_after)?;
+
+        if !(200..300).contains(&res.status) {
+            return Err(NearIntentsError::Http {
+                status: res.status,
+                message: res.body.to_string(),
+            });
+        }
+
+        parse_tokens_response(&res.body)
+    }
 }
 
 /// Quote request for the new 1Click API (POST /v0/quote).
@@ -324,6 +345,24 @@ fn map_http_error(err: HttpClientError) -> NearIntentsError {
         HttpClientError::InvalidUrl(message) => NearIntentsError::InvalidResponse(message),
         HttpClientError::InvalidBody(message) => NearIntentsError::InvalidResponse(message),
     }
+}
+
+/// Token information from the 1Click `/v0/tokens` endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenInfo {
+    /// Asset ID (e.g., "nep141:wrap.near")
+    pub asset_id: String,
+    /// Token symbol (e.g., "NEAR")
+    pub symbol: String,
+    /// Chain identifier (e.g., "near", "eth", "sol")
+    pub chain: String,
+    /// Token decimals
+    pub decimals: u8,
+    /// USD price (may be null/zero)
+    pub usd_price: Option<f64>,
+    /// Token icon URL (optional)
+    pub icon: Option<String>,
 }
 
 /// Parse the nested quote response from the 1Click API.
@@ -489,4 +528,74 @@ fn parse_status_response(body: &serde_json::Value) -> Result<StatusResponse, Nea
             .and_then(|v| v.as_str())
             .map(str::to_string),
     })
+}
+
+/// Parse the tokens response from the 1Click API.
+///
+/// Response structure (array of tokens):
+/// ```json
+/// [
+///   {
+///     "defuseAssetId": "nep141:wrap.near",
+///     "symbol": "NEAR",
+///     "blockchain": "near",
+///     "chainName": "NEAR",
+///     "decimals": 24,
+///     "assetName": "NEAR",
+///     "usdPrice": 4.5,
+///     "icon": "https://..."
+///   },
+///   ...
+/// ]
+/// ```
+fn parse_tokens_response(body: &serde_json::Value) -> Result<Vec<TokenInfo>, NearIntentsError> {
+    let arr = body
+        .as_array()
+        .ok_or_else(|| NearIntentsError::InvalidResponse("expected array".to_string()))?;
+
+    let mut tokens = Vec::with_capacity(arr.len());
+    for item in arr {
+        let asset_id = item
+            .get("defuseAssetId")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        // Skip tokens without asset ID
+        if asset_id.is_empty() {
+            continue;
+        }
+
+        let symbol = item
+            .get("symbol")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let chain = item
+            .get("blockchain")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        let decimals = item.get("decimals").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+
+        let usd_price = item.get("usdPrice").and_then(|v| v.as_f64());
+
+        let icon = item
+            .get("icon")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        tokens.push(TokenInfo {
+            asset_id,
+            symbol,
+            chain,
+            decimals,
+            usd_price,
+            icon,
+        });
+    }
+
+    Ok(tokens)
 }

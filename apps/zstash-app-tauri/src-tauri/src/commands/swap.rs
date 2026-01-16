@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zstash_core::domain::SwapIntent;
+use zstash_core::domain::{SupportedToken, SwapIntent};
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::swap::{
-    GetSwapStatusRequest, GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse,
-    RequestSwapQuoteRequest, RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
+    GetSupportedTokensRequest, GetSupportedTokensResponse, GetSwapStatusRequest,
+    GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse, RequestSwapQuoteRequest,
+    RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
@@ -122,4 +123,48 @@ pub fn zstash_list_swaps(
 
         state.swap_service.list_swaps(wallet.id)
     })
+}
+
+#[tauri::command(rename = "zstash_get_supported_tokens")]
+pub async fn zstash_get_supported_tokens(
+    state: State<'_, AppState>,
+    request: GetSupportedTokensRequest,
+) -> Result<IpcResult<GetSupportedTokensResponse>, ()> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return Ok(IpcResult::Err { err });
+    }
+
+    let near_client = state.near_client.clone();
+
+    let result = near_client.get_supported_tokens().await;
+
+    match result {
+        Ok(tokens) => {
+            let supported_tokens: Vec<SupportedToken> = tokens
+                .into_iter()
+                .map(|t| SupportedToken {
+                    asset_id: t.asset_id,
+                    symbol: t.symbol,
+                    chain: t.chain,
+                    decimals: t.decimals,
+                    usd_price: t.usd_price,
+                    icon: t.icon,
+                })
+                .collect();
+
+            Ok(IpcResult::Ok {
+                ok: GetSupportedTokensResponse {
+                    schema_version: SCHEMA_VERSION,
+                    tokens: supported_tokens,
+                },
+            })
+        }
+        Err(e) => Ok(IpcResult::Err {
+            err: zstash_core::ipc::v1::common::IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: e.to_string(),
+                details: None,
+            },
+        }),
+    }
 }

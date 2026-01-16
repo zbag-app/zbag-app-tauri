@@ -127,6 +127,7 @@ fn run_tauri_app() {
             commands::swap::zstash_start_swap,
             commands::swap::zstash_get_swap_status,
             commands::swap::zstash_list_swaps,
+            commands::swap::zstash_get_supported_tokens,
             // Tor
             commands::tor::zstash_set_tor_enabled,
             commands::tor::zstash_get_tor_state,
