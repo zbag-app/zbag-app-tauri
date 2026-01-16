@@ -15,7 +15,7 @@ use tracing::{debug, error, instrument};
 use uuid::Uuid;
 
 use zstash_core::domain::{
-    Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
+    MemoInfo, MemoKind, Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
 };
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::keystone::{
@@ -958,8 +958,8 @@ impl<C: Clock> TxService<C> {
                     tx_type: TransactionType::Send,
                     value: record.summary.amount.clone(),
                     fee: record.summary.fee.clone(),
-                    memo_present: record.summary.memo_present,
-                    memo: None,
+                    memo_count: if record.summary.memo_present { 1 } else { 0 },
+                    memos: vec![],
                     status,
                     last_error,
                     can_retry_broadcast,
@@ -1279,8 +1279,8 @@ impl<C: Clock> TxService<C> {
                             tx_type: TransactionType::Shield,
                             value: shielded_value,
                             fee: fee_u64.to_string(),
-                            memo_present: false,
-                            memo: None,
+                            memo_count: 0,
+                            memos: vec![],
                             status,
                             last_error,
                             can_retry_broadcast,
@@ -1447,7 +1447,7 @@ impl<C: Clock> TxService<C> {
             let fee_paid: Option<i64> = row.get(3)?;
             let total_spent: i64 = row.get(4)?;
             let total_received: i64 = row.get(5)?;
-            let memo_count: i64 = row.get(6)?;
+            let _memo_count: i64 = row.get(6)?;
             let block_time: Option<i64> = row.get(7)?;
             let is_shielding: bool = row.get(8)?;
             let sent_note_count: i64 = row.get(9)?;
@@ -1513,12 +1513,9 @@ impl<C: Clock> TxService<C> {
                 _ => (None, false),
             };
 
-            // Fetch memo content if memos exist for this transaction
-            let memo = if memo_count > 0 {
-                fetch_transaction_memos(wallet_db_conn, &txid_bytes)?
-            } else {
-                None
-            };
+            // Fetch structured memo content
+            let memos = fetch_transaction_memos(wallet_db_conn, &txid_bytes)?;
+            let actual_memo_count = memos.len() as u32;
 
             transactions.push(TransactionInfo {
                 txid,
@@ -1526,8 +1523,8 @@ impl<C: Clock> TxService<C> {
                 tx_type,
                 value: value_u64.to_string(),
                 fee: fee_u64.to_string(),
-                memo_present: memo_count > 0,
-                memo,
+                memo_count: actual_memo_count,
+                memos,
                 status,
                 last_error,
                 can_retry_broadcast,
@@ -1545,22 +1542,23 @@ impl<C: Clock> TxService<C> {
     }
 }
 
-/// Fetches all non-empty memos for a transaction from received and sent notes tables.
-/// Returns memos concatenated with newlines, or None if no memos found.
-fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Result<Option<String>> {
+/// Fetches all memos for a transaction from received and sent notes tables.
+/// Returns structured memo information for each memo found.
+fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Result<Vec<MemoInfo>> {
     // Query all memo sources using UNION - orchard, sapling received notes and sent notes
+    // Include all memos (even empty ones) for accurate counting
     let mut stmt = conn.prepare(
         "SELECT memo FROM orchard_received_notes
          JOIN transactions ON transactions.id_tx = orchard_received_notes.transaction_id
-         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL
          UNION ALL
          SELECT memo FROM sapling_received_notes
          JOIN transactions ON transactions.id_tx = sapling_received_notes.transaction_id
-         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL
          UNION ALL
          SELECT memo FROM sent_notes
          JOIN transactions ON transactions.id_tx = sent_notes.transaction_id
-         WHERE transactions.txid = ?1 AND memo IS NOT NULL AND memo != X'F6'",
+         WHERE transactions.txid = ?1 AND memo IS NOT NULL",
     )?;
 
     let mut rows = stmt.query([txid_bytes])?;
@@ -1568,28 +1566,40 @@ fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Resu
 
     while let Some(row) = rows.next()? {
         let memo_bytes: Vec<u8> = row.get(0)?;
-        // Try to parse as MemoBytes and convert to text
+        let size_bytes = memo_bytes.len();
+
+        // Try to parse as MemoBytes and convert to structured info
         if let Ok(memo_bytes_obj) = zcash_protocol::memo::MemoBytes::from_bytes(&memo_bytes)
             && let Ok(memo) = zcash_protocol::memo::Memo::try_from(memo_bytes_obj)
         {
             match memo {
                 zcash_protocol::memo::Memo::Text(text) => {
-                    memos.push(text.to_string());
+                    memos.push(MemoInfo {
+                        kind: MemoKind::Text,
+                        content: Some(text.to_string()),
+                        size_bytes,
+                    });
                 }
-                zcash_protocol::memo::Memo::Empty => {}
+                zcash_protocol::memo::Memo::Empty => {
+                    memos.push(MemoInfo {
+                        kind: MemoKind::Empty,
+                        content: None,
+                        size_bytes: 0,
+                    });
+                }
                 _ => {
-                    // For Future or Arbitrary memos, show as hex
-                    memos.push(format!("[binary: {} bytes]", memo_bytes.len()));
+                    // For Future or Arbitrary memos, mark as binary
+                    memos.push(MemoInfo {
+                        kind: MemoKind::Binary,
+                        content: Some(format!("[binary: {} bytes]", size_bytes)),
+                        size_bytes,
+                    });
                 }
             }
         }
     }
 
-    if memos.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(memos.join("\n")))
-    }
+    Ok(memos)
 }
 
 fn ensure_spend_allowed(app_db: &AppDb, wallet_id: Uuid, account_id: u32) -> anyhow::Result<()> {

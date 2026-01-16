@@ -74,13 +74,22 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
     }
   }, [fiatAmount, inputMode, exchangeRate]);
 
+  // Calculate memo byte length (UTF-8)
+  const memoByteLength = useMemo(() => {
+    return new TextEncoder().encode(memo).length;
+  }, [memo]);
+
+  const memoTooLong = memoByteLength > 512;
+  const memoNearLimit = memoByteLength > 450 && memoByteLength <= 512;
+
   const canSubmit = useMemo(() => {
     if (activeAccount == null) return false;
     if (!recipient.trim()) return false;
     if (!amountZatoshis) return false;
     if (transparentRecipient && !transparentAck) return false;
+    if (memoTooLong) return false;
     return true;
-  }, [activeAccount, recipient, amountZatoshis, transparentRecipient, transparentAck]);
+  }, [activeAccount, recipient, amountZatoshis, transparentRecipient, transparentAck, memoTooLong]);
 
   const submit = async () => {
     if (activeAccount == null) return;
@@ -286,16 +295,40 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="memo">Memo (optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="memo">Memo (optional)</Label>
+                {!transparentRecipient && memo.length > 0 && (
+                  <span
+                    className={`text-xs ${
+                      memoTooLong
+                        ? 'text-destructive font-medium'
+                        : memoNearLimit
+                          ? 'text-warning'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
+                    {memoByteLength}/512 bytes
+                  </span>
+                )}
+              </div>
               <textarea
                 id="memo"
                 value={memo}
                 onChange={(e) => setMemo(e.currentTarget.value)}
                 disabled={transparentRecipient}
                 rows={3}
-                placeholder={transparentRecipient ? 'Disabled for transparent recipients' : 'Memo (<=512 bytes)'}
-                className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder={transparentRecipient ? 'Disabled for transparent recipients' : 'Enter memo text (max 512 bytes)'}
+                className={`flex w-full rounded-none border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+                  memoTooLong
+                    ? 'border-destructive focus-visible:ring-destructive'
+                    : 'border-border'
+                }`}
               />
+              {memoTooLong && (
+                <p className="text-xs text-destructive">
+                  Memo exceeds 512 bytes. Please shorten your message. Note: some characters (like emojis) use multiple bytes.
+                </p>
+              )}
             </div>
 
             {transparentRecipient && (

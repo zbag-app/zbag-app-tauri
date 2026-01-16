@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { History, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { History, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Copy, ChevronDown, ChevronUp, Check, FileText } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -25,6 +25,8 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [retryPassword, setRetryPassword] = useState('');
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
+  const [copiedMemo, setCopiedMemo] = useState<string | null>(null);
 
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
@@ -153,6 +155,38 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     }
   };
 
+  const toggleMemoExpanded = (txid: string) => {
+    setExpandedMemos((prev) => {
+      const next = new Set(prev);
+      if (next.has(txid)) {
+        next.delete(txid);
+      } else {
+        next.add(txid);
+      }
+      return next;
+    });
+  };
+
+  const copyMemo = async (txid: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMemo(txid);
+      setTimeout(() => setCopiedMemo(null), 2000);
+    } catch {
+      // Clipboard API not available
+    }
+  };
+
+  const getDisplayableMemos = (memos: IPC.MemoInfo[]) => {
+    // Filter out empty memos for display
+    return memos.filter((m) => m.kind !== 'Empty' && m.content);
+  };
+
+  const getMemoDisplayText = (memos: IPC.MemoInfo[]) => {
+    const displayable = getDisplayableMemos(memos);
+    return displayable.map((m) => m.content).join('\n---\n');
+  };
+
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
       <div className="flex items-center justify-between">
@@ -270,14 +304,70 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                     </span>
                     <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
                   </div>
-                  {tx.memo && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      <span className="font-medium">Memo: </span>
-                      <span className="break-words">
-                        {tx.memo.length > 100 ? `${tx.memo.slice(0, 100)}...` : tx.memo}
-                      </span>
-                    </div>
-                  )}
+                  {(() => {
+                    const displayableMemos = getDisplayableMemos(tx.memos);
+                    if (displayableMemos.length === 0) return null;
+
+                    const fullText = getMemoDisplayText(tx.memos);
+                    const isLong = fullText.length > 100;
+                    const isExpanded = expandedMemos.has(tx.txid);
+                    const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
+
+                    return (
+                      <div className="mt-2 rounded-md border border-border/50 bg-muted/30 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span>Memo{displayableMemos.length > 1 ? `s (${displayableMemos.length})` : ''}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => void copyMemo(tx.txid, fullText)}
+                              title="Copy memo"
+                            >
+                              {copiedMemo === tx.txid ? (
+                                <Check className="h-3.5 w-3.5 text-green-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                          {displayText}
+                          {isLong && !isExpanded && '...'}
+                        </div>
+                        {isLong && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-2 h-7 px-2 text-xs"
+                            onClick={() => toggleMemoExpanded(tx.txid)}
+                          >
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                                Show less
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                                Show more ({fullText.length} chars)
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {displayableMemos.some((m) => m.kind === 'Binary') && (
+                          <div className="mt-2 text-xs text-muted-foreground/70">
+                            Contains binary data that cannot be displayed as text
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <Badge variant={getStatusBadgeVariant(tx.status)}>
                   {tx.status}
