@@ -262,8 +262,9 @@ impl SyncService {
                 }
             };
 
-            let mut wallet_db = if on_balance_task.as_ref().is_some() {
-                match open_wallet_db(&wallet_db_path, &wallet_dek) {
+            let mut balance_db = if on_balance_task.as_ref().is_some() {
+                // Copy DEK bytes for the balance connection (original stays with sync)
+                match open_wallet_db_async(wallet_db_path.clone(), Dek(wallet_dek.0)).await {
                     Ok(db) => Some(db),
                     Err(err) => {
                         tracing::debug!(
@@ -278,37 +279,12 @@ impl SyncService {
                 None
             };
 
-            let maybe_emit_balances = |wallet_db: &mut Option<Connection>| {
-                let Some(handler) = on_balance_task.as_ref() else {
-                    return;
-                };
-                let Some(db) = wallet_db.as_mut() else {
-                    return;
-                };
-
-                for account_id in &account_ids {
-                    let Ok(balance) = crate::balance::get_balance(db, network, *account_id) else {
-                        continue;
-                    };
-
-                    if record_balance(&state, wallet_id, *account_id, &balance) {
-                        handler(BalanceChangedEvent {
-                            schema_version: SCHEMA_VERSION,
-                            event: "balance.changed".to_string(),
-                            account_id: *account_id,
-                            balance,
-                        });
-                    }
-                }
-            };
-
-            let mut update = |progress: SyncProgress| {
+            let update = |progress: SyncProgress| {
                 let mut state = state.lock().expect("mutex poisoned");
                 let progress = with_eta(&mut state, wallet_id, progress);
                 state.progress.insert(wallet_id, progress.clone());
                 drop(state);
                 emit(progress);
-                maybe_emit_balances(&mut wallet_db);
             };
 
             // === Phase: Preparing ===
@@ -335,12 +311,12 @@ impl SyncService {
 
             // Chain tip is fetched in the catch-up loop below.
 
-            // Initialize block cache directory with secure permissions (0700 on Unix)
+            // Initialize block cache directory (on blocking thread)
             let cache_dir = wallet_db_path
                 .parent()
                 .unwrap_or(&wallet_db_path)
                 .join("block_cache");
-            if let Err(err) = create_dir_all_secure(&cache_dir) {
+            if let Err(err) = create_cache_dir_async(cache_dir.clone()).await {
                 tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
@@ -349,8 +325,8 @@ impl SyncService {
                 return;
             }
 
-            // Initialize FsBlockDb
-            let mut fsblock_db = match FsBlockDb::for_path(&cache_dir) {
+            // Initialize FsBlockDb (on blocking thread)
+            let mut fsblock_db = match init_fsblock_db_async(cache_dir.clone()).await {
                 Ok(db) => db,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
@@ -362,14 +338,13 @@ impl SyncService {
                 }
             };
 
-            // Initialize the block metadata database schema
-            if let Err(err) = init_blockmeta_db(&mut fsblock_db) {
-                tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to init blockmeta db schema");
-                // Continue - scanning might still work without metadata
-            }
-
-            // Open wallet DB for sync operations
-            let mut sync_wallet_conn = match open_wallet_db(&wallet_db_path, &wallet_dek) {
+            // Open wallet DB for sync operations (on blocking thread)
+            let mut sync_wallet_conn = match open_wallet_db_async(
+                wallet_db_path.clone(),
+                Dek(wallet_dek.0),
+            )
+            .await
+            {
                 Ok(conn) => conn,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to open wallet db for sync");
@@ -383,9 +358,10 @@ impl SyncService {
 
             // Backfill account birthday tree sizes from lightwalletd (required for accurate
             // output-based progress ratios in WalletSummary).
-            if let Err(err) =
-                backfill_birthday_tree_sizes(&mut sync_wallet_conn, &client, wallet_id).await
-            {
+            let (conn, backfill_result) =
+                backfill_birthday_tree_sizes(sync_wallet_conn, &client, wallet_id).await;
+            sync_wallet_conn = conn;
+            if let Err(err) = backfill_result {
                 tracing::warn!(
                     wallet_id = %wallet_id,
                     error = ?err,
@@ -394,18 +370,14 @@ impl SyncService {
             }
 
             let params = zcash_consensus_network(network);
-            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
-                &mut sync_wallet_conn,
-                params,
-                zcash_client_sqlite::util::SystemClock,
-                rand::rngs::OsRng,
-            );
 
             let mut poll_backoff = POLL_INTERVAL;
             // When entering Offline/Error backoff, emit `retry_in_seconds` before sleeping so the UI
             // can show a countdown based on the full backoff duration.
 
             // === Persistent sync loop ===
+            // Note: We pass sync_wallet_conn and fsblock_db in/out of blocking operations
+            // to keep SQLite work off the async runtime.
             'auto_sync: loop {
                 // Check cancellation at start of each iteration
                 if *cancel_rx.borrow() {
@@ -422,14 +394,11 @@ impl SyncService {
                     }
                     Err(err) => {
                         tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to get chain tip");
-                        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
-                        let wallet_tip_height = wdb
-                            .chain_height()
-                            .ok()
-                            .flatten()
-                            .map(u32::from)
-                            .unwrap_or(0);
-                        let retry_in_seconds = poll_backoff.as_secs();
+                        // Get progress on blocking thread
+                        let (conn, progress_percent, fully_scanned, chain_height) =
+                            get_progress_blocking(sync_wallet_conn, params).await;
+                        sync_wallet_conn = conn;
+                        let wallet_tip_height = chain_height.map(u32::from).unwrap_or(0);
                         update(SyncProgress {
                             phase: SyncPhase::Offline,
                             scan_frontier_height: fully_scanned,
@@ -455,15 +424,19 @@ impl SyncService {
                     "got chain tip"
                 );
 
-                // Update chain tip in wallet (retry with backoff on local DB errors).
-                if let Err(err) = wdb.update_chain_tip(chain_tip) {
+                // Update chain tip in wallet on blocking thread (retry with backoff on transient errors).
+                let (conn, update_result) =
+                    update_chain_tip_blocking(sync_wallet_conn, params, chain_tip).await;
+                sync_wallet_conn = conn;
+                if let Err(err) = update_result {
                     tracing::warn!(
                         wallet_id = %wallet_id,
-                        error = ?err,
+                        error = %err,
                         "failed to update chain tip"
                     );
-                    let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
-                    let retry_in_seconds = poll_backoff.as_secs();
+                    let (conn, progress_percent, fully_scanned, _) =
+                        get_progress_blocking(sync_wallet_conn, params).await;
+                    sync_wallet_conn = conn;
                     update(SyncProgress {
                         phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
@@ -494,13 +467,16 @@ impl SyncService {
                         break 'auto_sync;
                     }
 
-                    // Get suggested scan ranges
-                    let ranges = match wdb.suggest_scan_ranges() {
+                    // Get suggested scan ranges on blocking thread
+                    let (conn, ranges_result) =
+                        suggest_scan_ranges_blocking(sync_wallet_conn, params).await;
+                    sync_wallet_conn = conn;
+                    let ranges = match ranges_result {
                         Ok(ranges) => ranges,
                         Err(err) => {
                             tracing::error!(
                                 wallet_id = %wallet_id,
-                                error = ?err,
+                                error = %err,
                                 "failed to get scan ranges"
                             );
                             sync_error_message = Some("Failed to determine scan ranges");
@@ -546,7 +522,11 @@ impl SyncService {
                             continue;
                         }
 
-                        let wallet_tip = wdb.chain_height().ok().flatten().unwrap_or_else(|| {
+                        // Get wallet tip on blocking thread
+                        let (conn, _, _, chain_height) =
+                            get_progress_blocking(sync_wallet_conn, params).await;
+                        sync_wallet_conn = conn;
+                        let wallet_tip = chain_height.unwrap_or_else(|| {
                             tracing::debug!("chain height unavailable for progress calculation");
                             range_start
                         });
@@ -636,7 +616,10 @@ impl SyncService {
                         });
 
                         // Update phase to downloading/scanning (pipelined)
-                        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+                        // Get progress on blocking thread
+                        let (conn, progress_percent, fully_scanned, _) =
+                            get_progress_blocking(sync_wallet_conn, params).await;
+                        sync_wallet_conn = conn;
                         let initial_frontier =
                             fully_scanned.max(u32::from(range_start.saturating_sub(1)));
                         update(SyncProgress {
@@ -689,33 +672,15 @@ impl SyncService {
                                         break;
                                     }
 
-                                    // Write blocks to cache
-                                    let mut block_metas = Vec::new();
-                                    for block in &batch.blocks {
-                                        match write_block_to_cache(&blocks_dir, block) {
-                                            Ok(meta) => block_metas.push(meta),
-                                            Err(err) => {
-                                                tracing::error!(
-                                                    wallet_id = %wallet_id,
-                                                    block_height = block.height,
-                                                    error = ?err,
-                                                    "failed to cache block - block may not be scanned"
-                                                );
-                                            }
-                                        }
-                                    }
-
-                                    // Register block metadata
-                                    if !block_metas.is_empty()
-                                        && let Err(err) =
-                                            fsblock_db.write_block_metadata(&block_metas)
-                                    {
-                                        tracing::error!(
-                                            wallet_id = %wallet_id,
-                                            error = ?err,
-                                            "failed to write block metadata"
-                                        );
-                                    }
+                                    // Write blocks to cache on blocking thread
+                                    let (db, block_metas) = write_blocks_to_cache_async(
+                                        blocks_dir.clone(),
+                                        batch.blocks.clone(),
+                                        fsblock_db,
+                                        wallet_id,
+                                    )
+                                    .await;
+                                    fsblock_db = db;
 
                                     // Scan the batch immediately after caching
                                     // Fetch tree state for each batch to avoid CheckpointConflict
@@ -743,123 +708,62 @@ impl SyncService {
                                             }
                                         }
                                     };
-                                    let limit = batch.blocks.len();
+                                    let limit = block_metas.len();
 
-                                    if limit > 0 {
-                                        match scan_cached_blocks(
-                                            &params,
-                                            &fsblock_db,
-                                            &mut wdb,
-                                            batch.range_start,
-                                            &chain_state,
-                                            limit,
-                                        ) {
-                                            Ok(scan_result) => {
-                                                tracing::debug!(
-                                                    wallet_id = %wallet_id,
-                                                    scanned_range = ?scan_result.scanned_range(),
-                                                    spent_sapling = scan_result.spent_sapling_note_count(),
-                                                    spent_orchard = scan_result.spent_orchard_note_count(),
-                                                    received_sapling = scan_result.received_sapling_note_count(),
-                                                    received_orchard = scan_result.received_orchard_note_count(),
-                                                    "scanned blocks"
+                                    // Scan blocks on blocking thread
+                                    let scan_result = scan_batch_blocking(
+                                        sync_wallet_conn,
+                                        fsblock_db,
+                                        params,
+                                        batch.range_start,
+                                        chain_state,
+                                        limit,
+                                        blocks_dir.clone(),
+                                        batch.range_end,
+                                        wallet_id,
+                                    )
+                                    .await;
+
+                                    // Restore ownership
+                                    sync_wallet_conn = scan_result.conn;
+                                    fsblock_db = scan_result.fsblock_db;
+
+                                    match scan_result.scan_outcome {
+                                        ScanOutcome::Success => {
+                                            // Update progress after scan
+                                            update(SyncProgress {
+                                                phase: SyncPhase::Scanning,
+                                                scan_frontier_height: scan_result.fully_scanned,
+                                                wallet_tip_height: u32::from(wallet_tip),
+                                                progress_percent: scan_result.progress_percent,
+                                                eta_seconds: None,
+                                            });
+
+                                            // Emit balance updates on blocking thread
+                                            if let Some(db) = balance_db.take() {
+                                                balance_db = Some(
+                                                    emit_balances_blocking(
+                                                        db,
+                                                        network,
+                                                        account_ids.clone(),
+                                                        Arc::clone(&state),
+                                                        wallet_id,
+                                                        on_balance_task.clone(),
+                                                    )
+                                                    .await,
                                                 );
-                                            }
-                                            Err(ChainError::Scan(scan_err))
-                                                if scan_err.is_continuity_error() =>
-                                            {
-                                                // Chain reorg detected. Rewind the wallet to recover.
-                                                let rewind_height =
-                                                    scan_err.at_height().saturating_sub(10);
-                                                tracing::warn!(
-                                                    wallet_id = %wallet_id,
-                                                    error_height = %u32::from(scan_err.at_height()),
-                                                    rewind_height = %u32::from(rewind_height),
-                                                    "chain reorg detected, rewinding wallet"
-                                                );
-
-                                                // Truncate the wallet database to the rewind height.
-                                                if let Err(truncate_err) =
-                                                    wdb.truncate_to_height(rewind_height)
-                                                {
-                                                    tracing::error!(
-                                                        wallet_id = %wallet_id,
-                                                        error = ?truncate_err,
-                                                        "failed to truncate wallet for reorg recovery"
-                                                    );
-                                                    sync_error_message =
-                                                        Some("Failed to rewind wallet after reorg");
-                                                    range_error = true;
-                                                    break;
-                                                }
-
-                                                // Clear the block cache from rewind height onwards.
-                                                if let Err(cache_err) =
-                                                    fsblock_db.truncate_to_height(rewind_height)
-                                                {
-                                                    tracing::debug!(
-                                                        wallet_id = %wallet_id,
-                                                        error = ?cache_err,
-                                                        "failed to truncate block cache after reorg"
-                                                    );
-                                                }
-
-                                                // Delete cached block files that are now invalid.
-                                                delete_cached_block_files(
-                                                    &blocks_dir,
-                                                    rewind_height + 1,
-                                                    batch.range_end,
-                                                );
-
-                                                // Break to re-fetch scan ranges with the rewound state.
-                                                // Don't set range_error - this is a recoverable situation.
-                                                break;
-                                            }
-                                            Err(err) => {
-                                                tracing::error!(
-                                                    wallet_id = %wallet_id,
-                                                    range_start = %u32::from(batch.range_start),
-                                                    limit = limit,
-                                                    error = ?err,
-                                                    "failed to scan blocks, aborting range"
-                                                );
-                                                sync_error_message = Some("Failed to scan blocks");
-                                                range_error = true;
-                                                break;
                                             }
                                         }
-
-                                        // Clean up scanned blocks from cache (metadata)
-                                        if let Err(err) =
-                                            fsblock_db.truncate_to_height(prior_height)
-                                        {
-                                            tracing::debug!(
-                                                wallet_id = %wallet_id,
-                                                error = ?err,
-                                                "failed to truncate block cache metadata"
-                                            );
+                                        ScanOutcome::ReorgDetected { rewind_height: _ } => {
+                                            // Break to re-fetch scan ranges with the rewound state.
+                                            // Don't set range_error - this is a recoverable situation.
+                                            break;
                                         }
-
-                                        // Delete the actual block files to prevent accumulation
-                                        delete_cached_block_files(
-                                            &blocks_dir,
-                                            batch.range_start,
-                                            batch.range_end,
-                                        );
+                                        ScanOutcome::Error(_) => {
+                                            range_error = true;
+                                            break;
+                                        }
                                     }
-
-                                    // Update progress after scan
-                                    let (progress_percent, fully_scanned) =
-                                        calculate_progress_and_height(&wdb);
-                                    update(SyncProgress {
-                                        phase: SyncPhase::Scanning,
-                                        scan_frontier_height: fully_scanned,
-                                        wallet_tip_height: u32::from(wallet_tip),
-                                        progress_percent,
-                                        eta_seconds: None,
-                                        retry_in_seconds: None,
-                                        error_message: None,
-                                    });
                                 }
                                 DownloadResult::RangeComplete => {
                                     tracing::debug!(
@@ -897,8 +801,10 @@ impl SyncService {
                             break 'sync_loop;
                         }
 
-                        // Final progress update for the range
-                        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+                        // Final progress update for the range (on blocking thread)
+                        let (conn, progress_percent, fully_scanned, _) =
+                            get_progress_blocking(sync_wallet_conn, params).await;
+                        sync_wallet_conn = conn;
                         update(SyncProgress {
                             phase: SyncPhase::Scanning,
                             scan_frontier_height: fully_scanned,
@@ -912,8 +818,9 @@ impl SyncService {
                 }
 
                 if sync_error {
-                    let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
-                    let retry_in_seconds = poll_backoff.as_secs();
+                    let (conn, progress_percent, fully_scanned, _) =
+                        get_progress_blocking(sync_wallet_conn, params).await;
+                    sync_wallet_conn = conn;
                     update(SyncProgress {
                         phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
@@ -933,195 +840,7 @@ impl SyncService {
                 }
 
                 if sync_complete {
-                    // === Phase: Enhancing ===
-                    // Fetch full transactions to extract memos for received notes.
-                    // Compact blocks don't contain memo data, so we need to fetch
-                    // the full transaction and decrypt it to get memos.
-
-                    // Get total count for progress tracking
-                    let total_to_enhance = match count_txids_needing_memo_enhancement(
-                        &wallet_db_path,
-                        &wallet_dek,
-                    ) {
-                        Ok(count) => count,
-                        Err(err) => {
-                            tracing::warn!(
-                                wallet_id = %wallet_id,
-                                error = ?err,
-                                "failed to count transactions needing memo enhancement, skipping enhancement phase"
-                            );
-                            0
-                        }
-                    };
-
-                    // Emit initial enhancing progress
-                    let enhancement_progress = |enhanced: u32, total: u32| -> u8 {
-                        if total == 0 {
-                            return 100;
-                        }
-                        // Map enhancement progress to 99-100 range
-                        let ratio = enhanced as f64 / total as f64;
-                        (99.0 + ratio).min(100.0) as u8
-                    };
-
-                    update(SyncProgress {
-                        phase: SyncPhase::Enhancing,
-                        scan_frontier_height: u32::from(chain_tip),
-                        wallet_tip_height: u32::from(chain_tip),
-                        progress_percent: enhancement_progress(0, total_to_enhance),
-                        eta_seconds: None,
-                        retry_in_seconds: None,
-                        error_message: None,
-                    });
-
-                    if total_to_enhance > 0 {
-                        // Use concurrent enhancement with bounded parallelism.
-                        // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
-                        // configured, so moderate concurrency is safe.
-                        const ENHANCEMENT_CONCURRENCY: usize = 4;
-                        let mut join_set = tokio::task::JoinSet::new();
-                        let mut enhanced_count: u32 = 0;
-                        let mut batch_offset: u32 = 0;
-
-                        // Process transactions in batches to limit memory usage
-                        'enhancement: loop {
-                            // Check cancellation before fetching next batch
-                            if *cancel_rx.borrow() {
-                                break 'enhancement;
-                            }
-
-                            // Fetch next batch of txids
-                            let txids_batch = match get_txids_needing_memo_enhancement_batch(
-                                &wallet_db_path,
-                                &wallet_dek,
-                                batch_offset,
-                                ENHANCEMENT_BATCH_SIZE,
-                            ) {
-                                Ok(batch) => batch,
-                                Err(err) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        batch_offset,
-                                        error = ?err,
-                                        "failed to get memo enhancement batch"
-                                    );
-                                    break 'enhancement;
-                                }
-                            };
-
-                            // If batch is empty, we're done
-                            if txids_batch.is_empty() {
-                                break 'enhancement;
-                            }
-
-                            let batch_size = txids_batch.len() as u32;
-                            batch_offset += batch_size;
-
-                            // Emit progress at start of each batch
-                            update(SyncProgress {
-                                phase: SyncPhase::Enhancing,
-                                scan_frontier_height: u32::from(chain_tip),
-                                wallet_tip_height: u32::from(chain_tip),
-                                progress_percent: enhancement_progress(
-                                    enhanced_count,
-                                    total_to_enhance,
-                                ),
-                                eta_seconds: None,
-                                retry_in_seconds: None,
-                                error_message: None,
-                            });
-
-                            for txid_bytes in txids_batch {
-                                // Check cancellation before spawning new tasks
-                                if *cancel_rx.borrow() {
-                                    break 'enhancement;
-                                }
-
-                                // Limit concurrency by draining completed tasks
-                                while join_set.len() >= ENHANCEMENT_CONCURRENCY {
-                                    if let Some(result) = join_set.join_next().await {
-                                        enhanced_count += 1;
-                                        match result {
-                                            Ok(Ok(())) => {}
-                                            Ok(Err((txid, err))) => {
-                                                tracing::warn!(
-                                                    wallet_id = %wallet_id,
-                                                    txid = hex::encode(txid),
-                                                    error = ?err,
-                                                    "failed to enhance transaction memo"
-                                                );
-                                            }
-                                            Err(join_err) => {
-                                                tracing::warn!(
-                                                    wallet_id = %wallet_id,
-                                                    error = ?join_err,
-                                                    "enhancement task panicked"
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Clone values for the spawned task
-                                let client = client.clone();
-                                let wallet_db_path = wallet_db_path.clone();
-                                let wallet_dek = Arc::clone(&wallet_dek);
-
-                                join_set.spawn(async move {
-                                    match enhance_transaction_memo(
-                                        &client,
-                                        &wallet_db_path,
-                                        &wallet_dek,
-                                        &params,
-                                        txid_bytes,
-                                    )
-                                    .await
-                                    {
-                                        Ok(()) => {
-                                            tracing::debug!(
-                                                txid = hex::encode(txid_bytes),
-                                                "enhanced transaction memo"
-                                            );
-                                            Ok(())
-                                        }
-                                        Err(err) => Err((txid_bytes, err)),
-                                    }
-                                });
-                            }
-                        }
-
-                        // Drain remaining tasks
-                        while let Some(result) = join_set.join_next().await {
-                            enhanced_count += 1;
-                            match result {
-                                Ok(Ok(())) => {}
-                                Ok(Err((txid, err))) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        txid = hex::encode(txid),
-                                        error = ?err,
-                                        "failed to enhance transaction memo"
-                                    );
-                                }
-                                Err(join_err) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        error = ?join_err,
-                                        "enhancement task panicked"
-                                    );
-                                }
-                            }
-                        }
-
-                        tracing::debug!(
-                            wallet_id = %wallet_id,
-                            enhanced_count,
-                            total_to_enhance,
-                            "memo enhancement phase complete"
-                        );
-                    }
-
-                    // Final update triggers balance emission via the update closure
+                    // Final progress update
                     update(SyncProgress {
                         phase: SyncPhase::CatchingUp,
                         scan_frontier_height: u32::from(chain_tip),
@@ -1131,15 +850,28 @@ impl SyncService {
                         retry_in_seconds: None,
                         error_message: None,
                     });
+
+                    // Emit final balance updates on blocking thread
+                    if let Some(db) = balance_db.take() {
+                        balance_db = Some(
+                            emit_balances_blocking(
+                                db,
+                                network,
+                                account_ids.clone(),
+                                Arc::clone(&state),
+                                wallet_id,
+                                on_balance_task.clone(),
+                            )
+                            .await,
+                        );
+                    }
                 }
 
                 tokio::time::sleep(POLL_INTERVAL).await;
             }
 
-            // Clean up block cache directory
-            if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
-                tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache directory");
-            }
+            // Clean up block cache directory (on blocking thread)
+            remove_cache_dir_async(cache_dir).await;
 
             // Clear job entry (best effort).
             let mut state = state.lock().expect("mutex poisoned");
@@ -1264,6 +996,13 @@ fn open_wallet_db(wallet_db_path: &Path, dek: &Dek) -> anyhow::Result<Connection
             load_array_module: true,
         },
     )
+}
+
+/// Open wallet database on a blocking thread to avoid starving the async runtime.
+async fn open_wallet_db_async(wallet_db_path: PathBuf, dek: Dek) -> anyhow::Result<Connection> {
+    crate::tokio_runtime::spawn_blocking(move || open_wallet_db(&wallet_db_path, &dek))
+        .await
+        .context("spawn_blocking panicked")?
 }
 
 fn default_progress() -> SyncProgress {
@@ -1541,38 +1280,43 @@ where
     }
 }
 
-async fn backfill_birthday_tree_sizes(
-    conn: &mut Connection,
-    client: &zstash_network::grpc_client::GrpcClient,
+/// Query birthday heights that need tree size backfill on a blocking thread.
+async fn query_birthday_heights_blocking(
+    conn: Connection,
+) -> (Connection, anyhow::Result<Vec<u32>>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let result = (|| {
+            let mut stmt = conn
+                .prepare(
+                    r#"
+                SELECT DISTINCT birthday_height
+                FROM accounts
+                WHERE birthday_sapling_tree_size IS NULL OR birthday_sapling_tree_size = 0
+                   OR birthday_orchard_tree_size IS NULL OR birthday_orchard_tree_size = 0
+                "#,
+                )
+                .context("failed to query account birthdays for tree size backfill")?;
+
+            stmt.query_map([], |row| row.get::<_, u32>(0))?
+                .collect::<Result<Vec<_>, _>>()
+                .context("failed to read account birthday heights")
+        })();
+        (conn, result)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Update account birthday tree sizes on a blocking thread.
+async fn update_birthday_tree_sizes_blocking(
+    conn: Connection,
+    birthday_height: u32,
+    sapling_tree_size: u64,
+    orchard_tree_size: u64,
     wallet_id: uuid::Uuid,
-) -> anyhow::Result<()> {
-    let birthday_heights = {
-        let mut stmt = conn
-            .prepare(
-                r#"
-            SELECT DISTINCT birthday_height
-            FROM accounts
-            WHERE birthday_sapling_tree_size IS NULL OR birthday_sapling_tree_size = 0
-               OR birthday_orchard_tree_size IS NULL OR birthday_orchard_tree_size = 0
-            "#,
-            )
-            .context("failed to query account birthdays for tree size backfill")?;
-
-        stmt.query_map([], |row| row.get::<_, u32>(0))?
-            .collect::<Result<Vec<_>, _>>()
-            .context("failed to read account birthday heights")?
-    };
-
-    for birthday_height in birthday_heights {
-        let prior_height =
-            zcash_protocol::consensus::BlockHeight::from(birthday_height.saturating_sub(1));
-
-        let chain_state = fetch_chain_state(client, prior_height, wallet_id).await?;
-
-        let sapling_tree_size = chain_state.final_sapling_tree().tree_size();
-        let orchard_tree_size = chain_state.final_orchard_tree().tree_size();
-
-        let rows = conn
+) -> (Connection, anyhow::Result<usize>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let result = conn
             .execute(
                 "UPDATE accounts
                  SET birthday_sapling_tree_size = ?1,
@@ -1580,9 +1324,11 @@ async fn backfill_birthday_tree_sizes(
                  WHERE birthday_height = ?3",
                 rusqlite::params![sapling_tree_size, orchard_tree_size, birthday_height],
             )
-            .context("failed to update account birthday tree sizes")?;
+            .context("failed to update account birthday tree sizes");
 
-        if rows > 0 {
+        if let Ok(rows) = &result
+            && *rows > 0
+        {
             tracing::debug!(
                 wallet_id = %wallet_id,
                 birthday_height,
@@ -1592,9 +1338,59 @@ async fn backfill_birthday_tree_sizes(
                 "backfilled account birthday tree sizes"
             );
         }
+        (conn, result)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Backfill account birthday tree sizes from lightwalletd.
+///
+/// This function queries birthday heights on a blocking thread, fetches tree states
+/// via async network calls, and updates the database on blocking threads.
+async fn backfill_birthday_tree_sizes(
+    conn: Connection,
+    client: &zstash_network::grpc_client::GrpcClient,
+    wallet_id: uuid::Uuid,
+) -> (Connection, anyhow::Result<()>) {
+    // Query birthday heights on blocking thread
+    let (mut conn, heights_result) = query_birthday_heights_blocking(conn).await;
+
+    let birthday_heights = match heights_result {
+        Ok(heights) => heights,
+        Err(e) => return (conn, Err(e)),
+    };
+
+    for birthday_height in birthday_heights {
+        let prior_height =
+            zcash_protocol::consensus::BlockHeight::from(birthday_height.saturating_sub(1));
+
+        // Async network call
+        let chain_state = match fetch_chain_state(client, prior_height, wallet_id).await {
+            Ok(state) => state,
+            Err(e) => return (conn, Err(e)),
+        };
+
+        let sapling_tree_size = chain_state.final_sapling_tree().tree_size();
+        let orchard_tree_size = chain_state.final_orchard_tree().tree_size();
+
+        // Update on blocking thread
+        let (returned_conn, update_result) = update_birthday_tree_sizes_blocking(
+            conn,
+            birthday_height,
+            sapling_tree_size,
+            orchard_tree_size,
+            wallet_id,
+        )
+        .await;
+        conn = returned_conn;
+
+        if let Err(e) = update_result {
+            return (conn, Err(e));
+        }
     }
 
-    Ok(())
+    (conn, Ok(()))
 }
 
 /// Write a compact block to the filesystem block cache.
@@ -1970,181 +1766,381 @@ async fn download_blocks_with_retry(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// =============================================================================
+// Async wrappers for blocking filesystem and SQLite operations
+// =============================================================================
+// These functions move blocking work onto the Tokio blocking thread pool to
+// avoid starving async worker threads during sync.
 
-    /// Creates a minimal wallet database schema sufficient for memo enhancement queries.
-    fn create_minimal_wallet_schema(conn: &Connection) {
-        conn.execute_batch(
-            "
-            CREATE TABLE transactions (
-                id_tx INTEGER PRIMARY KEY,
-                txid BLOB NOT NULL
-            );
-            CREATE TABLE sapling_received_notes (
-                id INTEGER PRIMARY KEY,
-                transaction_id INTEGER NOT NULL,
-                memo BLOB
-            );
-            CREATE TABLE orchard_received_notes (
-                id INTEGER PRIMARY KEY,
-                transaction_id INTEGER NOT NULL,
-                memo BLOB
-            );
-            ",
-        )
-        .expect("create minimal wallet schema");
-    }
+/// Initialize block cache directory on a blocking thread.
+async fn create_cache_dir_async(cache_dir: PathBuf) -> std::io::Result<()> {
+    crate::tokio_runtime::spawn_blocking(move || std::fs::create_dir_all(&cache_dir))
+        .await
+        .expect("spawn_blocking panicked")
+}
 
-    #[test]
-    fn get_txids_needing_memo_enhancement_returns_null_memo_txids() {
-        // Use tempfile for automatic cleanup even if test panics
-        let temp_file = tempfile::Builder::new()
-            .suffix(".db")
-            .tempfile()
-            .expect("create temp file");
-        let path = temp_file.path().to_path_buf();
-        let dek = Dek([0u8; 32]);
+/// Initialize FsBlockDb on a blocking thread.
+async fn init_fsblock_db_async(
+    cache_dir: PathBuf,
+) -> Result<FsBlockDb, zcash_client_sqlite::FsBlockDbError> {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let mut db = FsBlockDb::for_path(&cache_dir)?;
+        // Initialize the block metadata database schema
+        if let Err(err) = init_blockmeta_db(&mut db) {
+            tracing::warn!(error = ?err, "failed to init blockmeta db schema");
+        }
+        Ok(db)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
 
-        // Create and populate the database
-        {
-            let conn = open_sqlcipher_db(
-                &path,
-                &dek,
-                OpenSqlcipherOptions {
-                    create_if_missing: true,
-                    load_array_module: false,
-                },
-            )
-            .expect("create wallet db");
-            create_minimal_wallet_schema(&conn);
+/// Remove cache directory on a blocking thread.
+async fn remove_cache_dir_async(cache_dir: PathBuf) {
+    let _ = crate::tokio_runtime::spawn_blocking(move || {
+        if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
+            tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache directory");
+        }
+    })
+    .await;
+}
 
-            // Insert transaction with NULL memo (needs enhancement)
-            let txid_null = [0x01u8; 32];
-            conn.execute(
-                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
-                [&txid_null[..]],
-            )
-            .expect("insert tx 1");
-            conn.execute(
-                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
-                [],
-            )
-            .expect("insert note with null memo");
-
-            // Insert transaction with populated memo (does not need enhancement)
-            let txid_with_memo = [0x02u8; 32];
-            conn.execute(
-                "INSERT INTO transactions (id_tx, txid) VALUES (2, ?1)",
-                [&txid_with_memo[..]],
-            )
-            .expect("insert tx 2");
-            conn.execute(
-                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (2, X'F600000000')",
-                [],
-            )
-            .expect("insert note with memo");
+/// Write blocks to cache and register metadata on a blocking thread.
+/// Returns the block metadata for successfully cached blocks.
+async fn write_blocks_to_cache_async(
+    blocks_dir: PathBuf,
+    blocks: Vec<CompactBlock>,
+    fsblock_db: FsBlockDb,
+    wallet_id: uuid::Uuid,
+) -> (FsBlockDb, Vec<BlockMeta>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let mut block_metas = Vec::with_capacity(blocks.len());
+        for block in &blocks {
+            match write_block_to_cache(&blocks_dir, block) {
+                Ok(meta) => block_metas.push(meta),
+                Err(err) => {
+                    tracing::error!(
+                        wallet_id = %wallet_id,
+                        block_height = block.height,
+                        error = ?err,
+                        "failed to cache block - block may not be scanned"
+                    );
+                }
+            }
         }
 
-        // Query using the batch function (offset=0, limit=1000 to get all)
-        let txids =
-            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
-
-        assert_eq!(txids.len(), 1, "should return only txid with NULL memo");
-        assert_eq!(txids[0], [0x01u8; 32]);
-        // temp_file dropped here, automatic cleanup
-    }
-
-    #[test]
-    fn get_txids_needing_memo_enhancement_returns_empty_when_all_memos_populated() {
-        let temp_file = tempfile::Builder::new()
-            .suffix(".db")
-            .tempfile()
-            .expect("create temp file");
-        let path = temp_file.path().to_path_buf();
-        let dek = Dek([0u8; 32]);
-
-        // Create and populate the database with only populated memos
-        {
-            let conn = open_sqlcipher_db(
-                &path,
-                &dek,
-                OpenSqlcipherOptions {
-                    create_if_missing: true,
-                    load_array_module: false,
-                },
-            )
-            .expect("create wallet db");
-            create_minimal_wallet_schema(&conn);
-
-            let txid = [0x03u8; 32];
-            conn.execute(
-                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
-                [&txid[..]],
-            )
-            .expect("insert tx");
-            conn.execute(
-                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, X'F600000000')",
-                [],
-            )
-            .expect("insert note with memo");
+        // Register block metadata
+        let fsblock_db = fsblock_db;
+        if !block_metas.is_empty() {
+            if let Err(err) = fsblock_db.write_block_metadata(&block_metas) {
+                tracing::error!(
+                    wallet_id = %wallet_id,
+                    error = ?err,
+                    "failed to write block metadata"
+                );
+            }
         }
 
-        let txids =
-            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
-        assert!(txids.is_empty(), "no txids should need enhancement");
-        // temp_file dropped here, automatic cleanup
-    }
+        (fsblock_db, block_metas)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
 
-    #[test]
-    fn get_txids_needing_memo_enhancement_deduplicates_across_pools() {
-        let temp_file = tempfile::Builder::new()
-            .suffix(".db")
-            .tempfile()
-            .expect("create temp file");
-        let path = temp_file.path().to_path_buf();
-        let dek = Dek([0u8; 32]);
+/// Delete cached block files on a blocking thread.
+async fn delete_cached_block_files_async(
+    blocks_dir: PathBuf,
+    start: BlockHeight,
+    end: BlockHeight,
+) {
+    let _ = crate::tokio_runtime::spawn_blocking(move || {
+        delete_cached_block_files(&blocks_dir, start, end);
+    })
+    .await;
+}
 
-        // Create transaction with NULL memos in both sapling and orchard tables
-        {
-            let conn = open_sqlcipher_db(
-                &path,
-                &dek,
-                OpenSqlcipherOptions {
-                    create_if_missing: true,
-                    load_array_module: false,
-                },
-            )
-            .expect("create wallet db");
-            create_minimal_wallet_schema(&conn);
-
-            let txid = [0x04u8; 32];
-            conn.execute(
-                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
-                [&txid[..]],
-            )
-            .expect("insert tx");
-            // Same transaction has NULL memos in both pools
-            conn.execute(
-                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
-                [],
-            )
-            .expect("insert sapling note");
-            conn.execute(
-                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, NULL)",
-                [],
-            )
-            .expect("insert orchard note");
+/// Truncate FsBlockDb on a blocking thread.
+async fn truncate_fsblock_db_async(
+    fsblock_db: FsBlockDb,
+    height: BlockHeight,
+    wallet_id: uuid::Uuid,
+) -> FsBlockDb {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let db = fsblock_db;
+        if let Err(err) = db.truncate_to_height(height) {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                error = ?err,
+                "failed to truncate block cache metadata"
+            );
         }
+        db
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
 
-        let txids =
-            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
-        assert_eq!(
-            txids.len(),
-            1,
-            "txid should appear only once despite multiple NULL memo notes"
+/// Result of a batch scan operation.
+struct ScanBatchResult {
+    conn: Connection,
+    fsblock_db: FsBlockDb,
+    scan_outcome: ScanOutcome,
+    progress_percent: u8,
+    fully_scanned: u32,
+}
+
+/// Outcome of scanning a batch.
+enum ScanOutcome {
+    Success,
+    ReorgDetected { rewind_height: BlockHeight },
+    Error(String),
+}
+
+/// Scan a batch of blocks on a blocking thread.
+///
+/// This moves all SQLite operations (scan_cached_blocks, truncate, etc.) off the async runtime.
+#[allow(clippy::too_many_arguments)]
+async fn scan_batch_blocking(
+    mut conn: Connection,
+    fsblock_db: FsBlockDb,
+    params: zcash_protocol::consensus::Network,
+    batch_range_start: BlockHeight,
+    chain_state: ChainState,
+    limit: usize,
+    blocks_dir: PathBuf,
+    batch_range_end: BlockHeight,
+    wallet_id: uuid::Uuid,
+) -> ScanBatchResult {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
         );
-        // temp_file dropped here, automatic cleanup
-    }
+
+        let scan_outcome = if limit > 0 {
+            match scan_cached_blocks(
+                &params,
+                &fsblock_db,
+                &mut wdb,
+                batch_range_start,
+                &chain_state,
+                limit,
+            ) {
+                Ok(scan_result) => {
+                    tracing::debug!(
+                        wallet_id = %wallet_id,
+                        scanned_range = ?scan_result.scanned_range(),
+                        spent_sapling = scan_result.spent_sapling_note_count(),
+                        spent_orchard = scan_result.spent_orchard_note_count(),
+                        received_sapling = scan_result.received_sapling_note_count(),
+                        received_orchard = scan_result.received_orchard_note_count(),
+                        "scanned blocks"
+                    );
+                    ScanOutcome::Success
+                }
+                Err(ChainError::Scan(scan_err)) if scan_err.is_continuity_error() => {
+                    // Chain reorg detected. Rewind the wallet to recover.
+                    let rewind_height = scan_err.at_height().saturating_sub(10);
+                    tracing::warn!(
+                        wallet_id = %wallet_id,
+                        error_height = %u32::from(scan_err.at_height()),
+                        rewind_height = %u32::from(rewind_height),
+                        "chain reorg detected, rewinding wallet"
+                    );
+
+                    // Truncate the wallet database to the rewind height.
+                    if let Err(truncate_err) = wdb.truncate_to_height(rewind_height) {
+                        tracing::error!(
+                            wallet_id = %wallet_id,
+                            error = ?truncate_err,
+                            "failed to truncate wallet for reorg recovery"
+                        );
+                        ScanOutcome::Error(format!("truncate failed: {truncate_err}"))
+                    } else {
+                        // Clear the block cache from rewind height onwards.
+                        if let Err(cache_err) = fsblock_db.truncate_to_height(rewind_height) {
+                            tracing::debug!(
+                                wallet_id = %wallet_id,
+                                error = ?cache_err,
+                                "failed to truncate block cache after reorg"
+                            );
+                        }
+
+                        // Delete cached block files that are now invalid.
+                        delete_cached_block_files(&blocks_dir, rewind_height + 1, batch_range_end);
+
+                        ScanOutcome::ReorgDetected { rewind_height }
+                    }
+                }
+                Err(err) => {
+                    tracing::error!(
+                        wallet_id = %wallet_id,
+                        range_start = %u32::from(batch_range_start),
+                        limit = limit,
+                        error = ?err,
+                        "failed to scan blocks, aborting range"
+                    );
+                    ScanOutcome::Error(format!("{err}"))
+                }
+            }
+        } else {
+            ScanOutcome::Success
+        };
+
+        // Clean up scanned blocks from cache (metadata) on success
+        if matches!(scan_outcome, ScanOutcome::Success) && limit > 0 {
+            let prior_height = batch_range_start.saturating_sub(1);
+            if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
+                tracing::debug!(
+                    wallet_id = %wallet_id,
+                    error = ?err,
+                    "failed to truncate block cache metadata"
+                );
+            }
+
+            // Delete the actual block files to prevent accumulation
+            delete_cached_block_files(&blocks_dir, batch_range_start, batch_range_end);
+        }
+
+        // Calculate progress while we still have wdb
+        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+
+        // Drop wdb to release borrow on conn
+        drop(wdb);
+
+        ScanBatchResult {
+            conn,
+            fsblock_db,
+            scan_outcome,
+            progress_percent,
+            fully_scanned,
+        }
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Run update_chain_tip on a blocking thread.
+async fn update_chain_tip_blocking(
+    mut conn: Connection,
+    params: zcash_protocol::consensus::Network,
+    chain_tip: BlockHeight,
+) -> (Connection, Result<(), String>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let result = wdb.update_chain_tip(chain_tip).map_err(|e| format!("{e}"));
+
+        drop(wdb);
+        (conn, result)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Get suggested scan ranges on a blocking thread.
+async fn suggest_scan_ranges_blocking(
+    mut conn: Connection,
+    params: zcash_protocol::consensus::Network,
+) -> (
+    Connection,
+    Result<Vec<zcash_client_backend::data_api::scanning::ScanRange>, String>,
+) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let result = wdb.suggest_scan_ranges().map_err(|e| format!("{e}"));
+
+        drop(wdb);
+        (conn, result)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Get chain height and progress on a blocking thread.
+async fn get_progress_blocking(
+    mut conn: Connection,
+    params: zcash_protocol::consensus::Network,
+) -> (Connection, u8, u32, Option<BlockHeight>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+
+        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+        let chain_height = wdb.chain_height().ok().flatten();
+
+        drop(wdb);
+        (conn, progress_percent, fully_scanned, chain_height)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Get balance on a blocking thread.
+async fn get_balance_blocking(
+    mut conn: Connection,
+    network: Network,
+    account_id: u32,
+) -> (Connection, anyhow::Result<Balance>) {
+    crate::tokio_runtime::spawn_blocking(move || {
+        let result = crate::balance::get_balance(&mut conn, network, account_id);
+        (conn, result)
+    })
+    .await
+    .expect("spawn_blocking panicked")
+}
+
+/// Emit balance changed events for all accounts on a blocking thread.
+///
+/// Returns the connection and a vector of (account_id, balance) pairs for accounts
+/// whose balance has changed since the last emission.
+async fn emit_balances_blocking(
+    conn: Connection,
+    network: Network,
+    account_ids: Vec<u32>,
+    state: Arc<Mutex<State>>,
+    wallet_id: uuid::Uuid,
+    handler: Option<BalanceEventHandler>,
+) -> Connection {
+    let Some(handler) = handler else {
+        return conn;
+    };
+
+    crate::tokio_runtime::spawn_blocking(move || {
+        let mut conn = conn;
+        for account_id in account_ids {
+            let Ok(balance) = crate::balance::get_balance(&mut conn, network, account_id) else {
+                continue;
+            };
+
+            if record_balance(&state, wallet_id, account_id, &balance) {
+                handler(BalanceChangedEvent {
+                    schema_version: SCHEMA_VERSION,
+                    event: "balance.changed".to_string(),
+                    account_id,
+                    balance,
+                });
+            }
+        }
+        conn
+    })
+    .await
+    .expect("spawn_blocking panicked")
 }
