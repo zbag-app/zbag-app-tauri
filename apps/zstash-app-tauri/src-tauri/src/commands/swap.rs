@@ -6,8 +6,10 @@ use zstash_core::domain::{SupportedToken, SwapIntent};
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::swap::{
     GetSupportedTokensRequest, GetSupportedTokensResponse, GetSwapStatusRequest,
-    GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse, RequestSwapQuoteRequest,
-    RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
+    GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse,
+    RefreshSwapStatusRequest, RefreshSwapStatusResponse, RequestSwapQuoteRequest,
+    RequestSwapQuoteResponse, ResumePendingSwapsRequest, ResumePendingSwapsResponse,
+    StartSwapRequest, StartSwapResponse,
 };
 use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
@@ -186,4 +188,60 @@ pub async fn zstash_get_supported_tokens(
             },
         }),
     }
+}
+
+#[tauri::command(rename = "zstash_refresh_swap_status")]
+pub fn zstash_refresh_swap_status(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: RefreshSwapStatusRequest,
+) -> IpcResult<RefreshSwapStatusResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_swap_changed(&app, event);
+    });
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state
+            .swap_service
+            .refresh_swap_status(wallet.id, request.swap_id, Some(handler))
+    })
+}
+
+#[tauri::command(rename = "zstash_resume_pending_swaps")]
+pub fn zstash_resume_pending_swaps(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    request: ResumePendingSwapsRequest,
+) -> IpcResult<ResumePendingSwapsResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_swap_changed(&app, event);
+    });
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state
+            .swap_service
+            .resume_pending_swaps(wallet.id, Some(handler))
+    })
 }

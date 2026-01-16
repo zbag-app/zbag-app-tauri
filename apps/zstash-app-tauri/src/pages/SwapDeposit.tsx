@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, RefreshCw, Copy, Clock } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -8,23 +8,52 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { useNowMs } from '../hooks/useNowMs';
 import { formatCountdown } from '../lib/time';
-import { getSwapStatus } from '../services/ipc';
+import { getSwapStatus, refreshSwapStatus } from '../services/ipc';
 import { onSwapChanged } from '../services/events';
 import type { SwapDepositLocationState } from './SwapQuote';
 
 export function SwapDeposit() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { swapId } = useParams<{ swapId: string }>();
   const state = location.state as SwapDepositLocationState | null;
   const [swap, setSwap] = useState<IPC.SwapInfo | null>(state?.swap ?? null);
   const [error, setError] = useState<string | null>(null);
   const nowMs = useNowMs(Boolean(swap?.deadline));
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Clear location state after reading it
   useEffect(() => {
     if (location.state != null) {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
+
+  // Load swap from backend if we have a swapId but no swap from state
+  useEffect(() => {
+    if (swap != null || swapId == null) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    const id = swapId; // Capture for closure
+    async function loadSwap() {
+      const res = await getSwapStatus({ swap_id: id });
+      if (cancelled) return;
+      setLoading(false);
+      if ('err' in res) {
+        setError(res.err.message);
+        return;
+      }
+      setSwap(res.ok.swap);
+    }
+
+    loadSwap();
+    return () => {
+      cancelled = true;
+    };
+  }, [swap, swapId]);
 
   const expired = useMemo(() => {
     if (!swap?.deadline) return false;
@@ -58,7 +87,7 @@ export function SwapDeposit() {
     }
   };
 
-  if (!swap) {
+  if (loading) {
     return (
       <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
         <div className="flex items-center gap-3">
@@ -70,6 +99,30 @@ export function SwapDeposit() {
 
         <Card>
           <CardContent className="pt-6">
+            <p className="text-muted-foreground animate-pulse">Loading swap...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!swap) {
+    return (
+      <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <ArrowLeftRight className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">Swap Deposit</h1>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            {error && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
             <p className="text-muted-foreground">
               Missing swap. Return to <Link to="/swap" className="text-primary hover:underline">Swap</Link>.
             </p>
@@ -155,9 +208,12 @@ export function SwapDeposit() {
           <div className="flex gap-3 flex-wrap">
             <Button
               variant="outline"
+              disabled={refreshing}
               onClick={async () => {
                 setError(null);
-                const res = await getSwapStatus({ swap_id: swap.id });
+                setRefreshing(true);
+                const res = await refreshSwapStatus({ swap_id: swap.id });
+                setRefreshing(false);
                 if ('err' in res) {
                   setError(res.err.message);
                   return;
@@ -165,8 +221,8 @@ export function SwapDeposit() {
                 setSwap(res.ok.swap);
               }}
             >
-              <RefreshCw className="h-4 w-4" />
-              Refresh status
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh status'}
             </Button>
             <Link to="/activity">
               <Button variant="outline">Activity</Button>

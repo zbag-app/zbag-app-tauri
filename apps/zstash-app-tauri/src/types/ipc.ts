@@ -735,6 +735,11 @@ export interface GetSwapStatusRequest extends VersionedPayload {
   swap_id: string;
 }
 
+/** Refresh swap status from remote API */
+export interface RefreshSwapStatusRequest extends VersionedPayload {
+  swap_id: string;
+}
+
 /**
  * List swaps for the currently active wallet only.
  *
@@ -744,6 +749,9 @@ export interface ListSwapsRequest extends VersionedPayload {}
 
 /** Get supported tokens for swaps from the 1Click API */
 export interface GetSupportedTokensRequest extends VersionedPayload {}
+
+/** Resume polling for pending swaps */
+export interface ResumePendingSwapsRequest extends VersionedPayload {}
 
 /** Set Tor enabled */
 export interface SetTorEnabledRequest extends VersionedPayload {
@@ -1043,6 +1051,14 @@ export interface GetSwapStatusResponse extends VersionedPayload {
   swap: SwapInfo;
 }
 
+export interface RefreshSwapStatusResponse extends VersionedPayload {
+  swap: SwapInfo;
+}
+
+export interface ResumePendingSwapsResponse extends VersionedPayload {
+  resumed_count: number;
+}
+
 export interface SetTorEnabledResponse extends VersionedPayload {
   state: TorState;
 }
@@ -1315,6 +1331,8 @@ export const Commands = {
   GET_SWAP_STATUS: 'zstash_get_swap_status',
   LIST_SWAPS: 'zstash_list_swaps',
   GET_SUPPORTED_TOKENS: 'zstash_get_supported_tokens',
+  REFRESH_SWAP_STATUS: 'zstash_refresh_swap_status',
+  RESUME_PENDING_SWAPS: 'zstash_resume_pending_swaps',
 
   // Tor
   SET_TOR_ENABLED: 'zstash_set_tor_enabled',

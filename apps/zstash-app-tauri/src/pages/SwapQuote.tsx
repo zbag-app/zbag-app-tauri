@@ -141,7 +141,7 @@ export function SwapQuote() {
                     return;
                   }
 
-                  navigate('/swap/deposit', { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
+                  navigate(`/swap/deposit/${res.ok.swap.id}`, { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Failed to start swap');
                 } finally {

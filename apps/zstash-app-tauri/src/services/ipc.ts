@@ -246,6 +246,16 @@ export async function getSupportedTokens(): Promise<IPC.IpcResult<IPC.GetSupport
   return invoke(IPC.Commands.GET_SUPPORTED_TOKENS, { request: versioned({}) });
 }
 
+export async function refreshSwapStatus(
+  request: Omit<IPC.RefreshSwapStatusRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.RefreshSwapStatusResponse>> {
+  return invoke(IPC.Commands.REFRESH_SWAP_STATUS, { request: versioned(request) });
+}
+
+export async function resumePendingSwaps(): Promise<IPC.IpcResult<IPC.ResumePendingSwapsResponse>> {
+  return invoke(IPC.Commands.RESUME_PENDING_SWAPS, { request: versioned({}) });
+}
+
 export async function setTorEnabled(
   request: Omit<IPC.SetTorEnabledRequest, 'schema_version'>
 ): Promise<IPC.IpcResult<IPC.SetTorEnabledResponse>> {

@@ -47,7 +47,20 @@ pub struct GetSwapStatusRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RefreshSwapStatusRequest {
+    pub schema_version: u32,
+    pub swap_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ListSwapsRequest {
+    pub schema_version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResumePendingSwapsRequest {
     pub schema_version: u32,
 }
 
@@ -80,4 +93,16 @@ pub struct ListSwapsResponse {
 pub struct GetSupportedTokensResponse {
     pub schema_version: u32,
     pub tokens: Vec<SupportedToken>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefreshSwapStatusResponse {
+    pub schema_version: u32,
+    pub swap: SwapInfo,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumePendingSwapsResponse {
+    pub schema_version: u32,
+    pub resumed_count: usize,
 }

@@ -15,7 +15,7 @@ import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { useActiveAccount } from './hooks/useActiveAccount';
 import { useThrottledCallback } from './hooks/useThrottle';
-import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, setTorEnabled, unlockWallet } from './services/ipc';
+import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, resumePendingSwaps, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus, onSyncProgress } from './services/events';
 import { BackupChallenge } from './pages/BackupChallenge';
 import { BackupFlow } from './pages/BackupFlow';
@@ -112,6 +112,16 @@ function AppInner() {
       cancelled = true;
     };
   }, [startup]);
+
+  // Resume pending swaps when wallet becomes ready
+  useEffect(() => {
+    if (startup.kind !== 'ready') return;
+
+    // Resume polling for any in-progress swaps from previous sessions
+    resumePendingSwaps().catch((err) => {
+      console.warn('Failed to resume pending swaps:', err);
+    });
+  }, [startup.kind === 'ready' ? startup.wallet.id : null]);
 
   // Throttled sync progress updates
   const throttledSetSync = useThrottledCallback(
@@ -391,7 +401,7 @@ function AppInner() {
         <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/crosspay" element={<CrossPay wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/quote" element={<SwapQuote />} />
-        <Route path="/swap/deposit" element={<SwapDeposit />} />
+        <Route path="/swap/deposit/:swapId" element={<SwapDeposit />} />
         <Route
           path="/activity"
           element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}

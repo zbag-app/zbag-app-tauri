@@ -13,7 +13,8 @@ use zstash_core::domain::{
 };
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::swap::{
-    GetSwapStatusResponse, ListSwapsResponse, RequestSwapQuoteResponse, StartSwapResponse,
+    GetSwapStatusResponse, ListSwapsResponse, RefreshSwapStatusResponse, RequestSwapQuoteResponse,
+    ResumePendingSwapsResponse, StartSwapResponse,
 };
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::SwapChangedEvent;
@@ -643,6 +644,148 @@ impl SwapService {
         Ok(ListSwapsResponse {
             schema_version: SCHEMA_VERSION,
             swaps,
+        })
+    }
+
+    /// Actively refresh swap status from the remote API.
+    ///
+    /// Unlike `get_swap_status` which only reads from the local DB, this method
+    /// queries the Near Intents API for the latest status and updates the DB.
+    pub fn refresh_swap_status(
+        &self,
+        wallet_id: Uuid,
+        swap_id: Uuid,
+        on_swap_changed: Option<SwapEventHandler>,
+    ) -> anyhow::Result<RefreshSwapStatusResponse> {
+        let conn = open_app_db(&self.app_db_path)?;
+        let Some((owner_wallet_id, mut swap)) =
+            swap_meta::get_swap(&conn, swap_id).context("failed to load swap")?
+        else {
+            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
+        };
+
+        if owner_wallet_id != wallet_id {
+            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
+        }
+
+        // Only refresh if swap is in a non-terminal state
+        if matches!(
+            swap.state,
+            SwapState::Completed | SwapState::Refunded | SwapState::Failed
+        ) {
+            return Ok(RefreshSwapStatusResponse {
+                schema_version: SCHEMA_VERSION,
+                swap,
+            });
+        }
+
+        let Some(deposit_address) = swap.deposit_address.clone() else {
+            return Ok(RefreshSwapStatusResponse {
+                schema_version: SCHEMA_VERSION,
+                swap,
+            });
+        };
+
+        // Query remote API for latest status
+        let status_res = block_on(async {
+            self.near
+                .get_status(zstash_network::near_intents::StatusRequest {
+                    deposit_address,
+                    deposit_memo: swap.deposit_memo.clone(),
+                })
+                .await
+        });
+
+        match status_res {
+            Ok(status) => {
+                let mapped =
+                    zstash_network::near_intents::map_remote_status_to_local_state(&status.status);
+                let mut next_state = mapped;
+
+                if mapped == SwapState::Confirming {
+                    let confirmed = has_confirmed_zcash_tx(&self.wallet_manager, wallet_id, &swap);
+                    if confirmed {
+                        next_state = SwapState::Completed;
+                    }
+                }
+
+                if next_state != swap.state {
+                    swap.state = next_state;
+                    swap.updated_at = chrono::Utc::now().timestamp_millis();
+                    swap.last_error = status.message.clone().or(swap.last_error.take());
+
+                    swap_meta::update_swap(&conn, wallet_id, &swap)
+                        .context("failed to update swap")?;
+
+                    if let Some(handler) = on_swap_changed.as_ref() {
+                        handler(SwapChangedEvent {
+                            schema_version: SCHEMA_VERSION,
+                            event: "swap.changed".to_string(),
+                            swap: swap.clone(),
+                        });
+                    }
+                }
+            }
+            Err(e) => {
+                swap.last_error = Some(e.to_string());
+                swap.updated_at = chrono::Utc::now().timestamp_millis();
+                swap_meta::update_swap(&conn, wallet_id, &swap).context("failed to update swap")?;
+
+                if let Some(handler) = on_swap_changed.as_ref() {
+                    handler(SwapChangedEvent {
+                        schema_version: SCHEMA_VERSION,
+                        event: "swap.changed".to_string(),
+                        swap: swap.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(RefreshSwapStatusResponse {
+            schema_version: SCHEMA_VERSION,
+            swap,
+        })
+    }
+
+    /// Resume polling for all pending (non-terminal) swaps.
+    ///
+    /// This should be called on app startup or wallet load to continue
+    /// tracking swaps that were in progress when the app was closed.
+    pub fn resume_pending_swaps(
+        &self,
+        wallet_id: Uuid,
+        on_swap_changed: Option<SwapEventHandler>,
+    ) -> anyhow::Result<ResumePendingSwapsResponse> {
+        let conn = open_app_db(&self.app_db_path)?;
+        let swaps =
+            swap_meta::list_swaps_for_wallet(&conn, wallet_id).context("failed to list swaps")?;
+
+        let mut resumed_count = 0;
+        for swap in swaps {
+            // Only resume polling for non-terminal swaps
+            if matches!(
+                swap.state,
+                SwapState::Draft
+                    | SwapState::AwaitingDeposit
+                    | SwapState::Pending
+                    | SwapState::Confirming
+            ) {
+                // Check if we're already polling this swap
+                {
+                    let state = self.state.lock().expect("mutex poisoned");
+                    if state.jobs.contains_key(&swap.id) {
+                        continue;
+                    }
+                }
+
+                self.start_polling(wallet_id, swap, on_swap_changed.clone());
+                resumed_count += 1;
+            }
+        }
+
+        Ok(ResumePendingSwapsResponse {
+            schema_version: SCHEMA_VERSION,
+            resumed_count,
         })
     }
 
