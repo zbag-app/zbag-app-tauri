@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, AlertCircle } from 'lucide-react';
+import { ArrowLeftRight, AlertCircle, ArrowRight } from 'lucide-react';
 import type * as IPC from '../types/ipc';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { DEFAULT_NON_ZEC_ASSET_ID, getToZecTokens, ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, requestSwapQuote } from '../services/ipc';
+
+/** Parse API error messages for user-friendly display */
+function parseSwapError(message: string): string {
+  if (message.includes('Failed to get quote') || message.includes('status=400')) {
+    return 'Failed to get quote. The amount may be below the minimum required or the swap pair is unavailable.';
+  }
+  return message;
+}
 
 export type SwapQuoteLocationState = {
   quoteId: string;
@@ -18,7 +26,6 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const { wallet, activeAccountId } = props;
   const navigate = useNavigate();
 
-  const [swapType, setSwapType] = useState<IPC.SwapType>('ToZec');
   const [inputAsset, setInputAsset] = useState(DEFAULT_NON_ZEC_ASSET_ID);
   const [inputAmount, setInputAmount] = useState('');
   const [destinationAddress, setDestinationAddress] = useState<string>('');
@@ -32,14 +39,13 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
 
   const canSubmit = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
-    if (swapType !== 'ToZec') return false;
     if (activeAccountId == null) return false;
     if (!inputAsset.trim()) return false;
     if (!inputAmount.trim()) return false;
     if (!destinationAddress.trim()) return false;
     if (!refundAddress.trim()) return false;
     return true;
-  }, [wallet.network, swapType, activeAccountId, inputAsset, inputAmount, destinationAddress, refundAddress]);
+  }, [wallet.network, activeAccountId, inputAsset, inputAmount, destinationAddress, refundAddress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,124 +108,118 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
         <h1 className="text-2xl font-bold">Swap</h1>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link to="/swap" className="block">
+          <Card className="h-full border-primary">
+            <CardHeader>
+              <CardTitle className="text-lg">Swap to ZEC</CardTitle>
+              <CardDescription>Convert other assets into ZEC</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link to="/swap/from-zec" className="block">
+          <Card className="h-full hover:border-primary/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                Swap from ZEC
+                <ArrowRight className="h-4 w-4" />
+              </CardTitle>
+              <CardDescription>Convert ZEC into other assets</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Swap Details</CardTitle>
+          <CardTitle className="text-lg">Swap to ZEC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="swapType">Swap type</Label>
+            <Label htmlFor="inputAsset">Input asset</Label>
             <select
-              id="swapType"
-              value={swapType}
-              onChange={(e) => setSwapType(e.currentTarget.value as IPC.SwapType)}
-              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              id="inputAsset"
+              value={inputAsset}
+              onChange={(e) => setInputAsset(e.currentTarget.value)}
+              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="ToZec">To ZEC</option>
-              <option value="FromZec">From ZEC</option>
+              {getToZecTokens().map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </div>
 
-          {swapType === 'FromZec' && (
-            <div className="rounded-none border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
-              Swap-from-ZEC is not implemented yet.{' '}
-              <Link to="/swap/from-zec" className="text-primary hover:underline">
-                Open page
-              </Link>
+          <div className="space-y-2">
+            <Label htmlFor="inputAmount">Amount (input asset units)</Label>
+            <Input
+              id="inputAmount"
+              value={inputAmount}
+              onChange={(e) => setInputAmount(e.currentTarget.value)}
+              placeholder="0.0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="destinationAddress">Destination ZEC address</Label>
+            <Input
+              id="destinationAddress"
+              value={destinationAddress}
+              onChange={(e) => setDestinationAddress(e.currentTarget.value)}
+              placeholder="u1... / zs... / etc"
+              disabled={loadingAddress}
+              className="font-mono"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="refundAddress">Refund address (origin chain)</Label>
+            <Input
+              id="refundAddress"
+              value={refundAddress}
+              onChange={(e) => setRefundAddress(e.currentTarget.value)}
+              placeholder="Your address on the input asset chain"
+              className="font-mono"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
             </div>
           )}
 
-          {swapType === 'ToZec' && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="inputAsset">Input asset</Label>
-                <select
-                  id="inputAsset"
-                  value={inputAsset}
-                  onChange={(e) => setInputAsset(e.currentTarget.value)}
-                  className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {getToZecTokens().map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <Button
+            disabled={!canSubmit || submitting}
+            onClick={async () => {
+              if (!canSubmit) return;
+              setSubmitting(true);
+              setError(null);
 
-              <div className="space-y-2">
-                <Label htmlFor="inputAmount">Amount (input asset units)</Label>
-                <Input
-                  id="inputAmount"
-                  value={inputAmount}
-                  onChange={(e) => setInputAmount(e.currentTarget.value)}
-                  placeholder="0.0"
-                />
-              </div>
+              const res = await requestSwapQuote({
+                swap_type: 'ToZec',
+                input_asset: inputAsset,
+                input_amount: inputAmount,
+                output_asset: outputAsset,
+                destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
+                refund_address: refundAddress.trim() ? refundAddress.trim() : null,
+              });
+              setSubmitting(false);
 
-              <div className="space-y-2">
-                <Label htmlFor="destinationAddress">Destination ZEC address</Label>
-                <textarea
-                  id="destinationAddress"
-                  rows={2}
-                  value={destinationAddress}
-                  onChange={(e) => setDestinationAddress(e.currentTarget.value)}
-                  placeholder="u1... / zs... / etc"
-                  disabled={loadingAddress}
-                  className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-                />
-              </div>
+              if ('err' in res) {
+                setError(parseSwapError(res.err.message));
+                return;
+              }
 
-              <div className="space-y-2">
-                <Label htmlFor="refundAddress">Refund address (origin chain)</Label>
-                <textarea
-                  id="refundAddress"
-                  rows={2}
-                  value={refundAddress}
-                  onChange={(e) => setRefundAddress(e.currentTarget.value)}
-                  placeholder="Your address on the input asset chain for refunds if the swap fails"
-                  className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-
-              <Button
-                disabled={!canSubmit || submitting}
-                onClick={async () => {
-                  if (!canSubmit) return;
-                  setSubmitting(true);
-                  setError(null);
-
-                  const res = await requestSwapQuote({
-                    swap_type: swapType,
-                    input_asset: inputAsset,
-                    input_amount: inputAmount,
-                    output_asset: outputAsset,
-                    destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                    refund_address: refundAddress.trim() ? refundAddress.trim() : null,
-                  });
-                  setSubmitting(false);
-
-                  if ('err' in res) {
-                    setError(res.err.message);
-                    return;
-                  }
-
-                  navigate('/swap/quote', {
-                    state: { quoteId: res.ok.quote_id, quote: res.ok.quote } satisfies SwapQuoteLocationState,
-                  });
-                }}
-                className="w-full"
-              >
-                {submitting ? 'Requesting quote...' : 'Get quote'}
-              </Button>
-            </>
-          )}
+              navigate('/swap/quote', {
+                state: { quoteId: res.ok.quote_id, quote: res.ok.quote } satisfies SwapQuoteLocationState,
+              });
+            }}
+            className="w-full"
+          >
+            {submitting ? 'Requesting quote...' : 'Get quote'}
+          </Button>
         </CardContent>
       </Card>
     </div>

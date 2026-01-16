@@ -77,14 +77,14 @@ export function SwapQuote() {
         <CardContent className="space-y-4">
           <div className="rounded-none bg-muted/50 p-4">
             <div className="text-lg font-semibold">
-              {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
+              {quote.input_amount_formatted} → {quote.output_amount_formatted}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="space-y-1">
               <span className="text-muted-foreground">Min. output</span>
-              <div className="font-semibold">{quote.min_output_amount}</div>
+              <div className="font-semibold">{quote.output_amount_formatted}</div>
             </div>
             <div className="space-y-1">
               <span className="text-muted-foreground">Est. time</span>

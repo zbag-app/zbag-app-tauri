@@ -10,12 +10,34 @@ import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
+/** ZEC has 8 decimal places (1 ZEC = 100,000,000 zatoshis) */
+const ZEC_DECIMALS = 8;
+
+/** Convert ZEC to zatoshis string */
+function zecToZatoshis(zec: string): string {
+  const trimmed = zec.trim();
+  if (!trimmed || Number.isNaN(Number(trimmed))) return '';
+  const parts = trimmed.split('.');
+  const whole = parts[0] || '0';
+  const frac = (parts[1] || '').padEnd(ZEC_DECIMALS, '0').slice(0, ZEC_DECIMALS);
+  const zatoshis = BigInt(whole) * BigInt(10 ** ZEC_DECIMALS) + BigInt(frac);
+  return zatoshis.toString();
+}
+
+/** Parse API error messages for user-friendly display */
+function parseSwapError(message: string): string {
+  if (message.includes('Failed to get quote') || message.includes('status=400')) {
+    return 'Failed to get quote. The amount may be below the minimum required or the swap pair is unavailable.';
+  }
+  return message;
+}
+
 export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
   const { wallet, activeAccountId } = props;
   const navigate = useNavigate();
 
   const [outputAsset, setOutputAsset] = useState(DEFAULT_NON_ZEC_ASSET_ID);
-  const [inputAmountZat, setInputAmountZat] = useState('');
+  const [inputAmountZec, setInputAmountZec] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
   const [refundAddress, setRefundAddress] = useState('');
   const [loadingRefundAddress, setLoadingRefundAddress] = useState(false);
@@ -25,7 +47,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
   const [password, setPassword] = useState('');
   const [reauthToken, setReauthToken] = useState<string | null>(null);
-  const [privacyAckRequired, setPrivacyAckRequired] = useState(false);
+  // FromZec swaps always require transparent interaction (deposit address is transparent)
   const [privacyAck, setPrivacyAck] = useState(false);
 
   const [submittingQuote, setSubmittingQuote] = useState(false);
@@ -36,11 +58,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
     if (!outputAsset.trim()) return false;
-    if (!inputAmountZat.trim()) return false;
+    if (!inputAmountZec.trim()) return false;
     if (!destinationAddress.trim()) return false;
     if (!refundAddress.trim()) return false;
+    if (!privacyAck) return false;
     return true;
-  }, [wallet.network, activeAccountId, outputAsset, inputAmountZat, destinationAddress, refundAddress]);
+  }, [wallet.network, activeAccountId, outputAsset, inputAmountZec, destinationAddress, refundAddress, privacyAck]);
 
   // Auto-populate refund address from wallet's shielded address
   useEffect(() => {
@@ -113,7 +136,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="outputAsset"
               value={outputAsset}
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
-              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
                   <option key={t.id} value={t.id}>
@@ -124,39 +147,39 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="inputAmount">Amount (zatoshis)</Label>
+            <Label htmlFor="inputAmount">Amount (ZEC)</Label>
             <Input
               id="inputAmount"
-              value={inputAmountZat}
-              onChange={(e) => setInputAmountZat(e.currentTarget.value)}
-              placeholder="Enter amount in zatoshis"
+              value={inputAmountZec}
+              onChange={(e) => setInputAmountZec(e.currentTarget.value)}
+              placeholder="0.0"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="destinationAddress">Destination address (target asset chain)</Label>
-            <textarea
+            <Input
               id="destinationAddress"
-              rows={2}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
-              placeholder="Paste the destination address for the target asset"
-              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              placeholder="Paste the destination address"
+              className="font-mono"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="refundAddress">Refund address (ZEC)</Label>
-            <textarea
+            <Input
               id="refundAddress"
-              rows={2}
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
-              placeholder="Your ZEC address for refunds if the swap fails"
+              placeholder="Your ZEC address for refunds"
               disabled={loadingRefundAddress}
-              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              className="font-mono"
             />
           </div>
+
+          <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
 
           <Button
             disabled={!canQuote || submittingQuote}
@@ -166,14 +189,19 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setError(null);
               setQuote(null);
               setQuoteId(null);
-              setPrivacyAckRequired(false);
-              setPrivacyAck(false);
               setReauthToken(null);
+
+              const zatoshis = zecToZatoshis(inputAmountZec);
+              if (!zatoshis) {
+                setError('Invalid amount');
+                setSubmittingQuote(false);
+                return;
+              }
 
               const res = await requestSwapQuote({
                 swap_type: 'FromZec',
                 input_asset: ZEC_ASSET_ID,
-                input_amount: inputAmountZat,
+                input_amount: zatoshis,
                 output_asset: outputAsset,
                 destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
                 refund_address: refundAddress.trim() ? refundAddress.trim() : null,
@@ -181,7 +209,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setSubmittingQuote(false);
 
               if ('err' in res) {
-                setError(res.err.message);
+                setError(parseSwapError(res.err.message));
                 return;
               }
 
@@ -201,16 +229,16 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             <CardTitle className="text-lg">Quote</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-none bg-muted/50 p-4">
+            <div className="rounded-lg bg-muted/50 p-4">
               <div className="text-lg font-semibold">
-                {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
+                {quote.input_amount_formatted} → {quote.output_amount_formatted}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
                 <span className="text-muted-foreground">Min. output</span>
-                <div className="font-semibold">{quote.min_output_amount}</div>
+                <div className="font-semibold">{quote.output_amount_formatted}</div>
               </div>
               <div className="space-y-1">
                 <span className="text-muted-foreground">Est. time</span>
@@ -239,13 +267,9 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               />
             </div>
 
-            {privacyAckRequired && (
-              <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
-            )}
-
             <div className="flex gap-3">
               <Button
-                disabled={!password.trim() || starting || (privacyAckRequired && !privacyAck)}
+                disabled={!password.trim() || starting}
                 onClick={async () => {
                   if (!quoteId) return;
 
@@ -269,28 +293,21 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                       setReauthToken(token);
                     }
 
-                    const allow = privacyAckRequired ? true : false;
+                    // Privacy was acknowledged upfront before getting quote
                     const startRes = await startSwap({
                       quote_id: quoteId,
-                      allow_transparent_interaction: allow,
+                      allow_transparent_interaction: true,
                       reauth_token: token,
                     });
 
                     if ('err' in startRes) {
-                      if (startRes.err.code === 'PRIVACY_ACK_REQUIRED') {
-                        setPrivacyAckRequired(true);
-                        setStarting(false);
-                        return;
-                      }
-                      setError(startRes.err.message);
+                      setError(parseSwapError(startRes.err.message));
                       setStarting(false);
                       return;
                     }
 
                     setPassword('');
                     setReauthToken(null);
-                    setPrivacyAckRequired(false);
-                    setPrivacyAck(false);
                     navigate('/activity');
                   } catch (e) {
                     setError(e instanceof Error ? e.message : 'Failed to start swap');
@@ -299,7 +316,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                 }}
                 className="flex-1"
               >
-                {starting ? 'Starting...' : privacyAckRequired ? 'Acknowledge & start swap' : 'Start swap'}
+                {starting ? 'Starting...' : 'Start swap'}
               </Button>
               <Link to="/swap">
                 <Button variant="outline">
@@ -313,7 +330,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       )}
 
       {error && (
-        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
