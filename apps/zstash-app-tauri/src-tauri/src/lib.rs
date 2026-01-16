@@ -107,6 +107,12 @@ fn run_tauri_app() {
             commands::transaction::zstash_cancel_send,
             commands::transaction::zstash_retry_broadcast,
             commands::transaction::zstash_shield_funds,
+            // Jobs (async operations)
+            commands::job::zstash_start_send_job,
+            commands::job::zstash_start_shield_job,
+            commands::job::zstash_cancel_job,
+            commands::job::zstash_get_job_status,
+            commands::job::zstash_list_jobs,
             // Backup
             commands::backup::zstash_get_backup_challenge,
             commands::backup::zstash_verify_backup,

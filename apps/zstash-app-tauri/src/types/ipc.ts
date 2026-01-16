@@ -284,6 +284,39 @@ export interface WalletStatus {
 }
 
 // ============================================================================
+// Job Types (Async Operations)
+// ============================================================================
+
+/** Type of job operation */
+export type JobType = 'Send' | 'Shield';
+
+/** Current state of a job */
+export type JobState = 'Queued' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
+
+/** Phase within a transaction job for granular progress reporting */
+export type JobPhase = 'Preparing' | 'Proving' | 'Broadcasting' | 'Done';
+
+/** Progress information for a background job */
+export interface JobProgress {
+  /** Job identifier */
+  job_id: string;
+  /** Type of operation */
+  job_type: JobType;
+  /** Current state */
+  state: JobState;
+  /** Current phase within the operation */
+  phase: JobPhase;
+  /** Progress percentage (0-100), if determinable */
+  progress_percent: number | null;
+  /** Transaction ID once known (after proving, before or after broadcast) */
+  txid: string | null;
+  /** Error message if the job failed */
+  error: string | null;
+  /** Whether the job can be cancelled in its current state */
+  can_cancel: boolean;
+}
+
+// ============================================================================
 // Backup Types
 // ============================================================================
 
@@ -588,6 +621,39 @@ export interface FinalizeSigningRequest extends VersionedPayload {
   /** Re-auth token (purpose: Spend) */
   reauth_token: string;
 }
+
+// ============================================================================
+// Job Command Requests
+// ============================================================================
+
+/** Start a send transaction as a background job */
+export interface StartSendJobRequest extends VersionedPayload {
+  /** Proposal ID from PrepareSendResponse */
+  proposal_id: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Start a shield operation as a background job */
+export interface StartShieldJobRequest extends VersionedPayload {
+  account_id: number;
+  consolidate: boolean;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Cancel a running job */
+export interface CancelJobRequest extends VersionedPayload {
+  job_id: string;
+}
+
+/** Get the current status of a job */
+export interface GetJobStatusRequest extends VersionedPayload {
+  job_id: string;
+}
+
+/** List all active jobs */
+export interface ListJobsRequest extends VersionedPayload {}
 
 /** Request swap quote */
 export interface RequestSwapQuoteRequest extends VersionedPayload {
@@ -970,6 +1036,38 @@ export interface ListSwapsResponse extends VersionedPayload {
 }
 
 // ============================================================================
+// Job Command Responses
+// ============================================================================
+
+/** Response when a send job is started */
+export interface StartSendJobResponse extends VersionedPayload {
+  /** Unique job identifier for tracking progress */
+  job_id: string;
+}
+
+/** Response when a shield job is started */
+export interface StartShieldJobResponse extends VersionedPayload {
+  /** Unique job identifier for tracking progress */
+  job_id: string;
+}
+
+/** Response when cancelling a job */
+export interface CancelJobResponse extends VersionedPayload {
+  /** True if the job was cancelled, false if it could not be cancelled */
+  cancelled: boolean;
+}
+
+/** Response with current job status */
+export interface GetJobStatusResponse extends VersionedPayload {
+  progress: JobProgress;
+}
+
+/** Response listing all active jobs */
+export interface ListJobsResponse extends VersionedPayload {
+  jobs: JobProgress[];
+}
+
+// ============================================================================
 // Events
 // ============================================================================
 
@@ -1020,13 +1118,20 @@ export interface WalletStatusEvent extends VersionedPayload {
   status: WalletStatus;
 }
 
+/** Job progress changed */
+export interface JobProgressEvent extends VersionedPayload {
+  event: 'job.progress';
+  progress: JobProgress;
+}
+
 export type IpcEvent =
   | SyncProgressEvent
   | BalanceChangedEvent
   | TransactionChangedEvent
   | SwapChangedEvent
   | TorStatusEvent
-  | WalletStatusEvent;
+  | WalletStatusEvent
+  | JobProgressEvent;
 
 // ============================================================================
 // Error Codes
@@ -1173,6 +1278,12 @@ export const Commands = {
   GET_FIAT_SETTINGS: 'zstash_get_fiat_settings',
   SET_FIAT_SETTINGS: 'zstash_set_fiat_settings',
   GET_EXCHANGE_RATE: 'zstash_get_exchange_rate',
+  // Jobs (async operations)
+  START_SEND_JOB: 'zstash_start_send_job',
+  START_SHIELD_JOB: 'zstash_start_shield_job',
+  CANCEL_JOB: 'zstash_cancel_job',
+  GET_JOB_STATUS: 'zstash_get_job_status',
+  LIST_JOBS: 'zstash_list_jobs',
 } as const;
 
 // ============================================================================
@@ -1186,4 +1297,5 @@ export const EventChannels = {
   SWAP: 'zstash://swap',
   TOR: 'zstash://tor',
   WALLET_STATUS: 'zstash://wallet-status',
+  JOB: 'zstash://job',
 } as const;

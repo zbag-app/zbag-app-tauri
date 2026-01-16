@@ -8,6 +8,7 @@ pub mod db;
 pub mod encryption;
 pub mod error;
 pub mod grpc_url;
+pub mod job_service;
 pub mod key_store;
 pub mod key_store_keychain;
 pub mod logging;

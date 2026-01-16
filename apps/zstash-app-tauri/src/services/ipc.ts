@@ -297,3 +297,35 @@ export async function getExchangeRate(
 ): Promise<IPC.IpcResult<IPC.GetExchangeRateResponse>> {
   return invoke(IPC.Commands.GET_EXCHANGE_RATE, { request: versioned(request) });
 }
+
+// ============================================================================
+// Job Commands (Async Operations)
+// ============================================================================
+
+export async function startSendJob(
+  request: Omit<IPC.StartSendJobRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.StartSendJobResponse>> {
+  return invoke(IPC.Commands.START_SEND_JOB, { request: versioned(request) });
+}
+
+export async function startShieldJob(
+  request: Omit<IPC.StartShieldJobRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.StartShieldJobResponse>> {
+  return invoke(IPC.Commands.START_SHIELD_JOB, { request: versioned(request) });
+}
+
+export async function cancelJob(
+  request: Omit<IPC.CancelJobRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.CancelJobResponse>> {
+  return invoke(IPC.Commands.CANCEL_JOB, { request: versioned(request) });
+}
+
+export async function getJobStatus(
+  request: Omit<IPC.GetJobStatusRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetJobStatusResponse>> {
+  return invoke(IPC.Commands.GET_JOB_STATUS, { request: versioned(request) });
+}
+
+export async function listJobs(): Promise<IPC.IpcResult<IPC.ListJobsResponse>> {
+  return invoke(IPC.Commands.LIST_JOBS, { request: versioned({}) });
+}

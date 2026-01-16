@@ -34,6 +34,10 @@ use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
+use zstash_core::ipc::v1::commands::job::{
+    CancelJobResponse, GetJobStatusResponse, ListJobsResponse, StartSendJobResponse,
+    StartShieldJobResponse,
+};
 use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
@@ -45,6 +49,8 @@ use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
 use zstash_core::sensitive::SensitiveString;
 
+use crate::job_service::{JobEventHandler, JobService, SendJobContext, ShieldJobContext};
+
 pub struct WalletManager {
     app_db: AppDb,
     key_store: Box<dyn KeyStore>,
@@ -52,6 +58,7 @@ pub struct WalletManager {
     active_wallet: Option<ActiveWallet>,
     reauth: ReauthManager,
     tx_service: TxService<SystemClock>,
+    job_service: JobService,
     backup_challenges: HashMap<Uuid, BackupChallengeState>,
     cached_balances: HashMap<(Uuid, u32), Balance>,
     cached_sync_status: HashMap<Uuid, SyncStatus>,
@@ -109,6 +116,7 @@ impl WalletManager {
             active_wallet: None,
             reauth: ReauthManager::new(SystemClock),
             tx_service: TxService::new(SystemClock),
+            job_service: JobService::new(),
             backup_challenges: HashMap::new(),
             cached_balances: HashMap::new(),
             cached_sync_status: HashMap::new(),
@@ -2015,6 +2023,180 @@ impl WalletManager {
             limit,
             offset,
         )
+    }
+
+    // =========================================================================
+    // Background Job Methods
+    // =========================================================================
+
+    /// Start a send transaction as a background job.
+    /// Returns immediately with a job_id; progress is reported via events.
+    pub fn start_send_job(
+        &mut self,
+        proposal_id: &str,
+        reauth_token: &str,
+        tor_manager: Option<Arc<zstash_tor::TorManager>>,
+        on_progress: Option<JobEventHandler>,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<StartSendJobResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        // Watch-only wallets cannot use start_send_job (no seed for signing)
+        if active.wallet.wallet_type == WalletType::WatchOnly {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_CANNOT_SPEND,
+                "cannot send from watch-only wallet; use hardware signing flow",
+            ));
+        }
+
+        let wallet_id = active.wallet.id;
+        let wallet_network = active.wallet.network;
+        let wallet_dir = active.wallet_dir.clone();
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        let proposal_account_id = self
+            .tx_service
+            .proposal_account_id(proposal_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        // Get the proposal from tx_service
+        let proposal = self
+            .tx_service
+            .take_proposal(proposal_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found or expired"))?;
+
+        let wallet_db_path = self.wallet_db_path(&wallet_dir);
+
+        let ctx = SendJobContext {
+            wallet_id,
+            network: wallet_network,
+            wallet_dir,
+            wallet_dek,
+            wallet_db_path,
+            grpc_url,
+            proposal_id: proposal_id.to_string(),
+            account_id: proposal_account_id,
+            spending_key,
+            tor_manager,
+        };
+
+        let job_id = self
+            .job_service
+            .start_send_job(ctx, proposal, on_progress, on_tx_changed)?;
+
+        Ok(StartSendJobResponse {
+            schema_version: SCHEMA_VERSION,
+            job_id,
+        })
+    }
+
+    /// Start a shield operation as a background job.
+    /// Returns immediately with a job_id; progress is reported via events.
+    pub fn start_shield_job(
+        &mut self,
+        account_id: u32,
+        consolidate: bool,
+        reauth_token: &str,
+        tor_manager: Option<Arc<zstash_tor::TorManager>>,
+        on_progress: Option<JobEventHandler>,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<StartShieldJobResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        // Shielding is not supported for watch-only wallets
+        if active.wallet.wallet_type == WalletType::WatchOnly {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_CANNOT_SHIELD,
+                "shielding not supported for watch-only wallet",
+            ));
+        }
+
+        let wallet_id = active.wallet.id;
+        let wallet_network = active.wallet.network;
+        let wallet_dir = active.wallet_dir.clone();
+        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let spending_key = self.derive_unified_spending_key(wallet_id, account_id)?;
+
+        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+            .context("failed to resolve active lightwalletd endpoint")?;
+
+        let wallet_db_path = self.wallet_db_path(&wallet_dir);
+
+        let ctx = ShieldJobContext {
+            wallet_id,
+            network: wallet_network,
+            wallet_dir,
+            wallet_dek,
+            wallet_db_path,
+            grpc_url,
+            account_id,
+            consolidate,
+            spending_key,
+            tor_manager,
+        };
+
+        let job_id = self
+            .job_service
+            .start_shield_job(ctx, on_progress, on_tx_changed)?;
+
+        self.maybe_emit_wallet_status(wallet_id);
+
+        Ok(StartShieldJobResponse {
+            schema_version: SCHEMA_VERSION,
+            job_id,
+        })
+    }
+
+    /// Cancel a running job if it's in a cancellable state.
+    pub fn cancel_job(&mut self, job_id: &str) -> anyhow::Result<CancelJobResponse> {
+        let cancelled = self.job_service.cancel_job(job_id);
+        Ok(CancelJobResponse {
+            schema_version: SCHEMA_VERSION,
+            cancelled,
+        })
+    }
+
+    /// Get the current status of a job.
+    pub fn get_job_status(&self, job_id: &str) -> anyhow::Result<GetJobStatusResponse> {
+        let progress = self
+            .job_service
+            .get_progress(job_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "job not found"))?;
+
+        Ok(GetJobStatusResponse {
+            schema_version: SCHEMA_VERSION,
+            progress,
+        })
+    }
+
+    /// List all active jobs for the current wallet.
+    pub fn list_jobs(&self) -> anyhow::Result<ListJobsResponse> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Ok(ListJobsResponse {
+                schema_version: SCHEMA_VERSION,
+                jobs: vec![],
+            });
+        };
+
+        let jobs = self.job_service.list_jobs(active.wallet.id);
+        Ok(ListJobsResponse {
+            schema_version: SCHEMA_VERSION,
+            jobs,
+        })
     }
 
     pub fn key_store(&self) -> &dyn KeyStore {

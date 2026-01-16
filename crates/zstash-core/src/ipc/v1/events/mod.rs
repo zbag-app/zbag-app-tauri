@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Balance, SyncProgress, TransactionInfo, WalletStatus};
+use crate::domain::{Balance, JobProgress, SyncProgress, TransactionInfo, WalletStatus};
 
 pub mod swap;
 pub use swap::SwapChangedEvent;
@@ -35,4 +35,12 @@ pub struct WalletStatusEvent {
     pub schema_version: u32,
     pub event: String,
     pub status: WalletStatus,
+}
+
+/// Event emitted when a background job's progress changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobProgressEvent {
+    pub schema_version: u32,
+    pub event: String,
+    pub progress: JobProgress,
 }

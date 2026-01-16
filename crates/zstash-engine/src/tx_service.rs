@@ -774,6 +774,20 @@ impl<C: Clock> TxService<C> {
         self.proposals.remove(proposal_id).is_some()
     }
 
+    /// Take a proposal out of the service, transferring ownership.
+    /// Used by JobService to run the proposal asynchronously.
+    pub fn take_proposal(
+        &mut self,
+        proposal_id: &str,
+    ) -> Option<
+        zcash_client_backend::proposal::Proposal<
+            zcash_client_backend::fees::StandardFeeRule,
+            zcash_client_sqlite::ReceivedNoteId,
+        >,
+    > {
+        self.proposals.remove(proposal_id).map(|r| r.proposal)
+    }
+
     /// Clear all pending proposals for a specific wallet.
     /// Called during wallet logout to prevent stale proposals.
     pub fn clear_proposals_for_wallet(&mut self, wallet_id: Uuid) {
