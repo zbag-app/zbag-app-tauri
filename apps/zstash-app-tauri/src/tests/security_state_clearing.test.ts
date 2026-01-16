@@ -29,10 +29,11 @@ test('clears route state for swap flows', async () => {
   expect(deposit).toContain('state: null');
 });
 
-test('clears seed phrase state on unmount', async () => {
-  const file = await read('pages/SeedDisplay.tsx');
-  expect(file).toContain('setWords([]');
-  expect(file).toContain('onCleared()');
+test('clears route state for restore flow', async () => {
+  const file = await read('pages/RestoreBirthday.tsx');
+  expect(file).toContain('replace: true');
+  expect(file).toContain('state: null');
+  expect(file).not.toContain('window.history.replaceState');
 });
 
 test('clears backup challenge inputs on unmount', async () => {
@@ -47,4 +48,3 @@ test('clears view-seed dialog state when closed', async () => {
   expect(file).toContain("setPassword('')");
   expect(file).toContain('setSeedWords(null)');
 });
-

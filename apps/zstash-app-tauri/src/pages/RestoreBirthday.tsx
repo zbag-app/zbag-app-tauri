@@ -9,6 +9,8 @@ import { Label } from '../components/ui/label';
 import { loadWallet, restoreWallet, startSync } from '../services/ipc';
 import type { RestoreFlowData } from './RestoreWallet';
 
+type LocationState = RestoreFlowData;
+
 export function RestoreBirthday(props: {
   onRestored: (args: { wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }) => void;
 }) {
@@ -16,17 +18,18 @@ export function RestoreBirthday(props: {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Read flow data from navigation state (cleared when navigating away)
-  const [flow, setFlow] = useState<RestoreFlowData | null>(
-    (location.state as RestoreFlowData | null) ?? null
-  );
+  // Read flow data from navigation state.
+  const [flow, setFlow] = useState<RestoreFlowData | null>(() => {
+    const state = location.state as LocationState | null;
+    return state ?? null;
+  });
 
-  // Clear navigation state after reading to prevent re-renders from restoring it
+  // Clear navigation state from the history entry after reading it.
   useEffect(() => {
-    if (location.state) {
-      window.history.replaceState({}, document.title);
+    if (location.state != null) {
+      navigate(location.pathname, { replace: true, state: null });
     }
-  }, [location.state]);
+  }, [location.pathname, location.state, navigate]);
 
   // Clear flow data on unmount to minimize memory lifetime
   useEffect(() => {

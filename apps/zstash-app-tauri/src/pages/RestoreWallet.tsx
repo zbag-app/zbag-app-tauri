@@ -67,7 +67,7 @@ export function RestoreWallet() {
     setPassword('');
     setPasswordConfirm('');
 
-    // Pass flow data via navigation state (automatically cleared on navigation change)
+    // Pass flow data via navigation state (next page replaces the history entry to clear it).
     navigate('/restore/birthday', { state: flowData });
   };
 
