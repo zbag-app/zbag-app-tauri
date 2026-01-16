@@ -159,9 +159,11 @@ fn setup_from_zec_quote(
 ) -> anyhow::Result<String> {
     let intent = SwapIntent {
         swap_type: SwapType::FromZec,
+        swap_mode: Default::default(),
         input_asset: "nep141:zec.omft.near".to_string(),
         input_amount: "1".to_string(),
         output_asset: "nep141:wrap.near".to_string(),
+        output_amount: None,
         destination_address: Some("near_destination.near".to_string()),
         // Refund address is required by the new API
         refund_address: Some("u1refundaddress".to_string()),

@@ -225,9 +225,11 @@ fn regression_no_secret_logging() {
             Network::Testnet,
             SwapIntent {
                 swap_type: SwapType::FromZec,
+                swap_mode: Default::default(),
                 input_asset: "ZEC".to_string(),
                 input_amount: "1".to_string(),
                 output_asset: "USDC".to_string(),
+                output_amount: None,
                 destination_address: Some(full_address.to_string()),
                 refund_address: None,
             },

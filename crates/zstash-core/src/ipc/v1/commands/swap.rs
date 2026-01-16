@@ -1,16 +1,24 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::{SupportedToken, SwapInfo, SwapQuote, SwapType};
+use crate::domain::{SupportedToken, SwapInfo, SwapMode, SwapQuote, SwapType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequestSwapQuoteRequest {
     pub schema_version: u32,
     pub swap_type: SwapType,
+    /// Swap mode: ExactInput (default) or ExactOutput (CrossPay).
+    /// When ExactOutput, the `output_amount` field specifies the desired output.
+    #[serde(default)]
+    pub swap_mode: SwapMode,
     pub input_asset: String,
+    /// Input amount (required for ExactInput mode, ignored for ExactOutput).
     pub input_amount: String,
     pub output_asset: String,
+    /// Output amount (required for ExactOutput/CrossPay mode, ignored for ExactInput).
+    #[serde(default)]
+    pub output_amount: Option<String>,
     pub destination_address: Option<String>,
     pub refund_address: Option<String>,
 }

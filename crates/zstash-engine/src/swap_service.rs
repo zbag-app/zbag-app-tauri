@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use zstash_core::domain::{
-    AccountType, Network, SwapInfo, SwapIntent, SwapQuote, SwapState, SwapType,
+    AccountType, Network, SwapInfo, SwapIntent, SwapMode, SwapQuote, SwapState, SwapType,
 };
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::swap::{
@@ -98,9 +98,42 @@ impl SwapService {
         if intent.input_asset.trim().is_empty() || intent.output_asset.trim().is_empty() {
             return Err(ipc_err(errors::INVALID_ASSET, "invalid asset"));
         }
-        if intent.input_amount.trim().is_empty() {
-            return Err(ipc_err(errors::INVALID_REQUEST, "missing input_amount"));
-        }
+
+        // Validate amount based on swap mode
+        let (amount_smallest, swap_type_str, amount_decimals) = match intent.swap_mode {
+            SwapMode::ExactInput => {
+                if intent.input_amount.trim().is_empty() {
+                    return Err(ipc_err(
+                        errors::INVALID_REQUEST,
+                        "missing input_amount for ExactInput mode",
+                    ));
+                }
+                let decimals = get_decimals_for_asset(&intent.input_asset);
+                let amount =
+                    convert_to_smallest_units(&intent.input_amount, decimals).map_err(|e| {
+                        ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}"))
+                    })?;
+                (amount, "EXACT_INPUT", decimals)
+            }
+            SwapMode::ExactOutput => {
+                let output_amount = intent
+                    .output_amount
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| {
+                        ipc_err(
+                            errors::INVALID_REQUEST,
+                            "missing output_amount for ExactOutput/CrossPay mode",
+                        )
+                    })?;
+                let decimals = get_decimals_for_asset(&intent.output_asset);
+                let amount = convert_to_smallest_units(output_amount, decimals).map_err(|e| {
+                    ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}"))
+                })?;
+                (amount, "EXACT_OUTPUT", decimals)
+            }
+        };
 
         // For ToZec: recipient is the destination Zcash address, refund goes back to origin chain
         // For FromZec: recipient is the destination chain address, refund goes back to Zcash
@@ -121,11 +154,6 @@ impl SwapService {
             .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "refund_address required"))?
             .to_string();
 
-        // Convert amount to smallest units
-        let decimals = get_decimals_for_asset(&intent.input_asset);
-        let amount_smallest = convert_to_smallest_units(&intent.input_amount, decimals)
-            .map_err(|e| ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}")))?;
-
         // Calculate deadline (2 hours from now, like Zashi)
         let deadline = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
 
@@ -135,12 +163,20 @@ impl SwapService {
         const _: () = assert!(APP_FEE_BPS <= 500, "App fee should not exceed 5%");
         const AFFILIATE_RECIPIENT: &str = "zstash.near";
 
+        tracing::debug!(
+            swap_mode = ?intent.swap_mode,
+            swap_type = swap_type_str,
+            amount = %amount_smallest,
+            decimals = amount_decimals,
+            "requesting swap quote"
+        );
+
         // Use dry=false to get deposit address directly (like Zashi)
         let req = zstash_network::near_intents::QuoteRequest {
             origin_asset: intent.input_asset.clone(),
             destination_asset: intent.output_asset.clone(),
             amount: amount_smallest,
-            swap_type: "EXACT_INPUT".to_string(),
+            swap_type: swap_type_str.to_string(),
             slippage_tolerance: 100, // 1%
             quote_waiting_time_ms: Some(3000),
             referral: Some("zstash".to_string()),

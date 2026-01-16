@@ -32,6 +32,7 @@ import { RestoreWallet } from './pages/RestoreWallet';
 import { ImportKeystone } from './pages/ImportKeystone';
 import { KeystoneSetup } from './pages/KeystoneSetup';
 import { Signing } from './pages/Signing';
+import { CrossPay } from './pages/CrossPay';
 import { Swap } from './pages/Swap';
 import { SwapDeposit } from './pages/SwapDeposit';
 import { SwapFromZec } from './pages/SwapFromZec';
@@ -388,6 +389,7 @@ function AppInner() {
           element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
         />
         <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
+        <Route path="/swap/crosspay" element={<CrossPay wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/quote" element={<SwapQuote />} />
         <Route path="/swap/deposit" element={<SwapDeposit />} />
         <Route

@@ -175,6 +175,14 @@ export interface SyncProgress {
 // ============================================================================
 
 export type SwapType = 'ToZec' | 'FromZec';
+
+/**
+ * Swap mode determines whether the amount specified is the input or output.
+ * - ExactInput: User specifies the input amount, receives whatever output the swap yields.
+ * - ExactOutput: User specifies the desired output amount (CrossPay), pays whatever input is required.
+ */
+export type SwapMode = 'ExactInput' | 'ExactOutput';
+
 export type SwapState =
   | 'Draft'
   | 'AwaitingDeposit'
@@ -691,9 +699,17 @@ export interface ListJobsRequest extends VersionedPayload {}
 /** Request swap quote */
 export interface RequestSwapQuoteRequest extends VersionedPayload {
   swap_type: SwapType;
+  /**
+   * Swap mode: ExactInput (default) or ExactOutput (CrossPay).
+   * When ExactOutput, the output_amount field specifies the desired output.
+   */
+  swap_mode?: SwapMode;
   input_asset: string;
+  /** Input amount (required for ExactInput mode, ignored for ExactOutput). */
   input_amount: string;
   output_asset: string;
+  /** Output amount (required for ExactOutput/CrossPay mode, ignored for ExactInput). */
+  output_amount?: string;
   destination_address: string | null;
   refund_address: string | null;
 }

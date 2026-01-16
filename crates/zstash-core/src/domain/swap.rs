@@ -7,6 +7,17 @@ pub enum SwapType {
     FromZec,
 }
 
+/// Swap mode determines whether the amount specified is the input or output.
+///
+/// - `ExactInput`: User specifies the input amount, receives whatever output the swap yields.
+/// - `ExactOutput`: User specifies the desired output amount, pays whatever input is required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum SwapMode {
+    #[default]
+    ExactInput,
+    ExactOutput,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SwapState {
     Draft,
@@ -21,9 +32,15 @@ pub enum SwapState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SwapIntent {
     pub swap_type: SwapType,
+    /// Swap mode: ExactInput or ExactOutput (CrossPay).
+    #[serde(default)]
+    pub swap_mode: SwapMode,
     pub input_asset: String,
+    /// Input amount (used for ExactInput mode).
     pub input_amount: String,
     pub output_asset: String,
+    /// Output amount (used for ExactOutput/CrossPay mode).
+    pub output_amount: Option<String>,
     pub destination_address: Option<String>,
     pub refund_address: Option<String>,
 }

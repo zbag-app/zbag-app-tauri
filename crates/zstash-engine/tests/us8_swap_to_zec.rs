@@ -250,9 +250,11 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
 
     let intent = SwapIntent {
         swap_type: SwapType::ToZec,
+        swap_mode: Default::default(),
         input_asset: "nep141:eth.omft.near".to_string(),
         input_amount: "0.001".to_string(),
         output_asset: "nep141:zec.omft.near".to_string(),
+        output_amount: None,
         destination_address: Some(recipient.to_string()),
         refund_address: Some(refund_to.to_string()),
     };
