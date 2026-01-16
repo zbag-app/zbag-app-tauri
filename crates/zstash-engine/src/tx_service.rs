@@ -31,6 +31,7 @@ use zstash_core::ipc::v1::events::TransactionChangedEvent;
 use crate::db::AppDb;
 use crate::encryption::Dek;
 use crate::error::ipc_err;
+use crate::permissions::{create_dir_all_secure, write_file_secure};
 use crate::reauth::Clock;
 use crate::tokio_runtime::block_on;
 
@@ -1803,7 +1804,7 @@ fn queue_broadcast<C: Clock>(
     last_error: Option<String>,
 ) -> anyhow::Result<()> {
     let queue_dir = queued_broadcasts_dir(wallet_dir);
-    std::fs::create_dir_all(&queue_dir).with_context(|| {
+    create_dir_all_secure(&queue_dir).with_context(|| {
         format!(
             "failed to create queued broadcasts dir: {}",
             queue_dir.display()
@@ -1833,14 +1834,16 @@ fn queue_broadcast<C: Clock>(
     let mut out = Vec::with_capacity(24 + ciphertext.len());
     out.extend_from_slice(&nonce);
     out.extend_from_slice(&ciphertext);
-    std::fs::write(&bin_path, out)
+    // Write queued tx bytes with secure permissions (0600 on Unix)
+    write_file_secure(&bin_path, &out)
         .with_context(|| format!("failed to write queued tx bytes: {}", bin_path.display()))?;
 
     let meta = QueuedBroadcastMeta {
         created_at_ms: to_unix_ms(clock.now())?,
         last_error,
     };
-    std::fs::write(&meta_path, serde_json::to_vec_pretty(&meta)?).with_context(|| {
+    // Write queued tx metadata with secure permissions (0600 on Unix)
+    write_file_secure(&meta_path, &serde_json::to_vec_pretty(&meta)?).with_context(|| {
         format!(
             "failed to write queued tx metadata: {}",
             meta_path.display()
@@ -1931,7 +1934,8 @@ fn update_queued_broadcast_error<C: Clock>(
         created_at_ms: existing.created_at_ms,
         last_error,
     };
-    std::fs::write(&meta_path, serde_json::to_vec_pretty(&updated)?).with_context(|| {
+    // Update metadata with secure permissions (0600 on Unix)
+    write_file_secure(&meta_path, &serde_json::to_vec_pretty(&updated)?).with_context(|| {
         format!(
             "failed to update queued broadcast meta: {}",
             meta_path.display()

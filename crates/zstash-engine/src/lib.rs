@@ -12,6 +12,7 @@ pub mod job_service;
 pub mod key_store;
 pub mod key_store_keychain;
 pub mod logging;
+pub mod permissions;
 pub mod reauth;
 pub mod server_resolver;
 pub mod swap_service;

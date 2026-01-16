@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -12,6 +13,54 @@ use tracing::warn;
 use zstash_core::domain::{TorState, TorStatus};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::TorStatusEvent;
+
+/// Recursively create directories with secure permissions (0700 on Unix).
+///
+/// This is an async version that uses tokio::fs for non-blocking IO.
+async fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
+    let path = path.as_ref().to_path_buf();
+
+    // Collect all path components that need to be created
+    let mut to_create = Vec::new();
+    let mut current = path.as_path();
+    while !current.exists() {
+        to_create.push(current.to_path_buf());
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => current = parent,
+            _ => break,
+        }
+    }
+
+    // Create directories from root to leaf, setting permissions on each
+    for dir in to_create.into_iter().rev() {
+        match tokio::fs::create_dir(&dir).await {
+            Ok(()) => {
+                set_dir_permissions(&dir)?;
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Directory was created between our check and create_dir - that's fine
+                // Still try to set permissions (best-effort)
+                let _ = set_dir_permissions(&dir);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
+}
+
+/// Set directory permissions to 0700 (owner-only access) on Unix.
+#[cfg(unix)]
+fn set_dir_permissions(path: impl AsRef<Path>) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let perms = std::fs::Permissions::from_mode(0o700);
+    std::fs::set_permissions(path, perms)
+}
+
+#[cfg(not(unix))]
+fn set_dir_permissions(_path: impl AsRef<Path>) -> io::Result<()> {
+    Ok(())
+}
 
 type BootstrapFuture =
     Pin<Box<dyn Future<Output = Result<zcash_client_backend::tor::Client, String>> + Send>>;
@@ -211,7 +260,10 @@ impl TorManager {
                 return;
             }
 
-            if let Err(err) = tokio::fs::create_dir_all(&config.tor_dir).await {
+            if let Err(err) = create_dir_all_secure(&config.tor_dir).await {
+                if *cancel_rx.borrow() {
+                    return;
+                }
                 warn!("failed to create tor directory: {err}");
                 // No explicit cancellation check needed: set_status_if_active has an internal
                 // guard, and we return immediately after.

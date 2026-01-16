@@ -6,6 +6,7 @@ use uuid::Uuid;
 use zstash_core::domain::Network;
 
 use crate::key_store::KeyStore;
+use crate::permissions::{create_dir_all_secure, set_file_permissions, write_file_secure};
 
 #[derive(Debug, Clone)]
 pub struct KeyStoreKeychain {
@@ -43,7 +44,7 @@ impl KeyStoreKeychain {
 
     fn write_file_atomic(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
+            create_dir_all_secure(parent).with_context(|| {
                 format!(
                     "failed to create key store parent directory: {}",
                     parent.display()
@@ -55,7 +56,8 @@ impl KeyStoreKeychain {
         tmp.push(".tmp");
         let tmp_path = PathBuf::from(tmp);
 
-        std::fs::write(&tmp_path, contents).with_context(|| {
+        // Write temp file with secure permissions (0600 on Unix)
+        write_file_secure(&tmp_path, contents).with_context(|| {
             format!(
                 "failed to write key store temp file: {}",
                 tmp_path.display()
@@ -65,6 +67,13 @@ impl KeyStoreKeychain {
             format!(
                 "failed to move key store temp file into place: {} -> {}",
                 tmp_path.display(),
+                path.display()
+            )
+        })?;
+        // Ensure permissions are set after rename (rename preserves permissions, but verify)
+        set_file_permissions(path).with_context(|| {
+            format!(
+                "failed to set permissions on key store file: {}",
                 path.display()
             )
         })?;

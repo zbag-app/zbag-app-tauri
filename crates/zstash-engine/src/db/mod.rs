@@ -6,6 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 use zeroize::Zeroize;
 
 use crate::encryption::Dek;
+use crate::permissions::{create_dir_all_secure, set_file_permissions};
 
 /// SQLite busy timeout for concurrent operations (sync + tx).
 ///
@@ -114,7 +115,7 @@ impl AppDb {
     pub fn open(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
+            create_dir_all_secure(parent).with_context(|| {
                 format!(
                     "failed to create app metadata db parent directory: {}",
                     parent.display()
@@ -125,6 +126,14 @@ impl AppDb {
         migrations::migrate_with_rollback(&path)?;
 
         let conn = open_app_db_connection(&path)?;
+
+        // Set secure file permissions on the database file (0600 on Unix)
+        set_file_permissions(&path).with_context(|| {
+            format!(
+                "failed to set permissions on app metadata db: {}",
+                path.display()
+            )
+        })?;
 
         Ok(Self { path, conn })
     }

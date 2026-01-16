@@ -35,6 +35,7 @@ use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
+use crate::permissions::{create_dir_all_secure, set_file_permissions};
 use crate::server_resolver;
 
 /// Default batch size for downloading blocks.
@@ -334,12 +335,12 @@ impl SyncService {
 
             // Chain tip is fetched in the catch-up loop below.
 
-            // Initialize block cache directory
+            // Initialize block cache directory with secure permissions (0700 on Unix)
             let cache_dir = wallet_db_path
                 .parent()
                 .unwrap_or(&wallet_db_path)
                 .join("block_cache");
-            if let Err(err) = std::fs::create_dir_all(&cache_dir) {
+            if let Err(err) = create_dir_all_secure(&cache_dir) {
                 tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
@@ -1632,6 +1633,13 @@ fn write_block_to_cache(
         .with_context(|| format!("failed to create block file: {}", block_path.display()))?;
     file.write_all(&block.encode_to_vec())
         .with_context(|| format!("failed to write block file: {}", block_path.display()))?;
+    // Set secure file permissions on the block cache file (0600 on Unix)
+    set_file_permissions(&block_path).with_context(|| {
+        format!(
+            "failed to set permissions on block file: {}",
+            block_path.display()
+        )
+    })?;
 
     Ok(block_meta)
 }

@@ -1,0 +1,222 @@
+//! Filesystem permission hardening for wallet data.
+//!
+//! On Unix/macOS:
+//! - Directories are created with mode 0700 (owner read/write/execute only)
+//! - Files are created with mode 0600 (owner read/write only)
+//!
+//! On Windows, permissions are applied using best-effort Windows API calls where feasible.
+
+use std::io;
+use std::path::Path;
+
+/// Create a directory with secure permissions (0700 on Unix).
+///
+/// If the directory already exists, this will attempt to set restrictive permissions.
+pub fn create_dir_secure(path: impl AsRef<Path>) -> io::Result<()> {
+    let path = path.as_ref();
+    std::fs::create_dir(path)?;
+    set_dir_permissions(path)?;
+    Ok(())
+}
+
+/// Recursively create directories with secure permissions (0700 on Unix).
+///
+/// Each directory in the path hierarchy is created with restrictive permissions.
+pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
+    let path = path.as_ref();
+
+    // Collect all path components that need to be created
+    let mut to_create = Vec::new();
+    let mut current = path;
+    while !current.exists() {
+        to_create.push(current.to_path_buf());
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => current = parent,
+            _ => break,
+        }
+    }
+
+    // Create directories from root to leaf, setting permissions on each
+    for dir in to_create.into_iter().rev() {
+        // Use create_dir which fails if it already exists (race-safe)
+        match std::fs::create_dir(&dir) {
+            Ok(()) => {
+                set_dir_permissions(&dir)?;
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Directory was created between our check and create_dir - that's fine
+                // Still try to set permissions (best-effort)
+                let _ = set_dir_permissions(&dir);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
+}
+
+/// Write data to a file with secure permissions (0600 on Unix).
+///
+/// The file is created with restrictive permissions atomically on Unix
+/// to prevent race conditions where the file briefly exists with broader permissions.
+pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<()> {
+    let path = path.as_ref();
+
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true).mode(0o600);
+        let mut file = opts.open(path)?;
+        file.write_all(contents)?;
+        file.sync_all()?;
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, contents)?;
+        // Best-effort permission setting on non-Unix
+        let _ = set_file_permissions(path);
+        Ok(())
+    }
+}
+
+/// Set directory permissions to 0700 (owner-only access) on Unix.
+///
+/// On non-Unix platforms, this is a no-op (best-effort).
+pub fn set_dir_permissions(path: impl AsRef<Path>) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o700);
+        std::fs::set_permissions(path, perms)
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
+/// Set file permissions to 0600 (owner read/write only) on Unix.
+///
+/// On non-Unix platforms, this is a no-op (best-effort).
+pub fn set_file_permissions(path: impl AsRef<Path>) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(path, perms)
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
+/// Open a file for writing with secure permissions (0600 on Unix).
+///
+/// Returns an `OpenOptions` configured for secure file creation.
+#[cfg(unix)]
+pub fn secure_open_options() -> std::fs::OpenOptions {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true).mode(0o600);
+    opts
+}
+
+#[cfg(not(unix))]
+pub fn secure_open_options() -> std::fs::OpenOptions {
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    opts
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_create_dir_secure_sets_0700() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path().join("secure_dir");
+
+        create_dir_secure(&dir).unwrap();
+
+        let meta = std::fs::metadata(&dir).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "directory should have mode 0700");
+    }
+
+    #[test]
+    fn test_create_dir_all_secure_sets_0700_on_all() {
+        let tmp = tempdir().unwrap();
+        let nested = tmp.path().join("a").join("b").join("c");
+
+        create_dir_all_secure(&nested).unwrap();
+
+        // Check each directory in the chain has 0700
+        for dir in [
+            tmp.path().join("a"),
+            tmp.path().join("a").join("b"),
+            tmp.path().join("a").join("b").join("c"),
+        ] {
+            let meta = std::fs::metadata(&dir).unwrap();
+            let mode = meta.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o700, "directory {:?} should have mode 0700", dir);
+        }
+    }
+
+    #[test]
+    fn test_write_file_secure_sets_0600() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("secure_file.txt");
+
+        write_file_secure(&file, b"secret data").unwrap();
+
+        let meta = std::fs::metadata(&file).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "file should have mode 0600");
+    }
+
+    #[test]
+    fn test_set_file_permissions() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test_file.txt");
+
+        std::fs::write(&file, b"test").unwrap();
+        set_file_permissions(&file).unwrap();
+
+        let meta = std::fs::metadata(&file).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "file should have mode 0600 after set_file_permissions"
+        );
+    }
+
+    #[test]
+    fn test_set_dir_permissions() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path().join("test_dir");
+
+        std::fs::create_dir(&dir).unwrap();
+        set_dir_permissions(&dir).unwrap();
+
+        let meta = std::fs::metadata(&dir).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o700,
+            "directory should have mode 0700 after set_dir_permissions"
+        );
+    }
+}

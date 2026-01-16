@@ -28,6 +28,7 @@ use crate::db::{
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
 };
+use crate::permissions::set_file_permissions;
 use crate::error::ipc_err;
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
@@ -2362,14 +2363,24 @@ impl WalletManager {
         dek: &Dek,
         create_if_missing: bool,
     ) -> anyhow::Result<rusqlite::Connection> {
-        open_sqlcipher_db(
+        let conn = open_sqlcipher_db(
             wallet_db_path,
             dek,
             OpenSqlcipherOptions {
                 create_if_missing,
                 load_array_module: false,
             },
-        )
+        )?;
+
+        // Set secure file permissions on the wallet database (0600 on Unix)
+        set_file_permissions(wallet_db_path).with_context(|| {
+            format!(
+                "failed to set permissions on wallet db: {}",
+                wallet_db_path.display()
+            )
+        })?;
+
+        Ok(conn)
     }
 
     fn issue_backup_challenge(&mut self, wallet_id: Uuid) -> anyhow::Result<BackupChallenge> {

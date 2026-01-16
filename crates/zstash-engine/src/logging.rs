@@ -4,6 +4,8 @@ use anyhow::Context as _;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt as _};
 
+use crate::permissions::create_dir_all_secure;
+
 #[derive(Debug)]
 pub struct LoggingGuard {
     _guard: WorkerGuard,
@@ -82,7 +84,8 @@ pub fn redact_address(address: &str) -> RedactedAddress<'_> {
 
 pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     let log_directory = default_log_directory()?;
-    std::fs::create_dir_all(&log_directory).with_context(|| {
+    // Create log directory with secure permissions (0700 on Unix)
+    create_dir_all_secure(&log_directory).with_context(|| {
         format!(
             "failed to create log directory: {}",
             log_directory.display()
