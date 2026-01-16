@@ -78,14 +78,9 @@ pub struct WalletAeadParams {
 #[zeroize(drop)]
 pub struct Dek(pub [u8; 32]);
 
-impl Dek {
-    /// Explicitly clones sensitive key material into a new `Dek` value.
-    ///
-    /// This should only be used when ownership transfer is required (for example,
-    /// moving a DEK into a spawned blocking task). Both the original and cloned
-    /// values are zeroized independently on drop.
-    pub fn clone_key_material(&self) -> Self {
-        Self(self.0)
+impl Clone for Dek {
+    fn clone(&self) -> Self {
+        Dek(self.0)
     }
 }
 

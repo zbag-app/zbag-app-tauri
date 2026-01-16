@@ -171,7 +171,7 @@ fn regression_no_secret_logging() {
 
         let wallet_id = {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            mgr.create_wallet("Test Wallet", Network::Testnet, password, false, None)
+            mgr.create_wallet_for_test("Test Wallet", Network::Testnet, password, false, None)
                 .expect("create wallet")
                 .wallet
                 .id
@@ -199,7 +199,7 @@ fn regression_no_secret_logging() {
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            let _ = mgr.prepare_send(0, "invalid-recipient", "1", Some(memo), false);
+            let _ = mgr.prepare_send_for_test(0, "invalid-recipient", "1", Some(memo), false);
         }
 
         {
@@ -209,7 +209,7 @@ fn regression_no_secret_logging() {
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            let _ = mgr.finalize_signing(
+            let _ = mgr.finalize_signing_for_test(
                 "test-signing-request-id",
                 signed_payload,
                 &reauth_token,
@@ -218,8 +218,15 @@ fn regression_no_secret_logging() {
         }
 
         // Swap-from / quote paths should fail closed on Testnet without network calls.
-        let swap_service =
-            SwapService::new(app_db_path, Arc::clone(&wallet_manager)).expect("swap service");
+        let tx_service = std::sync::Arc::new(std::sync::Mutex::new(
+            zstash_engine::tx_service::TxService::new(zstash_engine::reauth::SystemClock),
+        ));
+        let swap_service = SwapService::new(
+            app_db_path,
+            Arc::clone(&wallet_manager),
+            Arc::clone(&tx_service),
+        )
+        .expect("swap service");
         let _ = swap_service.request_swap_quote(
             wallet_id,
             Network::Testnet,
@@ -247,7 +254,7 @@ fn regression_no_secret_logging() {
         )
         .expect("create restore wallet manager");
         let _ = restore_mgr
-            .restore_wallet(
+            .restore_wallet_for_test(
                 "Restored wallet",
                 Network::Testnet,
                 password,

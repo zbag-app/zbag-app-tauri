@@ -113,12 +113,12 @@ fn build_signing_request_is_blocked_until_backup_complete() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
     let err = mgr
-        .build_signing_request(0, "not-an-address", "1", None, false)
+        .build_signing_request_for_test(0, "not-an-address", "1", None, false)
         .expect_err("BACKUP_REQUIRED should block build_signing_request");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::BACKUP_REQUIRED);
@@ -127,7 +127,7 @@ fn build_signing_request_is_blocked_until_backup_complete() {
         .expect("set backup required=false");
 
     let err = mgr
-        .build_signing_request(0, "not-an-address", "1", None, false)
+        .build_signing_request_for_test(0, "not-an-address", "1", None, false)
         .expect_err("after backup, invalid recipient should be surfaced");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::INVALID_RECIPIENT);
@@ -147,7 +147,7 @@ fn build_signing_request_enforces_privacy_ack_and_memo_rules_for_transparent_rec
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -158,13 +158,13 @@ fn build_signing_request_enforces_privacy_ack_and_memo_rules_for_transparent_rec
         .expect("get transparent address");
 
     let err = mgr
-        .build_signing_request(0, &transparent.encoded, "1", None, false)
+        .build_signing_request_for_test(0, &transparent.encoded, "1", None, false)
         .expect_err("transparent recipient should require privacy ack");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::PRIVACY_ACK_REQUIRED);
 
     let err = mgr
-        .build_signing_request(0, &transparent.encoded, "1", Some("hi"), true)
+        .build_signing_request_for_test(0, &transparent.encoded, "1", Some("hi"), true)
         .expect_err("transparent recipient must reject memos");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::MEMO_NOT_ALLOWED);
@@ -184,7 +184,7 @@ fn build_signing_request_rejects_memo_over_512_bytes() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -193,7 +193,7 @@ fn build_signing_request_rejects_memo_over_512_bytes() {
     let shielded = testnet_shielded_address();
     let memo = "a".repeat(513);
     let err = mgr
-        .build_signing_request(0, &shielded, "1", Some(&memo), false)
+        .build_signing_request_for_test(0, &shielded, "1", Some(&memo), false)
         .expect_err("memo too long should be rejected");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::MEMO_TOO_LONG);

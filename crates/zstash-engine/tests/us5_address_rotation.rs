@@ -105,7 +105,7 @@ fn receive_shielded_addresses_rotate_and_are_shielded_only() {
         WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
             .expect("create wallet manager");
 
-    mgr.create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+    mgr.create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let a1 = mgr
@@ -160,7 +160,7 @@ fn transparent_receive_address_is_stable_per_account() {
         WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
             .expect("create wallet manager");
 
-    mgr.create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+    mgr.create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let t1 = mgr

@@ -133,7 +133,7 @@ fn create_wallet_issues_backup_challenge_and_requires_backup() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     assert_eq!(created.seed_phrase.len(), 24);
@@ -173,7 +173,7 @@ fn verify_backup_marks_backup_complete() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let answers =
@@ -253,7 +253,7 @@ fn backup_challenge_invalidates_after_five_failures_and_requires_new_challenge()
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let wrong_answers: HashMap<u8, SensitiveString> = created
@@ -314,7 +314,7 @@ fn expired_backup_challenge_returns_backup_challenge_expired() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let now_ms = chrono::Utc::now().timestamp_millis();
@@ -357,7 +357,7 @@ fn restart_invalidates_in_memory_backup_challenges() {
         )
         .expect("create wallet manager");
 
-        mgr.create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        mgr.create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
             .expect("create wallet")
     };
 
@@ -387,19 +387,21 @@ fn load_wallet_is_locked_then_unlocked_after_unlock_wallet() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     mgr.lock_wallet(created.wallet.id).expect("lock wallet");
 
-    let (_wallet, lock_status) = mgr.load_wallet(created.wallet.id).expect("load wallet");
+    let (_wallet, lock_status) = mgr
+        .load_wallet_for_test(created.wallet.id)
+        .expect("load wallet");
     assert_eq!(lock_status, WalletLockStatus::Locked);
 
-    mgr.unlock_wallet(created.wallet.id, "pw", false)
+    mgr.unlock_wallet_for_test(created.wallet.id, "pw", false)
         .expect("unlock wallet");
 
     let (_wallet, lock_status) = mgr
-        .load_wallet(created.wallet.id)
+        .load_wallet_for_test(created.wallet.id)
         .expect("load wallet after unlock");
     assert_eq!(lock_status, WalletLockStatus::Unlocked);
 
@@ -427,7 +429,7 @@ fn create_wallet_end_to_end_duration_is_under_sixty_seconds_in_release() {
 
     let start = std::time::Instant::now();
     let _created = mgr
-        .create_wallet("Timing Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Timing Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
     let elapsed = start.elapsed();
     eprintln!("CreateWallet duration (release): {elapsed:?}");

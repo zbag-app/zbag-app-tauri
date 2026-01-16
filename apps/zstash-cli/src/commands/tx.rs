@@ -147,7 +147,15 @@ pub async fn run(
             // Prepare the transaction
             let prepare_response = {
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                wm.prepare_send(account_id, &to, &amount, memo.as_deref(), allow_transparent)?
+                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                wm.prepare_send(
+                    account_id,
+                    &to,
+                    &amount,
+                    memo.as_deref(),
+                    allow_transparent,
+                    &mut tx_svc,
+                )?
             };
 
             // Show summary and confirm
@@ -193,10 +201,30 @@ pub async fn run(
             drop(unlock_password);
             drop(provided_password);
 
-            // Confirm and broadcast
+            // Confirm and broadcast (two-phase pattern to release mutex during proving)
             let confirm_response = {
-                let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                wm.confirm_send(&prepare_response.proposal_id, &reauth_token, None)?
+                // Phase 1: Get context
+                let (ctx, spending_key) = {
+                    let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+                    let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                    wm.prepare_confirm_send(&prepare_response.proposal_id, &reauth_token, &tx_svc)?
+                };
+
+                // Phase 2: Expensive operations outside mutex
+                let mut conn = zstash_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
+                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                tx_svc.confirm_send(
+                    &ctx.app_db_path,
+                    ctx.wallet_id,
+                    ctx.network,
+                    &ctx.wallet_dir,
+                    &ctx.dek,
+                    &mut conn,
+                    &ctx.grpc_url,
+                    &prepare_response.proposal_id,
+                    spending_key,
+                    None,
+                )?
             };
 
             output.print_tx_sent(&confirm_response.txid);
@@ -239,10 +267,30 @@ pub async fn run(
             drop(unlock_password);
             drop(provided_password);
 
-            // Shield funds
+            // Shield funds (two-phase pattern to release mutex during proving)
             let response = {
-                let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                wm.shield_funds(account_id, consolidate, &reauth_token, None)?
+                // Phase 1: Get context
+                let (ctx, spending_key) = {
+                    let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+                    wm.prepare_shield_funds(account_id, &reauth_token)?
+                };
+
+                // Phase 2: Expensive operations outside mutex
+                let mut conn = zstash_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
+                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                tx_svc.shield_funds(
+                    &ctx.app_db_path,
+                    ctx.wallet_id,
+                    ctx.network,
+                    &ctx.wallet_dir,
+                    &ctx.dek,
+                    &mut conn,
+                    &ctx.grpc_url,
+                    account_id,
+                    consolidate,
+                    spending_key,
+                    None,
+                )?
             };
 
             output.print_tx_sent(&response.txid);
@@ -266,7 +314,8 @@ pub async fn run(
             // List transactions
             let response = {
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                wm.list_transactions(account_id, limit, offset)?
+                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                wm.list_transactions(account_id, limit, offset, &mut tx_svc)?
             };
 
             if output.is_json() {
@@ -336,7 +385,8 @@ pub async fn run(
             // Retry broadcast
             let result_txid = {
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                wm.retry_broadcast(&txid, &reauth_token, None, None)?
+                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                wm.retry_broadcast(&txid, &reauth_token, None, &mut tx_svc)?
             };
 
             output.print_tx_sent(&result_txid);

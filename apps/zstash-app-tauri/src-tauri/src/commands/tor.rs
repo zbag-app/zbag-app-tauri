@@ -57,11 +57,12 @@ pub fn zstash_set_tor_enabled(
         // Restart syncs (they will wait for Tor in their own task)
         if request.enabled && !running_wallets.is_empty() {
             let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
             for wallet_id in running_wallets {
-                if let Ok((wallet, lock_status)) = mgr.load_wallet(wallet_id)
-                    && lock_status == WalletLockStatus::Unlocked
-                {
-                    let _ = start_sync_with_handlers(&app, &state, &mut mgr, &wallet);
+                if let Ok((wallet, lock_status)) = mgr.load_wallet(wallet_id, &mut tx_svc) {
+                    if lock_status == WalletLockStatus::Unlocked {
+                        let _ = start_sync_with_handlers(&app, &state, &mut mgr, &wallet);
+                    }
                 }
             }
         }

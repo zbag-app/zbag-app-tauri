@@ -9,8 +9,8 @@ use zstash_core::ipc::v1::commands::transaction::{
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zstash_engine::error::find_engine_ipc_error;
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_engine::wallet_manager::open_wallet_db_for_tx;
 
 use crate::events;
 use crate::state::AppState;
@@ -43,19 +43,14 @@ pub fn zstash_prepare_send(
     let result = (|| {
         let lock_wait_started = Instant::now();
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        if zstash_engine::logging::temporary_debug_enabled() {
-            tracing::debug!(
-                phase = "tauri.zstash_prepare_send.wallet_manager_lock_acquired",
-                elapsed_ms = lock_wait_started.elapsed().as_millis(),
-                "temporary send debug"
-            );
-        }
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         mgr.prepare_send(
             request.account_id,
             &request.recipient,
             &request.amount,
             request.memo.as_deref(),
             request.allow_transparent_recipient,
+            &mut tx_svc,
         )
     })();
 
@@ -112,8 +107,33 @@ pub fn zstash_confirm_send(
     });
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.confirm_send(&request.proposal_id, &request.reauth_token, Some(handler))
+        // Phase 1: Extract context while holding wallet_manager lock briefly
+        let (ctx, spending_key, proposal_id) = {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+            let (ctx, spending_key) =
+                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &tx_svc)?;
+            (ctx, spending_key, request.proposal_id.clone())
+        };
+        // wallet_manager lock is released here
+
+        // Phase 2: Open a fresh database connection and perform expensive operations
+        // without holding the wallet_manager lock, allowing other operations to proceed.
+        let mut conn = open_wallet_db_for_tx(&ctx)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+
+        tx_svc.confirm_send(
+            &ctx.app_db_path,
+            ctx.wallet_id,
+            ctx.network,
+            &ctx.wallet_dir,
+            &ctx.dek,
+            &mut conn,
+            &ctx.grpc_url,
+            &proposal_id,
+            spending_key,
+            Some(handler),
+        )
     })
 }
 
@@ -127,10 +147,10 @@ pub fn zstash_cancel_send(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         Ok(CancelSendResponse {
             schema_version: SCHEMA_VERSION,
-            cancelled: mgr.cancel_send(&request.proposal_id),
+            cancelled: tx_svc.cancel_send(&request.proposal_id),
         })
     })
 }
@@ -158,12 +178,18 @@ pub async fn zstash_retry_broadcast(
         let _ = events::emit_server_failover(&failover_app, event);
     });
 
-    let prepare_join = tauri::async_runtime::spawn_blocking(move || {
-        map_anyhow(|| {
-            let mut mgr = prepare_wallet_manager.lock().expect("mutex poisoned");
-            let task = mgr.prepare_retry_broadcast_task(&txid, &reauth_token)?;
-            mgr.validate_retry_broadcast_task(&task)?;
-            Ok(task)
+    map_anyhow(|| {
+        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let txid = mgr.retry_broadcast(
+            &request.txid,
+            &request.reauth_token,
+            Some(handler),
+            &mut tx_svc,
+        )?;
+        Ok(RetryBroadcastResponse {
+            schema_version: SCHEMA_VERSION,
+            txid,
         })
     });
 
@@ -219,7 +245,13 @@ pub fn zstash_list_transactions(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.list_transactions(request.account_id, request.limit, request.offset)
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        mgr.list_transactions(
+            request.account_id,
+            request.limit,
+            request.offset,
+            &mut tx_svc,
+        )
     })
 }
 
@@ -238,11 +270,31 @@ pub fn zstash_shield_funds(
     });
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.shield_funds(
-            request.account_id,
-            request.consolidate,
-            &request.reauth_token,
+        // Phase 1: Extract context while holding wallet_manager lock briefly
+        let (ctx, spending_key, account_id, consolidate) = {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            let (ctx, spending_key) =
+                mgr.prepare_shield_funds(request.account_id, &request.reauth_token)?;
+            (ctx, spending_key, request.account_id, request.consolidate)
+        };
+        // wallet_manager lock is released here
+
+        // Phase 2: Open a fresh database connection and perform expensive operations
+        // without holding the wallet_manager lock, allowing other operations to proceed.
+        let mut conn = open_wallet_db_for_tx(&ctx)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+
+        tx_svc.shield_funds(
+            &ctx.app_db_path,
+            ctx.wallet_id,
+            ctx.network,
+            &ctx.wallet_dir,
+            &ctx.dek,
+            &mut conn,
+            &ctx.grpc_url,
+            account_id,
+            consolidate,
+            spending_key,
             Some(handler),
         )
     })

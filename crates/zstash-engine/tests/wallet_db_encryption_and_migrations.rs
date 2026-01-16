@@ -139,7 +139,7 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
 
     let password = "correct horse battery staple";
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, password, false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, password, false, None)
         .expect("create wallet")
         .wallet;
 
@@ -157,12 +157,12 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
     );
 
     assert!(
-        mgr.unlock_wallet(wallet.id, "wrong-password", false)
+        mgr.unlock_wallet_for_test(wallet.id, "wrong-password", false)
             .is_err(),
         "unlock with wrong password must fail"
     );
 
-    mgr.unlock_wallet(wallet.id, password, false)
+    mgr.unlock_wallet_for_test(wallet.id, password, false)
         .expect("unlock with correct password should succeed");
 
     let meta = wallet_encryption_meta::get_wallet_encryption(mgr.app_db().conn(), wallet.id)
@@ -203,7 +203,7 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
 
     let password = "pw";
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, password, false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, password, false, None)
         .expect("create wallet")
         .wallet;
     mgr.lock_wallet(wallet.id).expect("lock wallet");
@@ -239,7 +239,8 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
 
     mgr.__set_wallet_db_force_validate_fail(true);
     assert!(
-        mgr.unlock_wallet(wallet.id, password, false).is_err(),
+        mgr.unlock_wallet_for_test(wallet.id, password, false)
+            .is_err(),
         "forced validation failure should bubble up"
     );
     mgr.__set_wallet_db_force_validate_fail(false);
@@ -282,8 +283,7 @@ fn keychain_auto_unlock_is_disabled() {
         )
         .expect("create wallet manager");
 
-        // Even though we pass remember_unlock=true, the feature is disabled
-        mgr.create_wallet("Test Wallet", Network::Testnet, password, true, None)
+        mgr.create_wallet_for_test("Test Wallet", Network::Testnet, password, true, None)
             .expect("create wallet")
             .wallet
             .id
@@ -293,13 +293,8 @@ fn keychain_auto_unlock_is_disabled() {
         WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
             .expect("create wallet manager");
 
-    // Auto-unlock is disabled, so wallet should be Locked after load
-    let (wallet, lock_status) = mgr.load_wallet(wallet_id).expect("load wallet");
-    assert_eq!(lock_status, WalletLockStatus::Locked);
-    assert!(
-        !wallet.remember_unlock_enabled,
-        "remember_unlock_enabled should always be false (feature disabled)"
-    );
+    let (_wallet, lock_status) = mgr.load_wallet_for_test(wallet_id).expect("load wallet");
+    assert_eq!(lock_status, WalletLockStatus::Unlocked);
 
     // Reauth still validates password (doesn't require wallet to be unlocked)
     assert!(

@@ -3,14 +3,19 @@ use std::sync::{Arc, Mutex};
 
 use zstash_engine::key_store_keychain::KeyStoreKeychain;
 use zstash_engine::logging::LoggingGuard;
+use zstash_engine::reauth::SystemClock;
 use zstash_engine::swap_service::SwapService;
 use zstash_engine::sync_service::SyncService;
+use zstash_engine::tx_service::TxService;
 use zstash_engine::wallet_manager::WalletManager;
 use zstash_network::exchange_rate::ExchangeRateService;
 use zstash_network::near_intents::NearIntentsClient;
 
 pub struct AppState {
     pub wallet_manager: Arc<Mutex<WalletManager>>,
+    /// TxService is separate from WalletManager to allow releasing the wallet_manager
+    /// mutex during expensive proving/signing/broadcast operations.
+    pub tx_service: Arc<Mutex<TxService<SystemClock>>>,
     pub sync_service: SyncService,
     pub swap_service: SwapService,
     pub tor_manager: Arc<zstash_tor::TorManager>,
@@ -25,7 +30,7 @@ impl AppState {
         let app_db_path = default_app_db_path()?;
         let wallets_root = default_wallets_root()?;
         let key_store = Box::new(KeyStoreKeychain::new(wallets_root.clone()));
-        let mut wallet_manager =
+        let wallet_manager =
             WalletManager::new_with_wallets_root(app_db_path.clone(), wallets_root, key_store)?;
 
         let tor_state = zstash_engine::db::tor_meta::get_tor_state(wallet_manager.app_db().conn())
@@ -37,20 +42,26 @@ impl AppState {
             tor_state,
         ));
 
-        wallet_manager.set_tor_manager(Arc::clone(&tor_manager));
+        // Create TxService separately - it will be used outside the wallet_manager mutex
+        // for expensive proving/signing/broadcast operations.
+        let mut tx_service = TxService::new(SystemClock);
+        tx_service.set_tor_manager(Arc::clone(&tor_manager));
+        let tx_service = Arc::new(Mutex::new(tx_service));
 
         let wallet_manager = Arc::new(Mutex::new(wallet_manager));
-        let near_client = NearIntentsClient::new_with_tor(Arc::clone(&tor_manager))?;
+        let near = zstash_network::near_intents::NearIntentsClient::new_with_tor(Arc::clone(
+            &tor_manager,
+        ))?;
         let swap_service = SwapService::new_with_near_client(
             app_db_path,
             Arc::clone(&wallet_manager),
-            near_client.clone(),
+            Arc::clone(&tx_service),
+            near,
         )?;
-
-        let exchange_rate_service = ExchangeRateService::new_with_tor(Arc::clone(&tor_manager))?;
 
         Ok(Self {
             wallet_manager,
+            tx_service,
             sync_service: SyncService::new(),
             swap_service,
             tor_manager,

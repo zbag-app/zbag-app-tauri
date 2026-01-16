@@ -130,7 +130,7 @@ fn restore_wallet_rejects_invalid_seed_phrase() {
             .expect("create wallet manager");
 
     let err = mgr
-        .restore_wallet(
+        .restore_wallet_for_test(
             "Restored",
             Network::Testnet,
             "pw",
@@ -155,7 +155,7 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Seed Source", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Seed Source", Network::Testnet, "pw", false, None)
         .expect("create wallet");
     let seed_phrase = created
         .seed_phrase
@@ -166,7 +166,7 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
     let seed_phrase: SensitiveString = seed_phrase.into();
 
     let restored = mgr
-        .restore_wallet(
+        .restore_wallet_for_test(
             "Restored",
             Network::Testnet,
             "pw2",
@@ -186,7 +186,7 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
         .expect("get receive address");
 
     let err = mgr
-        .prepare_send(0, &recipient.encoded, "1", None, false)
+        .prepare_send_for_test(0, &recipient.encoded, "1", None, false)
         .expect_err(
             "send should fail (no funds / not yet scanned), but must not be BACKUP_REQUIRED",
         );
@@ -207,7 +207,7 @@ fn restore_wallet_returns_birthday_height_estimate() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Seed Source", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Seed Source", Network::Mainnet, "pw", false, None)
         .expect("create wallet");
     let seed_phrase = created
         .seed_phrase
@@ -222,7 +222,7 @@ fn restore_wallet_returns_birthday_height_estimate() {
         zstash_engine::birthday::estimate_birthday_height(Network::Mainnet, birthday_date_ms);
 
     let restored = mgr
-        .restore_wallet(
+        .restore_wallet_for_test(
             "Restored",
             Network::Mainnet,
             "pw2",

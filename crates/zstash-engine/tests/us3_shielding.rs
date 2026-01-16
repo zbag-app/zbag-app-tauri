@@ -304,7 +304,7 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -324,7 +324,8 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
         &transparent.encoded,
         [100_000],
     );
-    mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
+    mgr.unlock_wallet_for_test(wallet.id, "pw", false)
+        .expect("unlock");
 
     let balance = mgr.get_balance(0).expect("get balance");
     let transparent_total: u64 = balance
@@ -335,7 +336,7 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
 
     let shielded = testnet_shielded_address();
     let err = mgr
-        .prepare_send(0, &shielded, "1", None, false)
+        .prepare_send_for_test(0, &shielded, "1", None, false)
         .expect_err("transparent funds must not be spendable via send flow");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::TRANSPARENT_SPEND_BLOCKED);
@@ -358,7 +359,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -377,7 +378,8 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
         &transparent.encoded,
         [250_000],
     );
-    mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
+    mgr.unlock_wallet_for_test(wallet.id, "pw", false)
+        .expect("unlock");
 
     let before = mgr.get_balance(0).expect("get balance before");
     let before_total: u64 = before.total.parse().expect("before total u64");
@@ -439,7 +441,7 @@ fn shield_funds_is_blocked_until_backup_complete() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -471,7 +473,7 @@ fn shield_funds_insufficient_fee_includes_details() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -490,7 +492,8 @@ fn shield_funds_insufficient_fee_includes_details() {
         &transparent.encoded,
         [6_000],
     );
-    mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
+    mgr.unlock_wallet_for_test(wallet.id, "pw", false)
+        .expect("unlock");
 
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
@@ -532,7 +535,7 @@ fn shield_funds_batches_large_input_sets() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -551,7 +554,8 @@ fn shield_funds_batches_large_input_sets() {
         &transparent.encoded,
         std::iter::repeat_n(50_000u64, 201),
     );
-    mgr.unlock_wallet(wallet.id, "pw", false).expect("unlock");
+    mgr.unlock_wallet_for_test(wallet.id, "pw", false)
+        .expect("unlock");
 
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
@@ -561,7 +565,7 @@ fn shield_funds_batches_large_input_sets() {
         .expect("shield funds");
 
     let txs = mgr
-        .list_transactions(0, 500, 0)
+        .list_transactions_for_test(0, 500, 0)
         .expect("list transactions")
         .transactions;
     let shield_txs: Vec<_> = txs

@@ -12,8 +12,9 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, WalletInfo, WalletLockStatus};
-use zstash_core::permissions::create_dir_all_secure;
+use zstash_engine::reauth::SystemClock;
 use zstash_engine::sync_service::SyncService;
+use zstash_engine::tx_service::TxService;
 use zstash_engine::wallet_manager::WalletManager;
 
 use crate::file_key_store::FileKeyStore;
@@ -21,6 +22,7 @@ use crate::file_key_store::FileKeyStore;
 /// CLI application state.
 pub struct CliAppState {
     pub wallet_manager: Arc<Mutex<WalletManager>>,
+    pub tx_service: Arc<Mutex<TxService<SystemClock>>>,
     pub sync_service: SyncService,
     pub tor_manager: Option<Arc<zstash_tor::TorManager>>,
     #[allow(dead_code)]
@@ -42,8 +44,11 @@ impl CliAppState {
         let key_store = Box::new(FileKeyStore::new(data_dir));
 
         // Initialize WalletManager
-        let mut wallet_manager =
+        let wallet_manager =
             WalletManager::new_with_wallets_root(app_db_path, wallets_root, key_store)?;
+
+        // Create TxService
+        let mut tx_service = TxService::new(SystemClock);
 
         // Initialize TorManager if requested
         let tor_manager = if enable_tor {
@@ -56,16 +61,18 @@ impl CliAppState {
                 zstash_tor::TorManagerConfig::new(tor_dir),
                 tor_state,
             ));
-            wallet_manager.set_tor_manager(Arc::clone(&manager));
+            tx_service.set_tor_manager(Arc::clone(&manager));
             Some(manager)
         } else {
             None
         };
 
         let wallet_manager = Arc::new(Mutex::new(wallet_manager));
+        let tx_service = Arc::new(Mutex::new(tx_service));
 
         Ok(Self {
             wallet_manager,
+            tx_service,
             sync_service: SyncService::new(),
             tor_manager,
             data_dir: data_dir.to_path_buf(),
@@ -87,7 +94,8 @@ impl CliAppState {
     /// Load a wallet by ID.
     pub fn load_wallet(&self, wallet_id: Uuid) -> Result<(WalletInfo, bool)> {
         let mut wm = self.wallet_manager.lock().expect("mutex poisoned");
-        let (info, lock_status) = wm.load_wallet(wallet_id)?;
+        let mut tx_svc = self.tx_service.lock().expect("mutex poisoned");
+        let (info, lock_status) = wm.load_wallet(wallet_id, &mut tx_svc)?;
         let unlocked = lock_status == WalletLockStatus::Unlocked;
         Ok((info, unlocked))
     }
@@ -95,7 +103,8 @@ impl CliAppState {
     /// Unlock a wallet with password.
     pub fn unlock_wallet(&self, wallet_id: Uuid, password: &str, remember: bool) -> Result<()> {
         let mut wm = self.wallet_manager.lock().expect("mutex poisoned");
-        wm.unlock_wallet(wallet_id, password, remember)?;
+        let mut tx_svc = self.tx_service.lock().expect("mutex poisoned");
+        wm.unlock_wallet(wallet_id, password, remember, &mut tx_svc)?;
         Ok(())
     }
 

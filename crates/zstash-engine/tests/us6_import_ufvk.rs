@@ -115,7 +115,7 @@ fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
     let answers =
         common::solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
@@ -153,7 +153,7 @@ fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
         .expect("get balance for imported account");
 
     let err = mgr
-        .prepare_send(imported.id, "anything", "1", None, false)
+        .prepare_send_for_test(imported.id, "anything", "1", None, false)
         .expect_err("watch-only account cannot spend");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::WATCH_ONLY_CANNOT_SPEND);
@@ -171,7 +171,7 @@ fn import_ufvk_rejects_network_mismatch() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let seed = [11u8; 32];

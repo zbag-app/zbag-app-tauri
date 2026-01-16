@@ -96,7 +96,7 @@ fn wallet_directories_are_network_scoped_and_network_is_immutable() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -117,7 +117,7 @@ fn wallet_directories_are_network_scoped_and_network_is_immutable() {
         .expect("update network field");
 
     let err = mgr
-        .load_wallet(wallet.id)
+        .load_wallet_for_test(wallet.id)
         .expect_err("network change should be rejected");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::INVALID_REQUEST);
@@ -137,7 +137,7 @@ fn address_prefixes_match_network() {
     .expect("create wallet manager");
 
     let mainnet = mgr
-        .create_wallet("Main", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Main", Network::Mainnet, "pw", false, None)
         .expect("create mainnet wallet")
         .wallet;
     let main_shielded = mgr
@@ -159,10 +159,11 @@ fn address_prefixes_match_network() {
 
     // Switch to testnet wallet and assert prefixes.
     let testnet = mgr
-        .create_wallet("Test", Network::Testnet, "pw2", false, None)
+        .create_wallet_for_test("Test", Network::Testnet, "pw2", false, None)
         .expect("create testnet wallet")
         .wallet;
-    mgr.load_wallet(testnet.id).expect("load testnet wallet");
+    mgr.load_wallet_for_test(testnet.id)
+        .expect("load testnet wallet");
 
     let test_shielded = mgr
         .get_receive_address(0, AddressType::ShieldedOnly)

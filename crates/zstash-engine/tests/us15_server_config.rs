@@ -153,7 +153,7 @@ fn server_network_mismatch_is_rejected_for_active_wallet() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 

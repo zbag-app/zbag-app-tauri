@@ -23,7 +23,8 @@ use zstash_network::near_intents::AppFee;
 
 use crate::db::{account_meta, open_app_db_connection, swap_meta};
 use crate::error::ipc_err;
-use crate::tokio_runtime::block_on;
+use crate::reauth::SystemClock;
+use crate::tx_service::TxService;
 use crate::wallet_manager::WalletManager;
 
 pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
@@ -37,6 +38,7 @@ pub struct SwapService {
     near: zstash_network::near_intents::NearIntentsClient,
     state: Arc<Mutex<State>>,
     wallet_manager: Arc<Mutex<WalletManager>>,
+    tx_service: Arc<Mutex<TxService<SystemClock>>>,
 }
 
 #[derive(Debug)]
@@ -168,10 +170,12 @@ impl SwapService {
     pub fn new(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
+        tx_service: Arc<Mutex<TxService<SystemClock>>>,
     ) -> anyhow::Result<Self> {
         Self::new_with_near_client(
             app_db_path,
             wallet_manager,
+            tx_service,
             zstash_network::near_intents::NearIntentsClient::new()?,
         )
     }
@@ -179,6 +183,7 @@ impl SwapService {
     pub fn new_with_near_client(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
+        tx_service: Arc<Mutex<TxService<SystemClock>>>,
         near: zstash_network::near_intents::NearIntentsClient,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -192,6 +197,7 @@ impl SwapService {
                 token_decimals_updated_ms: None,
             })),
             wallet_manager,
+            tx_service,
         })
     }
 
@@ -654,23 +660,49 @@ impl SwapService {
         }
 
         // Send ZEC to the deposit address
-        let send_result = {
-            let Ok(mut mgr) = self.wallet_manager.lock() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        let send_result: anyhow::Result<_> = (|| {
+            // Phase 1: Prepare and get context
+            let (ctx, spending_key, proposal_id) = {
+                let Ok(mut mgr) = self.wallet_manager.lock() else {
+                    return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+                };
+                let Ok(mut tx_svc) = self.tx_service.lock() else {
+                    return Err(ipc_err(errors::WALLET_LOCKED, "tx service locked"));
+                };
+
+                let proposal = mgr.prepare_send(
+                    account_id,
+                    &deposit_address,
+                    &swap.input_amount,
+                    swap.deposit_memo.as_deref(),
+                    allow_transparent_interaction,
+                    &mut tx_svc,
+                )?;
+
+                let (ctx, spending_key) =
+                    mgr.prepare_confirm_send(&proposal.proposal_id, reauth_token, &tx_svc)?;
+                (ctx, spending_key, proposal.proposal_id)
             };
 
-            let proposal = mgr.prepare_send(
-                account_id,
-                &deposit_address,
-                // Wallet send APIs expect zatoshis. The quote contains both formatted and
-                // raw values; use the raw (smallest unit) amount here.
-                &record.quote.input_amount,
-                swap.deposit_memo.as_deref(),
-                allow_transparent_interaction,
-            )?;
+            // Phase 2: Run expensive operations outside the mutex
+            let mut conn = crate::wallet_manager::open_wallet_db_for_tx(&ctx)?;
+            let Ok(mut tx_svc) = self.tx_service.lock() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "tx service locked"));
+            };
 
-            mgr.confirm_send(&proposal.proposal_id, reauth_token, None)
-        };
+            tx_svc.confirm_send(
+                &ctx.app_db_path,
+                ctx.wallet_id,
+                ctx.network,
+                &ctx.wallet_dir,
+                &ctx.dek,
+                &mut conn,
+                &ctx.grpc_url,
+                &proposal_id,
+                spending_key,
+                None,
+            )
+        })();
 
         let txid = match send_result {
             Ok(res) => res.txid,

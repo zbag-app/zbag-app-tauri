@@ -42,9 +42,7 @@ use zstash_core::ipc::v1::commands::job::{
 use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
-use zstash_core::ipc::v1::commands::transaction::{
-    ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
-};
+use zstash_core::ipc::v1::commands::transaction::{ListTransactionsResponse, PrepareSendResponse};
 use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
@@ -61,8 +59,6 @@ pub struct WalletManager {
     wallets_root: PathBuf,
     active_wallet: Option<ActiveWallet>,
     reauth: ReauthManager,
-    tx_service: TxService<SystemClock>,
-    job_service: JobService,
     backup_challenges: HashMap<Uuid, BackupChallengeState>,
     cached_balances: HashMap<(Uuid, u32), Balance>,
     cached_sync_status: HashMap<Uuid, SyncStatus>,
@@ -72,21 +68,9 @@ pub struct WalletManager {
     wallet_db_force_validate_fail: bool,
 }
 
-pub struct RetryBroadcastTask {
-    pub txid: String,
-    user_intent_confirmed: bool,
-    wallet_id: Uuid,
-    wallet_network: Network,
-    wallet_dir: PathBuf,
-    wallet_db_path: PathBuf,
-    // This owned DEK copy is required so prepared manual retry tasks can be
-    // executed later without borrowing WalletManager state. `Dek` zeroizes its
-    // key material on drop via `#[zeroize(drop)]`.
-    wallet_dek: Dek,
-    grpc_url: String,
-    app_db_path: PathBuf,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
-}
+/// TxService is now managed separately from WalletManager to allow
+/// releasing the wallet_manager mutex during expensive tx operations.
+/// Create with TxService::new(SystemClock) and share via Arc<Mutex<TxService<SystemClock>>>.
 
 #[derive(Debug)]
 struct ActiveWallet {
@@ -108,6 +92,19 @@ pub struct CreateWalletResult {
 pub struct RestoreWalletResult {
     pub wallet: WalletInfo,
     pub birthday_height: u32,
+}
+
+/// Context needed for transaction operations that can run outside the wallet_manager mutex.
+/// This allows expensive proving/signing/broadcast operations to proceed without blocking
+/// other wallet operations like sync status updates and balance queries.
+#[derive(Debug, Clone)]
+pub struct TxOperationContext {
+    pub wallet_id: Uuid,
+    pub network: Network,
+    pub wallet_dir: PathBuf,
+    pub dek: Dek,
+    pub grpc_url: String,
+    pub app_db_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -135,8 +132,6 @@ impl WalletManager {
             wallets_root,
             active_wallet: None,
             reauth: ReauthManager::new(SystemClock),
-            tx_service: TxService::new(SystemClock),
-            job_service: JobService::new(),
             backup_challenges: HashMap::new(),
             cached_balances: HashMap::new(),
             cached_sync_status: HashMap::new(),
@@ -155,6 +150,7 @@ impl WalletManager {
     pub fn load_wallet(
         &mut self,
         wallet_id: Uuid,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<(WalletInfo, WalletLockStatus)> {
         let Some((wallet, directory_path_str)) =
             wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
@@ -199,7 +195,7 @@ impl WalletManager {
             wallet_db,
         });
 
-        self.tx_service
+        tx_service
             .scan_queued_broadcasts(wallet.id, &directory_path)
             .context("failed to scan queued broadcasts")?;
 
@@ -215,6 +211,7 @@ impl WalletManager {
         password: &str,
         _remember_unlock: bool,
         birthday_height: Option<u32>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<CreateWalletResult> {
         if name.trim().is_empty() {
             return Err(ipc_err(
@@ -390,7 +387,7 @@ impl WalletManager {
             wallet_db: Some(conn),
         });
 
-        self.tx_service
+        tx_service
             .scan_queued_broadcasts(wallet.id, &wallet_dir)
             .context("failed to scan queued broadcasts")?;
 
@@ -411,6 +408,7 @@ impl WalletManager {
         _remember_unlock: bool,
         seed_phrase: SensitiveString,
         birthday_date_ms: Option<i64>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<RestoreWalletResult> {
         if name.trim().is_empty() {
             return Err(ipc_err(
@@ -578,7 +576,7 @@ impl WalletManager {
             wallet_db: Some(conn),
         });
 
-        self.tx_service
+        tx_service
             .scan_queued_broadcasts(wallet.id, &wallet_dir)
             .context("failed to scan queued broadcasts")?;
 
@@ -605,6 +603,7 @@ impl WalletManager {
         birthday_height: Option<u32>,
         seed_fingerprint: Option<&str>,
         zip32_account_index: Option<u32>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<(WalletInfo, AccountInfo)> {
         if name.trim().is_empty() {
             return Err(ipc_err(
@@ -786,7 +785,7 @@ impl WalletManager {
             wallet_db: Some(conn),
         });
 
-        self.tx_service
+        tx_service
             .scan_queued_broadcasts(wallet.id, &wallet_dir)
             .context("failed to scan queued broadcasts")?;
 
@@ -799,7 +798,8 @@ impl WalletManager {
         &mut self,
         wallet_id: Uuid,
         password: &str,
-        _remember_unlock: bool,
+        remember_unlock: bool,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<WalletLockStatus> {
         let Some((wallet, directory_path_str)) =
             wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
@@ -867,7 +867,7 @@ impl WalletManager {
             wallet_db: Some(conn),
         });
 
-        self.tx_service
+        tx_service
             .scan_queued_broadcasts(wallet.id, &directory_path)
             .context("failed to scan queued broadcasts")?;
 
@@ -898,7 +898,11 @@ impl WalletManager {
     /// 3. Clears backup challenges
     ///
     /// Caller MUST stop sync before calling this method.
-    pub fn logout_wallet(&mut self, wallet_id: Uuid) -> anyhow::Result<()> {
+    pub fn logout_wallet(
+        &mut self,
+        wallet_id: Uuid,
+        tx_service: &mut TxService<SystemClock>,
+    ) -> anyhow::Result<()> {
         // Verify wallet_id matches active wallet
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_NOT_FOUND, "no active wallet"));
@@ -919,8 +923,7 @@ impl WalletManager {
         self.sync_stop_requested.remove(&wallet_id);
         self.last_emitted_status.remove(&wallet_id);
         self.backup_challenges.remove(&wallet_id);
-        self.tx_service.clear_proposals_for_wallet(wallet_id);
-        self.job_service.clear_finished_jobs(wallet_id);
+        tx_service.clear_proposals_for_wallet(wallet_id);
 
         // Deactivate the wallet
         self.active_wallet = None;
@@ -1117,6 +1120,46 @@ impl WalletManager {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         Ok(Dek(dek.0))
+    }
+
+    /// Get the transaction operation context for the active unlocked wallet.
+    /// This captures all the data needed to perform transaction operations
+    /// (proving, signing, broadcast) outside the wallet_manager mutex.
+    pub fn get_tx_operation_context(&self) -> anyhow::Result<TxOperationContext> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(dek) = active.dek.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        let grpc_url =
+            crate::server_resolver::resolve_grpc_url(&self.app_db, active.wallet.network)
+                .context("failed to resolve active lightwalletd endpoint")?;
+
+        Ok(TxOperationContext {
+            wallet_id: active.wallet.id,
+            network: active.wallet.network,
+            wallet_dir: active.wallet_dir.clone(),
+            dek: Dek(dek.0),
+            grpc_url,
+            app_db_path: self.app_db.path().to_path_buf(),
+        })
+    }
+
+    /// Check if a wallet is watch-only (cannot use confirm_send/shield_funds).
+    pub fn is_watch_only_wallet(&self) -> bool {
+        self.active_wallet
+            .as_ref()
+            .is_some_and(|w| w.wallet.wallet_type == WalletType::WatchOnly)
+    }
+
+    /// Get the active wallet type for determining which tx flow to use.
+    pub fn active_wallet_type(&self) -> Option<WalletType> {
+        self.active_wallet.as_ref().map(|w| w.wallet.wallet_type)
     }
 
     pub fn verify_backup(
@@ -1673,15 +1716,9 @@ impl WalletManager {
         amount_zat: &str,
         memo: Option<&str>,
         allow_transparent_recipient: bool,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<PrepareSendResponse> {
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
+        let Some(active) = self.active_wallet.as_mut() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         if active.lock_status != WalletLockStatus::Unlocked {
@@ -1692,7 +1729,7 @@ impl WalletManager {
         };
 
         tx_service.prepare_send(
-            app_db,
+            &self.app_db,
             active.wallet.id,
             active.wallet.network,
             conn,
@@ -1711,15 +1748,9 @@ impl WalletManager {
         amount_zat: &str,
         memo: Option<&str>,
         allow_transparent_recipient: bool,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<BuildSigningRequestResponse> {
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
+        let Some(active) = self.active_wallet.as_mut() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         if active.lock_status != WalletLockStatus::Unlocked {
@@ -1730,7 +1761,7 @@ impl WalletManager {
         };
 
         tx_service.build_signing_request(
-            app_db,
+            &self.app_db,
             active.wallet.id,
             active.wallet.network,
             conn,
@@ -1748,6 +1779,7 @@ impl WalletManager {
         signed_payload: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<FinalizeSigningResponse> {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
@@ -1762,14 +1794,7 @@ impl WalletManager {
         let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
             .context("failed to resolve active lightwalletd endpoint")?;
 
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
+        let Some(active) = self.active_wallet.as_mut() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         if active.lock_status != WalletLockStatus::Unlocked {
@@ -1783,7 +1808,7 @@ impl WalletManager {
         };
 
         tx_service.finalize_signing(
-            app_db,
+            &self.app_db,
             wallet_id,
             wallet_network,
             &wallet_dir,
@@ -1796,184 +1821,60 @@ impl WalletManager {
         )
     }
 
-    pub fn confirm_send(
+    /// Prepare context for confirm_send operation.
+    /// This extracts all data needed before the expensive proving/signing operation.
+    /// The actual tx operation should be called on TxService after releasing the wallet_manager mutex.
+    pub fn prepare_confirm_send(
         &mut self,
         proposal_id: &str,
         reauth_token: &str,
-        on_tx_changed: Option<TxEventHandler>,
-    ) -> anyhow::Result<ConfirmSendResponse> {
-        let started_at = Instant::now();
-        let mut wallet_id_for_log = self
-            .active_wallet
-            .as_ref()
-            .map(|active| active.wallet.id.to_string())
-            .unwrap_or_else(|| "-".to_string());
-        let mut account_id_for_log: Option<u32> = None;
+        tx_service: &TxService<SystemClock>,
+    ) -> anyhow::Result<(
+        TxOperationContext,
+        zcash_client_backend::keys::UnifiedSpendingKey,
+    )> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
 
-        tracing::info!(
-            wallet_id = %wallet_id_for_log,
-            account_id = ?account_id_for_log,
-            proposal_id = %proposal_id,
-            txid = "-",
-            phase = "wallet_manager.confirm_send.start",
-            elapsed_ms = 0u128,
-            error_code = "none",
-            error_message = "",
-            "send lifecycle event"
-        );
-
-        let result = (|| -> anyhow::Result<ConfirmSendResponse> {
-            let Some(active) = self.active_wallet.as_ref() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            };
-
-            // Watch-only wallets cannot use confirm_send (no seed for signing)
-            // Use the hardware signing flow (build_signing_request + finalize_signing) instead
-            if active.wallet.wallet_type == WalletType::WatchOnly {
-                return Err(ipc_err(
-                    errors::WATCH_ONLY_CANNOT_SPEND,
-                    "cannot confirm send for watch-only wallet; use hardware signing flow",
-                ));
-            }
-
-            let wallet_id = active.wallet.id;
-            let wallet_network = active.wallet.network;
-            let wallet_dir = active.wallet_dir.clone();
-            wallet_id_for_log = wallet_id.to_string();
-            let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
-
-            let proposal_account_id = self
-                .tx_service
-                .validate_proposal_for_wallet(proposal_id, wallet_id)?;
-            account_id_for_log = Some(proposal_account_id);
-            tracing::info!(
-                wallet_id = %wallet_id_for_log,
-                account_id = ?account_id_for_log,
-                proposal_id = %proposal_id,
-                txid = "-",
-                phase = "wallet_manager.confirm_send.proposal_validated",
-                elapsed_ms = started_at.elapsed().as_millis(),
-                error_code = "none",
-                error_message = "",
-                "send lifecycle event"
-            );
-
-            let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
-
-            self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
-            tracing::info!(
-                wallet_id = %wallet_id_for_log,
-                account_id = ?account_id_for_log,
-                proposal_id = %proposal_id,
-                txid = "-",
-                phase = "wallet_manager.confirm_send.reauth_consumed",
-                elapsed_ms = started_at.elapsed().as_millis(),
-                error_code = "none",
-                error_message = "",
-                "send lifecycle event"
-            );
-
-            let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
-                .context("failed to resolve active lightwalletd endpoint")?;
-            tracing::info!(
-                wallet_id = %wallet_id_for_log,
-                account_id = ?account_id_for_log,
-                proposal_id = %proposal_id,
-                txid = "-",
-                phase = "wallet_manager.confirm_send.grpc_resolved",
-                elapsed_ms = started_at.elapsed().as_millis(),
-                error_code = "none",
-                error_message = "",
-                "send lifecycle event"
-            );
-
-            let WalletManager {
-                app_db,
-                tx_service,
-                active_wallet,
-                ..
-            } = self;
-
-            let Some(active) = active_wallet.as_mut() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            };
-            if active.lock_status != WalletLockStatus::Unlocked {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            }
-            if active.wallet.id != wallet_id {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            }
-            let Some(conn) = active.wallet_db.as_mut() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-            };
-
-            tx_service.confirm_send(
-                app_db,
-                wallet_id,
-                wallet_network,
-                &wallet_dir,
-                &wallet_dek,
-                conn,
-                &grpc_url,
-                proposal_id,
-                spending_key,
-                on_tx_changed,
-            )
-        })();
-
-        match result {
-            Ok(response) => {
-                tracing::info!(
-                    wallet_id = %wallet_id_for_log,
-                    account_id = ?account_id_for_log,
-                    proposal_id = %proposal_id,
-                    txid = %response.txid,
-                    phase = "wallet_manager.confirm_send.success",
-                    elapsed_ms = started_at.elapsed().as_millis(),
-                    error_code = "none",
-                    error_message = "",
-                    "send lifecycle event"
-                );
-                Ok(response)
-            }
-            Err(err) => {
-                let (error_code, error_message) = match find_engine_ipc_error(&err) {
-                    Some(engine) => (engine.code.to_string(), engine.message.clone()),
-                    None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
-                };
-                tracing::warn!(
-                    wallet_id = %wallet_id_for_log,
-                    account_id = ?account_id_for_log,
-                    proposal_id = %proposal_id,
-                    txid = "-",
-                    phase = "wallet_manager.confirm_send.error",
-                    elapsed_ms = started_at.elapsed().as_millis(),
-                    error_code = %error_code,
-                    error_message = %error_message,
-                    "send lifecycle event"
-                );
-                Err(err)
-            }
+        // Watch-only wallets cannot use confirm_send (no seed for signing)
+        if active.wallet.wallet_type == WalletType::WatchOnly {
+            return Err(ipc_err(
+                errors::WATCH_ONLY_CANNOT_SPEND,
+                "cannot confirm send for watch-only wallet; use hardware signing flow",
+            ));
         }
+
+        let wallet_id = active.wallet.id;
+
+        let proposal_account_id = tx_service
+            .proposal_account_id(proposal_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
+
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+
+        let ctx = self.get_tx_operation_context()?;
+        Ok((ctx, spending_key))
     }
 
-    pub fn cancel_send(&mut self, proposal_id: &str) -> bool {
-        self.tx_service.cancel_send(proposal_id)
-    }
-
-    pub fn shield_funds(
+    /// Prepare context for shield_funds operation.
+    /// This extracts all data needed before the expensive proving/signing operation.
+    /// The actual tx operation should be called on TxService after releasing the wallet_manager mutex.
+    pub fn prepare_shield_funds(
         &mut self,
         account_id: u32,
-        consolidate: bool,
         reauth_token: &str,
-        on_tx_changed: Option<TxEventHandler>,
-    ) -> anyhow::Result<ShieldFundsResponse> {
+    ) -> anyhow::Result<(
+        TxOperationContext,
+        zcash_client_backend::keys::UnifiedSpendingKey,
+    )> {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
 
         // Shielding is not supported for watch-only wallets
-        // (no Keystone signing flow exists for shielding transactions)
         if active.wallet.wallet_type == WalletType::WatchOnly {
             return Err(ipc_err(
                 errors::WATCH_ONLY_CANNOT_SHIELD,
@@ -1982,52 +1883,13 @@ impl WalletManager {
         }
 
         let wallet_id = active.wallet.id;
-        let wallet_network = active.wallet.network;
-        let wallet_dir = active.wallet_dir.clone();
-        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
 
         self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
 
         let spending_key = self.derive_unified_spending_key(wallet_id, account_id)?;
 
-        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
-            .context("failed to resolve active lightwalletd endpoint")?;
-
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        if active.lock_status != WalletLockStatus::Unlocked {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        if active.wallet.id != wallet_id {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-
-        let resp = tx_service.shield_funds(
-            app_db,
-            wallet_id,
-            wallet_network,
-            &wallet_dir,
-            &wallet_dek,
-            conn,
-            &grpc_url,
-            account_id,
-            consolidate,
-            spending_key,
-            on_tx_changed,
-        )?;
-        self.maybe_emit_wallet_status(wallet_id);
-        Ok(resp)
+        let ctx = self.get_tx_operation_context()?;
+        Ok((ctx, spending_key))
     }
 
     pub fn retry_broadcast(
@@ -2035,7 +1897,7 @@ impl WalletManager {
         txid: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
-        on_failover: Option<ServerFailoverEventHandler>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<String> {
         let task = self.prepare_retry_broadcast_task(txid, reauth_token)?;
         self.execute_retry_broadcast_task(task, on_tx_changed, on_failover)
@@ -2212,9 +2074,21 @@ impl WalletManager {
         let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
             .context("failed to resolve active lightwalletd endpoint")?;
 
-        Ok(RetryBroadcastTask {
-            txid: txid.to_string(),
-            user_intent_confirmed,
+        let Some(active) = self.active_wallet.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        tx_service.retry_broadcast(
+            &self.app_db,
             wallet_id,
             wallet_network,
             wallet_dir: wallet_dir.clone(),
@@ -2259,6 +2133,7 @@ impl WalletManager {
         account_id: u32,
         limit: u32,
         offset: u32,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<ListTransactionsResponse> {
         let (wallet_id, wallet_network, wallet_dir) = {
             let Some(active) = self.active_wallet.as_ref() else {
@@ -2271,13 +2146,7 @@ impl WalletManager {
             )
         };
 
-        let WalletManager {
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
+        let Some(active) = self.active_wallet.as_mut() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
         if active.lock_status != WalletLockStatus::Unlocked {
@@ -2479,10 +2348,6 @@ impl WalletManager {
         self.key_store.as_ref()
     }
 
-    pub fn set_tor_manager(&mut self, tor_manager: std::sync::Arc<zstash_tor::TorManager>) {
-        self.tx_service.set_tor_manager(tor_manager);
-    }
-
     pub fn app_db(&self) -> &AppDb {
         &self.app_db
     }
@@ -2537,6 +2402,181 @@ impl WalletManager {
         };
         state.expires_at = expires_at_ms;
         true
+    }
+
+    // ==========================================================================
+    // Test-only backward compatibility wrappers (create internal TxService)
+    // These methods are provided for test compatibility and should not be used
+    // in production code.
+    // ==========================================================================
+
+    /// Test-only: create_wallet with internal TxService
+    #[doc(hidden)]
+    pub fn create_wallet_for_test(
+        &mut self,
+        name: &str,
+        network: Network,
+        password: &str,
+        remember_unlock: bool,
+        birthday_height: Option<u32>,
+    ) -> anyhow::Result<CreateWalletResult> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.create_wallet(
+            name,
+            network,
+            password,
+            remember_unlock,
+            birthday_height,
+            &mut tx_service,
+        )
+    }
+
+    /// Test-only: restore_wallet with internal TxService
+    #[doc(hidden)]
+    pub fn restore_wallet_for_test(
+        &mut self,
+        name: &str,
+        network: Network,
+        password: &str,
+        remember_unlock: bool,
+        seed_phrase: &str,
+        birthday_date_ms: Option<i64>,
+    ) -> anyhow::Result<RestoreWalletResult> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.restore_wallet(
+            name,
+            network,
+            password,
+            remember_unlock,
+            seed_phrase,
+            birthday_date_ms,
+            &mut tx_service,
+        )
+    }
+
+    /// Test-only: load_wallet with internal TxService
+    #[doc(hidden)]
+    pub fn load_wallet_for_test(
+        &mut self,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<(WalletInfo, WalletLockStatus)> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.load_wallet(wallet_id, &mut tx_service)
+    }
+
+    /// Test-only: unlock_wallet with internal TxService
+    #[doc(hidden)]
+    pub fn unlock_wallet_for_test(
+        &mut self,
+        wallet_id: Uuid,
+        password: &str,
+        remember_unlock: bool,
+    ) -> anyhow::Result<WalletLockStatus> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.unlock_wallet(wallet_id, password, remember_unlock, &mut tx_service)
+    }
+
+    /// Test-only: prepare_send with internal TxService
+    #[doc(hidden)]
+    pub fn prepare_send_for_test(
+        &mut self,
+        account_id: u32,
+        recipient: &str,
+        amount_zat: &str,
+        memo: Option<&str>,
+        allow_transparent_recipient: bool,
+    ) -> anyhow::Result<PrepareSendResponse> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.prepare_send(
+            account_id,
+            recipient,
+            amount_zat,
+            memo,
+            allow_transparent_recipient,
+            &mut tx_service,
+        )
+    }
+
+    /// Test-only: shield_funds with internal TxService (two-phase pattern internally)
+    #[doc(hidden)]
+    pub fn shield_funds(
+        &mut self,
+        account_id: u32,
+        consolidate: bool,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<zstash_core::ipc::v1::commands::transaction::ShieldFundsResponse> {
+        // Phase 1: Get context
+        let (ctx, spending_key) = self.prepare_shield_funds(account_id, reauth_token)?;
+
+        // Phase 2: Execute with internal TxService
+        let mut conn = open_wallet_db_for_tx(&ctx)?;
+        let mut tx_service = TxService::new(SystemClock);
+        tx_service.shield_funds(
+            &ctx.app_db_path,
+            ctx.wallet_id,
+            ctx.network,
+            &ctx.wallet_dir,
+            &ctx.dek,
+            &mut conn,
+            &ctx.grpc_url,
+            account_id,
+            consolidate,
+            spending_key,
+            on_tx_changed,
+        )
+    }
+
+    /// Test-only: list_transactions with internal TxService
+    #[doc(hidden)]
+    pub fn list_transactions_for_test(
+        &mut self,
+        account_id: u32,
+        limit: u32,
+        offset: u32,
+    ) -> anyhow::Result<ListTransactionsResponse> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.list_transactions(account_id, limit, offset, &mut tx_service)
+    }
+
+    /// Test-only: build_signing_request with internal TxService
+    #[doc(hidden)]
+    pub fn build_signing_request_for_test(
+        &mut self,
+        account_id: u32,
+        recipient: &str,
+        amount_zat: &str,
+        memo: Option<&str>,
+        allow_transparent_recipient: bool,
+    ) -> anyhow::Result<BuildSigningRequestResponse> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.build_signing_request(
+            account_id,
+            recipient,
+            amount_zat,
+            memo,
+            allow_transparent_recipient,
+            &mut tx_service,
+        )
+    }
+
+    /// Test-only: finalize_signing with internal TxService
+    #[doc(hidden)]
+    pub fn finalize_signing_for_test(
+        &mut self,
+        signing_request_id: &str,
+        signed_payload: &str,
+        reauth_token: &str,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<FinalizeSigningResponse> {
+        let mut tx_service = TxService::new(SystemClock);
+        self.finalize_signing(
+            signing_request_id,
+            signed_payload,
+            reauth_token,
+            on_tx_changed,
+            &mut tx_service,
+        )
     }
 
     fn wallet_dir(&self, wallet_id: Uuid, network: Network) -> PathBuf {
@@ -2817,11 +2857,44 @@ fn network_dir_name(network: Network) -> &'static str {
     }
 }
 
-fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Network {
+pub fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Network {
     match network {
         Network::Mainnet => zcash_protocol::consensus::Network::MainNetwork,
         Network::Testnet => zcash_protocol::consensus::Network::TestNetwork,
     }
+}
+
+/// Open a fresh wallet database connection for transaction operations.
+/// This is used to perform expensive operations (proving, signing, broadcast)
+/// outside the wallet_manager mutex, allowing other operations to proceed concurrently.
+pub fn open_wallet_db_for_tx(ctx: &TxOperationContext) -> anyhow::Result<rusqlite::Connection> {
+    let wallet_db_path = ctx.wallet_dir.join("wallet.sqlite");
+
+    let conn =
+        rusqlite::Connection::open_with_flags(&wallet_db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+            .with_context(|| format!("failed to open wallet db: {}", wallet_db_path.display()))?;
+
+    let mut dek_hex = ctx
+        .dek
+        .0
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
+    conn.execute_batch(&pragma)
+        .context("failed to apply wallet db encryption key")?;
+
+    dek_hex.zeroize();
+    pragma.zeroize();
+
+    // Force an early read to detect an incorrect key.
+    let _: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
+        .context("wallet db is not readable (incorrect key or corrupted db)")?;
+
+    rusqlite::vtab::array::load_module(&conn).context("failed to load sqlite array module")?;
+
+    Ok(conn)
 }
 
 fn mnemonic_aad(wallet_id: Uuid, network: Network) -> String {
