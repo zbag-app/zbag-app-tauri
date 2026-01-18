@@ -34,6 +34,26 @@
 - Follow existing commit patterns: `US<N>: ...`, `docs: ...`, `chore: ...`, `fix: ...` (imperative, concise).
 - PRs: link the relevant spec/issue, include a brief test plan (commands run), and add screenshots for UI changes.
 
+## Version Control (jj/Jujutsu)
+
+This repository uses jj (Jujutsu) colocated on Git for version control workflow.
+
+**Quick reference:**
+- `jj status` - Show working copy status
+- `jj diff` - Show uncommitted changes
+- `jj new` - Create new change (commit)
+- `jj describe -m "message"` - Set commit message
+- `jj squash` - Squash into parent
+- `jj git push` - Push to remote (works with existing Git remotes)
+- `jj undo` - Undo last operation
+
+**Setup (one-time):**
+```bash
+jj git init --colocate  # Already done for this repo
+```
+
+Git commands still work - jj colocates with the existing `.git/` directory.
+
 ## Security & Configuration Tips
 
 - Never log or persist mnemonics/spending keys; keep secrets in the Rust backend and follow `.specify/memory/constitution.md`.
