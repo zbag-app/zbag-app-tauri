@@ -194,7 +194,11 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               id="refundAddress"
               rows={2}
               value={refundAddress}
-              onChange={(e) => setRefundAddress(e.currentTarget.value)}
+              onChange={(e) => {
+                setRefundAddress(e.currentTarget.value);
+                setQuote(null);
+                setQuoteId(null);
+              }}
               placeholder="Your ZEC address for refunds if the payment fails"
               disabled={loadingRefundAddress}
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
