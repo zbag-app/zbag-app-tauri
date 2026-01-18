@@ -332,7 +332,7 @@
 
 **Audit summary**:
 - **Tauri config** (`apps/zstash-app-tauri/src-tauri/tauri.conf.json`): No crash reporter configuration; no remote telemetry settings.
-- **Tauri plugins** (`apps/zstash-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` and `tauri-plugin-shell` (no telemetry/crash plugins).
+- **Tauri plugins** (`apps/zstash-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` (no telemetry/crash plugins).
 - **Frontend deps** (`apps/zstash-app-tauri/package.json`): No analytics/crash SDK dependencies (e.g., Sentry, PostHog, Segment, Amplitude).
 - **Rust deps** (`Cargo.toml`, `Cargo.lock`): No telemetry/crash crates (e.g., `sentry`, `bugsnag`, `rollbar`).
 

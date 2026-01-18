@@ -50,7 +50,6 @@ fn main() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             // Wallet
             zstash_app_tauri_lib::commands::wallet::zstash_create_wallet,
