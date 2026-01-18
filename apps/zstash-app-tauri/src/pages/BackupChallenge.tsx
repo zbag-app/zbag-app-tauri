@@ -154,9 +154,10 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
                   <Input
                     id={`word-${index}`}
                     value={inputs[index] ?? ''}
-                    onChange={(e) =>
-                      setInputs((prev) => ({ ...prev, [index]: e.currentTarget.value }))
-                    }
+                    onChange={(e) => {
+                      const value = e.currentTarget.value;
+                      setInputs((prev) => ({ ...prev, [index]: value }));
+                    }}
                     placeholder={`Enter word #${index}`}
                   />
                 </div>
