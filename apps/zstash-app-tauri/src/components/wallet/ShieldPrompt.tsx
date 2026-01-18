@@ -144,7 +144,7 @@ export function ShieldPrompt(props: {
               </div>
 
               {result ? (
-                <div className="rounded-lg border border-success/50 bg-success/10 p-4 space-y-3">
+                <div className="rounded-none border border-success/50 bg-success/10 p-4 space-y-3">
                   <h4 className="font-semibold text-success">Shielding Started</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -182,12 +182,12 @@ export function ShieldPrompt(props: {
 
                   {error && (
                     <div className="space-y-2">
-                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                      <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                         {error.code}: {error.message}
                       </div>
 
                       {error.code === 'E3001' && (requiredMinimum || available || estimatedFee) && (
-                        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3 space-y-2">
+                        <div className="rounded-none border border-destructive/50 bg-destructive/5 p-3 space-y-2">
                           <h5 className="font-semibold text-sm">Not enough transparent funds to pay the shielding fee</h5>
                           <div className="text-xs space-y-1">
                             {requiredMinimum && <div>Required minimum: {formatZatoshisToZec(requiredMinimum)} ZEC</div>}

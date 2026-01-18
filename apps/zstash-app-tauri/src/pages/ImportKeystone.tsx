@@ -135,7 +135,7 @@ export function ImportKeystone(props: {
                 }}
                 rows={4}
                 placeholder="uview..."
-                className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
               />
               {seedFingerprint === null && ufvk.trim() && (
                 <p className="text-sm text-amber-600 dark:text-amber-500">
@@ -157,7 +157,7 @@ export function ImportKeystone(props: {
           )}
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}

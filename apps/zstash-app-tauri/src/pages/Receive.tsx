@@ -79,7 +79,7 @@ export function Receive(props: { activeAccountId: number | null }) {
           </label>
 
           {showTransparent && (
-            <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-3">
+            <div className="flex items-start gap-3 rounded-none border border-warning/50 bg-warning/5 p-3">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
               <p className="text-sm text-muted-foreground">
                 Transparent addresses are receive-only. Funds received to a transparent address must be
@@ -89,7 +89,7 @@ export function Receive(props: { activeAccountId: number | null }) {
           )}
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}

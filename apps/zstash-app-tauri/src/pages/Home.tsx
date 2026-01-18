@@ -103,7 +103,7 @@ export function Home(props: {
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -225,7 +225,7 @@ export function Home(props: {
         <Card className="border-warning/50 bg-warning/5">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning/20">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none bg-warning/20">
                 <Shield className="h-5 w-5 text-warning" />
               </div>
               <div className="flex-1">

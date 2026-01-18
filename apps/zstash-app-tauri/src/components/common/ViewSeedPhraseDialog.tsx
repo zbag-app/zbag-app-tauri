@@ -95,7 +95,7 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
                     {seedWords.map((word, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2"
+                        className="flex items-center gap-2 rounded-none border border-border bg-muted px-3 py-2"
                       >
                         <span className="w-6 text-sm text-muted-foreground">{idx + 1}.</span>
                         <span className="font-medium">{word}</span>
@@ -122,7 +122,7 @@ export function ViewSeedPhraseDialog(props: { walletId: string; triggerLabel: st
                     />
                   </div>
                   {error && (
-                    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                       {error}
                     </div>
                   )}

@@ -76,7 +76,7 @@ export function Settings(props: {
               {wallet.network}
             </Badge>
           </div>
-          <Link to="/settings/servers" className="flex items-center justify-between p-3 -mx-3 rounded-lg hover:bg-accent transition-colors">
+          <Link to="/settings/servers" className="flex items-center justify-between p-3 -mx-3 rounded-none hover:bg-accent transition-colors">
             <span className="text-sm">Server settings</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Link>
@@ -109,7 +109,7 @@ export function Settings(props: {
             <span className="text-sm">Enable Tor (beta)</span>
           </label>
           {torState?.enabled && torState.status !== 'On' && (
-            <div className="rounded-lg border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
+            <div className="rounded-none border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
               Status: {torState.status}. Some operations may be blocked until Tor is connected.
             </div>
           )}

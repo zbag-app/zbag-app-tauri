@@ -75,7 +75,7 @@ export function SwapQuote() {
           <CardTitle className="text-lg">Swap Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg bg-muted/50 p-4">
+          <div className="rounded-none bg-muted/50 p-4">
             <div className="text-lg font-semibold">
               {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
             </div>
@@ -102,13 +102,13 @@ export function SwapQuote() {
           </div>
 
           {expired && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               Quote expired.
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}

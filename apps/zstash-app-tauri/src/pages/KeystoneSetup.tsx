@@ -166,7 +166,7 @@ export function KeystoneSetup(props: {
                   }}
                   rows={4}
                   placeholder="uview..."
-                  className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                  className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
                 />
                 {ufvk.trim() && !isValidUfvk(ufvk) && (
                   <p className="text-sm text-destructive">
@@ -242,7 +242,7 @@ export function KeystoneSetup(props: {
                 id="network"
                 value={network}
                 onChange={(e) => setNetwork(e.currentTarget.value as IPC.Network)}
-                className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="Mainnet">Mainnet</option>
                 <option value="Testnet">Testnet</option>
@@ -315,7 +315,7 @@ export function KeystoneSetup(props: {
             </label>
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}

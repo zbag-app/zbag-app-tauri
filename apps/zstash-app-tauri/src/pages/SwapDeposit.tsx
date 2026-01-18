@@ -118,7 +118,7 @@ export function SwapDeposit() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <span className="text-sm text-muted-foreground">Deposit address</span>
-                <code className="block text-sm break-all bg-muted px-3 py-2 rounded-lg font-mono">
+                <code className="block text-sm break-all bg-muted px-3 py-2 rounded-none font-mono">
                   {swap.deposit_address}
                 </code>
               </div>
@@ -126,13 +126,13 @@ export function SwapDeposit() {
               {swap.deposit_memo && (
                 <div className="space-y-2">
                   <span className="text-sm text-muted-foreground">Deposit memo/tag</span>
-                  <code className="block text-sm break-all bg-muted px-3 py-2 rounded-lg font-mono">
+                  <code className="block text-sm break-all bg-muted px-3 py-2 rounded-none font-mono">
                     {swap.deposit_memo}
                   </code>
                 </div>
               )}
 
-              <div className="flex justify-center p-4 bg-white rounded-lg">
+              <div className="flex justify-center p-4 bg-white rounded-none">
                 <QRCodeSVG value={depositText} size={200} />
               </div>
 
@@ -146,13 +146,13 @@ export function SwapDeposit() {
           )}
 
           {swap.last_error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               Last error: {swap.last_error}
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}

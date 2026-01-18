@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, RotateCcw, RefreshCw, Key } from 'lucide-react';
-import { AnimatedLogo } from '../brand/AnimatedLogo';
+import { Logo } from '../brand/Logo';
+import { AnimatedWordmark } from '../brand/AnimatedWordmark';
 import type * as IPC from '../../types/ipc';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -71,18 +72,18 @@ export function WalletPicker(props: {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-6 animate-[scale-in_0.3s_ease-out]">
-        <div className="text-center space-y-2">
-          <div className="mx-auto">
-            <AnimatedLogo size={64} />
-          </div>
-          <h1 className="font-display text-3xl font-bold tracking-wide">zSTASH</h1>
-          <p className="text-muted-foreground">Select a wallet to continue</p>
+        <div className="flex flex-col items-center space-y-6">
+          <Logo size={96} />
+          <AnimatedWordmark showTagline={true} />
+          {wallets.length > 0 && (
+            <p className="text-muted-foreground text-sm">Select a wallet to continue</p>
+          )}
         </div>
 
         {error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive text-center">
+          <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive text-center">
             {error}
           </div>
         )}

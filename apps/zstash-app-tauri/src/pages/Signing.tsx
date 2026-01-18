@@ -95,7 +95,7 @@ export function Signing(props: { walletId: string }) {
           <CardTitle className="text-lg">Scan QR Code</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex justify-center p-4 bg-white rounded-lg">
+          <div className="flex justify-center p-4 bg-white rounded-none">
             <AnimatedQRDisplay pcztPayloadBase64={signingRequest.pczt_payload} />
           </div>
           <p className="text-sm text-muted-foreground text-center">
@@ -164,7 +164,7 @@ export function Signing(props: { walletId: string }) {
           />
 
           {signedPayload && (
-            <div className="rounded-lg border border-success/50 bg-success/10 p-3 text-sm text-success">
+            <div className="rounded-none border border-success/50 bg-success/10 p-3 text-sm text-success">
               Signed payload imported successfully.
             </div>
           )}
@@ -189,7 +189,7 @@ export function Signing(props: { walletId: string }) {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}

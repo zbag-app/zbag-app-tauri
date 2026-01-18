@@ -113,7 +113,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               id="swapType"
               value={swapType}
               onChange={(e) => setSwapType(e.currentTarget.value as IPC.SwapType)}
-              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="ToZec">To ZEC</option>
               <option value="FromZec">From ZEC</option>
@@ -121,7 +121,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
           </div>
 
           {swapType === 'FromZec' && (
-            <div className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+            <div className="rounded-none border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
               Swap-from-ZEC is not implemented yet.{' '}
               <Link to="/swap/from-zec" className="text-primary hover:underline">
                 Open page
@@ -137,7 +137,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                   id="inputAsset"
                   value={inputAsset}
                   onChange={(e) => setInputAsset(e.currentTarget.value)}
-                  className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {getToZecTokens().map((t) => (
                     <option key={t.id} value={t.id}>
@@ -166,7 +166,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                   onChange={(e) => setDestinationAddress(e.currentTarget.value)}
                   placeholder="u1... / zs... / etc"
                   disabled={loadingAddress}
-                  className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+                  className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
                 />
               </div>
 
@@ -178,12 +178,12 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                   value={refundAddress}
                   onChange={(e) => setRefundAddress(e.currentTarget.value)}
                   placeholder="Your address on the input asset chain for refunds if the swap fails"
-                  className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                  className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
                 />
               </div>
 
               {error && (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
                 </div>
               )}

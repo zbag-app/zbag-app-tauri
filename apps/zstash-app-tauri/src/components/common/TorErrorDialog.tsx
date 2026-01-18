@@ -47,7 +47,7 @@ export function TorErrorDialog(props: {
             Tor is enabled but currently in an error state. Network requests will fail closed until Tor is healthy again.
           </p>
 
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+          <div className="rounded-none border border-destructive/30 bg-destructive/10 p-3">
             <div className="font-semibold text-sm mb-1">Last error</div>
             <div className="text-sm whitespace-pre-wrap text-destructive">{state.last_error ?? 'Unknown error'}</div>
           </div>

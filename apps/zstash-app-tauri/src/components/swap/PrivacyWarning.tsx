@@ -5,7 +5,7 @@ export function PrivacyWarning(props: {
   const { acknowledged, onAcknowledgedChange } = props;
 
   return (
-    <div className="p-3 rounded-lg border border-warning/50 bg-warning/10">
+    <div className="p-3 rounded-none border border-warning/50 bg-warning/10">
       <strong className="text-warning">Privacy warning</strong>
       <div className="mt-1.5 text-sm text-muted-foreground">
         This swap may require transparent Zcash interaction (for example: sending to a transparent address

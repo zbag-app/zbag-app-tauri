@@ -114,7 +114,7 @@ export function ServerSettings(props: { wallet: IPC.WalletInfo }) {
       <ServerSecurityWarning />
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -180,7 +180,7 @@ export function ServerSettings(props: { wallet: IPC.WalletInfo }) {
               return (
                 <div
                   key={s.id}
-                  className="rounded-lg border border-border p-4 space-y-3"
+                  className="rounded-none border border-border p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1 flex-1">

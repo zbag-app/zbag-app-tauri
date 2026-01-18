@@ -192,12 +192,12 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
                 disabled={transparentRecipient}
                 rows={3}
                 placeholder={transparentRecipient ? 'Disabled for transparent recipients' : 'Memo (<=512 bytes)'}
-                className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
 
             {transparentRecipient && (
-              <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-3">
+              <div className="flex items-start gap-3 rounded-none border border-warning/50 bg-warning/5 p-3">
                 <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
@@ -214,7 +214,7 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
             )}
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}

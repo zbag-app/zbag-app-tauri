@@ -15,7 +15,7 @@ export function SigningVerify(props: { summary: IPC.SigningSummary }) {
       <h2 className="text-lg font-semibold">Verify transaction</h2>
 
       {warning ? (
-        <div className="p-3 rounded-lg border border-warning/50 bg-warning/10">
+        <div className="p-3 rounded-none border border-warning/50 bg-warning/10">
           <strong className="text-warning">Privacy warning</strong>
           <div className="mt-1 text-sm text-muted-foreground">{warning}</div>
         </div>

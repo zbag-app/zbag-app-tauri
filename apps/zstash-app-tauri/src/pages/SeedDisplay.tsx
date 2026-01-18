@@ -75,7 +75,7 @@ export function SeedDisplay(props: { seedPhrase: string[]; onCleared: () => void
             {wordRows.map(({ index, word }) => (
               <div
                 key={index}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2"
+                className="flex items-center gap-2 rounded-none border border-border bg-muted/50 px-3 py-2"
               >
                 <span className="w-6 text-sm text-muted-foreground">{index}.</span>
                 <span className="font-mono font-semibold">{word}</span>

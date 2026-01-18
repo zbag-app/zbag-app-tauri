@@ -27,7 +27,7 @@ export function OnboardingBackup(props: {
   // No seed phrase available - redirect to home
   if (seedPhrase.length !== 24) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+      <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">No seed phrase available.</p>
@@ -43,7 +43,7 @@ export function OnboardingBackup(props: {
   // Step 1: Choice screen
   if (step === 'choice') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+      <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-lg animate-[scale-in_0.3s_ease-out]">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
@@ -88,7 +88,7 @@ export function OnboardingBackup(props: {
 
   // Step 2: Show seed phrase
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-2xl animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
@@ -110,7 +110,7 @@ export function OnboardingBackup(props: {
             {seedPhrase.map((word, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2"
+                className="flex items-center gap-2 rounded-none border border-border bg-muted/50 px-3 py-2"
               >
                 <span className="w-6 text-sm text-muted-foreground">{idx + 1}.</span>
                 <span className="font-mono font-semibold">{word}</span>

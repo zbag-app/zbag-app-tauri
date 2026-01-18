@@ -1,189 +1,62 @@
-import { motion } from "framer-motion";
+import { useEffect, useState } from 'react';
+import { ScrambleText } from '../effects/ScrambleText';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface AnimatedWordmarkProps {
-  className?: string;
   showTagline?: boolean;
+  className?: string;
 }
 
-// WordMark letters with animation directions
-// Paths from zSTASH_Tagline.svg WordMark group
-const WORDMARK_LETTERS = [
-  {
-    id: "z",
-    path: "M28.81,138.3l33.55-50.89h-29.33v-20.87h71.76l.14.29-35.11,51.32h32.57v20.44H28.95s-.14-.29-.14-.29Z",
-    initial: { x: -50, y: 0 }, // left -> right
-    delay: 1.0,
-  },
-  {
-    id: "S1",
-    path: "M153.15,54.13c-6.48,0-10.15,3.24-10.15,8.04,0,5.22,2.26,6.63,17.48,10.85,17.77,4.93,27.35,13.25,27.35,29.04,0,22.97-15.65,38.35-39.33,38.35-12.12,0-27.07-4.51-37.21-11.42l12.83-23.26c7.75,5.92,15.93,9.02,23.4,9.02s11-3.53,11-9.02c0-5.78-4.22-8.17-16.49-11.28-19.17-4.8-28.33-13.39-28.33-29.46,0-20.72,14.8-34.54,37.64-34.54,10.43,0,22.7,3.95,31.01,10.01l-11,21.71c-5.22-4.93-12.12-8.04-18.19-8.04h0Z",
-    initial: { x: 0, y: -50 }, // top -> down
-    delay: 1.12,
-  },
-  {
-    id: "T",
-    path: "M212.51,55.83h-22.28v-23.55h72.04v23.55h-22.28v82.75h-27.49V55.83h0Z",
-    initial: { x: 0, y: 50 }, // bottom -> up
-    delay: 1.22,
-  },
-  {
-    id: "A",
-    path: "M292.86,32.28h28.48l39.19,106.3h-28.62l-6.77-19.46h-38.77l-7.05,19.46h-28.06s41.59-106.3,41.59-106.3ZM317.82,98.12l-11.42-32.85h-.29l-11.98,32.85h23.69Z",
-    initial: { x: 0, y: -50 }, // top -> down
-    delay: 1.3,
-  },
-  {
-    id: "S2",
-    path: "M405.94,54.13c-6.48,0-10.15,3.24-10.15,8.04,0,5.22,2.26,6.63,17.48,10.85,17.77,4.93,27.35,13.25,27.35,29.04,0,22.97-15.65,38.35-39.33,38.35-12.12,0-27.07-4.51-37.21-11.42l12.83-23.26c7.75,5.92,15.93,9.02,23.4,9.02s11-3.53,11-9.02c0-5.78-4.22-8.17-16.49-11.28-19.17-4.8-28.33-13.39-28.33-29.46,0-20.72,14.8-34.54,37.64-34.54,10.43,0,22.7,3.95,31.01,10.01l-11,21.71c-5.22-4.93-12.12-8.04-18.19-8.04h0Z",
-    initial: { x: 0, y: 50 }, // bottom -> up
-    delay: 1.38,
-  },
-  {
-    id: "H",
-    path: "M481.5,32.28v40.6h38.21v-40.6h27.49v106.3h-27.49v-43.14h-38.21v43.14h-27.48V32.28h27.48Z",
-    initial: { x: 0, y: -50 }, // top -> down
-    delay: 1.44,
-  },
-];
-
-// Tagline letter paths - "encrypt your wealth"
-const TAGLINE_PATHS = [
-  {
-    id: "e",
-    path: "M43.87,197.48c-9.34,0-15.06-5.97-15.06-15s6.2-15.36,14.88-15.36,14.28,6.45,14.28,16.93h-22.47c.66,4.88,3.86,7.96,8.43,7.96,3.61,0,6.14-1.74,8.31-4.94l4.94,3.13c-2.47,4.52-7.23,7.29-13.31,7.29h0ZM51.04,178.87c-.48-3.79-3.5-6.51-7.29-6.51-4.4,0-7.17,2.23-8.08,6.51h15.36Z",
-  },
-  {
-    id: "n",
-    path: "M62.96,167.72h6.69v3.86h.12c2.11-2.95,5.3-4.46,8.97-4.46,6.14,0,10.24,3.73,10.24,9.94v19.82h-6.69v-17.89c0-4.1-2.17-6.26-5.97-6.26s-6.69,2.71-6.69,6.99v17.17h-6.69v-29.16h0Z",
-  },
-  {
-    id: "c",
-    path: "M110.32,172.79c-5.18,0-9.52,3.61-9.52,9.52s4.16,9.58,9.7,9.58c2.59,0,5.6-1.08,7.71-3.01h.12v6.09c-2.28,1.45-5.78,2.53-8.97,2.53-9.22,0-15.36-6.26-15.36-15.12s6.86-15.24,15.54-15.24c2.95,0,6.14.79,8.73,2.35v6.2l-.12.06c-2.17-1.87-5.06-2.95-7.83-2.95h0Z",
-  },
-  {
-    id: "r",
-    path: "M123.5,167.72h6.57v4.33h.12c1.87-3.01,5.06-4.94,8.08-4.94.97,0,2.11.24,3.07.72l-.97,6.32-.18.06c-.97-.66-2.23-1.02-3.67-1.02-3.56,0-6.32,2.9-6.32,6.57v17.11h-6.69v-29.16.02Z",
-  },
-  {
-    id: "y",
-    path: "M155.85,195.86l-13.86-28.13h7.65l9.58,20.97h.12l9.34-20.97h7.23l-20.85,44.82h-7.47l8.25-16.69h0Z",
-  },
-  {
-    id: "p",
-    path: "M179.05,212.55v-44.82h6.69v3.98h.06c2.28-3.01,5.97-4.58,10.48-4.58,8.19,0,13.86,5.97,13.86,15.12s-6.03,15.19-13.97,15.19c-4.33,0-8.13-1.68-10.36-4.46h-.06v19.58h-6.69,0ZM194.48,191.82c5.24,0,8.91-3.92,8.91-9.45s-3.44-9.58-8.79-9.58-9.28,3.98-9.28,9.64c0,5.3,3.98,9.39,9.16,9.39h0Z",
-  },
-  {
-    id: "t",
-    path: "M223.08,158.69v9.04h5.54v5.6h-5.54v23.56h-6.69v-23.56h-3.5v-5.6h3.5v-9.04h6.69Z",
-  },
-  {
-    id: "y1",
-    path: "M252.36,195.86l-13.86-28.13h7.65l9.58,20.97h.12l9.34-20.97h7.23l-20.85,44.82h-7.47l8.25-16.69h0Z",
-  },
-  {
-    id: "o",
-    path: "M272.73,182.19c0-8.85,6.8-15.06,16.15-15.06s15.73,5.9,15.73,14.88-6.75,15.48-16.02,15.48-15.84-6.09-15.84-15.3h0ZM297.85,182.25c0-5.54-3.73-9.22-9.1-9.22s-9.22,3.56-9.22,9.34,3.92,9.39,9.16,9.39,9.16-3.79,9.16-9.51h0Z",
-  },
-  {
-    id: "u",
-    path: "M316.58,167.72v17.35c0,4.4,2.29,6.69,6.2,6.69s6.26-2.35,6.26-6.92v-17.11h6.69v18.13c0,7.11-5.3,11.63-13.2,11.63s-12.65-4.21-12.65-11.38v-18.38h6.7Z",
-  },
-  {
-    id: "r1",
-    path: "M342.61,167.72h6.57v4.33h.12c1.87-3.01,5.06-4.94,8.08-4.94.97,0,2.11.24,3.07.72l-.97,6.32-.18.06c-.97-.66-2.23-1.02-3.67-1.02-3.55,0-6.32,2.9-6.32,6.57v17.11h-6.69v-29.16.02Z",
-  },
-  {
-    id: "w",
-    path: "M370.56,167.72h6.99l7.53,16.93h.12l8.19-18.26h.36l8.56,18.26h.12l7.41-16.93h6.92l-14.34,30.48h-.31l-8.43-18.55h-.12l-8.31,18.55h-.31l-14.4-30.48Z",
-  },
-  {
-    id: "e1",
-    path: "M432.44,197.48c-9.34,0-15.06-5.97-15.06-15s6.2-15.36,14.88-15.36,14.28,6.45,14.28,16.93h-22.47c.66,4.88,3.86,7.96,8.43,7.96,3.61,0,6.14-1.74,8.31-4.94l4.94,3.13c-2.47,4.52-7.23,7.29-13.31,7.29h0ZM439.6,178.87c-.48-3.79-3.5-6.51-7.29-6.51-4.4,0-7.17,2.23-8.08,6.51h15.36Z",
-  },
-  {
-    id: "a",
-    path: "M449.72,182.37c0-8.85,6.09-15.24,14.22-15.24,4.21,0,8.25,1.68,10.18,4.58h.06v-3.98h6.69v29.16h-6.69v-3.73h-.06c-2.11,2.77-6.03,4.33-10.36,4.33-8.37,0-14.03-6.26-14.03-15.12h0ZM474.66,182.19c0-5.78-3.98-9.39-9.1-9.39s-9.04,3.79-9.04,9.46,3.61,9.58,8.79,9.58c5.54,0,9.34-4.1,9.34-9.64h0Z",
-  },
-  {
-    id: "l",
-    path: "M494.96,146.89v50.01h-6.69v-50.01h6.69Z",
-  },
-  {
-    id: "t1",
-    path: "M510.99,158.69v9.04h5.54v5.6h-5.54v23.56h-6.69v-23.56h-3.5v-5.6h3.5v-9.04h6.69Z",
-  },
-  {
-    id: "h",
-    path: "M521.17,146.89h6.69v24.89h.12c2.17-3.01,5.24-4.64,8.98-4.64,6.2,0,10.24,3.73,10.24,9.94v19.82h-6.69v-17.78c0-4.21-2.11-6.39-5.9-6.39s-6.75,3.01-6.75,7.05v17.11h-6.69v-50.01h0Z",
-  },
-];
-
-// Tagline starts after H settles (~1.74s) with small pause
-const TAGLINE_DELAY = 1.9;
+const BRAND_NAME = 'zSTASH';
+const LETTER_OFFSET_PX = 8;
 
 /**
- * Animated zSTASH wordmark with per-letter direction animation.
- * Each letter flies in from a different direction.
- * Tagline fades in and slides up after the wordmark completes.
+ * Animated zSTASH wordmark with optional tagline.
+ * Letters animate in with a staggered reveal effect.
+ * Respects prefers-reduced-motion accessibility setting.
  */
-export function AnimatedWordmark({
-  className = "",
-  showTagline = true,
-}: AnimatedWordmarkProps) {
-  // ViewBox from zSTASH_Tagline.svg - includes both wordmark and tagline
-  const viewBox = showTagline ? "0 0 576 243" : "0 0 576 170";
+export function AnimatedWordmark({ showTagline = false, className = '' }: AnimatedWordmarkProps) {
+  const reducedMotion = useReducedMotion();
+  const [visible, setVisible] = useState(reducedMotion);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    // Small delay before starting animation
+    const timer = setTimeout(() => setVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, [reducedMotion]);
+
+  const letters = BRAND_NAME.split('');
 
   return (
-    <motion.svg
-      viewBox={viewBox}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      style={{ width: "clamp(280px, 50vw, 550px)", height: "auto" }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
-    >
-      {/* WordMark group - per-letter direction animation */}
-      <g id="WordMark">
-        {WORDMARK_LETTERS.map((letter) => (
-          <motion.path
-            key={letter.id}
-            id={letter.id}
-            d={letter.path}
-            fill="#f5f5f5"
-            initial={{ opacity: 0, ...letter.initial }}
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            transition={{
-              delay: letter.delay,
-              type: "spring",
-              stiffness: 400,
-              damping: 15,
-              mass: 0.8,
+    <div className={`flex flex-col items-center ${className}`}>
+      <div className="flex items-baseline" aria-label="zSTASH">
+        {letters.map((letter, index) => (
+          <span
+            key={`letter-${index}-${letter}`}
+            aria-hidden="true"
+            className="font-display text-7xl font-bold tracking-tight transition-all duration-300"
+            style={{
+              opacity: visible ? 1 : 0,
+              transform: visible ? 'translateY(0)' : `translateY(${LETTER_OFFSET_PX}px)`,
+              transitionDelay: reducedMotion ? '0ms' : `${index * 50}ms`,
             }}
-          />
+          >
+            {letter}
+          </span>
         ))}
-      </g>
-
-      {/* Tagline group - fade in + slide up as unit */}
+      </div>
       {showTagline && (
-        <motion.g
-          id="Tagline"
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: TAGLINE_DELAY,
-            type: "spring",
-            stiffness: 50,
-            damping: 18,
-            mass: 1.5,
+        <p
+          className="font-mono text-3xl text-muted-foreground mt-3 transition-opacity duration-500"
+          style={{
+            opacity: visible ? 1 : 0,
+            transitionDelay: reducedMotion ? '0ms' : '400ms',
           }}
         >
-          {TAGLINE_PATHS.map((letter) => (
-            <path key={letter.id} id={letter.id} d={letter.path} fill="#f5f5f5" />
-          ))}
-        </motion.g>
+          <ScrambleText text="encrypt your wealth" delayMs={500} duration={0.8} />
+        </p>
       )}
-    </motion.svg>
+    </div>
   );
 }

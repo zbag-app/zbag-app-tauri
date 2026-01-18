@@ -107,7 +107,7 @@ export function SendConfirm(props: { walletId: string }) {
       </div>
 
       {warning && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/50 bg-warning/5 p-4">
+        <div className="flex items-start gap-3 rounded-none border border-warning/50 bg-warning/5 p-4">
           <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
           <div>
             <h3 className="font-semibold text-warning">Privacy Warning</h3>
@@ -123,7 +123,7 @@ export function SendConfirm(props: { walletId: string }) {
         <CardContent className="space-y-4">
           <div className="space-y-1">
             <span className="text-sm text-muted-foreground">Recipient</span>
-            <code className="block text-sm break-all bg-muted px-3 py-2 rounded-lg font-mono">
+            <code className="block text-sm break-all bg-muted px-3 py-2 rounded-none font-mono">
               {summary.recipient}
             </code>
           </div>
@@ -188,7 +188,7 @@ export function SendConfirm(props: { walletId: string }) {
             </div>
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}

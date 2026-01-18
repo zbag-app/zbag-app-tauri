@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
-import { AnimatedLogo } from './components/brand/AnimatedLogo';
+import { Logo } from './components/brand/Logo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
@@ -185,8 +185,8 @@ function AppInner() {
   // Loading state
   if (startup.kind === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center grid-bg">
-        <AnimatedLogo size={120} />
+      <div className="flex h-screen items-center justify-center">
+        <Logo size={120} className="animate-pulse" />
       </div>
     );
   }
@@ -566,7 +566,7 @@ function UnlockGate(props: {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">

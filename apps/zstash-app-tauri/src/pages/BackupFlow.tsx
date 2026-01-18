@@ -58,7 +58,7 @@ export function BackupFlow(props: { walletId: string }) {
   // Step 1: Password prompt
   if (step === 'password') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+      <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
@@ -90,7 +90,7 @@ export function BackupFlow(props: { walletId: string }) {
               </div>
 
               {error && (
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -113,7 +113,7 @@ export function BackupFlow(props: { walletId: string }) {
   // Step 2: Show seed phrase
   if (!seedWords || seedWords.length !== 24) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+      <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">Unable to load seed phrase.</p>
@@ -149,7 +149,7 @@ export function BackupFlow(props: { walletId: string }) {
             {seedWords.map((word, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2"
+                className="flex items-center gap-2 rounded-none border border-border bg-muted/50 px-3 py-2"
               >
                 <span className="w-6 text-sm text-muted-foreground">{idx + 1}.</span>
                 <span className="font-mono font-semibold">{word}</span>

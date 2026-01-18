@@ -94,7 +94,7 @@ export function UFVKScanner(props: {
 
   return (
     <div className="space-y-4">
-      <div className="relative rounded-lg overflow-hidden bg-muted aspect-square max-w-[320px] mx-auto">
+      <div className="relative rounded-none overflow-hidden bg-muted aspect-square max-w-[320px] mx-auto">
         <AnimatedQRScanner
           purpose={Purpose.SYNC}
           urTypes={[ZCASH_ACCOUNTS_UR_TYPE]}
@@ -123,7 +123,7 @@ export function UFVKScanner(props: {
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}

@@ -177,7 +177,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -192,7 +192,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
             {swaps.map((s) => {
               const expired = s.deadline != null && Date.now() >= s.deadline;
               return (
-                <div key={s.id} className="rounded-lg border border-border p-4 space-y-2">
+                <div key={s.id} className="rounded-none border border-border p-4 space-y-2">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="font-semibold">
@@ -247,7 +247,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           )}
 
           {transactions.map((tx) => (
-            <div key={tx.txid} className="rounded-lg border border-border p-4 space-y-3">
+            <div key={tx.txid} className="rounded-none border border-border p-4 space-y-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

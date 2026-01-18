@@ -108,7 +108,7 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
               {loading ? 'Loading...' : 'No challenge.'}
             </p>
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive mt-4">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive mt-4">
                 {error}
               </div>
             )}
@@ -165,7 +165,7 @@ export function BackupChallenge(props: { walletId: string; onVerified: () => voi
             </div>
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}

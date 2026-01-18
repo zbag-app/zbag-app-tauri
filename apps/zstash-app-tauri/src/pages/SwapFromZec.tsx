@@ -113,7 +113,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="outputAsset"
               value={outputAsset}
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
-              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
                   <option key={t.id} value={t.id}>
@@ -141,7 +141,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
               placeholder="Paste the destination address for the target asset"
-              className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
             />
           </div>
 
@@ -154,7 +154,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
               placeholder="Your ZEC address for refunds if the swap fails"
               disabled={loadingRefundAddress}
-              className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
             />
           </div>
 
@@ -201,7 +201,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             <CardTitle className="text-lg">Quote</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-4">
+            <div className="rounded-none bg-muted/50 p-4">
               <div className="text-lg font-semibold">
                 {quote.input_amount} {quote.input_asset} → {quote.output_amount} {quote.output_asset}
               </div>
@@ -313,7 +313,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}

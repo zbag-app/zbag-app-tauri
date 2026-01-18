@@ -56,7 +56,7 @@ export function ErrorDialog(props: {
             If you contact support, share this error code: <code className="text-foreground">{error.code}</code>
           </p>
 
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+          <div className="rounded-none border border-destructive/30 bg-destructive/10 p-3">
             <div className="font-semibold text-sm mb-1">Message</div>
             <div className="text-sm whitespace-pre-wrap text-destructive">{error.message}</div>
           </div>

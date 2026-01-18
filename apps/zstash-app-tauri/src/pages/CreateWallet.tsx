@@ -73,7 +73,7 @@ export function CreateWallet(props: {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
@@ -98,7 +98,7 @@ export function CreateWallet(props: {
                 id="network"
                 value={network}
                 onChange={(e) => setNetwork(e.currentTarget.value as IPC.Network)}
-                className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="Mainnet">Mainnet</option>
                 <option value="Testnet">Testnet</option>
@@ -142,7 +142,7 @@ export function CreateWallet(props: {
                 type="checkbox"
                 checked={rememberUnlock}
                 onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-                className="rounded border-border h-4 w-4 accent-primary"
+                className="rounded-none border-border h-4 w-4 accent-primary"
               />
               <span className="text-sm text-muted-foreground">
                 Remember unlock (stores unlock material in OS keychain)
@@ -150,7 +150,7 @@ export function CreateWallet(props: {
             </label>
 
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
               </div>
             )}
