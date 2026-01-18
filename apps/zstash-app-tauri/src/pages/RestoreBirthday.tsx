@@ -48,6 +48,10 @@ export function RestoreBirthday(props: {
         return;
       }
 
+      // Clear flow data immediately after seed is persisted.
+      // If loadWallet fails, the seed phrase no longer needs to remain in state.
+      onClearFlow();
+
       const walletId = restored.ok.wallet.id;
 
       const load = await loadWallet({ wallet_id: walletId });
@@ -56,7 +60,6 @@ export function RestoreBirthday(props: {
         return;
       }
 
-      onClearFlow();
       onRestored({ wallet: load.ok.wallet, accounts: load.ok.accounts });
 
       await startSync({ wallet_id: walletId });
