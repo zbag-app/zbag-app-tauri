@@ -141,6 +141,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 setOutputAsset(e.currentTarget.value);
                 setQuote(null);
                 setQuoteId(null);
+                setError(null);
               }}
               className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -162,6 +163,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                   setOutputAmount(e.currentTarget.value);
                   setQuote(null);
                   setQuoteId(null);
+                  setError(null);
                 }}
                 placeholder="0.0"
                 className="pr-16"
@@ -182,6 +184,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 setDestinationAddress(e.currentTarget.value);
                 setQuote(null);
                 setQuoteId(null);
+                setError(null);
               }}
               placeholder={`Paste the recipient's ${selectedToken?.blockchain?.toUpperCase() ?? 'destination'} address`}
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
@@ -198,6 +201,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 setRefundAddress(e.currentTarget.value);
                 setQuote(null);
                 setQuoteId(null);
+                setError(null);
               }}
               placeholder="Your ZEC address for refunds if the payment fails"
               disabled={loadingRefundAddress}
@@ -318,7 +322,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                       });
                       if ('err' in res) throw new Error(res.err.message);
                       return res.ok.reauth_token;
-                    })()).toString();
+                    })());
 
                   try {
                     if (!reauthToken) {
@@ -349,6 +353,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                     setPrivacyAck(false);
                     navigate('/activity');
                   } catch (e) {
+                    setPassword('');
                     setError(e instanceof Error ? e.message : 'Failed to start payment');
                     setStarting(false);
                   }
