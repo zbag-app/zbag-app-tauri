@@ -10,8 +10,10 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fontsource/jetbrains-mono": "^5.2.8",
-    "@fontsource/syne": "^5.2.7",
+    "@fontsource/bebas-neue": "^5.2.5",
+    "@fontsource/ibm-plex-mono": "^5.2.5",
+    "@fontsource/ibm-plex-sans": "^5.2.5",
+    "framer-motion": "^11.18.2",
     "@keystonehq/animated-qr": "^0.10.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",

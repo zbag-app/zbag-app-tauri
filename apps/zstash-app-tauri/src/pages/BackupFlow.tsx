@@ -58,10 +58,10 @@ export function BackupFlow(props: { walletId: string }) {
   // Step 1: Password prompt
   if (step === 'password') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
               <Lock className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="font-display text-2xl">Backup Your Wallet</CardTitle>
@@ -113,7 +113,7 @@ export function BackupFlow(props: { walletId: string }) {
   // Step 2: Show seed phrase
   if (!seedWords || seedWords.length !== 24) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">Unable to load seed phrase.</p>
@@ -127,10 +127,10 @@ export function BackupFlow(props: { walletId: string }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
       <Card className="w-full max-w-2xl animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
             <Key className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="font-display text-2xl">Your Seed Phrase</CardTitle>

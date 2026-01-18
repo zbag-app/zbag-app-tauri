@@ -27,7 +27,7 @@ export function OnboardingBackup(props: {
   // No seed phrase available - redirect to home
   if (seedPhrase.length !== 24) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
         <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
           <CardContent className="pt-6 text-center">
             <p className="text-muted-foreground">No seed phrase available.</p>
@@ -43,10 +43,10 @@ export function OnboardingBackup(props: {
   // Step 1: Choice screen
   if (step === 'choice') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
         <Card className="w-full max-w-lg animate-[scale-in_0.3s_ease-out]">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
               <Shield className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="font-display text-2xl">Wallet Created</CardTitle>
@@ -88,10 +88,10 @@ export function OnboardingBackup(props: {
 
   // Step 2: Show seed phrase
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
       <Card className="w-full max-w-2xl animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
             <Key className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="font-display text-2xl">Write Down Your Seed Phrase</CardTitle>

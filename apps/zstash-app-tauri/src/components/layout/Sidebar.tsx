@@ -117,7 +117,7 @@ export function Sidebar({
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                "flex items-center gap-3 rounded-none px-3 py-2.5 text-sm font-medium transition-all",
                 isActive
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -161,7 +161,7 @@ export function Sidebar({
         {/* Lock Button */}
         <button
           onClick={onLock}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex w-full items-center justify-center gap-2 rounded-none border border-border bg-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Lock className="h-4 w-4" />
           Lock Wallet

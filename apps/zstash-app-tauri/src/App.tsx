@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
+import { AnimatedLogo } from './components/brand/AnimatedLogo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
@@ -184,8 +185,8 @@ function AppInner() {
   // Loading state
   if (startup.kind === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-muted-foreground animate-pulse">Loading...</div>
+      <div className="flex h-screen items-center justify-center grid-bg">
+        <AnimatedLogo size={120} />
       </div>
     );
   }
@@ -565,10 +566,10 @@ function UnlockGate(props: {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4 grid-bg">
       <Card className="w-full max-w-md animate-[scale-in_0.3s_ease-out]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-none bg-primary/10">
             <Shield className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="font-display text-2xl">Unlock Wallet</CardTitle>
@@ -595,7 +596,7 @@ function UnlockGate(props: {
               type="checkbox"
               checked={rememberUnlock}
               onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-              className="rounded border-border h-4 w-4 accent-primary"
+              className="rounded-none border-border h-4 w-4 accent-primary"
             />
             <span className="text-muted-foreground">Remember unlock</span>
           </label>
