@@ -31,9 +31,9 @@ use zstash_core::ipc::v1::events::TransactionChangedEvent;
 use crate::db::AppDb;
 use crate::encryption::Dek;
 use crate::error::ipc_err;
-use crate::permissions::{create_dir_all_secure, write_file_secure};
 use crate::reauth::Clock;
 use crate::tokio_runtime::block_on;
+use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
 
 const PROPOSAL_TTL: Duration = Duration::from_secs(10 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);

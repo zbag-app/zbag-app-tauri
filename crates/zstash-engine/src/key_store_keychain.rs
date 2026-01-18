@@ -6,7 +6,7 @@ use uuid::Uuid;
 use zstash_core::domain::Network;
 
 use crate::key_store::KeyStore;
-use crate::permissions::{create_dir_all_secure, set_file_permissions, write_file_secure};
+use zstash_core::permissions::{create_dir_all_secure, set_file_permissions, write_file_secure};
 
 #[derive(Debug, Clone)]
 pub struct KeyStoreKeychain {

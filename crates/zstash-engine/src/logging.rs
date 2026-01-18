@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt as _};
 
-use crate::permissions::create_dir_all_secure;
+use zstash_core::permissions::create_dir_all_secure;
 
 #[derive(Debug)]
 pub struct LoggingGuard {

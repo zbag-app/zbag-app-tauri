@@ -55,6 +55,42 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 
+/// Recursively create directories with secure permissions (0700 on Unix).
+///
+/// This is an async version that uses tokio::fs for non-blocking IO.
+#[cfg(feature = "async")]
+pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<()> {
+    let path = path.as_ref().to_path_buf();
+
+    // Collect all path components that need to be created
+    let mut to_create = Vec::new();
+    let mut current = path.as_path();
+    while !current.exists() {
+        to_create.push(current.to_path_buf());
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => current = parent,
+            _ => break,
+        }
+    }
+
+    // Create directories from root to leaf, setting permissions on each
+    for dir in to_create.into_iter().rev() {
+        match tokio::fs::create_dir(&dir).await {
+            Ok(()) => {
+                set_dir_permissions(&dir)?;
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Directory was created between our check and create_dir - that's fine
+                // Still try to set permissions (best-effort)
+                let _ = set_dir_permissions(&dir);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
+}
+
 /// Write data to a file with secure permissions (0600 on Unix).
 ///
 /// The file is created with restrictive permissions atomically on Unix

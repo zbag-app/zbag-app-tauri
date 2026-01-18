@@ -28,7 +28,6 @@ use crate::db::{
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
 };
-use crate::permissions::set_file_permissions;
 use crate::error::ipc_err;
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
@@ -48,6 +47,7 @@ use zstash_core::ipc::v1::commands::transaction::{
 use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
+use zstash_core::permissions::{create_dir_all_secure, set_file_permissions};
 use zstash_core::sensitive::SensitiveString;
 
 use crate::job_service::{JobEventHandler, JobService, SendJobContext, ShieldJobContext};

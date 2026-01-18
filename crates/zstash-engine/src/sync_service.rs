@@ -35,8 +35,8 @@ use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
-use crate::permissions::{create_dir_all_secure, set_file_permissions};
 use crate::server_resolver;
+use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
 
 /// Default batch size for downloading blocks.
 /// Matches Zashi's SYNC_BATCH_SIZE for optimal performance.
@@ -1629,17 +1629,11 @@ fn write_block_to_cache(
 
     let blocks_dir_buf = blocks_dir.to_path_buf();
     let block_path = block_meta.block_file_path(&blocks_dir_buf);
-    let mut file = std::fs::File::create(&block_path)
+    let mut file = secure_open_options()
+        .open(&block_path)
         .with_context(|| format!("failed to create block file: {}", block_path.display()))?;
     file.write_all(&block.encode_to_vec())
         .with_context(|| format!("failed to write block file: {}", block_path.display()))?;
-    // Set secure file permissions on the block cache file (0600 on Unix)
-    set_file_permissions(&block_path).with_context(|| {
-        format!(
-            "failed to set permissions on block file: {}",
-            block_path.display()
-        )
-    })?;
 
     Ok(block_meta)
 }
