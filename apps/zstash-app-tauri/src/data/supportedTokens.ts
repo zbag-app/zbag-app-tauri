@@ -74,3 +74,8 @@ export function getToZecTokens(): SupportedToken[] {
 export function getFromZecTokens(): SupportedToken[] {
   return supportedTokens.filter((t) => t.id !== ZEC_ASSET_ID);
 }
+
+/** Look up a token by its ID */
+export function getTokenById(id: string): SupportedToken | undefined {
+  return supportedTokens.find((t) => t.id === id);
+}

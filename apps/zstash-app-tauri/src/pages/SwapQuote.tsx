@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { startSwap } from '../services/ipc';
 import type { SwapQuoteLocationState } from './Swap';
+import { getTokenById } from '../data/supportedTokens';
+import { formatAtomicAmount } from '../utils/amounts';
 
 function formatDeadline(deadlineMs: number): string {
   const ms = deadlineMs - Date.now();
@@ -38,6 +40,15 @@ export function SwapQuote() {
   const expired = useMemo(() => {
     if (!quote) return false;
     return Date.now() >= quote.deadline;
+  }, [quote]);
+
+  // Format min output amount with token symbol
+  const formattedMinOutput = useMemo(() => {
+    if (!quote) return null;
+    const token = getTokenById(quote.output_asset);
+    if (!token) return quote.min_output_amount;
+    const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
+    return `${formatted} ${token.label}`;
   }, [quote]);
 
   if (!quoteId || !quote) {
@@ -84,7 +95,7 @@ export function SwapQuote() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="space-y-1">
               <span className="text-muted-foreground">Min. output</span>
-              <div className="font-semibold">{quote.output_amount_formatted}</div>
+              <div className="font-semibold">{formattedMinOutput}</div>
             </div>
             <div className="space-y-1">
               <span className="text-muted-foreground">Est. time</span>

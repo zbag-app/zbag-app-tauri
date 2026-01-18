@@ -7,30 +7,11 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
+import { getFromZecTokens, getTokenById, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
-
-/** ZEC has 8 decimal places (1 ZEC = 100,000,000 zatoshis) */
-const ZEC_DECIMALS = 8;
-
-/** Convert ZEC to zatoshis string */
-function zecToZatoshis(zec: string): string {
-  const trimmed = zec.trim();
-  if (!trimmed || Number.isNaN(Number(trimmed))) return '';
-  const parts = trimmed.split('.');
-  const whole = parts[0] || '0';
-  const frac = (parts[1] || '').padEnd(ZEC_DECIMALS, '0').slice(0, ZEC_DECIMALS);
-  const zatoshis = BigInt(whole) * BigInt(10 ** ZEC_DECIMALS) + BigInt(frac);
-  return zatoshis.toString();
-}
-
-/** Parse API error messages for user-friendly display */
-function parseSwapError(message: string): string {
-  if (message.includes('Failed to get quote') || message.includes('status=400')) {
-    return 'Failed to get quote. The amount may be below the minimum required or the swap pair is unavailable.';
-  }
-  return message;
-}
+import { parseZecToZatoshis } from '../utils/zec';
+import { parseSwapError } from '../utils/swap';
+import { formatAtomicAmount } from '../utils/amounts';
 
 export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
   const { wallet, activeAccountId } = props;
@@ -98,7 +79,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   // Clear error when form inputs change
   useEffect(() => {
     setError(null);
-  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
+  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress, privacyAck]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -108,6 +89,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
     return `${formatted} ${token.label}`;
   }, [quote]);
+
   if (wallet.network !== 'Mainnet') {
     return (
       <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
@@ -149,7 +131,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="outputAsset"
               value={outputAsset}
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
-              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
                   <option key={t.id} value={t.id}>
@@ -175,7 +157,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="destinationAddress"
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
-              placeholder="Paste the destination address"
+              placeholder="Paste the destination address for the target asset"
               className="font-mono"
             />
           </div>
@@ -204,12 +186,13 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setQuoteId(null);
               setReauthToken(null);
 
-              const zatoshis = zecToZatoshis(inputAmountZec);
-              if (!zatoshis) {
-                setError('Invalid amount');
+              const parseResult = parseZecToZatoshis(inputAmountZec);
+              if ('err' in parseResult) {
+                setError(parseResult.err);
                 setSubmittingQuote(false);
                 return;
               }
+              const zatoshis = parseResult.ok;
 
               const res = await requestSwapQuote({
                 swap_type: 'FromZec',
@@ -242,7 +225,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             <CardTitle className="text-lg">Quote</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-4">
+            <div className="rounded-none bg-muted/50 p-4">
               <div className="text-lg font-semibold">
                 {quote.input_amount_formatted} → {quote.output_amount_formatted}
               </div>
@@ -251,7 +234,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
                 <span className="text-muted-foreground">Min. output</span>
-                <div className="font-semibold">{quote.output_amount_formatted}</div>
+                <div className="font-semibold">{formattedMinOutput}</div>
               </div>
               <div className="space-y-1">
                 <span className="text-muted-foreground">Est. time</span>
@@ -343,7 +326,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       )}
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}

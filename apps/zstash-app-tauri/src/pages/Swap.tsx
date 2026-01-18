@@ -8,14 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { DEFAULT_NON_ZEC_ASSET_ID, getToZecTokens, ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, requestSwapQuote } from '../services/ipc';
-
-/** Parse API error messages for user-friendly display */
-function parseSwapError(message: string): string {
-  if (message.includes('Failed to get quote') || message.includes('status=400')) {
-    return 'Failed to get quote. The amount may be below the minimum required or the swap pair is unavailable.';
-  }
-  return message;
-}
+import { parseSwapError } from '../utils/swap';
 
 export type SwapQuoteLocationState = {
   quoteId: string;
@@ -76,6 +69,11 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
     };
   }, [wallet.network, activeAccountId]);
 
+  // Clear error when form inputs change
+  useEffect(() => {
+    setError(null);
+  }, [inputAsset, inputAmount, destinationAddress, refundAddress]);
+
   if (wallet.network !== 'Mainnet') {
     return (
       <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
@@ -109,14 +107,12 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Link to="/swap" className="block">
-          <Card className="h-full border-primary">
-            <CardHeader>
-              <CardTitle className="text-lg">Swap to ZEC</CardTitle>
-              <CardDescription>Convert other assets into ZEC</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+        <Card className="h-full border-primary">
+          <CardHeader>
+            <CardTitle className="text-lg">Swap to ZEC</CardTitle>
+            <CardDescription>Convert other assets into ZEC</CardDescription>
+          </CardHeader>
+        </Card>
         <Link to="/swap/from-zec" className="block">
           <Card className="h-full hover:border-primary/50 transition-colors">
             <CardHeader>
@@ -141,7 +137,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               id="inputAsset"
               value={inputAsset}
               onChange={(e) => setInputAsset(e.currentTarget.value)}
-              className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getToZecTokens().map((t) => (
                 <option key={t.id} value={t.id}>
@@ -163,29 +159,31 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
 
           <div className="space-y-2">
             <Label htmlFor="destinationAddress">Destination ZEC address</Label>
-            <Input
+            <textarea
               id="destinationAddress"
+              rows={2}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
               placeholder="u1... / zs... / etc"
               disabled={loadingAddress}
-              className="font-mono"
+              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="refundAddress">Refund address (origin chain)</Label>
-            <Input
+            <textarea
               id="refundAddress"
+              rows={2}
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
-              placeholder="Your address on the input asset chain"
-              className="font-mono"
+              placeholder="Your address on the input asset chain for refunds if the swap fails"
+              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
             />
           </div>
 
           {error && (
-            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
             </div>
           )}
