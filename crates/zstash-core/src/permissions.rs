@@ -4,14 +4,14 @@
 //! - Directories are created with mode 0700 (owner read/write/execute only)
 //! - Files are created with mode 0600 (owner read/write only)
 //!
-//! On Windows, permissions are applied using best-effort Windows API calls where feasible.
+//! On Windows, these functions are no-ops (permissions not enforced).
 
 use std::io;
 use std::path::Path;
 
 /// Create a directory with secure permissions (0700 on Unix).
 ///
-/// If the directory already exists, this will attempt to set restrictive permissions.
+/// Returns an error if the directory already exists.
 pub fn create_dir_secure(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
     std::fs::create_dir(path)?;
@@ -36,6 +36,9 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
         }
     }
 
+    // Check if path already exists before consuming to_create
+    let path_already_existed = to_create.is_empty();
+
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
         // Use create_dir which fails if it already exists (race-safe)
@@ -50,6 +53,13 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
             }
             Err(e) => return Err(e),
         }
+    }
+
+    // If path already existed, try to set permissions (best-effort)
+    // We use best-effort here because the directory might be a system directory
+    // that we cannot modify (e.g., /tmp or /var/folders/...)
+    if path_already_existed && path.is_dir() {
+        let _ = set_dir_permissions(path);
     }
 
     Ok(())
@@ -73,6 +83,9 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
         }
     }
 
+    // Check if path already exists before consuming to_create
+    let path_already_existed = to_create.is_empty();
+
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
         match tokio::fs::create_dir(&dir).await {
@@ -86,6 +99,13 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
             }
             Err(e) => return Err(e),
         }
+    }
+
+    // If path already existed, try to set permissions (best-effort)
+    // We use best-effort here because the directory might be a system directory
+    // that we cannot modify (e.g., /tmp or /var/folders/...)
+    if path_already_existed && path.is_dir() {
+        let _ = set_dir_permissions(&path);
     }
 
     Ok(())
@@ -254,5 +274,35 @@ mod tests {
             mode, 0o700,
             "directory should have mode 0700 after set_dir_permissions"
         );
+    }
+
+    #[test]
+    fn test_secure_open_options_sets_0600() {
+        use std::io::Write;
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("secure_open_file.txt");
+
+        let mut f = secure_open_options().open(&file).unwrap();
+        f.write_all(b"test").unwrap();
+
+        let meta = std::fs::metadata(&file).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "file should have mode 0600");
+    }
+
+    #[test]
+    fn test_create_dir_all_secure_on_existing_leaf_sets_0700() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path().join("existing");
+
+        // Create with default permissions first
+        std::fs::create_dir(&dir).unwrap();
+
+        // Call create_dir_all_secure - should not error, should set permissions
+        create_dir_all_secure(&dir).unwrap();
+
+        let meta = std::fs::metadata(&dir).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "existing directory should have mode 0700");
     }
 }
