@@ -256,7 +256,7 @@ export interface BackupChallenge {
 // Re-auth Types
 // ============================================================================
 
-export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase' | 'Logout';
+export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase';
 
 // ============================================================================
 // Server Types
@@ -376,10 +376,9 @@ export interface ViewSeedPhraseRequest extends VersionedPayload {
   reauth_token: string;
 }
 
-/** Logout wallet (requires re-auth token with purpose Logout) */
+/** Logout wallet */
 export interface LogoutWalletRequest extends VersionedPayload {
   wallet_id: string;
-  reauth_token: string;
 }
 
 /**

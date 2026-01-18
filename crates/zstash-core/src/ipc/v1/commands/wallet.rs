@@ -9,7 +9,6 @@ use super::super::common::UnixTimestampMs;
 pub enum ReauthPurpose {
     Spend,
     ViewSeedPhrase,
-    Logout,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,13 +75,11 @@ pub struct ViewSeedPhraseRequest {
 }
 
 /// Request to logout from the active wallet.
-/// Requires a valid reauth token with Logout purpose.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LogoutWalletRequest {
     pub schema_version: u32,
     pub wallet_id: Uuid,
-    pub reauth_token: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -9,8 +9,8 @@ use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
     LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
-    ReauthPurpose, ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest,
-    UnlockWalletResponse, ViewSeedPhraseRequest, ViewSeedPhraseResponse,
+    ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse,
+    ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
 use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
@@ -257,13 +257,6 @@ pub fn zstash_logout_wallet(
         let _ = state.sync_service.stop_sync(request.wallet_id, None);
 
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-
-        // Validate and consume reauth token
-        mgr.consume_reauth_token(
-            request.wallet_id,
-            &request.reauth_token,
-            ReauthPurpose::Logout,
-        )?;
 
         // Perform logout
         mgr.logout_wallet(request.wallet_id)?;
