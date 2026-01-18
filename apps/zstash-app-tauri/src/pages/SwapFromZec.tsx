@@ -95,6 +95,19 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
+  // Clear error when form inputs change
+  useEffect(() => {
+    setError(null);
+  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
+
+  // Format min output amount with token symbol
+  const formattedMinOutput = useMemo(() => {
+    if (!quote) return null;
+    const token = getTokenById(quote.output_asset);
+    if (!token) return quote.min_output_amount;
+    const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
+    return `${formatted} ${token.label}`;
+  }, [quote]);
   if (wallet.network !== 'Mainnet') {
     return (
       <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">

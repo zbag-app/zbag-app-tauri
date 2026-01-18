@@ -1,3 +1,5 @@
+import { formatAtomicAmount } from './amounts';
+
 const ZATOSHI_PER_ZEC = 100_000_000n;
 
 export type ParseAmountResult = { ok: string } | { err: string };
@@ -25,19 +27,7 @@ export function parseZecToZatoshis(input: string): ParseAmountResult {
 }
 
 export function formatZatoshisToZec(input: string): string {
-  const value = input.trim();
-  if (!/^\d+$/.test(value)) return input;
-
-  const zatoshis = BigInt(value);
-  const whole = zatoshis / ZATOSHI_PER_ZEC;
-  const fractional = zatoshis % ZATOSHI_PER_ZEC;
-  if (fractional === 0n) return whole.toString(10);
-
-  const fractionalStr = fractional
-    .toString(10)
-    .padStart(8, '0')
-    .replace(/0+$/, '');
-  return `${whole.toString(10)}.${fractionalStr}`;
+  return formatAtomicAmount(input, 8);
 }
 
 export function formatRelativeTime(timestampMs: number): string {
