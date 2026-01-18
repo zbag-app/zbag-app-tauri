@@ -7,8 +7,8 @@ import {
   History,
   Settings,
   Lock,
-  Shield,
 } from "lucide-react";
+import { Logo } from "../brand/Logo";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
@@ -94,9 +94,7 @@ export function Sidebar({
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">
       {/* Logo Section */}
       <div className="flex items-center gap-3 p-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-          <Shield className="h-5 w-5 text-primary" />
-        </div>
+        <Logo size={40} />
         <div className="flex flex-col">
           <span className="font-display text-lg font-bold tracking-tight">zSTASH</span>
           <div className="flex items-center gap-2">

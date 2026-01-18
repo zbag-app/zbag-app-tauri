@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Shield, Plus, RotateCcw, RefreshCw, Key } from 'lucide-react';
+import { Plus, RotateCcw, RefreshCw, Key } from 'lucide-react';
+import { Logo } from '../brand/Logo';
 import type * as IPC from '../../types/ipc';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -73,8 +74,8 @@ export function WalletPicker(props: {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-6 animate-[scale-in_0.3s_ease-out]">
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-            <Shield className="h-8 w-8 text-primary" />
+          <div className="mx-auto">
+            <Logo size={64} />
           </div>
           <h1 className="font-display text-3xl font-bold">zSTASH</h1>
           <p className="text-muted-foreground">Select a wallet to continue</p>

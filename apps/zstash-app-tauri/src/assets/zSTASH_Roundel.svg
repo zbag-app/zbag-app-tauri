@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1024 1024">
+  <!-- Generator: Adobe Illustrator 30.1.0, SVG Export Plug-In . SVG Version: 2.1.1 Build 136)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #ff8000;
+      }
+
+      .st1 {
+        fill: #151517;
+      }
+
+      .st2 {
+        fill: lime;
+      }
+
+      .st3 {
+        fill: #ff0;
+      }
+
+      .st4 {
+        fill: #f5f5f7;
+      }
+
+      .st5 {
+        fill: red;
+      }
+    </style>
+  </defs>
+  <g id="Layer_3">
+    <circle id="Roundel" class="st1" cx="512" cy="512" r="460.8"/>
+  </g>
+  <g id="Logo">
+    <polygon class="st0" points="742.23 537.58 742.23 486.42 512 601.53 281.77 486.42 281.77 537.58 512 652.7 742.23 537.58"/>
+    <polygon class="st5" points="281.77 588.74 281.77 639.91 512 755.03 742.23 639.91 742.23 588.74 512 703.86 281.77 588.74"/>
+    <polygon class="st3" points="742.23 384.09 512 499.21 281.77 384.09 281.77 435.26 512 550.38 742.23 435.26 742.23 384.09"/>
+    <polygon class="st4" points="844.56 691.07 512 857.35 179.44 691.07 179.44 358.51 230.61 332.93 230.61 665.49 512 806.18 793.39 665.49 793.39 332.93 844.56 358.51 844.56 691.07"/>
+    <polygon class="st2" points="512 448.05 281.77 332.93 281.77 281.77 512 166.65 742.23 281.77 742.23 332.93 512 448.05"/>
+  </g>
+</svg>
