@@ -76,13 +76,17 @@ impl FileKeyStore {
         write_file_secure(&tmp_path, content.as_bytes()).with_context(|| {
             format!("failed to write keystore temp file: {}", tmp_path.display())
         })?;
-        fs::rename(&tmp_path, &self.keystore_path).with_context(|| {
-            format!(
-                "failed to move keystore temp file into place: {} -> {}",
-                tmp_path.display(),
-                self.keystore_path.display()
-            )
-        })?;
+        fs::rename(&tmp_path, &self.keystore_path)
+            .inspect_err(|_| {
+                let _ = fs::remove_file(&tmp_path);
+            })
+            .with_context(|| {
+                format!(
+                    "failed to move keystore temp file into place: {} -> {}",
+                    tmp_path.display(),
+                    self.keystore_path.display()
+                )
+            })?;
 
         Ok(())
     }
@@ -95,13 +99,17 @@ impl FileKeyStore {
         write_file_secure(&tmp_path, contents).with_context(|| {
             format!("failed to write mnemonic temp file: {}", tmp_path.display())
         })?;
-        fs::rename(&tmp_path, path).with_context(|| {
-            format!(
-                "failed to move mnemonic temp file into place: {} -> {}",
-                tmp_path.display(),
-                path.display()
-            )
-        })?;
+        fs::rename(&tmp_path, path)
+            .inspect_err(|_| {
+                let _ = fs::remove_file(&tmp_path);
+            })
+            .with_context(|| {
+                format!(
+                    "failed to move mnemonic temp file into place: {} -> {}",
+                    tmp_path.display(),
+                    path.display()
+                )
+            })?;
         Ok(())
     }
 }
