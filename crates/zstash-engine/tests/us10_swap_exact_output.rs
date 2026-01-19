@@ -20,6 +20,12 @@ struct TestKeyStore {
     encrypted_mnemonics: Arc<Mutex<Vec<u8>>>,
 }
 
+#[derive(Debug, Default, Clone)]
+struct CapturedQuoteRequest {
+    swap_type: Option<String>,
+    amount: Option<String>,
+}
+
 impl KeyStore for TestKeyStore {
     fn store_encrypted_mnemonic(
         &self,
@@ -90,15 +96,20 @@ fn temp_root(prefix: &str) -> PathBuf {
 
 /// Spawn a mock server that validates ExactOutput requests.
 ///
-/// Returns the captured swap_type from the request body.
-fn spawn_mock_1click_server_capturing_swap_type(
+/// Returns the captured `swapType` and `amount` fields from the request body.
+fn spawn_mock_1click_server_capturing_quote_request(
     expected_requests: usize,
-) -> (String, Arc<Mutex<Option<String>>>, thread::JoinHandle<()>) {
+) -> (
+    String,
+    Arc<Mutex<CapturedQuoteRequest>>,
+    thread::JoinHandle<()>,
+) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
     let addr = listener.local_addr().expect("server addr");
     let base_url = format!("http://{addr}");
-    let captured_swap_type: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let captured_clone = Arc::clone(&captured_swap_type);
+    let captured: Arc<Mutex<CapturedQuoteRequest>> =
+        Arc::new(Mutex::new(CapturedQuoteRequest::default()));
+    let captured_clone = Arc::clone(&captured);
 
     let handle = thread::spawn(move || {
         for _ in 0..expected_requests {
@@ -107,16 +118,20 @@ fn spawn_mock_1click_server_capturing_swap_type(
             let n = stream.read(&mut buf).expect("read request");
             let req = String::from_utf8_lossy(&buf[..n]);
 
-            // Extract swap_type from JSON body
+            // Extract relevant fields from JSON body
             if let Some(body_start) = req.find("\r\n\r\n") {
                 let body = &req[body_start + 4..];
-                // Simple extraction: look for "swapType":"EXACT_OUTPUT" or "swapType":"EXACT_INPUT"
-                if body.contains(r#""swapType":"EXACT_OUTPUT""#) {
-                    *captured_clone.lock().expect("mutex poisoned") =
-                        Some("EXACT_OUTPUT".to_string());
-                } else if body.contains(r#""swapType":"EXACT_INPUT""#) {
-                    *captured_clone.lock().expect("mutex poisoned") =
-                        Some("EXACT_INPUT".to_string());
+
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+                    let mut captured = captured_clone.lock().expect("mutex poisoned");
+                    captured.swap_type = json
+                        .get("swapType")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    captured.amount = json
+                        .get("amount")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
                 }
             }
 
@@ -157,7 +172,7 @@ fn spawn_mock_1click_server_capturing_swap_type(
         }
     });
 
-    (base_url, captured_swap_type, handle)
+    (base_url, captured, handle)
 }
 
 #[test]
@@ -181,7 +196,7 @@ fn request_swap_quote_exact_output_sends_correct_swap_type() {
         .expect("create wallet")
         .wallet;
 
-    let (base_url, captured_swap_type, server) = spawn_mock_1click_server_capturing_swap_type(1);
+    let (base_url, captured_request, server) = spawn_mock_1click_server_capturing_quote_request(1);
     let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
@@ -205,12 +220,18 @@ fn request_swap_quote_exact_output_sends_correct_swap_type() {
 
     server.join().expect("server joined");
 
-    // Verify the server received EXACT_OUTPUT swap type
-    let captured = captured_swap_type.lock().expect("mutex poisoned").clone();
+    // Verify the server received EXACT_OUTPUT swap type and the amount was converted using the
+    // output asset's decimals (NEAR has 24 decimals).
+    let captured = captured_request.lock().expect("mutex poisoned").clone();
     assert_eq!(
-        captured,
+        captured.swap_type,
         Some("EXACT_OUTPUT".to_string()),
         "ExactOutput mode should send swapType: EXACT_OUTPUT"
+    );
+    assert_eq!(
+        captured.amount,
+        Some("1000000000000000000000000".to_string()),
+        "ExactOutput should convert 1 NEAR (24 decimals) to smallest units"
     );
 }
 

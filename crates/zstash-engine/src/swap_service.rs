@@ -100,7 +100,7 @@ impl SwapService {
         }
 
         // Validate amount based on swap mode
-        let (amount_smallest, swap_type_str, amount_decimals) = match intent.swap_mode {
+        let (amount_smallest, swap_type_str, decimals) = match intent.swap_mode {
             SwapMode::ExactInput => {
                 if intent.input_amount.trim().is_empty() {
                     return Err(ipc_err(
@@ -167,7 +167,7 @@ impl SwapService {
             swap_mode = ?intent.swap_mode,
             swap_type = swap_type_str,
             amount = %amount_smallest,
-            decimals = amount_decimals,
+            decimals,
             "requesting swap quote"
         );
 

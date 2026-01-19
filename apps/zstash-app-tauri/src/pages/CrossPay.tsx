@@ -10,6 +10,14 @@ import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, supportedTokens } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
+function formatDeadline(deadlineMs: number, nowMs: number): string {
+  const ms = deadlineMs - nowMs;
+  const secs = Math.max(0, Math.floor(ms / 1000));
+  const mins = Math.floor(secs / 60);
+  const rem = secs % 60;
+  return `${mins}:${rem.toString().padStart(2, '0')}`;
+}
+
 /**
  * CrossPay page - Pay recipients in other currencies using ZEC.
  *
@@ -28,6 +36,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
 
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [password, setPassword] = useState('');
   const [reauthToken, setReauthToken] = useState<string | null>(null);
@@ -43,15 +52,37 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     return supportedTokens.find((t) => t.id === outputAsset);
   }, [outputAsset]);
 
+  const outputAmountValidationError = useMemo(() => {
+    const trimmed = outputAmount.trim();
+    if (!trimmed) return null;
+    if (!/^[0-9]+(?:\.[0-9]*)?$/.test(trimmed)) return 'Enter a valid amount (e.g., 1.23)';
+
+    const maxDecimals = selectedToken?.decimals ?? 8;
+    const [, frac = ''] = trimmed.split('.');
+    if (frac.length > maxDecimals) return `Too many decimal places (max ${maxDecimals})`;
+
+    if (/^0+(?:\.0*)?$/.test(trimmed)) return 'Amount must be greater than zero';
+    return null;
+  }, [outputAmount, selectedToken?.decimals]);
+
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
     if (!outputAsset.trim()) return false;
     if (!outputAmount.trim()) return false;
+    if (outputAmountValidationError) return false;
     if (!destinationAddress.trim()) return false;
     if (!refundAddress.trim()) return false;
     return true;
-  }, [wallet.network, activeAccountId, outputAsset, outputAmount, destinationAddress, refundAddress]);
+  }, [
+    wallet.network,
+    activeAccountId,
+    outputAsset,
+    outputAmount,
+    outputAmountValidationError,
+    destinationAddress,
+    refundAddress,
+  ]);
 
   // Auto-populate refund address from wallet's shielded address
   useEffect(() => {
@@ -82,6 +113,17 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
       cancelled = true;
     };
   }, [wallet.network, activeAccountId]);
+
+  useEffect(() => {
+    if (!quote) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [quote]);
+
+  const quoteExpired = useMemo(() => {
+    if (!quote) return false;
+    return nowMs >= quote.deadline;
+  }, [quote, nowMs]);
 
   if (wallet.network !== 'Mainnet') {
     return (
@@ -159,6 +201,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               <Input
                 id="outputAmount"
                 value={outputAmount}
+                inputMode="decimal"
                 onChange={(e) => {
                   setOutputAmount(e.currentTarget.value);
                   setQuote(null);
@@ -172,6 +215,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 {selectedToken?.label ?? outputAsset}
               </span>
             </div>
+            {outputAmountValidationError && <div className="text-sm text-destructive">{outputAmountValidationError}</div>}
           </div>
 
           <div className="space-y-2">
@@ -228,7 +272,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                   input_asset: ZEC_ASSET_ID,
                   input_amount: '', // Not used for ExactOutput
                   output_asset: outputAsset,
-                  output_amount: outputAmount,
+                  output_amount: outputAmount.trim(),
                   destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
                   refund_address: refundAddress.trim() ? refundAddress.trim() : null,
                 });
@@ -281,6 +325,12 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 <span className="text-muted-foreground">Est. time</span>
                 <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
+              <div className="space-y-1 col-span-2">
+                <span className="text-muted-foreground">Expires in</span>
+                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
+                  {quoteExpired ? 'Expired' : formatDeadline(quote.deadline, nowMs)}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -310,7 +360,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
 
             <div className="flex gap-3">
               <Button
-                disabled={!password.trim() || starting || (privacyAckRequired && !privacyAck)}
+                disabled={!password.trim() || starting || quoteExpired || (privacyAckRequired && !privacyAck)}
                 onClick={async () => {
                   if (!quoteId) return;
 
@@ -334,7 +384,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                       setReauthToken(token);
                     }
 
-                    const allow = privacyAckRequired ? true : false;
+                    const allow = privacyAckRequired;
                     const startRes = await startSwap({
                       quote_id: quoteId,
                       allow_transparent_interaction: allow,
@@ -347,6 +397,8 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                         setStarting(false);
                         return;
                       }
+                      setPassword('');
+                      setReauthToken(null);
                       setError(startRes.err.message);
                       setStarting(false);
                       return;
@@ -366,7 +418,13 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 }}
                 className="flex-1"
               >
-                {starting ? 'Processing...' : privacyAckRequired ? 'Acknowledge & pay' : 'Pay now'}
+                {starting
+                  ? 'Processing...'
+                  : quoteExpired
+                    ? 'Quote expired'
+                    : privacyAckRequired
+                      ? 'Acknowledge & pay'
+                      : 'Pay now'}
               </Button>
               <Link to="/swap">
                 <Button variant="outline">
