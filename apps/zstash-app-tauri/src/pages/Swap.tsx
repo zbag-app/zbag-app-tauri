@@ -161,6 +161,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               id="inputAmount"
               value={inputAmount}
               onChange={(e) => setInputAmount(e.currentTarget.value)}
+              inputMode="decimal"
               placeholder="0.0"
               disabled={submitting}
             />

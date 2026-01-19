@@ -39,34 +39,41 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
   const lastQuoteInputsRef = useRef<{
     outputAsset: string;
-    inputAmountZec: string;
+    inputAmountZatoshis: string | null;
     destinationAddress: string;
     refundAddress: string;
   } | null>(null);
 
-  const amountError = useMemo(() => {
-    if (!inputAmountZec.trim()) return null;
-    const res = parseZecToZatoshis(inputAmountZec);
-    return 'err' in res ? res.err : null;
-  }, [inputAmountZec]);
+  const outputAssetTrimmed = outputAsset.trim();
+  const inputAmountZecTrimmed = inputAmountZec.trim();
+  const destinationAddressTrimmed = destinationAddress.trim();
+  const refundAddressTrimmed = refundAddress.trim();
+
+  const parsedAmount = useMemo<{ zatoshis: string | null; error: string | null }>(() => {
+    if (!inputAmountZecTrimmed) return { zatoshis: null, error: null };
+    const res = parseZecToZatoshis(inputAmountZecTrimmed);
+    if ('err' in res) return { zatoshis: null, error: res.err };
+    return { zatoshis: res.ok, error: null };
+  }, [inputAmountZecTrimmed]);
+
+  const amountError = parsedAmount.error;
+  const inputAmountZatoshis = parsedAmount.zatoshis;
 
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
-    if (!outputAsset.trim()) return false;
-    if (!inputAmountZec.trim()) return false;
-    if (amountError) return false;
-    if (!destinationAddress.trim()) return false;
-    if (!refundAddress.trim()) return false;
+    if (!outputAssetTrimmed) return false;
+    if (!inputAmountZatoshis) return false;
+    if (!destinationAddressTrimmed) return false;
+    if (!refundAddressTrimmed) return false;
     return true;
   }, [
     wallet.network,
     activeAccountId,
-    outputAsset,
-    inputAmountZec,
-    amountError,
-    destinationAddress,
-    refundAddress,
+    outputAssetTrimmed,
+    inputAmountZatoshis,
+    destinationAddressTrimmed,
+    refundAddressTrimmed,
   ]);
 
   // Auto-populate refund address from wallet's shielded address
@@ -99,9 +106,19 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
-  // Clear errors and invalidate quotes when quote inputs change.
+  // Clear errors when quote inputs change (even if the semantic/canonical values are unchanged).
   useEffect(() => {
-    const nextInputs = { outputAsset, inputAmountZec, destinationAddress, refundAddress };
+    setError(null);
+  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
+
+  // Invalidate quotes when quote inputs change.
+  useEffect(() => {
+    const nextInputs = {
+      outputAsset: outputAssetTrimmed,
+      inputAmountZatoshis,
+      destinationAddress: destinationAddressTrimmed,
+      refundAddress: refundAddressTrimmed,
+    };
     const prevInputs = lastQuoteInputsRef.current;
 
     if (!prevInputs) {
@@ -111,7 +128,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
     const inputsChanged =
       prevInputs.outputAsset !== nextInputs.outputAsset ||
-      prevInputs.inputAmountZec !== nextInputs.inputAmountZec ||
+      prevInputs.inputAmountZatoshis !== nextInputs.inputAmountZatoshis ||
       prevInputs.destinationAddress !== nextInputs.destinationAddress ||
       prevInputs.refundAddress !== nextInputs.refundAddress;
     if (!inputsChanged) return;
@@ -120,13 +137,19 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
     lastQuoteInputsRef.current = nextInputs;
 
-    setError(null);
     setQuote(null);
     setQuoteId(null);
     setReauthToken(null);
     setPassword('');
     // Intentionally NOT resetting privacyAck; FromZec swaps always require transparent interaction.
-  }, [destinationAddress, inputAmountZec, outputAsset, refundAddress, starting, submittingQuote]);
+  }, [
+    destinationAddressTrimmed,
+    inputAmountZatoshis,
+    outputAssetTrimmed,
+    refundAddressTrimmed,
+    starting,
+    submittingQuote,
+  ]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -241,21 +264,18 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setReauthToken(null);
               setPassword('');
 
-              const parseResult = parseZecToZatoshis(inputAmountZec);
-              if ('err' in parseResult) {
-                setError(parseResult.err);
+              if (!inputAmountZatoshis) {
                 setSubmittingQuote(false);
                 return;
               }
-              const zatoshis = parseResult.ok;
 
               const res = await requestSwapQuote({
                 swap_type: 'FromZec',
                 input_asset: ZEC_ASSET_ID,
-                input_amount: zatoshis,
-                output_asset: outputAsset,
-                destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                refund_address: refundAddress.trim() ? refundAddress.trim() : null,
+                input_amount: inputAmountZatoshis,
+                output_asset: outputAssetTrimmed,
+                destination_address: destinationAddressTrimmed ? destinationAddressTrimmed : null,
+                refund_address: refundAddressTrimmed ? refundAddressTrimmed : null,
               });
               setSubmittingQuote(false);
 
