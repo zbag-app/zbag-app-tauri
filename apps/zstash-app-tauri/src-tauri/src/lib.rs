@@ -6,6 +6,7 @@ compile_error!("test-bridge feature must not be enabled in release builds");
 pub mod commands;
 pub mod events;
 pub mod exchange_logic;
+pub mod menu;
 pub mod server_logic;
 pub mod state;
 #[cfg(feature = "test-bridge")]
@@ -117,6 +118,8 @@ where
 
     tauri::Builder::default()
         .manage(state)
+        .menu(|app| menu::build_menu(app))
+        .on_menu_event(|app, event| menu::handle_menu_event(app, &event))
         .setup(|app| {
             let state = app.state::<state::AppState>();
 

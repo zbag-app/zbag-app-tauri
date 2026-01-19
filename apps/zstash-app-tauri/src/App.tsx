@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
 import { Label } from './components/ui/label';
 import { useActiveAccount } from './hooks/useActiveAccount';
+import { useMenuEvents } from './hooks/useMenuEvents';
 import { useThrottledCallback } from './hooks/useThrottle';
 import { getTorState, getSyncProgress, listWallets, loadWallet, lockWallet, resumePendingSwaps, setTorEnabled, unlockWallet } from './services/ipc';
 import { onTorStatus, onSyncProgress } from './services/events';
@@ -78,6 +79,27 @@ function AppInner() {
     if (activeAccountId == null) return null;
     return accounts.find((a) => a.id === activeAccountId) ?? null;
   }, [accounts, activeAccountId]);
+
+  // Menu events handler
+  useMenuEvents({
+    walletId: activeWalletId,
+    onLocked: () => {
+      if (startup.kind === 'ready') {
+        setStartup({ kind: 'locked', wallet: startup.wallet });
+        setAccounts([]);
+        setSyncProgress(null);
+      }
+    },
+    onLogout: () => {
+      setAccounts([]);
+      setSyncProgress(null);
+      setStartup({ kind: 'wallet-selection' });
+      navigate('/wallets');
+    },
+    onTorStateChanged: (enabled) => {
+      setTorState((prev) => (prev ? { ...prev, enabled } : null));
+    },
+  });
 
   // Tor state initialization and subscription
   useEffect(() => {
