@@ -82,6 +82,7 @@ export function RestoreBirthday(props: {
         return;
       }
 
+      onClearFlow();
       onRestored({ wallet: load.ok.wallet, accounts: load.ok.accounts });
 
       await startSync({ wallet_id: walletId });
