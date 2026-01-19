@@ -123,6 +123,8 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
         const res = await lockWallet({ wallet_id: id });
         if ('ok' in res && res.ok.locked) {
           onLockedRef.current?.();
+        } else if ('err' in res) {
+          console.error('Menu: failed to lock wallet', res.err);
         }
       });
 
@@ -131,10 +133,15 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
         const id = walletIdRef.current;
         if (!id) return;
         // Stop sync first to satisfy engine contract
-        await stopSync({ wallet_id: id });
+        const stopRes = await stopSync({ wallet_id: id });
+        if ('err' in stopRes) {
+          console.error('Menu: failed to stop sync before logout', stopRes.err);
+        }
         const res = await logoutWallet({ wallet_id: id });
         if ('ok' in res) {
           onLogoutRef.current?.();
+        } else if ('err' in res) {
+          console.error('Menu: failed to logout wallet', res.err);
         }
       });
 
@@ -142,14 +149,20 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       await addListener(MenuEvents.SYNC_NOW, async () => {
         const id = walletIdRef.current;
         if (!id) return;
-        await startSync({ wallet_id: id });
+        const res = await startSync({ wallet_id: id });
+        if ('err' in res) {
+          console.error('Menu: failed to start sync', res.err);
+        }
       });
 
       // Stop sync
       await addListener(MenuEvents.STOP_SYNC, async () => {
         const id = walletIdRef.current;
         if (!id) return;
-        await stopSync({ wallet_id: id });
+        const res = await stopSync({ wallet_id: id });
+        if ('err' in res) {
+          console.error('Menu: failed to stop sync', res.err);
+        }
       });
 
       // Toggle Tor
@@ -160,7 +173,11 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           const res = await setTorEnabled({ enabled: !currentEnabled });
           if ('ok' in res) {
             onTorStateChangedRef.current?.(!currentEnabled);
+          } else if ('err' in res) {
+            console.error('Menu: failed to toggle Tor', res.err);
           }
+        } else if ('err' in stateRes) {
+          console.error('Menu: failed to get Tor state', stateRes.err);
         }
       });
 
@@ -169,6 +186,8 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
         const res = await getLogLocation();
         if ('ok' in res && res.ok.log_directory) {
           await revealItemInDir(res.ok.log_directory);
+        } else if ('err' in res) {
+          console.error('Menu: failed to get log location', res.err);
         }
       });
     }
