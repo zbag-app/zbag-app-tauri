@@ -221,25 +221,30 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               setPrivacyAck(false);
               setReauthToken(null);
 
-              const res = await requestSwapQuote({
-                swap_type: 'FromZec',
-                swap_mode: 'ExactOutput',
-                input_asset: ZEC_ASSET_ID,
-                input_amount: '', // Not used for ExactOutput
-                output_asset: outputAsset,
-                output_amount: outputAmount,
-                destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                refund_address: refundAddress.trim() ? refundAddress.trim() : null,
-              });
-              setSubmittingQuote(false);
+              try {
+                const res = await requestSwapQuote({
+                  swap_type: 'FromZec',
+                  swap_mode: 'ExactOutput',
+                  input_asset: ZEC_ASSET_ID,
+                  input_amount: '', // Not used for ExactOutput
+                  output_asset: outputAsset,
+                  output_amount: outputAmount,
+                  destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
+                  refund_address: refundAddress.trim() ? refundAddress.trim() : null,
+                });
 
-              if ('err' in res) {
-                setError(res.err.message);
-                return;
+                if ('err' in res) {
+                  setError(res.err.message);
+                  return;
+                }
+
+                setQuoteId(res.ok.quote_id);
+                setQuote(res.ok.quote);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to get quote');
+              } finally {
+                setSubmittingQuote(false);
               }
-
-              setQuoteId(res.ok.quote_id);
-              setQuote(res.ok.quote);
             }}
             className="w-full"
           >
@@ -354,6 +359,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                     navigate('/activity');
                   } catch (e) {
                     setPassword('');
+                    setReauthToken(null);
                     setError(e instanceof Error ? e.message : 'Failed to start payment');
                     setStarting(false);
                   }
