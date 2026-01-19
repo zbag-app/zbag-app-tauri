@@ -48,7 +48,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   useEffect(() => {
     let mounted = true;
     let torToggleInFlight = false;
-    const unlisteners: UnlistenFn[] = [];
+    const unlisteners = new Set<UnlistenFn>();
 
     function ensureWalletLoaded(): string | null {
       const id = walletIdRef.current;
@@ -70,7 +70,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           }
         });
         if (mounted) {
-          unlisteners.push(unlisten);
+          unlisteners.add(unlisten);
         } else {
           // Component unmounted before listener was set up - clean up immediately
           unlisten();
@@ -250,7 +250,9 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
 
     return () => {
       mounted = false;
-      for (const unlisten of unlisteners) {
+      const snapshot = Array.from(unlisteners);
+      unlisteners.clear();
+      for (const unlisten of snapshot) {
         unlisten();
       }
     };

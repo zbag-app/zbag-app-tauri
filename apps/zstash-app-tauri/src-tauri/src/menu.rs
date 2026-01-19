@@ -9,7 +9,7 @@ use tauri::{
 
 /// Menu event channel names emitted to the frontend.
 ///
-/// Keep in sync with `apps/zstash-app-tauri/src/hooks/useMenuEvents.ts`.
+/// Keep in sync with `apps/zstash-app-tauri/src/constants/menuEvents.ts`.
 pub mod events {
     pub const NEW_WALLET: &str = "menu:new-wallet";
     pub const RESTORE_WALLET: &str = "menu:restore-wallet";
@@ -85,29 +85,44 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
         .accelerator("CmdOrCtrl+,")
         .build(app)?;
 
-    let separator = PredefinedMenuItem::separator(app)?;
-    let hide = PredefinedMenuItem::hide(app, Some("Hide zSTASH"))?;
-    let hide_others = PredefinedMenuItem::hide_others(app, Some("Hide Others"))?;
-    let show_all = PredefinedMenuItem::show_all(app, Some("Show All"))?;
-    let separator2 = PredefinedMenuItem::separator(app)?;
     let quit = PredefinedMenuItem::quit(app, Some("Quit zSTASH"))?;
+    let separator = PredefinedMenuItem::separator(app)?;
 
-    Submenu::with_items(
-        app,
-        "zSTASH",
-        true,
-        &[
-            &about,
-            &separator,
-            &preferences,
-            &separator2,
-            &hide,
-            &hide_others,
-            &show_all,
-            &PredefinedMenuItem::separator(app)?,
-            &quit,
-        ],
-    )
+    #[cfg(target_os = "macos")]
+    {
+        let hide = PredefinedMenuItem::hide(app, Some("Hide zSTASH"))?;
+        let hide_others = PredefinedMenuItem::hide_others(app, Some("Hide Others"))?;
+        let show_all = PredefinedMenuItem::show_all(app, Some("Show All"))?;
+        let separator2 = PredefinedMenuItem::separator(app)?;
+        let separator3 = PredefinedMenuItem::separator(app)?;
+
+        return Submenu::with_items(
+            app,
+            "zSTASH",
+            true,
+            &[
+                &about,
+                &separator,
+                &preferences,
+                &separator2,
+                &hide,
+                &hide_others,
+                &show_all,
+                &separator3,
+                &quit,
+            ],
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        return Submenu::with_items(
+            app,
+            "zSTASH",
+            true,
+            &[&about, &separator, &preferences, &quit],
+        );
+    }
 }
 
 fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
@@ -293,6 +308,8 @@ fn menu_id_to_event_name(menu_id: &str) -> Option<&'static str> {
 /// Handle menu events and emit to the frontend.
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &tauri::menu::MenuEvent) {
     let Some(event_name) = menu_id_to_event_name(event.id().as_ref()) else {
+        #[cfg(debug_assertions)]
+        tracing::debug!(menu_id = event.id().as_ref(), "unhandled menu event");
         return;
     };
 
