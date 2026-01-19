@@ -4,6 +4,7 @@ use anyhow::{Context as _, bail};
 use rusqlite::{Connection, params};
 
 use super::schema::INITIAL_SCHEMA_V1;
+use zstash_core::permissions::set_file_permissions;
 
 pub const LATEST_VERSION: i64 = 2;
 
@@ -16,6 +17,12 @@ pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
             format!(
                 "failed to create pre-migration snapshot: {} -> {}",
                 db_path.display(),
+                snapshot_path.display()
+            )
+        })?;
+        set_file_permissions(&snapshot_path).with_context(|| {
+            format!(
+                "failed to set permissions on pre-migration snapshot: {}",
                 snapshot_path.display()
             )
         })?;
@@ -44,6 +51,15 @@ pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
                         db_path.display()
                     )
                 });
+                if restore_result.is_ok()
+                    && let Err(e) = set_file_permissions(db_path)
+                {
+                    tracing::debug!(
+                        path = ?db_path,
+                        error = ?e,
+                        "failed to re-apply permissions after db restore"
+                    );
+                }
                 if let Err(e) = std::fs::remove_file(&snapshot_path) {
                     tracing::debug!(path = ?snapshot_path, error = ?e, "failed to cleanup snapshot file");
                 }

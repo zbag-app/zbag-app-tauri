@@ -12,6 +12,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, WalletInfo, WalletLockStatus};
+use zstash_core::permissions::create_dir_all_secure;
 use zstash_engine::sync_service::SyncService;
 use zstash_engine::wallet_manager::WalletManager;
 
@@ -34,8 +35,8 @@ impl CliAppState {
         let app_db_path = data_dir.join("app.db");
         let wallets_root = data_dir.join("wallets");
 
-        // Ensure directories exist
-        std::fs::create_dir_all(&wallets_root)?;
+        // Ensure directories exist (0700 on Unix)
+        create_dir_all_secure(&wallets_root)?;
 
         // Create file-based key store
         let key_store = Box::new(FileKeyStore::new(data_dir));

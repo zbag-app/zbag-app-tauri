@@ -8,6 +8,7 @@ use zeroize::Zeroize as _;
 use zcash_client_backend::address::Address;
 use zcash_client_backend::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
 use zcash_protocol::consensus::Network as ConsensusNetwork;
+use zstash_core::permissions::create_dir_all_secure;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -154,7 +155,7 @@ fn load_or_create_mnemonic(path: &Path, force_new: bool) -> anyhow::Result<(Stri
 
 fn write_secret_file(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
+        create_dir_all_secure(parent).with_context(|| {
             format!("failed to create mnemonic directory: {}", parent.display())
         })?;
     }

@@ -47,7 +47,9 @@ use zstash_core::ipc::v1::commands::transaction::{
 use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
-use zstash_core::permissions::{create_dir_all_secure, set_file_permissions};
+use zstash_core::permissions::{
+    create_dir_all_secure, set_file_permissions, set_sqlite_file_permissions,
+};
 use zstash_core::sensitive::SensitiveString;
 
 use crate::job_service::{JobEventHandler, JobService, SendJobContext, ShieldJobContext};
@@ -2281,6 +2283,15 @@ impl WalletManager {
         seed: Option<SecretVec<u8>>,
         create_if_missing: bool,
     ) -> anyhow::Result<rusqlite::Connection> {
+        if create_if_missing || wallet_dir.exists() {
+            create_dir_all_secure(wallet_dir).with_context(|| {
+                format!(
+                    "failed to ensure wallet directory permissions: {}",
+                    wallet_dir.display()
+                )
+            })?;
+        }
+
         let wallet_db_path = self.wallet_db_path(wallet_dir);
         let existed = wallet_db_path.exists();
         let snapshot_path = self.wallet_db_snapshot_path(&wallet_db_path);
@@ -2290,6 +2301,12 @@ impl WalletManager {
                 format!(
                     "failed to create pre-migration snapshot: {} -> {}",
                     wallet_db_path.display(),
+                    snapshot_path.display()
+                )
+            })?;
+            set_file_permissions(&snapshot_path).with_context(|| {
+                format!(
+                    "failed to set permissions on pre-migration snapshot: {}",
                     snapshot_path.display()
                 )
             })?;
@@ -2335,6 +2352,15 @@ impl WalletManager {
                                 wallet_db_path.display()
                             )
                         });
+                    if restore_result.is_ok()
+                        && let Err(e) = set_sqlite_file_permissions(&wallet_db_path)
+                    {
+                        tracing::debug!(
+                            path = ?wallet_db_path,
+                            error = ?e,
+                            "failed to re-apply permissions after wallet db restore"
+                        );
+                    }
                     let _ = std::fs::remove_file(&snapshot_path);
                     if let Err(restore_err) = restore_result {
                         anyhow::bail!("{err}\n{restore_err}");
@@ -2373,7 +2399,8 @@ impl WalletManager {
         )?;
 
         // Set secure file permissions on the wallet database (0600 on Unix)
-        set_file_permissions(wallet_db_path).with_context(|| {
+        // and best-effort sidecar files (e.g. `-wal`, `-shm`, `-journal`) if present.
+        set_sqlite_file_permissions(wallet_db_path).with_context(|| {
             format!(
                 "failed to set permissions on wallet db: {}",
                 wallet_db_path.display()

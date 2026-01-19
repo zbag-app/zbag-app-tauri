@@ -7,7 +7,7 @@
 //! On Windows, these functions are no-ops (permissions not enforced).
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Create a directory with secure permissions (0700 on Unix).
 ///
@@ -79,54 +79,9 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
 #[cfg(feature = "async")]
 pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref().to_path_buf();
-
-    // Collect all path components that need to be created
-    let mut to_create = Vec::new();
-    let mut current = path.as_path();
-    while !tokio::fs::try_exists(&current).await.unwrap_or(false) {
-        to_create.push(current.to_path_buf());
-        match current.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => current = parent,
-            _ => break,
-        }
-    }
-
-    // Check if path already exists before consuming to_create
-    let path_already_existed = to_create.is_empty();
-
-    // Create directories from root to leaf, setting permissions on each
-    for dir in to_create.into_iter().rev() {
-        let dir_clone = dir.clone();
-        let result = tokio::task::spawn_blocking(move || create_dir_secure(dir_clone))
-            .await
-            .map_err(io::Error::other)?;
-
-        match result {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                // Directory was created between our check and create - that's fine.
-                // Still try to set permissions (best-effort).
-                let dir_clone = dir.clone();
-                let _ = tokio::task::spawn_blocking(move || set_dir_permissions(dir_clone)).await;
-            }
-            Err(e) => return Err(e),
-        }
-    }
-
-    // If path already existed, try to set permissions (best-effort)
-    // We use best-effort here because the directory might be a system directory
-    // that we cannot modify (e.g., /tmp or /var/folders/...)
-    if path_already_existed
-        && tokio::fs::metadata(&path)
-            .await
-            .map(|m| m.is_dir())
-            .unwrap_or(false)
-    {
-        let path_clone = path.clone();
-        let _ = tokio::task::spawn_blocking(move || set_dir_permissions(path_clone)).await;
-    }
-
-    Ok(())
+    tokio::task::spawn_blocking(move || create_dir_all_secure(path))
+        .await
+        .map_err(io::Error::other)?
 }
 
 /// Write data to a file with secure permissions (0600 on Unix).
@@ -151,7 +106,13 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
 
     #[cfg(not(unix))]
     {
-        std::fs::write(path, contents)?;
+        use std::io::Write;
+
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        let mut file = opts.open(path)?;
+        file.write_all(contents)?;
+        file.sync_all()?;
         // Best-effort permission setting on non-Unix
         let _ = set_file_permissions(path);
         Ok(())
@@ -192,6 +153,34 @@ pub fn set_file_permissions(path: impl AsRef<Path>) -> io::Result<()> {
         let _ = path;
         Ok(())
     }
+}
+
+/// Set secure file permissions on a SQLite database and its common sidecar files.
+///
+/// SQLite may create auxiliary files next to the main database file (e.g. `-wal`, `-shm`,
+/// `-journal`). This helper applies 0600 (best-effort) to those sidecar files if they exist.
+///
+/// Note: This does not prevent SQLite from briefly creating sidecar files with the process umask
+/// defaults. Prefer placing databases in directories secured with `create_dir_all_secure()`.
+pub fn set_sqlite_file_permissions(db_path: impl AsRef<Path>) -> io::Result<()> {
+    let db_path = db_path.as_ref();
+
+    set_file_permissions(db_path)?;
+
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let mut sidecar = db_path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let sidecar_path = PathBuf::from(sidecar);
+        match set_file_permissions(&sidecar_path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(_e) => {
+                // Best-effort: sidecar files are opportunistic and may appear/disappear.
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Open a file for writing with secure permissions (0600 on Unix).
@@ -292,6 +281,28 @@ mod tests {
             mode, 0o700,
             "directory should have mode 0700 after set_dir_permissions"
         );
+    }
+
+    #[test]
+    fn test_set_sqlite_file_permissions_sets_0600_on_sidecars() {
+        let tmp = tempdir().unwrap();
+        let db = tmp.path().join("wallet.sqlite");
+        let wal = tmp.path().join("wallet.sqlite-wal");
+        let shm = tmp.path().join("wallet.sqlite-shm");
+        let journal = tmp.path().join("wallet.sqlite-journal");
+
+        std::fs::write(&db, b"db").unwrap();
+        std::fs::write(&wal, b"wal").unwrap();
+        std::fs::write(&shm, b"shm").unwrap();
+        std::fs::write(&journal, b"journal").unwrap();
+
+        set_sqlite_file_permissions(&db).unwrap();
+
+        for file in [&db, &wal, &shm, &journal] {
+            let meta = std::fs::metadata(file).unwrap();
+            let mode = meta.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "file {:?} should have mode 0600", file);
+        }
     }
 
     #[test]

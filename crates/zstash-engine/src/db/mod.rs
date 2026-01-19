@@ -6,7 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 use zeroize::Zeroize;
 
 use crate::encryption::Dek;
-use zstash_core::permissions::{create_dir_all_secure, set_file_permissions};
+use zstash_core::permissions::{create_dir_all_secure, set_sqlite_file_permissions};
 
 /// SQLite busy timeout for concurrent operations (sync + tx).
 ///
@@ -128,7 +128,8 @@ impl AppDb {
         let conn = open_app_db_connection(&path)?;
 
         // Set secure file permissions on the database file (0600 on Unix)
-        set_file_permissions(&path).with_context(|| {
+        // and best-effort sidecar files (e.g. `-wal`, `-shm`, `-journal`) if present.
+        set_sqlite_file_permissions(&path).with_context(|| {
             format!(
                 "failed to set permissions on app metadata db: {}",
                 path.display()

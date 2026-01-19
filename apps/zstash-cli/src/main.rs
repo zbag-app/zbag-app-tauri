@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use zstash_core::permissions::create_dir_all_secure;
 
 mod cli_app_state;
 mod commands;
@@ -90,7 +91,7 @@ async fn run_command(cli: Cli) -> Result<()> {
     let data_dir = cli.data_dir.unwrap_or_else(default_data_dir);
 
     // Ensure data directory exists
-    std::fs::create_dir_all(&data_dir)?;
+    create_dir_all_secure(&data_dir)?;
 
     match cli.command {
         Commands::Wallet(args) => commands::wallet::run(args, &data_dir, cli.tor, &output).await,
