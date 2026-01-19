@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CreditCard, ArrowLeft, Info } from 'lucide-react';
+import { CreditCard, ArrowLeft, Info, Clock } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -314,11 +314,14 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
               <div className="space-y-1 col-span-2">
-	                <span className="text-muted-foreground">Expires in</span>
-	                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
-	                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
-	                </div>
-	              </div>
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Expires in
+                </span>
+                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
+                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

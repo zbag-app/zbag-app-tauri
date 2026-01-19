@@ -220,14 +220,21 @@ impl SwapService {
         // Use correlation_id as the quote_id for tracking
         let quote_id = quote_res.correlation_id;
 
-        self.state.lock().expect("mutex poisoned").quotes.insert(
-            quote_id.clone(),
-            QuoteRecord {
-                wallet_id,
-                intent,
-                quote: quote.clone(),
-            },
-        );
+        {
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            let mut state = self.state.lock().expect("mutex poisoned");
+            state
+                .quotes
+                .retain(|_, record| record.quote.deadline == 0 || now_ms < record.quote.deadline);
+            state.quotes.insert(
+                quote_id.clone(),
+                QuoteRecord {
+                    wallet_id,
+                    intent,
+                    quote: quote.clone(),
+                },
+            );
+        }
 
         Ok(RequestSwapQuoteResponse {
             schema_version: SCHEMA_VERSION,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
+import { ArrowLeftRight, ArrowLeft, Clock } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { ErrorCodes } from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -9,6 +9,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { TokenPicker } from '../components/ui/TokenPicker';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
+import { useNowMs } from '../hooks/useNowMs';
+import { formatCountdown } from '../lib/time';
 import {
   ZEC_ASSET_ID,
   DEFAULT_NON_ZEC_ASSET_ID,
@@ -37,6 +39,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
+  const nowMs = useNowMs(quote != null);
 
   const [password, setPassword] = useState('');
   const [reauthToken, setReauthToken] = useState<string | null>(null);
@@ -92,6 +95,11 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     destinationAddressTrimmed,
     refundAddressTrimmed,
   ]);
+
+const quoteExpired = useMemo(() => {
+    if (!quote) return false;
+    return nowMs >= quote.deadline;
+  }, [quote, nowMs]);
 
   // Load supported tokens from API
   useEffect(() => {
@@ -390,6 +398,15 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                 <span className="text-muted-foreground">Est. time</span>
                 <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
+              <div className="space-y-1 col-span-2">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Expires in
+                </span>
+                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
+                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -415,9 +432,13 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
             <div className="flex gap-3">
               <Button
-                disabled={!password.trim() || starting || !privacyAck}
+                disabled={!password.trim() || starting || quoteExpired || !privacyAck}
                 onClick={async () => {
                   if (!quoteId) return;
+                  if (quoteExpired) {
+                    setError('Quote expired');
+                    return;
+                  }
 
                   setStarting(true);
                   setError(null);
@@ -458,6 +479,8 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                     setReauthToken(null);
                     navigate('/activity');
                   } catch (e) {
+                    setPassword('');
+                    setReauthToken(null);
                     setError(e instanceof Error ? e.message : 'Failed to start swap');
                   } finally {
                     setStarting(false);
@@ -465,7 +488,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                 }}
                 className="flex-1"
               >
-                {starting ? 'Starting...' : 'Start swap'}
+                {starting ? 'Starting...' : quoteExpired ? 'Quote expired' : 'Start swap'}
               </Button>
               <Link to="/swap">
                 <Button variant="outline">
