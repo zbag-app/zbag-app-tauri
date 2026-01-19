@@ -58,6 +58,8 @@ function AppInner() {
   const [seedPhrase, setSeedPhrase] = useState<string[] | null>(null);
   const [torState, setTorState] = useState<IPC.TorState | null>(null);
   const [torToggleError, setTorToggleError] = useState<IPC.IpcError | null>(null);
+  const [resumePendingSwapsError, setResumePendingSwapsError] = useState<IPC.IpcError | null>(null);
+  const [resumePendingSwapsRetryNonce, setResumePendingSwapsRetryNonce] = useState(0);
   const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
   const [dismissedTorError, setDismissedTorError] = useState(false);
 
@@ -115,7 +117,8 @@ function AppInner() {
 
   // Resume pending swaps when wallet becomes ready
   useEffect(() => {
-    if (startup.kind !== 'ready') return;
+    if (activeWalletId == null) return;
+    setResumePendingSwapsError(null);
 
     // Resume polling for any in-progress swaps from previous sessions
     let cancelled = false;
@@ -144,13 +147,21 @@ function AppInner() {
           const res = await resumePendingSwaps();
           if (cancelled) return;
           if ('err' in res) {
-            throw new Error(res.err.message);
+            if (attempt === delaysMs.length - 1) {
+              console.warn('Failed to resume pending swaps:', res.err);
+              setResumePendingSwapsError(res.err);
+            }
+            continue;
           }
           return;
         } catch (err) {
           if (cancelled) return;
           if (attempt === delaysMs.length - 1) {
             console.warn('Failed to resume pending swaps:', err);
+            setResumePendingSwapsError({
+              code: 'SWAP_RESUME_FAILED',
+              message: err instanceof Error ? err.message : String(err),
+            });
           }
         }
       }
@@ -164,7 +175,7 @@ function AppInner() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, [activeWalletId]);
+  }, [activeWalletId, resumePendingSwapsRetryNonce]);
 
   // Throttled sync progress updates
   const throttledSetSync = useThrottledCallback(
@@ -353,6 +364,11 @@ function AppInner() {
     );
   }
 
+  const showTorErrorDialog = torState != null && torState.enabled && torState.status === 'Error' && !dismissedTorError;
+  const showTorToggleErrorDialog = torToggleError != null;
+  const showResumePendingSwapsErrorDialog =
+    resumePendingSwapsError != null && !showTorErrorDialog && !showTorToggleErrorDialog;
+
   // Ready state - Main app with sidebar
   return (
     <FiatDisplayProvider>
@@ -363,9 +379,9 @@ function AppInner() {
       onLock={handleQuickLock}
     >
       {/* Tor Error Dialog */}
-      {torState && torState.enabled && torState.status === 'Error' && !dismissedTorError ? (
+      {showTorErrorDialog ? (
         <TorErrorDialog
-          state={torState}
+          state={torState!}
           onClose={() => setDismissedTorError(true)}
           onDisable={() => toggleTor(false)}
           onRetry={() => toggleTor(true)}
@@ -373,11 +389,29 @@ function AppInner() {
       ) : null}
 
       {/* Tor Toggle Error Dialog */}
-      {torToggleError ? (
+      {showTorToggleErrorDialog ? (
         <ErrorDialog
           title="Tor toggle failed"
-          error={{ code: torToggleError.code, message: torToggleError.message }}
+          error={{ code: torToggleError!.code, message: torToggleError!.message }}
           primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
+        />
+      ) : null}
+
+      {showResumePendingSwapsErrorDialog ? (
+        <ErrorDialog
+          title="Failed to resume swaps"
+          error={{
+            code: resumePendingSwapsError!.code,
+            message: resumePendingSwapsError!.message,
+          }}
+          primaryAction={{ label: 'Dismiss', onClick: () => setResumePendingSwapsError(null) }}
+          secondaryAction={{
+            label: 'Retry',
+            onClick: () => {
+              setResumePendingSwapsError(null);
+              setResumePendingSwapsRetryNonce((n) => n + 1);
+            },
+          }}
         />
       ) : null}
 
