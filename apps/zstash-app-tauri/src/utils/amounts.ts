@@ -16,7 +16,8 @@ export function formatAtomicAmount(value: string, decimals: number): string {
 
   const padded = trimmed.padStart(decimals + 1, '0');
   const wholeEnd = padded.length - decimals;
-  const whole = padded.slice(0, wholeEnd);
+  const wholeRaw = padded.slice(0, wholeEnd);
+  const whole = wholeRaw.replace(/^0+/, '') || '0';
   const fractional = padded.slice(wholeEnd).replace(/0+$/, '');
 
   if (!fractional) return whole;
@@ -30,7 +31,10 @@ export function formatAtomicAmount(value: string, decimals: number): string {
  */
 export function formatAtomicAmountForToken(value: string, tokenId: string): string {
   const trimmed = value.trim();
+  if (!trimmed) return '';
+
   const token = getTokenById(tokenId);
   if (!token) return `${trimmed} (raw)`;
+  if (!/^\d+$/.test(trimmed)) return `${trimmed} (raw)`;
   return `${formatAtomicAmount(trimmed, token.decimals)} ${token.label}`;
 }

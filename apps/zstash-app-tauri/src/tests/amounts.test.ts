@@ -16,6 +16,7 @@ test('formatAtomicAmount formats small values', () => {
 test('formatAtomicAmount handles edge cases', () => {
   expect(formatAtomicAmount('', 8)).toBe('');
   expect(formatAtomicAmount('00123', 8)).toBe('0.00000123');
+  expect(formatAtomicAmount('0000000001', 8)).toBe('0.00000001');
   expect(formatAtomicAmount('1000000000000000000000000', 18)).toBe('1000000');
 });
 
@@ -28,4 +29,6 @@ test('formatAtomicAmount passes through invalid input and decimals <= 0', () => 
 test('formatAtomicAmountForToken formats known tokens and falls back for unknown tokens', () => {
   expect(formatAtomicAmountForToken('100000000', 'nep141:zec.omft.near')).toBe('1 ZEC');
   expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toBe('123 (raw)');
+  expect(formatAtomicAmountForToken('abc', 'nep141:zec.omft.near')).toBe('abc (raw)');
+  expect(formatAtomicAmountForToken('   ', 'unknown-token')).toBe('');
 });
