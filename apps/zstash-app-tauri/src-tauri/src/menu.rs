@@ -1,4 +1,4 @@
-//! Native macOS menu bar for zSTASH.
+//! Native application menu for zSTASH.
 //!
 //! Provides app, file, wallet, security, network, and standard edit/window menus.
 
@@ -82,7 +82,7 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     )?;
 
     let preferences = MenuItemBuilder::with_id("preferences", "Preferences...")
-        .accelerator("Cmd+,")
+        .accelerator("CmdOrCtrl+,")
         .build(app)?;
 
     let separator = PredefinedMenuItem::separator(app)?;
@@ -112,21 +112,21 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
 
 fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     let new_wallet = MenuItemBuilder::with_id("new_wallet", "New Wallet...")
-        .accelerator("Cmd+N")
+        .accelerator("CmdOrCtrl+N")
         .build(app)?;
 
     let restore_wallet = MenuItemBuilder::with_id("restore_wallet", "Restore Wallet...")
-        .accelerator("Cmd+Shift+R")
+        .accelerator("CmdOrCtrl+Shift+R")
         .build(app)?;
 
     let switch_wallet = MenuItemBuilder::with_id("switch_wallet", "Switch Wallet...")
-        .accelerator("Cmd+Shift+W")
+        .accelerator("CmdOrCtrl+Shift+W")
         .build(app)?;
 
     let separator = PredefinedMenuItem::separator(app)?;
 
     let lock_wallet = MenuItemBuilder::with_id("lock_wallet", "Lock Wallet")
-        .accelerator("Cmd+L")
+        .accelerator("CmdOrCtrl+L")
         .build(app)?;
 
     let logout = MenuItemBuilder::with_id("logout", "Logout").build(app)?;
@@ -153,27 +153,27 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> 
 
 fn build_wallet_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     let send = MenuItemBuilder::with_id("send", "Send...")
-        .accelerator("Cmd+Shift+S")
+        .accelerator("CmdOrCtrl+Shift+S")
         .build(app)?;
 
     let receive = MenuItemBuilder::with_id("receive", "Receive...")
-        .accelerator("Cmd+Shift+D")
+        .accelerator("CmdOrCtrl+Shift+D")
         .build(app)?;
 
     let swap = MenuItemBuilder::with_id("swap", "Swap...")
-        .accelerator("Cmd+Shift+X")
+        .accelerator("CmdOrCtrl+Shift+X")
         .build(app)?;
 
     let separator = PredefinedMenuItem::separator(app)?;
 
     let activity = MenuItemBuilder::with_id("activity", "Activity")
-        .accelerator("Cmd+Shift+A")
+        .accelerator("CmdOrCtrl+Shift+A")
         .build(app)?;
 
     let separator2 = PredefinedMenuItem::separator(app)?;
 
     let sync_now = MenuItemBuilder::with_id("sync_now", "Sync Now")
-        .accelerator("Cmd+Shift+Y")
+        .accelerator("CmdOrCtrl+Shift+Y")
         .build(app)?;
 
     let stop_sync = MenuItemBuilder::with_id("stop_sync", "Stop Sync").build(app)?;

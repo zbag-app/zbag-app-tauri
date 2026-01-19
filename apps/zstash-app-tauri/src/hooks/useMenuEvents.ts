@@ -74,6 +74,13 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
     let mounted = true;
     const unlisteners: UnlistenFn[] = [];
 
+    function ensureWalletLoaded(): string | null {
+      const id = walletIdRef.current;
+      if (id) return id;
+      navigate('/wallets');
+      return null;
+    }
+
     async function addListener(
       event: string,
       handler: () => void | Promise<void>
@@ -98,116 +105,161 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
     }
 
     async function setupListeners() {
+      const listeners: Array<Promise<void>> = [];
+
       // Navigation events (no wallet required)
-      await addListener(MenuEvents.NEW_WALLET, () => navigate('/create'));
-      await addListener(MenuEvents.RESTORE_WALLET, () => navigate('/restore'));
-      await addListener(MenuEvents.SWITCH_WALLET, () => navigate('/wallets'));
-      await addListener(MenuEvents.PREFERENCES, () => navigate('/settings'));
+      listeners.push(addListener(MenuEvents.NEW_WALLET, () => navigate('/create')));
+      listeners.push(addListener(MenuEvents.RESTORE_WALLET, () => navigate('/restore')));
+      listeners.push(addListener(MenuEvents.SWITCH_WALLET, () => navigate('/wallets')));
 
       // Navigation events (wallet required)
-      await addListener(MenuEvents.SEND, () => {
-        if (walletIdRef.current) navigate('/send');
-      });
-      await addListener(MenuEvents.RECEIVE, () => {
-        if (walletIdRef.current) navigate('/receive');
-      });
-      await addListener(MenuEvents.SWAP, () => {
-        if (walletIdRef.current) navigate('/swap');
-      });
-      await addListener(MenuEvents.ACTIVITY, () => {
-        if (walletIdRef.current) navigate('/activity');
-      });
-      await addListener(MenuEvents.VIEW_SEED, () => {
-        if (walletIdRef.current) navigate('/backup/flow');
-      });
-      await addListener(MenuEvents.VERIFY_BACKUP, () => {
-        if (walletIdRef.current) navigate('/backup');
-      });
-      await addListener(MenuEvents.HARDWARE_WALLET, () =>
-        navigate('/keystone/import')
+      listeners.push(
+        addListener(MenuEvents.PREFERENCES, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/settings');
+        })
       );
-      await addListener(MenuEvents.SERVER_SETTINGS, () =>
-        navigate('/settings/servers')
+      listeners.push(
+        addListener(MenuEvents.SEND, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/send');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.RECEIVE, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/receive');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.SWAP, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/swap');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.ACTIVITY, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/activity');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.VIEW_SEED, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/backup/flow');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.VERIFY_BACKUP, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/backup');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.HARDWARE_WALLET, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/keystone/import');
+        })
+      );
+      listeners.push(
+        addListener(MenuEvents.SERVER_SETTINGS, () => {
+          if (!ensureWalletLoaded()) return;
+          navigate('/settings/servers');
+        })
       );
 
       // Lock wallet
-      await addListener(MenuEvents.LOCK_WALLET, async () => {
-        const id = walletIdRef.current;
-        if (!id) return;
-        const res = await lockWallet({ wallet_id: id });
-        if ('ok' in res && res.ok.locked) {
-          onLockedRef.current?.();
-        } else if ('err' in res) {
-          console.error('Menu: failed to lock wallet', res.err);
-        }
-      });
+      listeners.push(
+        addListener(MenuEvents.LOCK_WALLET, async () => {
+          const id = ensureWalletLoaded();
+          if (!id) return;
+          const res = await lockWallet({ wallet_id: id });
+          if ('ok' in res && res.ok.locked) {
+            onLockedRef.current?.();
+          } else if ('err' in res) {
+            console.error('Menu: failed to lock wallet', res.err);
+          }
+        })
+      );
 
       // Logout
-      await addListener(MenuEvents.LOGOUT, async () => {
-        const id = walletIdRef.current;
-        if (!id) return;
-        // Stop sync first to satisfy engine contract
-        const stopRes = await stopSync({ wallet_id: id });
-        if ('err' in stopRes) {
-          console.error('Menu: failed to stop sync before logout', stopRes.err);
-        }
-        const res = await logoutWallet({ wallet_id: id });
-        if ('ok' in res) {
-          onLogoutRef.current?.();
-        } else if ('err' in res) {
-          console.error('Menu: failed to logout wallet', res.err);
-        }
-      });
+      listeners.push(
+        addListener(MenuEvents.LOGOUT, async () => {
+          const id = ensureWalletLoaded();
+          if (!id) return;
+          // Stop sync first to satisfy engine contract
+          const stopRes = await stopSync({ wallet_id: id });
+          if ('err' in stopRes) {
+            console.error('Menu: failed to stop sync before logout', stopRes.err);
+          }
+          const res = await logoutWallet({ wallet_id: id });
+          if ('ok' in res) {
+            onLogoutRef.current?.();
+          } else if ('err' in res) {
+            console.error('Menu: failed to logout wallet', res.err);
+          }
+        })
+      );
 
       // Sync now
-      await addListener(MenuEvents.SYNC_NOW, async () => {
-        const id = walletIdRef.current;
-        if (!id) return;
-        const res = await startSync({ wallet_id: id });
-        if ('err' in res) {
-          console.error('Menu: failed to start sync', res.err);
-        }
-      });
+      listeners.push(
+        addListener(MenuEvents.SYNC_NOW, async () => {
+          const id = ensureWalletLoaded();
+          if (!id) return;
+          const res = await startSync({ wallet_id: id });
+          if ('err' in res) {
+            console.error('Menu: failed to start sync', res.err);
+          }
+        })
+      );
 
       // Stop sync
-      await addListener(MenuEvents.STOP_SYNC, async () => {
-        const id = walletIdRef.current;
-        if (!id) return;
-        const res = await stopSync({ wallet_id: id });
-        if ('err' in res) {
-          console.error('Menu: failed to stop sync', res.err);
-        }
-      });
+      listeners.push(
+        addListener(MenuEvents.STOP_SYNC, async () => {
+          const id = ensureWalletLoaded();
+          if (!id) return;
+          const res = await stopSync({ wallet_id: id });
+          if ('err' in res) {
+            console.error('Menu: failed to stop sync', res.err);
+          }
+        })
+      );
 
       // Toggle Tor
-      await addListener(MenuEvents.TOGGLE_TOR, async () => {
-        const stateRes = await getTorState();
-        if ('ok' in stateRes) {
-          const currentEnabled = stateRes.ok.state.enabled;
-          const res = await setTorEnabled({ enabled: !currentEnabled });
-          if ('ok' in res) {
-            onTorStateChangedRef.current?.(!currentEnabled);
-          } else if ('err' in res) {
-            console.error('Menu: failed to toggle Tor', res.err);
+      listeners.push(
+        addListener(MenuEvents.TOGGLE_TOR, async () => {
+          const stateRes = await getTorState();
+          if ('ok' in stateRes) {
+            const currentEnabled = stateRes.ok.state.enabled;
+            const res = await setTorEnabled({ enabled: !currentEnabled });
+            if ('ok' in res) {
+              onTorStateChangedRef.current?.(!currentEnabled);
+            } else if ('err' in res) {
+              console.error('Menu: failed to toggle Tor', res.err);
+            }
+          } else if ('err' in stateRes) {
+            console.error('Menu: failed to get Tor state', stateRes.err);
           }
-        } else if ('err' in stateRes) {
-          console.error('Menu: failed to get Tor state', stateRes.err);
-        }
-      });
+        })
+      );
 
       // Open logs folder
-      await addListener(MenuEvents.OPEN_LOGS, async () => {
-        const res = await getLogLocation();
-        if ('ok' in res && res.ok.log_directory) {
-          try {
-            await revealItemInDir(res.ok.log_directory);
-          } catch (err) {
-            console.error('Menu: failed to reveal logs directory', err);
+      listeners.push(
+        addListener(MenuEvents.OPEN_LOGS, async () => {
+          const res = await getLogLocation();
+          if ('ok' in res && res.ok.log_directory) {
+            try {
+              await revealItemInDir(res.ok.log_directory);
+            } catch (err) {
+              console.error('Menu: failed to reveal logs directory', err);
+            }
+          } else if ('err' in res) {
+            console.error('Menu: failed to get log location', res.err);
           }
-        } else if ('err' in res) {
-          console.error('Menu: failed to get log location', res.err);
-        }
-      });
+        })
+      );
+
+      await Promise.all(listeners);
     }
 
     setupListeners().catch((err) => {
