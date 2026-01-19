@@ -118,7 +118,7 @@ where
 
     tauri::Builder::default()
         .manage(state)
-        .menu(|app| menu::build_menu(app))
+        .menu(menu::build_menu)
         .on_menu_event(|app, event| menu::handle_menu_event(app, &event))
         .setup(|app| {
             let state = app.state::<state::AppState>();

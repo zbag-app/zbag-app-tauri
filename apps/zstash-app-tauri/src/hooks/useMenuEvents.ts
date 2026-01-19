@@ -37,6 +37,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   const onLockedRef = useRef(onLocked);
   const onLogoutRef = useRef(onLogout);
   const onTorStateChangedRef = useRef(onTorStateChanged);
+  const torToggleInFlightRef = useRef(false);
 
   useEffect(() => {
     walletIdRef.current = walletId;
@@ -47,7 +48,6 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
 
   useEffect(() => {
     let mounted = true;
-    let torToggleInFlight = false;
     const unlisteners = new Set<UnlistenFn>();
 
     function ensureWalletLoaded(): string | null {
@@ -204,8 +204,8 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       // Toggle Tor
       listeners.push(
         addListener(MenuEvents.TOGGLE_TOR, async () => {
-          if (torToggleInFlight) return;
-          torToggleInFlight = true;
+          if (torToggleInFlightRef.current) return;
+          torToggleInFlightRef.current = true;
           try {
             const stateRes = await getTorState();
             if ('ok' in stateRes) {
@@ -220,7 +220,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
               console.error('Menu: failed to get Tor state', stateRes.err);
             }
           } finally {
-            torToggleInFlight = false;
+            torToggleInFlightRef.current = false;
           }
         })
       );
