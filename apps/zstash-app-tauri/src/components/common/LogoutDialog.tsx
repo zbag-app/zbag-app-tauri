@@ -27,8 +27,19 @@ export function LogoutDialog(props: LogoutDialogProps) {
     setError(null);
     setLoading(true);
     try {
-      // Best effort stop sync - ignore errors
-      await stopSync({ wallet_id: walletId }).catch(() => {});
+      // Best effort stop sync - do not block logout on failures.
+      try {
+        const stopRes = await stopSync({ wallet_id: walletId });
+        if ('err' in stopRes) {
+          console.warn(
+            'Failed to stop sync before logout',
+            stopRes.err.code,
+            stopRes.err.message
+          );
+        }
+      } catch (err) {
+        console.warn('Failed to stop sync before logout', err);
+      }
 
       const logoutRes = await logoutWallet({ wallet_id: walletId });
       if ('err' in logoutRes) {
