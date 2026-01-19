@@ -97,7 +97,7 @@ check-telemetry: ## Check for telemetry code
 dev: ## Full Tauri development
 	@cd $(TAURI_DIR) && bun run tauri dev
 
-# Default CI=true avoids create-dmg unmount flakiness during macOS DMG bundling; override with CI=false if needed.
+# Default CI=true avoids macOS DMG bundling detach/unmount flakiness (create-dmg can fail with EBUSY); override with CI=false if needed.
 tauri-build: ## Tauri production build
 	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build
 

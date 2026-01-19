@@ -5,6 +5,7 @@ test('formatAtomicAmount formats various decimal places', () => {
   expect(formatAtomicAmount('1000000', 6)).toBe('1'); // USDC (6 decimals)
   expect(formatAtomicAmount('100000000', 8)).toBe('1'); // ZEC (8 decimals)
   expect(formatAtomicAmount('1000000000000000000', 18)).toBe('1'); // ETH (18 decimals)
+  expect(formatAtomicAmount('12345678', 8)).toBe('0.12345678'); // value length equals decimals
 });
 
 test('formatAtomicAmount formats small values', () => {
