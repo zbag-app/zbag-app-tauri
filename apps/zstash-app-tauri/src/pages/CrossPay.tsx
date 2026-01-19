@@ -398,16 +398,16 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                       return;
                     }
 
-                      setPassword('');
-                      setReauthToken(null);
-                      setPrivacyAckRequired(false);
-                      setPrivacyAck(false);
-                      setStarting(false);
-                      navigate('/activity');
-                    } catch (e) {
-                      setPassword('');
-                      setReauthToken(null);
-                      setError(e instanceof Error ? e.message : 'Failed to start payment');
+                    setPassword('');
+                    setReauthToken(null);
+                    setPrivacyAckRequired(false);
+                    setPrivacyAck(false);
+                    setStarting(false);
+                    navigate('/activity');
+                  } catch (e) {
+                    setPassword('');
+                    setReauthToken(null);
+                    setError(e instanceof Error ? e.message : 'Failed to start payment');
                     setStarting(false);
                   }
                 }}

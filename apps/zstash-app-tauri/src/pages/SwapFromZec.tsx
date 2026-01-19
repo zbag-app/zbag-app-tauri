@@ -350,6 +350,7 @@ const quoteExpired = useMemo(() => {
               try {
                 const res = await requestSwapQuote({
                   swap_type: 'FromZec',
+                  swap_mode: 'ExactInput',
                   input_asset: ZEC_ASSET_ID,
                   input_amount: inputAmountZatoshis,
                   output_asset: outputAssetTrimmed,
