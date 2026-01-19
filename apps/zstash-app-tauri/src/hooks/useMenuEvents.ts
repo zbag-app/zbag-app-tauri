@@ -191,9 +191,17 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           const id = ensureWalletLoaded();
           if (!id) return;
           // Stop sync first to satisfy engine contract
-          const stopRes = await stopSync({ wallet_id: id });
-          if ('err' in stopRes) {
-            console.error('Menu: failed to stop sync before logout', stopRes.err);
+          try {
+            const stopRes = await stopSync({ wallet_id: id });
+            if ('err' in stopRes) {
+              console.warn(
+                'Menu: failed to stop sync before logout',
+                stopRes.err.code,
+                stopRes.err.message
+              );
+            }
+          } catch (err) {
+            console.warn('Menu: failed to stop sync before logout', err);
           }
           const res = await logoutWallet({ wallet_id: id });
           if ('ok' in res) {
@@ -239,7 +247,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
               const currentEnabled = stateRes.ok.state.enabled;
               const res = await setTorEnabled({ enabled: !currentEnabled });
               if ('ok' in res) {
-                onTorStateChangedRef.current?.(!currentEnabled);
+                onTorStateChangedRef.current?.(res.ok.state.enabled);
               } else if ('err' in res) {
                 reportError('Toggle Tor failed', res.err);
               }
