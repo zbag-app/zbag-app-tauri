@@ -54,6 +54,7 @@ export function SwapQuote() {
     if (!quote) return null;
     return formatAtomicAmountForToken(quote.min_output_amount, quote.output_asset);
   }, [quote]);
+  const minOutputIsRaw = formattedMinOutput?.endsWith(' (raw)') ?? false;
 
   if (!quoteId || !quote) {
     return (
@@ -98,7 +99,7 @@ export function SwapQuote() {
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="space-y-1">
-              <span className="text-muted-foreground">Min. output</span>
+              <span className="text-muted-foreground">{minOutputIsRaw ? 'Min. output (raw)' : 'Min. output'}</span>
               <div className="font-semibold">{formattedMinOutput}</div>
             </div>
             <div className="space-y-1">
