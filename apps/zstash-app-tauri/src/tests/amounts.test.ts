@@ -12,6 +12,12 @@ test('formatAtomicAmount formats small values', () => {
   expect(formatAtomicAmount('1', 18)).toBe('0.000000000000000001');
 });
 
+test('formatAtomicAmount handles edge cases', () => {
+  expect(formatAtomicAmount('', 8)).toBe('');
+  expect(formatAtomicAmount('00123', 8)).toBe('0.00000123');
+  expect(formatAtomicAmount('1000000000000000000000000', 18)).toBe('1000000');
+});
+
 test('formatAtomicAmount passes through invalid input and decimals <= 0', () => {
   expect(formatAtomicAmount('  abc  ', 8)).toBe('abc');
   expect(formatAtomicAmount('123', 0)).toBe('123');

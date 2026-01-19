@@ -84,7 +84,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   const formattedMinOutput = useMemo(() => {
     if (!quote) return null;
     const token = getTokenById(quote.output_asset);
-    if (!token) return quote.min_output_amount;
+    if (!token) return `${quote.min_output_amount} (raw)`;
     const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
     return `${formatted} ${token.label}`;
   }, [quote]);
