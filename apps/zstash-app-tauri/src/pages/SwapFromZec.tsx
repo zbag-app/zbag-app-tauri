@@ -102,12 +102,14 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     if (submittingQuote || starting) return;
 
     setError(null);
-    setQuote(null);
-    setQuoteId(null);
-    setReauthToken(null);
-    setPassword('');
+    if (quoteId || quote) {
+      setQuote(null);
+      setQuoteId(null);
+      setReauthToken(null);
+      setPassword('');
+    }
     // Intentionally NOT resetting privacyAck; FromZec swaps always require transparent interaction.
-  }, [destinationAddress, inputAmountZec, outputAsset, refundAddress, starting, submittingQuote]);
+  }, [destinationAddress, inputAmountZec, outputAsset, quote, quoteId, refundAddress, starting, submittingQuote]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -202,7 +204,11 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             />
           </div>
 
-          <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
+          <PrivacyWarning
+            acknowledged={privacyAck}
+            onAcknowledgedChange={setPrivacyAck}
+            disabled={submittingQuote || starting}
+          />
 
           <Button
             disabled={!canQuote || submittingQuote || starting}

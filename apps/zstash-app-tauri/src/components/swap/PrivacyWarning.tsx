@@ -1,8 +1,9 @@
 export function PrivacyWarning(props: {
   acknowledged: boolean;
   onAcknowledgedChange: (next: boolean) => void;
+  disabled?: boolean;
 }) {
-  const { acknowledged, onAcknowledgedChange } = props;
+  const { acknowledged, onAcknowledgedChange, disabled = false } = props;
 
   return (
     <div className="p-3 rounded-none border border-warning/50 bg-warning/10">
@@ -12,12 +13,15 @@ export function PrivacyWarning(props: {
         or generating a temporary transparent refund address). Transparent interactions can reduce privacy
         by making amounts and addresses visible on-chain.
       </div>
-      <label className="flex gap-2 items-center mt-2.5 cursor-pointer">
+      <label
+        className={`flex gap-2 items-center mt-2.5 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+      >
         <input
           type="checkbox"
           checked={acknowledged}
           onChange={(e) => onAcknowledgedChange(e.currentTarget.checked)}
           className="accent-primary"
+          disabled={disabled}
         />
         <span className="text-sm">I understand and want to continue.</span>
       </label>
