@@ -159,26 +159,24 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
 
           <div className="space-y-2">
             <Label htmlFor="destinationAddress">Destination ZEC address</Label>
-            <textarea
+            <Input
               id="destinationAddress"
-              rows={2}
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
               placeholder="u1... / zs... / etc"
               disabled={loadingAddress}
-              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+              className="font-mono"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="refundAddress">Refund address (origin chain)</Label>
-            <textarea
+            <Input
               id="refundAddress"
-              rows={2}
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
               placeholder="Your address on the input asset chain for refunds if the swap fails"
-              className="flex w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              className="font-mono"
             />
           </div>
 
