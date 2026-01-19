@@ -9,6 +9,7 @@ import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, supportedTokens } from '../data/supportedTokens';
 import { useNowMs } from '../hooks/useNowMs';
+import { validateDecimalAmount } from '../lib/amount';
 import { formatCountdown } from '../lib/time';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
@@ -50,14 +51,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     const trimmed = outputAmount.trim();
     if (!trimmed) return null;
     if (!selectedToken) return 'Select a valid target asset';
-    if (!/^[0-9]+(?:\.[0-9]*)?$/.test(trimmed)) return 'Enter a valid amount (e.g., 1.23)';
-
-    const maxDecimals = selectedToken.decimals;
-    const [, frac = ''] = trimmed.split('.');
-    if (frac.length > maxDecimals) return `Too many decimal places (max ${maxDecimals})`;
-
-    if (/^0+(?:\.0*)?$/.test(trimmed)) return 'Amount must be greater than zero';
-    return null;
+    return validateDecimalAmount(trimmed, { maxDecimals: selectedToken.decimals, example: '1.23' });
   }, [outputAmount, selectedToken]);
 
   const canQuote = useMemo(() => {

@@ -273,6 +273,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               try {
                 const res = await requestSwapQuote({
                   swap_type: 'ToZec',
+                  swap_mode: 'ExactInput',
                   input_asset: inputAsset,
                   input_amount: inputAmount,
                   output_asset: outputAsset,
