@@ -33,7 +33,7 @@ use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::reauth::Clock;
 
-const PROPOSAL_TTL: Duration = Duration::from_secs(5 * 60);
+const PROPOSAL_TTL: Duration = Duration::from_secs(10 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const MAX_SHIELDING_INPUTS_PER_TX: usize = 200;
 
@@ -630,9 +630,10 @@ impl<C: Clock> TxService<C> {
 
         // Retrieve the stored PCZT with proofs
         let now = self.clock.now();
-        let pending_request = self
+        let (pending_wallet_id, pending_expires_at) = self
             .pending_signing_requests
-            .remove(signing_request_id)
+            .get(signing_request_id)
+            .map(|r| (r.wallet_id, r.expires_at))
             .ok_or_else(|| {
                 ipc_err(
                     errors::PROPOSAL_NOT_FOUND,
@@ -641,17 +642,23 @@ impl<C: Clock> TxService<C> {
             })?;
 
         // Check expiration
-        if now > pending_request.expires_at {
+        if now > pending_expires_at {
+            self.pending_signing_requests.remove(signing_request_id);
             return Err(ipc_err(errors::PROPOSAL_EXPIRED, "signing request expired"));
         }
 
         // Check wallet ID matches
-        if pending_request.wallet_id != wallet_id {
+        if pending_wallet_id != wallet_id {
             return Err(ipc_err(
                 errors::PROPOSAL_NOT_FOUND,
                 "signing request not found",
             ));
         }
+
+        let pending_request = self
+            .pending_signing_requests
+            .remove(signing_request_id)
+            .expect("pending signing request should exist");
 
         // Decode both PCZTs
         debug!("Decoding stored PCZT with proofs");
@@ -788,17 +795,24 @@ impl<C: Clock> TxService<C> {
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ConfirmSendResponse> {
         let now = self.clock.now();
+        let (proposal_wallet_id, proposal_expires_at) = self
+            .proposals
+            .get(proposal_id)
+            .map(|r| (r.wallet_id, r.expires_at))
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        if proposal_wallet_id != wallet_id {
+            return Err(ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"));
+        }
+        if now > proposal_expires_at {
+            self.proposals.remove(proposal_id);
+            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "proposal expired"));
+        }
+
         let record = self
             .proposals
             .remove(proposal_id)
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
-
-        if record.wallet_id != wallet_id {
-            return Err(ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"));
-        }
-        if now > record.expires_at {
-            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "proposal expired"));
-        }
+            .expect("proposal should exist");
 
         ensure_spend_allowed(app_db, wallet_id, record.account_id)?;
 
@@ -1916,5 +1930,298 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
     match network {
         Network::Mainnet => zcash_protocol::consensus::Network::MainNetwork,
         Network::Testnet => zcash_protocol::consensus::Network::TestNetwork,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::time::{Duration, SystemTime};
+
+    use rusqlite::Connection;
+    use uuid::Uuid;
+
+    use super::*;
+
+    #[derive(Debug, Clone, Copy)]
+    struct TestClock(SystemTime);
+
+    impl Clock for TestClock {
+        fn now(&self) -> SystemTime {
+            self.0
+        }
+    }
+
+    fn temp_root(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        root
+    }
+
+    fn set_backup_not_required(app_db: &AppDb, wallet_id: Uuid) {
+        let wallet = zstash_core::domain::WalletInfo {
+            id: wallet_id,
+            name: "Test Wallet".to_string(),
+            wallet_type: zstash_core::domain::WalletType::Software,
+            network: Network::Testnet,
+            remember_unlock_enabled: false,
+            created_at: 0,
+            last_opened_at: Some(0),
+        };
+        crate::db::wallet_meta::insert_wallet(app_db.conn(), &wallet, "/tmp")
+            .expect("insert wallet");
+        crate::db::backup_meta::set_backup_required(app_db.conn(), wallet_id, false)
+            .expect("set backup_required=false");
+    }
+
+    #[test]
+    fn finalize_signing_does_not_consume_request_on_wallet_mismatch() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+
+        let signing_wallet_id = Uuid::new_v4();
+        let other_wallet_id = Uuid::new_v4();
+        let signing_request_id = Uuid::new_v4().to_string();
+
+        service.pending_signing_requests.insert(
+            signing_request_id.clone(),
+            PendingSigningRequest {
+                wallet_id: signing_wallet_id,
+                pczt_with_proofs: "not-a-pczt".to_string(),
+                expires_at: now + Duration::from_secs(60),
+            },
+        );
+
+        let root = temp_root("tx_service_wallet_mismatch");
+        let app_db = AppDb::open(root.join("app.db")).expect("open app db");
+        set_backup_not_required(&app_db, other_wallet_id);
+
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0u8; 32]);
+        let mut wallet_db_conn = Connection::open_in_memory().expect("open wallet db");
+
+        let err = service
+            .finalize_signing(
+                &app_db,
+                other_wallet_id,
+                Network::Testnet,
+                &wallet_dir,
+                &wallet_dek,
+                &mut wallet_db_conn,
+                "grpc://example.invalid",
+                &signing_request_id,
+                "",
+                None,
+            )
+            .expect_err("wallet mismatch should fail");
+
+        let ipc = crate::error::find_engine_ipc_error(&err).expect("engine ipc error");
+        assert_eq!(ipc.code, errors::PROPOSAL_NOT_FOUND);
+        assert!(
+            service
+                .pending_signing_requests
+                .contains_key(&signing_request_id),
+            "pending signing request should remain"
+        );
+    }
+
+    #[test]
+    fn finalize_signing_removes_expired_request() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+
+        let wallet_id = Uuid::new_v4();
+        let signing_request_id = Uuid::new_v4().to_string();
+
+        service.pending_signing_requests.insert(
+            signing_request_id.clone(),
+            PendingSigningRequest {
+                wallet_id,
+                pczt_with_proofs: "not-a-pczt".to_string(),
+                expires_at: now - Duration::from_secs(1),
+            },
+        );
+
+        let root = temp_root("tx_service_expired_request");
+        let app_db = AppDb::open(root.join("app.db")).expect("open app db");
+        set_backup_not_required(&app_db, wallet_id);
+
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0u8; 32]);
+        let mut wallet_db_conn = Connection::open_in_memory().expect("open wallet db");
+
+        let err = service
+            .finalize_signing(
+                &app_db,
+                wallet_id,
+                Network::Testnet,
+                &wallet_dir,
+                &wallet_dek,
+                &mut wallet_db_conn,
+                "grpc://example.invalid",
+                &signing_request_id,
+                "",
+                None,
+            )
+            .expect_err("expired request should fail");
+
+        let ipc = crate::error::find_engine_ipc_error(&err).expect("engine ipc error");
+        assert_eq!(ipc.code, errors::PROPOSAL_EXPIRED);
+        assert!(
+            !service
+                .pending_signing_requests
+                .contains_key(&signing_request_id),
+            "expired signing request should be removed"
+        );
+    }
+
+    /// Creates a minimal ProposalRecord for testing expiration and wallet mismatch logic.
+    /// The proposal itself is not used - only wallet_id and expires_at matter for these tests.
+    fn test_proposal_record(wallet_id: Uuid, expires_at: SystemTime) -> ProposalRecord {
+        let fee = zcash_protocol::value::Zatoshis::ZERO;
+        let balance = zcash_client_backend::fees::TransactionBalance::new(vec![], fee).unwrap();
+        let target_height: zcash_client_backend::data_api::wallet::TargetHeight =
+            zcash_protocol::consensus::BlockHeight::from_u32(1).into();
+
+        let proposal = zcash_client_backend::proposal::Proposal::<
+            zcash_client_backend::fees::StandardFeeRule,
+            zcash_client_sqlite::ReceivedNoteId,
+        >::single_step(
+            zcash_client_backend::zip321::TransactionRequest::empty(),
+            BTreeMap::new(),
+            vec![],
+            None,
+            balance,
+            zcash_client_backend::fees::StandardFeeRule::Zip317,
+            target_height,
+            false,
+        )
+        .expect("create test proposal");
+
+        ProposalRecord {
+            wallet_id,
+            account_id: 0,
+            expires_at,
+            proposal,
+            summary: TransactionSummary {
+                recipient: "test".to_string(),
+                recipient_kind: zstash_core::domain::RecipientKind::Orchard,
+                amount: "0".to_string(),
+                fee: "0".to_string(),
+                memo_present: false,
+                total_spend: "0".to_string(),
+            },
+        }
+    }
+
+    #[test]
+    fn confirm_send_does_not_consume_proposal_on_wallet_mismatch() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+
+        let proposal_wallet_id = Uuid::new_v4();
+        let other_wallet_id = Uuid::new_v4();
+        let proposal_id = Uuid::new_v4().to_string();
+
+        service.proposals.insert(
+            proposal_id.clone(),
+            test_proposal_record(proposal_wallet_id, now + Duration::from_secs(60)),
+        );
+
+        let root = temp_root("tx_service_confirm_wallet_mismatch");
+        let app_db = AppDb::open(root.join("app.db")).expect("open app db");
+        set_backup_not_required(&app_db, other_wallet_id);
+
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0u8; 32]);
+        let mut wallet_db_conn = Connection::open_in_memory().expect("open wallet db");
+
+        // Create a dummy spending key - it won't be used since we fail early on wallet mismatch
+        let seed = [0u8; 32];
+        let spending_key = zcash_client_backend::keys::UnifiedSpendingKey::from_seed(
+            &zcash_protocol::consensus::Network::TestNetwork,
+            &seed,
+            zip32::AccountId::ZERO,
+        )
+        .expect("create test spending key");
+
+        let err = service
+            .confirm_send(
+                &app_db,
+                other_wallet_id,
+                Network::Testnet,
+                &wallet_dir,
+                &wallet_dek,
+                &mut wallet_db_conn,
+                "grpc://example.invalid",
+                &proposal_id,
+                spending_key,
+                None,
+            )
+            .expect_err("wallet mismatch should fail");
+
+        let ipc = crate::error::find_engine_ipc_error(&err).expect("engine ipc error");
+        assert_eq!(ipc.code, errors::PROPOSAL_NOT_FOUND);
+        assert!(
+            service.proposals.contains_key(&proposal_id),
+            "proposal should remain after wallet mismatch"
+        );
+    }
+
+    #[test]
+    fn confirm_send_removes_expired_proposal() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+
+        let wallet_id = Uuid::new_v4();
+        let proposal_id = Uuid::new_v4().to_string();
+
+        // Insert an already-expired proposal
+        service.proposals.insert(
+            proposal_id.clone(),
+            test_proposal_record(wallet_id, now - Duration::from_secs(1)),
+        );
+
+        let root = temp_root("tx_service_confirm_expired");
+        let app_db = AppDb::open(root.join("app.db")).expect("open app db");
+        set_backup_not_required(&app_db, wallet_id);
+
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0u8; 32]);
+        let mut wallet_db_conn = Connection::open_in_memory().expect("open wallet db");
+
+        let seed = [0u8; 32];
+        let spending_key = zcash_client_backend::keys::UnifiedSpendingKey::from_seed(
+            &zcash_protocol::consensus::Network::TestNetwork,
+            &seed,
+            zip32::AccountId::ZERO,
+        )
+        .expect("create test spending key");
+
+        let err = service
+            .confirm_send(
+                &app_db,
+                wallet_id,
+                Network::Testnet,
+                &wallet_dir,
+                &wallet_dek,
+                &mut wallet_db_conn,
+                "grpc://example.invalid",
+                &proposal_id,
+                spending_key,
+                None,
+            )
+            .expect_err("expired proposal should fail");
+
+        let ipc = crate::error::find_engine_ipc_error(&err).expect("engine ipc error");
+        assert_eq!(ipc.code, errors::PROPOSAL_EXPIRED);
+        assert!(
+            !service.proposals.contains_key(&proposal_id),
+            "expired proposal should be removed"
+        );
     }
 }

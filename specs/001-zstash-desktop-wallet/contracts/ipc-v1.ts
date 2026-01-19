@@ -684,7 +684,7 @@ export interface PrepareSendResponse extends VersionedPayload {
   fee: Zatoshis;
   /** Summary for user verification */
   summary: TransactionSummary;
-  /** Proposal expiration timestamp (v1: proposals auto-expire after 5 minutes) */
+  /** Proposal expiration timestamp (v1: proposals auto-expire after 10 minutes) */
   expires_at: UnixTimestampMs;
 }
 

@@ -255,7 +255,7 @@ This section is **non-normative**. It clarifies how the requirements above are i
 #### TTLs: re-auth tokens and send proposals (v1)
 
 - `ReauthWallet` tokens MUST be **single-use** and MUST expire after **2 minutes** (`REAUTH_TOKEN_EXPIRES_AT = issued_at + 120s`); an expired token MUST fail with `REAUTH_TOKEN_EXPIRED`.
-- `PrepareSend` proposals MUST be in-memory only and MUST expire after **5 minutes** (`PROPOSAL_EXPIRES_AT = created_at + 300s`); an expired proposal MUST fail with `PROPOSAL_EXPIRED`.
+- `PrepareSend` proposals MUST be in-memory only and MUST expire after **10 minutes** (`PROPOSAL_EXPIRES_AT = created_at + 600s`); an expired proposal MUST fail with `PROPOSAL_EXPIRED`.
 
 #### Backup verification challenge semantics (v1)
 

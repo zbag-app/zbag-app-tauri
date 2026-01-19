@@ -292,7 +292,7 @@ Prepared -> Pending -> Confirmed
 #### U2: TTLs (reauth tokens and send proposals)
 
 - `ReauthWallet` tokens MUST be single-use and MUST expire after 2 minutes (`expires_at` is returned over IPC).
-- `PrepareSend` proposals MUST be in-memory only and MUST expire after 5 minutes (`expires_at` is returned over IPC).
+- `PrepareSend` proposals MUST be in-memory only and MUST expire after 10 minutes (`expires_at` is returned over IPC).
 
 #### U3: Required mempool capability (FR-013)
 
