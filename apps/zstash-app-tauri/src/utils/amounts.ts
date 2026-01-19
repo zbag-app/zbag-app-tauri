@@ -12,6 +12,8 @@ import { getTokenById } from '../data/supportedTokens';
 export function formatAtomicAmount(value: string, decimals: number): string {
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) return trimmed;
+  // Prevent pathological inputs from causing large allocations and slow formatting in the UI.
+  if (trimmed.length > 78) return trimmed;
   if (decimals <= 0) return trimmed;
 
   const padded = trimmed.padStart(decimals + 1, '0');

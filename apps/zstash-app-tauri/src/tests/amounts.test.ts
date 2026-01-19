@@ -8,6 +8,10 @@ test('formatAtomicAmount formats various decimal places', () => {
   expect(formatAtomicAmount('12345678', 8)).toBe('0.12345678'); // value length equals decimals
 });
 
+test('formatAtomicAmount handles 24 decimals (NEAR)', () => {
+  expect(formatAtomicAmount('1000000000000000000000000', 24)).toBe('1');
+});
+
 test('formatAtomicAmount formats small values', () => {
   expect(formatAtomicAmount('0', 8)).toBe('0');
   expect(formatAtomicAmount('1', 18)).toBe('0.000000000000000001');
@@ -24,6 +28,11 @@ test('formatAtomicAmount passes through invalid input and decimals <= 0', () => 
   expect(formatAtomicAmount('  abc  ', 8)).toBe('abc');
   expect(formatAtomicAmount('123', 0)).toBe('123');
   expect(formatAtomicAmount('123', -1)).toBe('123');
+});
+
+test('formatAtomicAmount passes through extremely large numeric strings', () => {
+  const huge = '1'.repeat(79);
+  expect(formatAtomicAmount(huge, 8)).toBe(huge);
 });
 
 test('formatAtomicAmountForToken formats known tokens and falls back for unknown tokens', () => {

@@ -357,7 +357,6 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                       });
                       if ('err' in res) {
                         setError(res.err.message);
-                        setStarting(false);
                         return;
                       }
 
@@ -376,11 +375,9 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                         setError(
                           'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
                         );
-                        setStarting(false);
                         return;
                       }
                       setError(parseSwapError(startRes.err.message));
-                      setStarting(false);
                       return;
                     }
 
@@ -389,6 +386,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                     navigate('/activity');
                   } catch (e) {
                     setError(e instanceof Error ? e.message : 'Failed to start swap');
+                  } finally {
                     setStarting(false);
                   }
                 }}
