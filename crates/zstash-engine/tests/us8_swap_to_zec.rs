@@ -7,6 +7,8 @@ use std::thread;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, SwapIntent, SwapType};
+use zstash_core::errors;
+use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::swap_service::SwapService;
 use zstash_engine::wallet_manager::WalletManager;
@@ -85,6 +87,7 @@ fn temp_root(prefix: &str) -> PathBuf {
 }
 
 fn spawn_mock_1click_quote_server(
+    deadline_iso: String,
     expected_amount: &'static str,
     expected_recipient: &'static str,
     expected_refund_to: &'static str,
@@ -176,7 +179,6 @@ fn spawn_mock_1click_quote_server(
             "app fee should be 50 bps"
         );
 
-        let deadline_iso = "2026-01-10T00:00:00Z";
         let deposit_address = "0x0c79D7017D764b3109CEEFF082f3ea6d7b95e8ac";
 
         let ok_body = format!(
@@ -242,7 +244,9 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
 
     // Ensure the engine converts 0.001 ETH -> 1_000_000_000_000_000 wei.
     let expected_amount = "1000000000000000";
-    let (base_url, server) = spawn_mock_1click_quote_server(expected_amount, recipient, refund_to);
+    let deadline_iso = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+    let (base_url, server) =
+        spawn_mock_1click_quote_server(deadline_iso, expected_amount, recipient, refund_to);
     let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
@@ -275,6 +279,63 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
         Some(50),
         "app_fee_bps should be 50 in response"
     );
+
+    server.join().expect("server joined");
+}
+
+#[test]
+fn start_swap_rejects_expired_quote() {
+    let root = temp_root("us8_start_swap_expired_quote");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let recipient = "u10spepvgadw6djkhe8fq0mj2lj60dhf2g966c52eqzfh2hpgghlqzrgm246aa252fzx24cw6r88gu6vz99pyzzl4ryphlkteu7u3hq70k";
+    let refund_to = "0x3350Fe9Fc38cBa6518471693d748f3f3073C8fdB";
+
+    let expected_amount = "1000000000000000";
+    let deadline_iso = (chrono::Utc::now() - chrono::Duration::minutes(1)).to_rfc3339();
+    let (base_url, server) =
+        spawn_mock_1click_quote_server(deadline_iso, expected_amount, recipient, refund_to);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::ToZec,
+        swap_mode: Default::default(),
+        input_asset: "nep141:eth.omft.near".to_string(),
+        input_amount: "0.001".to_string(),
+        output_asset: "nep141:zec.omft.near".to_string(),
+        output_amount: None,
+        destination_address: Some(recipient.to_string()),
+        refund_address: Some(refund_to.to_string()),
+    };
+
+    let res = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .expect("quote");
+
+    let err = swap
+        .start_swap(wallet.id, wallet.network, &res.quote_id, false, None, None)
+        .unwrap_err();
+    let ipc = find_engine_ipc_error(&err).expect("ipc error");
+    assert_eq!(ipc.code, errors::QUOTE_EXPIRED);
 
     server.join().expect("server joined");
 }

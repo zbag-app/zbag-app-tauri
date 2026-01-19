@@ -258,12 +258,18 @@ impl SwapService {
         }
 
         let record = {
-            let state = self.state.lock().expect("mutex poisoned");
+            let mut state = self.state.lock().expect("mutex poisoned");
             let Some(record) = state.quotes.get(quote_id).cloned() else {
                 return Err(ipc_err(errors::QUOTE_EXPIRED, "quote not found"));
             };
             if record.wallet_id != wallet_id {
                 return Err(ipc_err(errors::QUOTE_EXPIRED, "quote not found"));
+            }
+
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            if record.quote.deadline > 0 && now_ms >= record.quote.deadline {
+                state.quotes.remove(quote_id);
+                return Err(ipc_err(errors::QUOTE_EXPIRED, "quote expired"));
             }
             record
         };
