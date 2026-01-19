@@ -26,6 +26,7 @@ export function SwapDeposit() {
   const nowMs = useNowMs(Boolean(swap?.deadline));
   const [loading, setLoading] = useState(swap == null && swapId != null);
   const [refreshingSwapId, setRefreshingSwapId] = useState<string | null>(null);
+  const [swapEventsUnavailable, setSwapEventsUnavailable] = useState(false);
   const currentSwapIdRef = useRef<string | null>(loadedSwapId);
 
   // Clear location state after reading it
@@ -91,6 +92,7 @@ export function SwapDeposit() {
   useEffect(() => {
     if (subscriptionSwapId == null) return;
     const swapId = subscriptionSwapId;
+    setSwapEventsUnavailable(false);
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
@@ -105,9 +107,11 @@ export function SwapDeposit() {
           return;
         }
         unlisten = fn;
+        setSwapEventsUnavailable(false);
       })
       .catch((err) => {
         if (cancelled) return;
+        setSwapEventsUnavailable(true);
         console.warn('Failed to subscribe to swap events:', err);
       });
     return () => {
@@ -196,6 +200,12 @@ export function SwapDeposit() {
               Deadline: {expired ? 'Expired' : `in ${formatCountdown(swap.deadline, nowMs)}`}
             </div>
           )}
+
+          {swapEventsUnavailable ? (
+            <div className="rounded-none border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
+              Real-time updates are unavailable. Use &quot;Refresh status&quot; to update.
+            </div>
+          ) : null}
 
           {swap.deposit_address ? (
             <div className="space-y-4">

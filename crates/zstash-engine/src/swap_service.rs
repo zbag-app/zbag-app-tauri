@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::Context as _;
 use rusqlite::{Connection, OpenFlags};
 use tokio::sync::watch;
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use zstash_core::domain::{
@@ -58,7 +57,6 @@ struct QuoteRecord {
 #[allow(dead_code)]
 struct SwapJob {
     cancel: watch::Sender<bool>,
-    handle: JoinHandle<()>,
 }
 
 fn load_owned_swap(conn: &Connection, wallet_id: Uuid, swap_id: Uuid) -> anyhow::Result<SwapInfo> {
@@ -817,14 +815,21 @@ impl SwapService {
         let near = self.near.clone();
         let wallet_manager = Arc::clone(&self.wallet_manager);
 
-        let mut state_guard = self.state.lock().expect("mutex poisoned");
-        if state_guard.jobs.contains_key(&swap_id) {
-            return false;
+        let (cancel_tx, mut cancel_rx) = watch::channel(false);
+
+        {
+            let mut state_guard = state.lock().expect("mutex poisoned");
+            if state_guard.jobs.contains_key(&swap_id) {
+                return false;
+            }
+            // Insert the job marker before spawning the task to avoid TOCTOU races where the task
+            // could complete and attempt to remove itself before it's recorded.
+            state_guard
+                .jobs
+                .insert(swap_id, SwapJob { cancel: cancel_tx });
         }
 
-        let (cancel_tx, mut cancel_rx) = watch::channel(false);
-        // Intentionally hold the jobs mutex across spawn+insert to avoid TOCTOU duplicate jobs.
-        let handle = crate::tokio_runtime::spawn(async move {
+        crate::tokio_runtime::spawn(async move {
             let mut backoff = Duration::from_secs(5);
             let mut swap = initial_swap;
 
@@ -969,14 +974,6 @@ impl SwapService {
             let mut state = state.lock().expect("mutex poisoned");
             state.jobs.remove(&swap_id);
         });
-
-        state_guard.jobs.insert(
-            swap_id,
-            SwapJob {
-                cancel: cancel_tx,
-                handle,
-            },
-        );
 
         true
     }
