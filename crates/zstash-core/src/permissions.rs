@@ -125,9 +125,9 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
     {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
+        use uuid::Uuid;
 
-        // `OpenOptionsExt::mode` applies only when the file is created. If the file
-        // already exists, we must `chmod` it to ensure 0600.
+        // `OpenOptionsExt::mode` applies only when the file is created.
         //
         // Avoid a pre-check (`Path::exists`) by attempting a create-new first.
         let mut create_opts = std::fs::OpenOptions::new();
@@ -140,17 +140,27 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                let mut overwrite_opts = std::fs::OpenOptions::new();
-                overwrite_opts
-                    .write(true)
-                    .create(true)
-                    // Don't truncate on open: ensure we can harden permissions first.
-                    .mode(0o600);
-                let mut file = overwrite_opts.open(path)?;
-                set_file_permissions(path)?;
-                file.set_len(0)?;
-                file.write_all(contents)?;
-                file.sync_all()?;
+                // When overwriting, write into a fresh temp file and then atomically rename.
+                // This avoids leaving a partially-written/truncated file if the write fails.
+                let file_name = path.file_name().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("invalid file path: {}", path.display()),
+                    )
+                })?;
+
+                let mut tmp_name = file_name.to_os_string();
+                tmp_name.push(format!(".tmp-{}", Uuid::new_v4()));
+                let tmp_path = path.with_file_name(tmp_name);
+
+                let mut tmp_opts = std::fs::OpenOptions::new();
+                tmp_opts.write(true).create_new(true).mode(0o600);
+                let mut tmp_file = tmp_opts.open(&tmp_path)?;
+                tmp_file.write_all(contents)?;
+                tmp_file.sync_all()?;
+                std::fs::rename(&tmp_path, path).inspect_err(|_| {
+                    let _ = std::fs::remove_file(&tmp_path);
+                })?;
                 Ok(())
             }
             Err(e) => Err(e),
