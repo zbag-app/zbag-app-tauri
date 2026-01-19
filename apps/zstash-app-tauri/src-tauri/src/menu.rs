@@ -191,7 +191,9 @@ fn build_wallet_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>
         .accelerator("CmdOrCtrl+Shift+Y")
         .build(app)?;
 
-    let stop_sync = MenuItemBuilder::with_id("stop_sync", "Stop Sync").build(app)?;
+    let stop_sync = MenuItemBuilder::with_id("stop_sync", "Stop Sync")
+        .accelerator("CmdOrCtrl+.")
+        .build(app)?;
 
     Submenu::with_items(
         app,

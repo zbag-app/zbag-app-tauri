@@ -76,6 +76,10 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
     function ensureWalletLoaded(): string | null {
       const id = walletIdRef.current;
       if (id) return id;
+      onErrorRef.current?.('Wallet required', {
+        code: 'WALLET_REQUIRED',
+        message: 'Select a wallet to use this menu item.',
+      });
       navigate('/wallets');
       return null;
     }
