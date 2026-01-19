@@ -18,6 +18,7 @@ export function SwapDeposit() {
   const { swapId } = useParams<{ swapId: string }>();
   const state = location.state as SwapDepositLocationState | null;
   const [swap, setSwap] = useState<IPC.SwapInfo | null>(state?.swap ?? null);
+  const loadedSwapId = swap?.id ?? null;
   const [error, setError] = useState<string | null>(null);
   const nowMs = useNowMs(Boolean(swap?.deadline));
   const [loading, setLoading] = useState(false);
@@ -34,33 +35,40 @@ export function SwapDeposit() {
   useEffect(() => {
     // Skip if no swapId, or if we already have the correct swap loaded
     if (swapId == null) return;
-    if (swap != null && swap.id === swapId) return;
+    if (loadedSwapId === swapId) return;
 
     // Clear stale swap when navigating to a different swapId
-    if (swap != null && swap.id !== swapId) {
+    if (loadedSwapId != null && loadedSwapId !== swapId) {
       setSwap(null);
     }
 
     let cancelled = false;
     setLoading(true);
+    setError(null);
 
     const id = swapId; // Capture for closure
     async function loadSwap() {
-      const res = await getSwapStatus({ swap_id: id });
-      setLoading(false);
-      if (cancelled) return;
-      if ('err' in res) {
-        setError(res.err.message);
-        return;
+      try {
+        const res = await getSwapStatus({ swap_id: id });
+        if (cancelled) return;
+        setLoading(false);
+        if ('err' in res) {
+          setError(res.err.message);
+          return;
+        }
+        setSwap(res.ok.swap);
+      } catch (e) {
+        if (cancelled) return;
+        setLoading(false);
+        setError(e instanceof Error ? e.message : String(e));
       }
-      setSwap(res.ok.swap);
     }
 
     loadSwap();
     return () => {
       cancelled = true;
     };
-  }, [swapId]);
+  }, [loadedSwapId, swapId]);
 
   const expired = useMemo(() => {
     if (!swap?.deadline) return false;

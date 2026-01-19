@@ -318,8 +318,7 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
     // Verify no API calls were made
     assert_eq!(request_count.load(Ordering::SeqCst), 0);
 
-    // Server thread will not join if no requests are expected, so we don't wait for it
-    drop(server);
+    server.join().expect("server joined");
 }
 
 #[test]

@@ -627,6 +627,7 @@ impl SwapService {
             return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
         };
 
+        // Intentionally return "swap not found" on wallet mismatch to avoid leaking swap existence.
         if owner_wallet_id != wallet_id {
             return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
         }
@@ -664,6 +665,7 @@ impl SwapService {
             return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
         };
 
+        // Intentionally return "swap not found" on wallet mismatch to avoid leaking swap existence.
         if owner_wallet_id != wallet_id {
             return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
         }
@@ -680,6 +682,12 @@ impl SwapService {
         }
 
         let Some(deposit_address) = swap.deposit_address.clone() else {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                swap_id = %swap_id,
+                state = ?swap.state,
+                "refresh_swap_status skipped: missing deposit_address"
+            );
             return Ok(RefreshSwapStatusResponse {
                 schema_version: SCHEMA_VERSION,
                 swap,
@@ -796,20 +804,17 @@ impl SwapService {
         on_swap_changed: Option<SwapEventHandler>,
     ) {
         let swap_id = initial_swap.id;
-
-        {
-            let state = self.state.lock().expect("mutex poisoned");
-            if state.jobs.contains_key(&swap_id) {
-                return;
-            }
-        }
-
-        let (cancel_tx, mut cancel_rx) = watch::channel(false);
         let state = Arc::clone(&self.state);
         let app_db_path = self.app_db_path.clone();
         let near = self.near.clone();
         let wallet_manager = Arc::clone(&self.wallet_manager);
 
+        let mut state_guard = self.state.lock().expect("mutex poisoned");
+        if state_guard.jobs.contains_key(&swap_id) {
+            return;
+        }
+
+        let (cancel_tx, mut cancel_rx) = watch::channel(false);
         let handle = crate::tokio_runtime::spawn(async move {
             let mut backoff = Duration::from_secs(5);
             let mut swap = initial_swap;
@@ -941,20 +946,13 @@ impl SwapService {
             state.jobs.remove(&swap_id);
         });
 
-        let finished = handle.is_finished();
-        {
-            let mut state = self.state.lock().expect("mutex poisoned");
-            state.jobs.insert(
-                swap_id,
-                SwapJob {
-                    cancel: cancel_tx,
-                    handle,
-                },
-            );
-            if finished {
-                state.jobs.remove(&swap_id);
-            }
-        }
+        state_guard.jobs.insert(
+            swap_id,
+            SwapJob {
+                cancel: cancel_tx,
+                handle,
+            },
+        );
     }
 }
 
