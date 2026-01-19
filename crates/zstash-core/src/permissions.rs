@@ -105,7 +105,7 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
 
 /// Recursively create directories with secure permissions (0700 on Unix).
 ///
-/// This is an async version that uses tokio::fs for non-blocking IO.
+/// This is an async wrapper around the sync implementation using `spawn_blocking`.
 #[cfg(feature = "async")]
 pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref().to_path_buf();
@@ -126,13 +126,35 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
 
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true).mode(0o600);
-        let mut file = opts.open(path)?;
-        file.write_all(contents)?;
-        file.sync_all()?;
-        set_file_permissions(path)?;
-        Ok(())
+        // `OpenOptionsExt::mode` applies only when the file is created. If the file
+        // already exists, we must `chmod` it to ensure 0600.
+        //
+        // Avoid a pre-check (`Path::exists`) by attempting a create-new first.
+        let mut create_opts = std::fs::OpenOptions::new();
+        create_opts.write(true).create_new(true).mode(0o600);
+
+        match create_opts.open(path) {
+            Ok(mut file) => {
+                file.write_all(contents)?;
+                file.sync_all()?;
+                Ok(())
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                let mut overwrite_opts = std::fs::OpenOptions::new();
+                overwrite_opts
+                    .write(true)
+                    .create(true)
+                    // Don't truncate on open: ensure we can harden permissions first.
+                    .mode(0o600);
+                let mut file = overwrite_opts.open(path)?;
+                set_file_permissions(path)?;
+                file.set_len(0)?;
+                file.write_all(contents)?;
+                file.sync_all()?;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     #[cfg(not(unix))]
@@ -216,8 +238,9 @@ pub fn set_sqlite_file_permissions(db_path: impl AsRef<Path>) -> io::Result<()> 
 
 /// Open a file for writing with secure permissions (0600 on Unix).
 ///
-/// Returns an `OpenOptions` configured for secure file creation.
+/// Returns an `OpenOptions` configured for secure *write-only* file creation.
 #[cfg(unix)]
+#[must_use]
 pub fn secure_open_options() -> std::fs::OpenOptions {
     use std::os::unix::fs::OpenOptionsExt;
     let mut opts = std::fs::OpenOptions::new();
@@ -226,6 +249,7 @@ pub fn secure_open_options() -> std::fs::OpenOptions {
 }
 
 #[cfg(not(unix))]
+#[must_use]
 pub fn secure_open_options() -> std::fs::OpenOptions {
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
