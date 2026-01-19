@@ -47,6 +47,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
 
   useEffect(() => {
     let mounted = true;
+    let torToggleInFlight = false;
     const unlisteners: UnlistenFn[] = [];
 
     function ensureWalletLoaded(): string | null {
@@ -203,17 +204,23 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       // Toggle Tor
       listeners.push(
         addListener(MenuEvents.TOGGLE_TOR, async () => {
-          const stateRes = await getTorState();
-          if ('ok' in stateRes) {
-            const currentEnabled = stateRes.ok.state.enabled;
-            const res = await setTorEnabled({ enabled: !currentEnabled });
-            if ('ok' in res) {
-              onTorStateChangedRef.current?.(!currentEnabled);
-            } else if ('err' in res) {
-              console.error('Menu: failed to toggle Tor', res.err);
+          if (torToggleInFlight) return;
+          torToggleInFlight = true;
+          try {
+            const stateRes = await getTorState();
+            if ('ok' in stateRes) {
+              const currentEnabled = stateRes.ok.state.enabled;
+              const res = await setTorEnabled({ enabled: !currentEnabled });
+              if ('ok' in res) {
+                onTorStateChangedRef.current?.(!currentEnabled);
+              } else if ('err' in res) {
+                console.error('Menu: failed to toggle Tor', res.err);
+              }
+            } else if ('err' in stateRes) {
+              console.error('Menu: failed to get Tor state', stateRes.err);
             }
-          } else if ('err' in stateRes) {
-            console.error('Menu: failed to get Tor state', stateRes.err);
+          } finally {
+            torToggleInFlight = false;
           }
         })
       );
