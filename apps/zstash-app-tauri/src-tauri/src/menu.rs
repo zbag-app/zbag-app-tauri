@@ -8,6 +8,8 @@ use tauri::{
 };
 
 /// Menu event channel names emitted to the frontend.
+///
+/// Keep in sync with `apps/zstash-app-tauri/src/hooks/useMenuEvents.ts`.
 pub mod events {
     pub const NEW_WALLET: &str = "menu:new-wallet";
     pub const RESTORE_WALLET: &str = "menu:restore-wallet";
@@ -264,31 +266,79 @@ fn build_help_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> 
     Submenu::with_items(app, "Help", true, &[&open_logs])
 }
 
+fn menu_id_to_event_name(menu_id: &str) -> Option<&'static str> {
+    match menu_id {
+        "new_wallet" => Some(events::NEW_WALLET),
+        "restore_wallet" => Some(events::RESTORE_WALLET),
+        "switch_wallet" => Some(events::SWITCH_WALLET),
+        "lock_wallet" => Some(events::LOCK_WALLET),
+        "logout" => Some(events::LOGOUT),
+        "send" => Some(events::SEND),
+        "receive" => Some(events::RECEIVE),
+        "swap" => Some(events::SWAP),
+        "activity" => Some(events::ACTIVITY),
+        "sync_now" => Some(events::SYNC_NOW),
+        "stop_sync" => Some(events::STOP_SYNC),
+        "view_seed" => Some(events::VIEW_SEED),
+        "verify_backup" => Some(events::VERIFY_BACKUP),
+        "hardware_wallet" => Some(events::HARDWARE_WALLET),
+        "toggle_tor" => Some(events::TOGGLE_TOR),
+        "server_settings" => Some(events::SERVER_SETTINGS),
+        "preferences" => Some(events::PREFERENCES),
+        "open_logs" => Some(events::OPEN_LOGS),
+        _ => None,
+    }
+}
+
 /// Handle menu events and emit to the frontend.
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &tauri::menu::MenuEvent) {
-    let event_name = match event.id().as_ref() {
-        "new_wallet" => events::NEW_WALLET,
-        "restore_wallet" => events::RESTORE_WALLET,
-        "switch_wallet" => events::SWITCH_WALLET,
-        "lock_wallet" => events::LOCK_WALLET,
-        "logout" => events::LOGOUT,
-        "send" => events::SEND,
-        "receive" => events::RECEIVE,
-        "swap" => events::SWAP,
-        "activity" => events::ACTIVITY,
-        "sync_now" => events::SYNC_NOW,
-        "stop_sync" => events::STOP_SYNC,
-        "view_seed" => events::VIEW_SEED,
-        "verify_backup" => events::VERIFY_BACKUP,
-        "hardware_wallet" => events::HARDWARE_WALLET,
-        "toggle_tor" => events::TOGGLE_TOR,
-        "server_settings" => events::SERVER_SETTINGS,
-        "preferences" => events::PREFERENCES,
-        "open_logs" => events::OPEN_LOGS,
-        _ => return,
+    let Some(event_name) = menu_id_to_event_name(event.id().as_ref()) else {
+        return;
     };
 
     if let Err(err) = app.emit(event_name, ()) {
         tracing::warn!(error = ?err, event = event_name, "failed to emit menu event");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_id_to_event_name_maps_known_ids() {
+        let cases = [
+            ("new_wallet", events::NEW_WALLET),
+            ("restore_wallet", events::RESTORE_WALLET),
+            ("switch_wallet", events::SWITCH_WALLET),
+            ("lock_wallet", events::LOCK_WALLET),
+            ("logout", events::LOGOUT),
+            ("send", events::SEND),
+            ("receive", events::RECEIVE),
+            ("swap", events::SWAP),
+            ("activity", events::ACTIVITY),
+            ("sync_now", events::SYNC_NOW),
+            ("stop_sync", events::STOP_SYNC),
+            ("view_seed", events::VIEW_SEED),
+            ("verify_backup", events::VERIFY_BACKUP),
+            ("hardware_wallet", events::HARDWARE_WALLET),
+            ("toggle_tor", events::TOGGLE_TOR),
+            ("server_settings", events::SERVER_SETTINGS),
+            ("preferences", events::PREFERENCES),
+            ("open_logs", events::OPEN_LOGS),
+        ];
+
+        for (menu_id, expected_event_name) in cases {
+            assert_eq!(
+                menu_id_to_event_name(menu_id),
+                Some(expected_event_name),
+                "unexpected mapping for {menu_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn menu_id_to_event_name_returns_none_for_unknown_id() {
+        assert_eq!(menu_id_to_event_name("not-a-real-menu-id"), None);
     }
 }

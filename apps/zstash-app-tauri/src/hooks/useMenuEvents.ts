@@ -12,7 +12,11 @@ import {
   getLogLocation,
 } from '../services/ipc';
 
-/** Menu event channel names from the backend. */
+/**
+ * Menu event channel names from the backend.
+ *
+ * Keep in sync with `apps/zstash-app-tauri/src-tauri/src/menu.rs`.
+ */
 const MenuEvents = {
   NEW_WALLET: 'menu:new-wallet',
   RESTORE_WALLET: 'menu:restore-wallet',
@@ -185,14 +189,20 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       await addListener(MenuEvents.OPEN_LOGS, async () => {
         const res = await getLogLocation();
         if ('ok' in res && res.ok.log_directory) {
-          await revealItemInDir(res.ok.log_directory);
+          try {
+            await revealItemInDir(res.ok.log_directory);
+          } catch (err) {
+            console.error('Menu: failed to reveal logs directory', err);
+          }
         } else if ('err' in res) {
           console.error('Menu: failed to get log location', res.err);
         }
       });
     }
 
-    setupListeners();
+    setupListeners().catch((err) => {
+      console.error('Menu: failed to set up listeners', err);
+    });
 
     return () => {
       mounted = false;
