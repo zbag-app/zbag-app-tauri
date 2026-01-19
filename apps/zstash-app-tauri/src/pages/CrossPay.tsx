@@ -49,19 +49,21 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
   const outputAmountValidationError = useMemo(() => {
     const trimmed = outputAmount.trim();
     if (!trimmed) return null;
+    if (!selectedToken) return 'Select a valid target asset';
     if (!/^[0-9]+(?:\.[0-9]*)?$/.test(trimmed)) return 'Enter a valid amount (e.g., 1.23)';
 
-    const maxDecimals = selectedToken?.decimals ?? 8;
+    const maxDecimals = selectedToken.decimals;
     const [, frac = ''] = trimmed.split('.');
     if (frac.length > maxDecimals) return `Too many decimal places (max ${maxDecimals})`;
 
     if (/^0+(?:\.0*)?$/.test(trimmed)) return 'Amount must be greater than zero';
     return null;
-  }, [outputAmount, selectedToken?.decimals]);
+  }, [outputAmount, selectedToken]);
 
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
+    if (!selectedToken) return false;
     if (!outputAsset.trim()) return false;
     if (!outputAmount.trim()) return false;
     if (outputAmountValidationError) return false;
@@ -71,6 +73,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
   }, [
     wallet.network,
     activeAccountId,
+    selectedToken,
     outputAsset,
     outputAmount,
     outputAmountValidationError,
@@ -395,16 +398,16 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                       return;
                     }
 
-	                    setPassword('');
-	                    setReauthToken(null);
-	                    setPrivacyAckRequired(false);
-	                    setPrivacyAck(false);
-	                    setStarting(false);
-	                    navigate('/activity');
-	                  } catch (e) {
-	                    setPassword('');
-	                    setReauthToken(null);
-	                    setError(e instanceof Error ? e.message : 'Failed to start payment');
+                      setPassword('');
+                      setReauthToken(null);
+                      setPrivacyAckRequired(false);
+                      setPrivacyAck(false);
+                      setStarting(false);
+                      navigate('/activity');
+                    } catch (e) {
+                      setPassword('');
+                      setReauthToken(null);
+                      setError(e instanceof Error ? e.message : 'Failed to start payment');
                     setStarting(false);
                   }
                 }}

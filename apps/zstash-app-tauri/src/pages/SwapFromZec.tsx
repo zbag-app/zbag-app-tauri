@@ -436,6 +436,8 @@ const quoteExpired = useMemo(() => {
                 onClick={async () => {
                   if (!quoteId) return;
                   if (quoteExpired) {
+                    setPassword('');
+                    setReauthToken(null);
                     setError('Quote expired');
                     return;
                   }
