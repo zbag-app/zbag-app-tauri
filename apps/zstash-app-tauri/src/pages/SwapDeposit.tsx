@@ -32,7 +32,14 @@ export function SwapDeposit() {
 
   // Load swap from backend if we have a swapId but no swap from state
   useEffect(() => {
-    if (swap != null || swapId == null) return;
+    // Skip if no swapId, or if we already have the correct swap loaded
+    if (swapId == null) return;
+    if (swap != null && swap.id === swapId) return;
+
+    // Clear stale swap when navigating to a different swapId
+    if (swap != null && swap.id !== swapId) {
+      setSwap(null);
+    }
 
     let cancelled = false;
     setLoading(true);
