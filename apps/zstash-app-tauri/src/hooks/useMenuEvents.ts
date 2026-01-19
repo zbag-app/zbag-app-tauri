@@ -22,6 +22,8 @@ export interface UseMenuEventsOptions {
   onLogout?: () => void;
   /** Callback to update Tor state after toggle. */
   onTorStateChanged?: (enabled: boolean) => void;
+  /** Callback for user-visible error reporting. */
+  onError?: (title: string, error: { code: string; message: string }) => void;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface UseMenuEventsOptions {
  * Must be used within a Router context.
  */
 export function useMenuEvents(options: UseMenuEventsOptions): void {
-  const { walletId, onLocked, onLogout, onTorStateChanged } = options;
+  const { walletId, onLocked, onLogout, onTorStateChanged, onError } = options;
   const navigate = useNavigate();
 
   // Use refs to avoid stale closures in event handlers
@@ -37,6 +39,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   const onLockedRef = useRef(onLocked);
   const onLogoutRef = useRef(onLogout);
   const onTorStateChangedRef = useRef(onTorStateChanged);
+  const onErrorRef = useRef(onError);
   const torToggleInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -44,11 +47,31 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
     onLockedRef.current = onLocked;
     onLogoutRef.current = onLogout;
     onTorStateChangedRef.current = onTorStateChanged;
-  }, [walletId, onLocked, onLogout, onTorStateChanged]);
+    onErrorRef.current = onError;
+  }, [walletId, onLocked, onLogout, onTorStateChanged, onError]);
 
   useEffect(() => {
     let mounted = true;
     const unlisteners = new Set<UnlistenFn>();
+
+    function reportError(title: string, err: unknown) {
+      console.error(`Menu: ${title}`, err);
+
+      const error =
+        typeof err === 'object' &&
+        err != null &&
+        'code' in err &&
+        'message' in err &&
+        typeof (err as { code: unknown }).code === 'string' &&
+        typeof (err as { message: unknown }).message === 'string'
+          ? { code: (err as { code: string }).code, message: (err as { message: string }).message }
+          : {
+              code: 'UNEXPECTED_ERROR',
+              message: err instanceof Error ? err.message : String(err),
+            };
+
+      onErrorRef.current?.(title, error);
+    }
 
     function ensureWalletLoaded(): string | null {
       const id = walletIdRef.current;
@@ -66,7 +89,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           try {
             await handler();
           } catch (err) {
-            console.error(`Menu: handler failed for ${event}`, err);
+            reportError('Menu action failed', err);
           }
         });
         if (mounted) {
@@ -153,7 +176,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           if ('ok' in res && res.ok.locked) {
             onLockedRef.current?.();
           } else if ('err' in res) {
-            console.error('Menu: failed to lock wallet', res.err);
+            reportError('Lock wallet failed', res.err);
           }
         })
       );
@@ -172,7 +195,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           if ('ok' in res) {
             onLogoutRef.current?.();
           } else if ('err' in res) {
-            console.error('Menu: failed to logout wallet', res.err);
+            reportError('Logout failed', res.err);
           }
         })
       );
@@ -184,7 +207,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           if (!id) return;
           const res = await startSync({ wallet_id: id });
           if ('err' in res) {
-            console.error('Menu: failed to start sync', res.err);
+            reportError('Start sync failed', res.err);
           }
         })
       );
@@ -196,7 +219,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           if (!id) return;
           const res = await stopSync({ wallet_id: id });
           if ('err' in res) {
-            console.error('Menu: failed to stop sync', res.err);
+            reportError('Stop sync failed', res.err);
           }
         })
       );
@@ -214,10 +237,10 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
               if ('ok' in res) {
                 onTorStateChangedRef.current?.(!currentEnabled);
               } else if ('err' in res) {
-                console.error('Menu: failed to toggle Tor', res.err);
+                reportError('Toggle Tor failed', res.err);
               }
             } else if ('err' in stateRes) {
-              console.error('Menu: failed to get Tor state', stateRes.err);
+              reportError('Failed to read Tor state', stateRes.err);
             }
           } finally {
             torToggleInFlightRef.current = false;
@@ -233,10 +256,13 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
             try {
               await revealItemInDir(res.ok.current_log_file || res.ok.log_directory);
             } catch (err) {
-              console.error('Menu: failed to reveal logs directory', err);
+              reportError('Open logs folder failed', {
+                code: 'OPEN_LOGS_FAILED',
+                message: err instanceof Error ? err.message : String(err),
+              });
             }
           } else if ('err' in res) {
-            console.error('Menu: failed to get log location', res.err);
+            reportError('Open logs folder failed', res.err);
           }
         })
       );

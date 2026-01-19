@@ -65,6 +65,7 @@ function AppInner() {
   const [torToggleError, setTorToggleError] = useState<IPC.IpcError | null>(null);
   const [resumePendingSwapsError, setResumePendingSwapsError] = useState<IPC.IpcError | null>(null);
   const [resumePendingSwapsRetryNonce, setResumePendingSwapsRetryNonce] = useState(0);
+  const [menuError, setMenuError] = useState<{ title: string; error: IPC.IpcError } | null>(null);
   const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
   const [dismissedTorError, setDismissedTorError] = useState(false);
 
@@ -99,7 +100,16 @@ function AppInner() {
     onTorStateChanged: (enabled) => {
       setTorState((prev) => (prev ? { ...prev, enabled } : null));
     },
+    onError: (title, error) => setMenuError({ title, error }),
   });
+
+  const menuErrorDialog = menuError ? (
+    <ErrorDialog
+      title={menuError.title}
+      error={{ code: menuError.error.code, message: menuError.error.message }}
+      primaryAction={{ label: 'Dismiss', onClick: () => setMenuError(null) }}
+    />
+  ) : null;
 
   // Tor state initialization and subscription
   useEffect(() => {
@@ -293,109 +303,121 @@ function AppInner() {
   // Error state
   if (startup.kind === 'error') {
     return (
-      <ErrorDialog
-        title="Request failed"
-        error={{ code: startup.error.code, message: startup.error.message }}
-        primaryAction={{ label: 'Reload app', onClick: () => window.location.reload() }}
-      />
+      <>
+        {menuErrorDialog}
+        <ErrorDialog
+          title="Request failed"
+          error={{ code: startup.error.code, message: startup.error.message }}
+          primaryAction={{ label: 'Reload app', onClick: () => window.location.reload() }}
+        />
+      </>
     );
   }
 
   // No wallets state
   if (startup.kind === 'no-wallets') {
     return (
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <CreateWallet
-              onCreated={(args) => {
-                setSeedPhrase(args.seedPhrase);
-                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                setAccounts(args.accounts);
-              }}
-            />
-          }
-        />
-        <Route path="/restore" element={<RestoreWallet />} />
-        <Route
-          path="/restore/birthday"
-          element={
-            <RestoreBirthday
-              onRestored={(args) => {
-                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                setAccounts(args.accounts);
-              }}
-            />
-          }
-        />
-        <Route
-          path="/keystone/setup"
-          element={
-            <KeystoneSetup
-              onCreated={(args) => {
-                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                setAccounts(args.accounts);
-              }}
-            />
-          }
-        />
-        <Route
-          path="/onboarding-backup"
-          element={
-            <OnboardingBackup
-              seedPhrase={seedPhrase ?? []}
-              onCleared={() => setSeedPhrase(null)}
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <>
+        {menuErrorDialog}
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <CreateWallet
+                onCreated={(args) => {
+                  setSeedPhrase(args.seedPhrase);
+                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                  setAccounts(args.accounts);
+                }}
+              />
+            }
+          />
+          <Route path="/restore" element={<RestoreWallet />} />
+          <Route
+            path="/restore/birthday"
+            element={
+              <RestoreBirthday
+                onRestored={(args) => {
+                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                  setAccounts(args.accounts);
+                }}
+              />
+            }
+          />
+          <Route
+            path="/keystone/setup"
+            element={
+              <KeystoneSetup
+                onCreated={(args) => {
+                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                  setAccounts(args.accounts);
+                }}
+              />
+            }
+          />
+          <Route
+            path="/onboarding-backup"
+            element={
+              <OnboardingBackup
+                seedPhrase={seedPhrase ?? []}
+                onCleared={() => setSeedPhrase(null)}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </>
     );
   }
 
   // Locked state
   if (startup.kind === 'locked') {
     return (
-      <UnlockGate
-        wallet={startup.wallet}
-        onUnlocked={(a) => {
-          setStartup(a);
-          if (a.kind === 'ready') {
-            setAccounts(a.accounts);
-          } else {
-            setAccounts([]);
-          }
-        }}
-        onBack={() => setStartup({ kind: 'wallet-selection' })}
-      />
+      <>
+        {menuErrorDialog}
+        <UnlockGate
+          wallet={startup.wallet}
+          onUnlocked={(a) => {
+            setStartup(a);
+            if (a.kind === 'ready') {
+              setAccounts(a.accounts);
+            } else {
+              setAccounts([]);
+            }
+          }}
+          onBack={() => setStartup({ kind: 'wallet-selection' })}
+        />
+      </>
     );
   }
 
   // Wallet selection state
   if (startup.kind === 'wallet-selection') {
     return (
-      <WalletSelectionRoutes
-        onLoaded={(resp) => {
-          setSeedPhrase(null);
-          if (resp.lock_status === 'Locked') {
-            setStartup({ kind: 'locked', wallet: resp.wallet });
-            setAccounts([]);
-            return;
-          }
-          setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
-          setAccounts(resp.accounts);
-        }}
-        onCreated={(args) => {
-          setSeedPhrase(args.seedPhrase);
-          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-          setAccounts(args.accounts);
-        }}
-        onRestored={(args) => {
-          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-          setAccounts(args.accounts);
-        }}
-      />
+      <>
+        {menuErrorDialog}
+        <WalletSelectionRoutes
+          onLoaded={(resp) => {
+            setSeedPhrase(null);
+            if (resp.lock_status === 'Locked') {
+              setStartup({ kind: 'locked', wallet: resp.wallet });
+              setAccounts([]);
+              return;
+            }
+            setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
+            setAccounts(resp.accounts);
+          }}
+          onCreated={(args) => {
+            setSeedPhrase(args.seedPhrase);
+            setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+            setAccounts(args.accounts);
+          }}
+          onRestored={(args) => {
+            setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+            setAccounts(args.accounts);
+          }}
+        />
+      </>
     );
   }
 
@@ -453,6 +475,8 @@ function AppInner() {
           }}
         />
       ) : null}
+
+      {menuErrorDialog}
 
       <Routes>
         <Route
