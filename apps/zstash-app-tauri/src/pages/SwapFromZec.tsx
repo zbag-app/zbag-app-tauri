@@ -44,15 +44,30 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     refundAddress: string;
   } | null>(null);
 
+  const amountError = useMemo(() => {
+    if (!inputAmountZec.trim()) return null;
+    const res = parseZecToZatoshis(inputAmountZec);
+    return 'err' in res ? res.err : null;
+  }, [inputAmountZec]);
+
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
     if (!outputAsset.trim()) return false;
     if (!inputAmountZec.trim()) return false;
+    if (amountError) return false;
     if (!destinationAddress.trim()) return false;
     if (!refundAddress.trim()) return false;
     return true;
-  }, [wallet.network, activeAccountId, outputAsset, inputAmountZec, destinationAddress, refundAddress]);
+  }, [
+    wallet.network,
+    activeAccountId,
+    outputAsset,
+    inputAmountZec,
+    amountError,
+    destinationAddress,
+    refundAddress,
+  ]);
 
   // Auto-populate refund address from wallet's shielded address
   useEffect(() => {
@@ -88,9 +103,11 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   useEffect(() => {
     const nextInputs = { outputAsset, inputAmountZec, destinationAddress, refundAddress };
     const prevInputs = lastQuoteInputsRef.current;
-    lastQuoteInputsRef.current = nextInputs;
 
-    if (!prevInputs) return;
+    if (!prevInputs) {
+      lastQuoteInputsRef.current = nextInputs;
+      return;
+    }
 
     const inputsChanged =
       prevInputs.outputAsset !== nextInputs.outputAsset ||
@@ -100,6 +117,8 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     if (!inputsChanged) return;
 
     if (submittingQuote || starting) return;
+
+    lastQuoteInputsRef.current = nextInputs;
 
     setError(null);
     if (quoteId || quote) {
@@ -175,9 +194,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="inputAmount"
               value={inputAmountZec}
               onChange={(e) => setInputAmountZec(e.currentTarget.value)}
+              inputMode="decimal"
               placeholder="0.0"
               disabled={submittingQuote || starting}
             />
+            <p className="text-xs text-muted-foreground">Up to 8 decimal places</p>
+            {amountError && <p className="text-xs text-destructive">{amountError}</p>}
           </div>
 
           <div className="space-y-2">
