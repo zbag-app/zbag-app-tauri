@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use zstash_core::domain::Network;
-use zstash_core::permissions::{create_dir_all_secure, set_file_permissions, write_file_secure};
+use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
 use zstash_engine::key_store::KeyStore;
 
 /// File-based key store for CLI usage.
@@ -82,9 +82,6 @@ impl FileKeyStore {
             )
         })?;
 
-        // Set restrictive permissions on Unix (no-op on Windows)
-        set_file_permissions(&self.keystore_path)?;
-
         Ok(())
     }
 
@@ -103,7 +100,6 @@ impl FileKeyStore {
                 path.display()
             )
         })?;
-        set_file_permissions(path)?;
         Ok(())
     }
 }

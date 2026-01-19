@@ -37,37 +37,70 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
 
     // Avoid pre-checking with `Path::exists()` (TOCTOU + extra syscalls). Instead,
-    // try to create the leaf directory and, on `NotFound`, recursively create the
-    // missing parent chain.
-    match create_dir_secure(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-            if path.is_dir() {
-                // Best-effort: the directory might already exist with broader
-                // permissions, or it may have been concurrently created.
-                //
-                // We intentionally don't fail if `chmod`/`set_permissions` fails,
-                // because callers may pass directories we don't own (e.g. system
-                // temp roots on macOS) and this helper is used for both creation
-                // and "ensure exists".
-                let _ = set_dir_permissions(path);
-                Ok(())
-            } else {
-                Err(io::Error::new(
-                    io::ErrorKind::AlreadyExists,
-                    format!("path exists but is not a directory: {}", path.display()),
-                ))
+    // attempt creation and handle `NotFound` by walking up the parent chain.
+    let mut to_create = Vec::new();
+    let mut current = path;
+
+    loop {
+        match create_dir_secure(current) {
+            Ok(()) => break,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if current.is_dir() {
+                    if current == path {
+                        // Best-effort: the directory might already exist with broader
+                        // permissions, or it may have been concurrently created.
+                        //
+                        // We intentionally don't fail if `chmod`/`set_permissions` fails,
+                        // because callers may pass directories we don't own (e.g. system
+                        // temp roots on macOS) and this helper is used for both creation
+                        // and "ensure exists".
+                        let _ = set_dir_permissions(current);
+                    }
+                    break;
+                }
+
+                return Err(io::Error::new(
+                    io::ErrorKind::NotADirectory,
+                    format!("path exists but is not a directory: {}", current.display()),
+                ));
             }
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                match current.parent() {
+                    Some(parent) if !parent.as_os_str().is_empty() => {
+                        to_create.push(current.to_path_buf());
+                        current = parent;
+                    }
+                    _ => return Err(e),
+                }
+            }
+            Err(e) => return Err(e),
         }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => match path.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => {
-                create_dir_all_secure(parent)?;
-                create_dir_all_secure(path)
-            }
-            _ => Err(e),
-        },
-        Err(e) => Err(e),
     }
+
+    // Create directories from root to leaf, setting permissions on each.
+    for dir in to_create.into_iter().rev() {
+        match create_dir_secure(&dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if dir.is_dir() {
+                    let _ = set_dir_permissions(&dir);
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotADirectory,
+                        format!("path exists but is not a directory: {}", dir.display()),
+                    ));
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
 }
 
 /// Recursively create directories with secure permissions (0700 on Unix).
@@ -98,6 +131,7 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
         let mut file = opts.open(path)?;
         file.write_all(contents)?;
         file.sync_all()?;
+        set_file_permissions(path)?;
         Ok(())
     }
 
@@ -237,9 +271,39 @@ mod tests {
     }
 
     #[test]
+    fn test_create_dir_all_secure_fails_if_intermediate_is_file() {
+        let tmp = tempdir().unwrap();
+        let intermediate = tmp.path().join("a");
+        std::fs::write(&intermediate, b"not a dir").unwrap();
+
+        let nested = tmp.path().join("a").join("b").join("c");
+        let err = create_dir_all_secure(&nested).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotADirectory);
+        assert!(
+            err.to_string().contains("not a directory"),
+            "error should mention non-directory path: {err}"
+        );
+    }
+
+    #[test]
     fn test_write_file_secure_sets_0600() {
         let tmp = tempdir().unwrap();
         let file = tmp.path().join("secure_file.txt");
+
+        write_file_secure(&file, b"secret data").unwrap();
+
+        let meta = std::fs::metadata(&file).unwrap();
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "file should have mode 0600");
+    }
+
+    #[test]
+    fn test_write_file_secure_hardens_existing_file_permissions() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("existing_file.txt");
+
+        std::fs::write(&file, b"existing").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
 
         write_file_secure(&file, b"secret data").unwrap();
 
