@@ -111,7 +111,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     setError(null);
   }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
 
-  // Invalidate quotes when quote inputs change.
+  // Invalidate quotes when canonical quote inputs change.
   useEffect(() => {
     const nextInputs = {
       outputAsset: outputAssetTrimmed,
@@ -133,7 +133,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       prevInputs.refundAddress !== nextInputs.refundAddress;
     if (!inputsChanged) return;
 
-    if (submittingQuote || starting) return;
+    if (submittingQuote || starting) {
+      // Do not advance the ref while an async quote/start is in-flight.
+      // This ensures any mid-flight input changes are still detected and will invalidate stale quote state
+      // immediately after the in-flight operation completes.
+      return;
+    }
 
     lastQuoteInputsRef.current = nextInputs;
 
@@ -372,13 +377,11 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                     });
 
                     if ('err' in startRes) {
-                      if (startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED) {
-                        setError(
-                          'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
-                        );
-                        return;
-                      }
-                      setError(parseSwapError(startRes.err.message));
+                      const message =
+                        startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED
+                          ? 'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
+                          : parseSwapError(startRes.err.message);
+                      setError(message);
                       return;
                     }
 
