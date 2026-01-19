@@ -18,6 +18,8 @@ export interface UseMenuEventsOptions {
   walletId: string | null;
   /** Callback when wallet is locked via menu. */
   onLocked?: () => void;
+  /** Callback when user requests logout via menu. */
+  onLogoutRequested?: (walletId: string) => void;
   /** Callback when user logs out via menu. */
   onLogout?: () => void;
   /** Callback to update Tor state after toggle. */
@@ -31,12 +33,13 @@ export interface UseMenuEventsOptions {
  * Must be used within a Router context.
  */
 export function useMenuEvents(options: UseMenuEventsOptions): void {
-  const { walletId, onLocked, onLogout, onTorStateChanged, onError } = options;
+  const { walletId, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError } = options;
   const navigate = useNavigate();
 
   // Use refs to avoid stale closures in event handlers
   const walletIdRef = useRef(walletId);
   const onLockedRef = useRef(onLocked);
+  const onLogoutRequestedRef = useRef(onLogoutRequested);
   const onLogoutRef = useRef(onLogout);
   const onTorStateChangedRef = useRef(onTorStateChanged);
   const onErrorRef = useRef(onError);
@@ -45,10 +48,11 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   useEffect(() => {
     walletIdRef.current = walletId;
     onLockedRef.current = onLocked;
+    onLogoutRequestedRef.current = onLogoutRequested;
     onLogoutRef.current = onLogout;
     onTorStateChangedRef.current = onTorStateChanged;
     onErrorRef.current = onError;
-  }, [walletId, onLocked, onLogout, onTorStateChanged, onError]);
+  }, [walletId, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError]);
 
   useEffect(() => {
     let mounted = true;
@@ -190,6 +194,10 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
         addListener(MenuEvents.LOGOUT, async () => {
           const id = ensureWalletLoaded();
           if (!id) return;
+          if (onLogoutRequestedRef.current) {
+            onLogoutRequestedRef.current(id);
+            return;
+          }
           // Stop sync first to satisfy engine contract
           try {
             const stopRes = await stopSync({ wallet_id: id });

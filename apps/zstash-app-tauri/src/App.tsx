@@ -8,6 +8,7 @@ import { createCancellableSleep } from './lib/cancellableSleep';
 import { Logo } from './components/brand/Logo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
+import { LogoutConfirmDialog } from './components/common/LogoutConfirmDialog';
 import { TorErrorDialog } from './components/common/TorErrorDialog';
 import { WalletPicker } from './components/wallet/WalletPicker';
 import { AppShell } from './components/layout/AppShell';
@@ -68,6 +69,8 @@ function AppInner() {
   const [menuError, setMenuError] = useState<{ title: string; error: IPC.IpcError } | null>(null);
   const [syncProgress, setSyncProgress] = useState<IPC.SyncProgress | null>(null);
   const [dismissedTorError, setDismissedTorError] = useState(false);
+  const [menuLogoutWalletId, setMenuLogoutWalletId] = useState<string | null>(null);
+  const [menuLogoutOpen, setMenuLogoutOpen] = useState(false);
 
   const activeWalletId = useMemo(() => {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
@@ -81,6 +84,19 @@ function AppInner() {
     return accounts.find((a) => a.id === activeAccountId) ?? null;
   }, [accounts, activeAccountId]);
 
+  const closeMenuLogout = () => {
+    setMenuLogoutOpen(false);
+    setMenuLogoutWalletId(null);
+  };
+
+  const handleLogout = () => {
+    closeMenuLogout();
+    setAccounts([]);
+    setSyncProgress(null);
+    setStartup({ kind: 'wallet-selection' });
+    navigate('/wallets');
+  };
+
   // Menu events handler
   useMenuEvents({
     walletId: activeWalletId,
@@ -91,12 +107,11 @@ function AppInner() {
         setSyncProgress(null);
       }
     },
-    onLogout: () => {
-      setAccounts([]);
-      setSyncProgress(null);
-      setStartup({ kind: 'wallet-selection' });
-      navigate('/wallets');
+    onLogoutRequested: (walletId) => {
+      setMenuLogoutWalletId(walletId);
+      setMenuLogoutOpen(true);
     },
+    onLogout: handleLogout,
     onTorStateChanged: (enabled) => {
       setTorState((prev) => (prev ? { ...prev, enabled } : null));
     },
@@ -110,6 +125,15 @@ function AppInner() {
       primaryAction={{ label: 'Dismiss', onClick: () => setMenuError(null) }}
     />
   ) : null;
+
+  const menuLogoutDialog = (
+    <LogoutConfirmDialog
+      walletId={menuLogoutWalletId}
+      open={menuLogoutOpen}
+      onClose={closeMenuLogout}
+      onLogout={handleLogout}
+    />
+  );
 
   // Tor state initialization and subscription
   useEffect(() => {
@@ -577,6 +601,7 @@ function AppInner() {
   return (
     <>
       {menuErrorDialog}
+      {menuLogoutDialog}
       {content}
     </>
   );
