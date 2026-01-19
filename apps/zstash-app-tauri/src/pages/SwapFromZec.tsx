@@ -121,14 +121,12 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     lastQuoteInputsRef.current = nextInputs;
 
     setError(null);
-    if (quoteId || quote) {
-      setQuote(null);
-      setQuoteId(null);
-      setReauthToken(null);
-      setPassword('');
-    }
+    setQuote(null);
+    setQuoteId(null);
+    setReauthToken(null);
+    setPassword('');
     // Intentionally NOT resetting privacyAck; FromZec swaps always require transparent interaction.
-  }, [destinationAddress, inputAmountZec, outputAsset, quote, quoteId, refundAddress, starting, submittingQuote]);
+  }, [destinationAddress, inputAmountZec, outputAsset, refundAddress, starting, submittingQuote]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {

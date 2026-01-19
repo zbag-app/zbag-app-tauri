@@ -27,7 +27,10 @@ export function formatAtomicAmount(value: string, decimals: number): string {
 /**
  * Format an atomic amount using known token metadata.
  *
- * Falls back to showing the raw atomic value if the token is unknown.
+ * Returns `''` for empty/whitespace input.
+ *
+ * Falls back to showing the raw atomic value as `<value> (raw)` if the token is unknown or the input is not a
+ * base-10 integer string.
  */
 export function formatAtomicAmountForToken(value: string, tokenId: string): string {
   const trimmed = value.trim();
