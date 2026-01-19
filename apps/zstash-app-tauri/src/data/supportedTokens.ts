@@ -65,12 +65,16 @@ export const ZEC_ASSET_ID = 'nep141:zec.omft.near';
 /** Get default non-ZEC asset for swaps */
 export const DEFAULT_NON_ZEC_ASSET_ID = 'nep141:wrap.near';
 
-/** Get tokens that can be swapped to ZEC (excludes ZEC itself) */
+/** Get tokens that can be swapped to ZEC (excludes ZEC itself). */
 export function getToZecTokens(): SupportedToken[] {
   return supportedTokens.filter((t) => t.id !== ZEC_ASSET_ID);
 }
 
-/** Get tokens that ZEC can be swapped to (excludes ZEC itself) */
+/**
+ * Get tokens that ZEC can be swapped to (excludes ZEC itself).
+ *
+ * Currently identical to `getToZecTokens`, but kept separate since supported routes may diverge.
+ */
 export function getFromZecTokens(): SupportedToken[] {
   return supportedTokens.filter((t) => t.id !== ZEC_ASSET_ID);
 }

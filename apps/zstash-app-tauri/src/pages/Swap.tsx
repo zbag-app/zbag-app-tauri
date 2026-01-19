@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, AlertCircle, ArrowRight } from 'lucide-react';
+import { ArrowLeftRight, AlertCircle, ArrowRight, Check } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -108,9 +108,15 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full border-primary">
+        <Card className="h-full border-primary bg-primary/5">
           <CardHeader>
-            <CardTitle className="text-lg">Swap to ZEC</CardTitle>
+            <CardTitle className="text-lg flex items-center justify-between gap-2">
+              <span>Swap to ZEC</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                <Check className="h-3 w-3" />
+                Current
+              </span>
+            </CardTitle>
             <CardDescription>Convert other assets into ZEC</CardDescription>
           </CardHeader>
         </Card>

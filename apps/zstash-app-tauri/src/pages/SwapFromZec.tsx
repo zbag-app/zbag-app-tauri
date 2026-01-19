@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
@@ -36,6 +36,13 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   const [submittingQuote, setSubmittingQuote] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const lastQuoteInputsRef = useRef<{
+    outputAsset: string;
+    inputAmountZec: string;
+    destinationAddress: string;
+    refundAddress: string;
+  } | null>(null);
 
   const canQuote = useMemo(() => {
     if (wallet.network !== 'Mainnet') return false;
@@ -77,21 +84,30 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
-  // Clear errors and invalidate quotes when form inputs change.
-  // Intentionally depends only on quote inputs (not quote/submission state) to avoid clearing a newly-received quote.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Clear errors and invalidate quotes when quote inputs change.
   useEffect(() => {
+    const nextInputs = { outputAsset, inputAmountZec, destinationAddress, refundAddress };
+    const prevInputs = lastQuoteInputsRef.current;
+    lastQuoteInputsRef.current = nextInputs;
+
+    if (!prevInputs) return;
+
+    const inputsChanged =
+      prevInputs.outputAsset !== nextInputs.outputAsset ||
+      prevInputs.inputAmountZec !== nextInputs.inputAmountZec ||
+      prevInputs.destinationAddress !== nextInputs.destinationAddress ||
+      prevInputs.refundAddress !== nextInputs.refundAddress;
+    if (!inputsChanged) return;
+
     if (submittingQuote || starting) return;
 
     setError(null);
-    if (quoteId || quote) {
-      setQuote(null);
-      setQuoteId(null);
-      setReauthToken(null);
-      setPassword('');
-    }
+    setQuote(null);
+    setQuoteId(null);
+    setReauthToken(null);
+    setPassword('');
     // Intentionally NOT resetting privacyAck; FromZec swaps always require transparent interaction.
-  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
+  }, [destinationAddress, inputAmountZec, outputAsset, refundAddress, starting, submittingQuote]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
