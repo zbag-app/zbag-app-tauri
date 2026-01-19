@@ -171,7 +171,7 @@ fn build_wallet_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>
     let separator2 = PredefinedMenuItem::separator(app)?;
 
     let sync_now = MenuItemBuilder::with_id("sync_now", "Sync Now")
-        .accelerator("Cmd+R")
+        .accelerator("Cmd+Shift+Y")
         .build(app)?;
 
     let stop_sync = MenuItemBuilder::with_id("stop_sync", "Stop Sync").build(app)?;

@@ -67,117 +67,116 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   }, [walletId, onLocked, onLogout, onTorStateChanged]);
 
   useEffect(() => {
+    let mounted = true;
     const unlisteners: UnlistenFn[] = [];
 
+    async function addListener(
+      event: string,
+      handler: () => void | Promise<void>
+    ) {
+      const unlisten = await listen(event, handler);
+      if (mounted) {
+        unlisteners.push(unlisten);
+      } else {
+        // Component unmounted before listener was set up - clean up immediately
+        unlisten();
+      }
+    }
+
     async function setupListeners() {
-      // Navigation events
-      unlisteners.push(
-        await listen(MenuEvents.NEW_WALLET, () => navigate('/create'))
+      // Navigation events (no wallet required)
+      await addListener(MenuEvents.NEW_WALLET, () => navigate('/create'));
+      await addListener(MenuEvents.RESTORE_WALLET, () => navigate('/restore'));
+      await addListener(MenuEvents.SWITCH_WALLET, () => navigate('/wallets'));
+      await addListener(MenuEvents.PREFERENCES, () => navigate('/settings'));
+
+      // Navigation events (wallet required)
+      await addListener(MenuEvents.SEND, () => {
+        if (walletIdRef.current) navigate('/send');
+      });
+      await addListener(MenuEvents.RECEIVE, () => {
+        if (walletIdRef.current) navigate('/receive');
+      });
+      await addListener(MenuEvents.SWAP, () => {
+        if (walletIdRef.current) navigate('/swap');
+      });
+      await addListener(MenuEvents.ACTIVITY, () => {
+        if (walletIdRef.current) navigate('/activity');
+      });
+      await addListener(MenuEvents.VIEW_SEED, () => {
+        if (walletIdRef.current) navigate('/backup/flow');
+      });
+      await addListener(MenuEvents.VERIFY_BACKUP, () => {
+        if (walletIdRef.current) navigate('/backup');
+      });
+      await addListener(MenuEvents.HARDWARE_WALLET, () =>
+        navigate('/keystone/import')
       );
-      unlisteners.push(
-        await listen(MenuEvents.RESTORE_WALLET, () => navigate('/restore'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.SWITCH_WALLET, () => navigate('/wallets'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.SEND, () => navigate('/send'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.RECEIVE, () => navigate('/receive'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.SWAP, () => navigate('/swap'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.ACTIVITY, () => navigate('/activity'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.VIEW_SEED, () => navigate('/backup/flow'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.VERIFY_BACKUP, () => navigate('/backup'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.HARDWARE_WALLET, () => navigate('/keystone/import'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.SERVER_SETTINGS, () => navigate('/settings/servers'))
-      );
-      unlisteners.push(
-        await listen(MenuEvents.PREFERENCES, () => navigate('/settings'))
+      await addListener(MenuEvents.SERVER_SETTINGS, () =>
+        navigate('/settings/servers')
       );
 
       // Lock wallet
-      unlisteners.push(
-        await listen(MenuEvents.LOCK_WALLET, async () => {
-          const id = walletIdRef.current;
-          if (!id) return;
-          const res = await lockWallet({ wallet_id: id });
-          if ('ok' in res && res.ok.locked) {
-            onLockedRef.current?.();
-          }
-        })
-      );
+      await addListener(MenuEvents.LOCK_WALLET, async () => {
+        const id = walletIdRef.current;
+        if (!id) return;
+        const res = await lockWallet({ wallet_id: id });
+        if ('ok' in res && res.ok.locked) {
+          onLockedRef.current?.();
+        }
+      });
 
       // Logout
-      unlisteners.push(
-        await listen(MenuEvents.LOGOUT, async () => {
-          const id = walletIdRef.current;
-          if (!id) return;
-          const res = await logoutWallet({ wallet_id: id });
-          if ('ok' in res) {
-            onLogoutRef.current?.();
-          }
-        })
-      );
+      await addListener(MenuEvents.LOGOUT, async () => {
+        const id = walletIdRef.current;
+        if (!id) return;
+        // Stop sync first to satisfy engine contract
+        await stopSync({ wallet_id: id });
+        const res = await logoutWallet({ wallet_id: id });
+        if ('ok' in res) {
+          onLogoutRef.current?.();
+        }
+      });
 
       // Sync now
-      unlisteners.push(
-        await listen(MenuEvents.SYNC_NOW, async () => {
-          const id = walletIdRef.current;
-          if (!id) return;
-          await startSync({ wallet_id: id });
-        })
-      );
+      await addListener(MenuEvents.SYNC_NOW, async () => {
+        const id = walletIdRef.current;
+        if (!id) return;
+        await startSync({ wallet_id: id });
+      });
 
       // Stop sync
-      unlisteners.push(
-        await listen(MenuEvents.STOP_SYNC, async () => {
-          const id = walletIdRef.current;
-          if (!id) return;
-          await stopSync({ wallet_id: id });
-        })
-      );
+      await addListener(MenuEvents.STOP_SYNC, async () => {
+        const id = walletIdRef.current;
+        if (!id) return;
+        await stopSync({ wallet_id: id });
+      });
 
       // Toggle Tor
-      unlisteners.push(
-        await listen(MenuEvents.TOGGLE_TOR, async () => {
-          const stateRes = await getTorState();
-          if ('ok' in stateRes) {
-            const currentEnabled = stateRes.ok.state.enabled;
-            const res = await setTorEnabled({ enabled: !currentEnabled });
-            if ('ok' in res) {
-              onTorStateChangedRef.current?.(!currentEnabled);
-            }
+      await addListener(MenuEvents.TOGGLE_TOR, async () => {
+        const stateRes = await getTorState();
+        if ('ok' in stateRes) {
+          const currentEnabled = stateRes.ok.state.enabled;
+          const res = await setTorEnabled({ enabled: !currentEnabled });
+          if ('ok' in res) {
+            onTorStateChangedRef.current?.(!currentEnabled);
           }
-        })
-      );
+        }
+      });
 
       // Open logs folder
-      unlisteners.push(
-        await listen(MenuEvents.OPEN_LOGS, async () => {
-          const res = await getLogLocation();
-          if ('ok' in res && res.ok.log_directory) {
-            await revealItemInDir(res.ok.log_directory);
-          }
-        })
-      );
+      await addListener(MenuEvents.OPEN_LOGS, async () => {
+        const res = await getLogLocation();
+        if ('ok' in res && res.ok.log_directory) {
+          await revealItemInDir(res.ok.log_directory);
+        }
+      });
     }
 
     setupListeners();
 
     return () => {
+      mounted = false;
       for (const unlisten of unlisteners) {
         unlisten();
       }
