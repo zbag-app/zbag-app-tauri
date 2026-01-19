@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
@@ -300,214 +300,21 @@ function AppInner() {
     );
   }
 
-  // Error state
+  let content: ReactNode;
+
   if (startup.kind === 'error') {
-    return (
-      <>
-        {menuErrorDialog}
-        <ErrorDialog
-          title="Request failed"
-          error={{ code: startup.error.code, message: startup.error.message }}
-          primaryAction={{ label: 'Reload app', onClick: () => window.location.reload() }}
-        />
-      </>
+    content = (
+      <ErrorDialog
+        title="Request failed"
+        error={{ code: startup.error.code, message: startup.error.message }}
+        primaryAction={{ label: 'Reload app', onClick: () => window.location.reload() }}
+      />
     );
-  }
-
-  // No wallets state
-  if (startup.kind === 'no-wallets') {
-    return (
-      <>
-        {menuErrorDialog}
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <CreateWallet
-                onCreated={(args) => {
-                  setSeedPhrase(args.seedPhrase);
-                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                  setAccounts(args.accounts);
-                }}
-              />
-            }
-          />
-          <Route path="/restore" element={<RestoreWallet />} />
-          <Route
-            path="/restore/birthday"
-            element={
-              <RestoreBirthday
-                onRestored={(args) => {
-                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                  setAccounts(args.accounts);
-                }}
-              />
-            }
-          />
-          <Route
-            path="/keystone/setup"
-            element={
-              <KeystoneSetup
-                onCreated={(args) => {
-                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-                  setAccounts(args.accounts);
-                }}
-              />
-            }
-          />
-          <Route
-            path="/onboarding-backup"
-            element={
-              <OnboardingBackup
-                seedPhrase={seedPhrase ?? []}
-                onCleared={() => setSeedPhrase(null)}
-              />
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </>
-    );
-  }
-
-  // Locked state
-  if (startup.kind === 'locked') {
-    return (
-      <>
-        {menuErrorDialog}
-        <UnlockGate
-          wallet={startup.wallet}
-          onUnlocked={(a) => {
-            setStartup(a);
-            if (a.kind === 'ready') {
-              setAccounts(a.accounts);
-            } else {
-              setAccounts([]);
-            }
-          }}
-          onBack={() => setStartup({ kind: 'wallet-selection' })}
-        />
-      </>
-    );
-  }
-
-  // Wallet selection state
-  if (startup.kind === 'wallet-selection') {
-    return (
-      <>
-        {menuErrorDialog}
-        <WalletSelectionRoutes
-          onLoaded={(resp) => {
-            setSeedPhrase(null);
-            if (resp.lock_status === 'Locked') {
-              setStartup({ kind: 'locked', wallet: resp.wallet });
-              setAccounts([]);
-              return;
-            }
-            setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
-            setAccounts(resp.accounts);
-          }}
-          onCreated={(args) => {
-            setSeedPhrase(args.seedPhrase);
-            setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-            setAccounts(args.accounts);
-          }}
-          onRestored={(args) => {
-            setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
-            setAccounts(args.accounts);
-          }}
-        />
-      </>
-    );
-  }
-
-  const torErrorState =
-    torState != null && torState.enabled && torState.status === 'Error' && !dismissedTorError
-      ? torState
-      : null;
-  const resumePendingSwapsDialogError =
-    resumePendingSwapsError != null && torErrorState == null && torToggleError == null
-      ? resumePendingSwapsError
-      : null;
-
-  // Ready state - Main app with sidebar
-  return (
-    <FiatDisplayProvider>
-    <AppShell
-      wallet={startup.wallet}
-      torState={torState}
-      syncProgress={syncProgress}
-      onLock={handleQuickLock}
-    >
-      {/* Tor Error Dialog */}
-      {torErrorState ? (
-        <TorErrorDialog
-          state={torErrorState}
-          onClose={() => setDismissedTorError(true)}
-          onDisable={() => toggleTor(false)}
-          onRetry={() => toggleTor(true)}
-        />
-      ) : null}
-
-      {/* Tor Toggle Error Dialog */}
-      {torToggleError ? (
-        <ErrorDialog
-          title="Tor toggle failed"
-          error={{ code: torToggleError.code, message: torToggleError.message }}
-          primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
-        />
-      ) : null}
-
-      {resumePendingSwapsDialogError ? (
-        <ErrorDialog
-          title="Failed to resume swaps"
-          error={{
-            code: resumePendingSwapsDialogError.code,
-            message: resumePendingSwapsDialogError.message,
-          }}
-          primaryAction={{ label: 'Dismiss', onClick: () => setResumePendingSwapsError(null) }}
-          secondaryAction={{
-            label: 'Retry',
-            onClick: () => {
-              setResumePendingSwapsError(null);
-              setResumePendingSwapsRetryNonce((n) => n + 1);
-            },
-          }}
-        />
-      ) : null}
-
-      {menuErrorDialog}
-
+  } else if (startup.kind === 'no-wallets') {
+    content = (
       <Routes>
         <Route
           path="/"
-          element={
-            <Home
-              wallet={startup.wallet}
-              activeAccountId={activeAccountId}
-            />
-          }
-        />
-        <Route
-          path="/wallets"
-          element={
-            <Wallets
-              activeWalletId={startup.wallet.id}
-              onLoaded={(resp) => {
-                setSeedPhrase(null);
-                if (resp.lock_status === 'Locked') {
-                  setStartup({ kind: 'locked', wallet: resp.wallet });
-                  setAccounts([]);
-                  return;
-                }
-                setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
-                setAccounts(resp.accounts);
-              }}
-            />
-          }
-        />
-        <Route
-          path="/create"
           element={
             <CreateWallet
               onCreated={(args) => {
@@ -530,57 +337,16 @@ function AppInner() {
             />
           }
         />
-        <Route path="/receive" element={<Receive activeAccountId={activeAccountId} />} />
-        <Route path="/send" element={<Send activeAccount={activeAccount} />} />
-        <Route path="/send/confirm" element={<SendConfirm walletId={startup.wallet.id} />} />
-        <Route path="/signing" element={<Signing walletId={startup.wallet.id} />} />
         <Route
-          path="/swap"
-          element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
-        />
-        <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
-        <Route path="/swap/crosspay" element={<CrossPay wallet={startup.wallet} activeAccountId={activeAccountId} />} />
-        <Route path="/swap/quote" element={<SwapQuote />} />
-        <Route path="/swap/deposit" element={<SwapDeposit />} />
-        <Route path="/swap/deposit/:swapId" element={<SwapDeposit />} />
-        <Route
-          path="/activity"
-          element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
-        />
-        <Route
-          path="/settings"
+          path="/keystone/setup"
           element={
-            <Settings
-              wallet={startup.wallet}
-              torState={torState}
-              onSetTorEnabled={toggleTor}
-              onLogout={() => {
-                setAccounts([]);
-                setSyncProgress(null);
-                setStartup({ kind: 'wallet-selection' });
-                navigate('/wallets');
+            <KeystoneSetup
+              onCreated={(args) => {
+                setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                setAccounts(args.accounts);
               }}
             />
           }
-        />
-        <Route path="/settings/servers" element={<ServerSettings wallet={startup.wallet} />} />
-        <Route
-          path="/keystone/import"
-          element={
-            <ImportKeystone
-              walletId={startup.wallet.id}
-              walletNetwork={startup.wallet.network}
-              onAccountsUpdated={(next) => setAccounts(next)}
-            />
-          }
-        />
-        <Route
-          path="/backup"
-          element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => setSeedPhrase(null)} />}
-        />
-        <Route
-          path="/backup/flow"
-          element={<BackupFlow walletId={startup.wallet.id} />}
         />
         <Route
           path="/onboarding-backup"
@@ -591,9 +357,228 @@ function AppInner() {
             />
           }
         />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </AppShell>
-    </FiatDisplayProvider>
+    );
+  } else if (startup.kind === 'locked') {
+    content = (
+      <UnlockGate
+        wallet={startup.wallet}
+        onUnlocked={(a) => {
+          setStartup(a);
+          if (a.kind === 'ready') {
+            setAccounts(a.accounts);
+          } else {
+            setAccounts([]);
+          }
+        }}
+        onBack={() => setStartup({ kind: 'wallet-selection' })}
+      />
+    );
+  } else if (startup.kind === 'wallet-selection') {
+    content = (
+      <WalletSelectionRoutes
+        onLoaded={(resp) => {
+          setSeedPhrase(null);
+          if (resp.lock_status === 'Locked') {
+            setStartup({ kind: 'locked', wallet: resp.wallet });
+            setAccounts([]);
+            return;
+          }
+          setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
+          setAccounts(resp.accounts);
+        }}
+        onCreated={(args) => {
+          setSeedPhrase(args.seedPhrase);
+          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+          setAccounts(args.accounts);
+        }}
+        onRestored={(args) => {
+          setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+          setAccounts(args.accounts);
+        }}
+      />
+    );
+  } else {
+    const torErrorState =
+      torState != null && torState.enabled && torState.status === 'Error' && !dismissedTorError
+        ? torState
+        : null;
+    const resumePendingSwapsDialogError =
+      resumePendingSwapsError != null && torErrorState == null && torToggleError == null
+        ? resumePendingSwapsError
+        : null;
+
+    // Ready state - Main app with sidebar
+    content = (
+      <FiatDisplayProvider>
+      <AppShell
+        wallet={startup.wallet}
+        torState={torState}
+        syncProgress={syncProgress}
+        onLock={handleQuickLock}
+      >
+        {/* Tor Error Dialog */}
+        {torErrorState ? (
+          <TorErrorDialog
+            state={torErrorState}
+            onClose={() => setDismissedTorError(true)}
+            onDisable={() => toggleTor(false)}
+            onRetry={() => toggleTor(true)}
+          />
+        ) : null}
+
+        {/* Tor Toggle Error Dialog */}
+        {torToggleError ? (
+          <ErrorDialog
+            title="Tor toggle failed"
+            error={{ code: torToggleError.code, message: torToggleError.message }}
+            primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
+          />
+        ) : null}
+
+        {resumePendingSwapsDialogError ? (
+          <ErrorDialog
+            title="Failed to resume swaps"
+            error={{
+              code: resumePendingSwapsDialogError.code,
+              message: resumePendingSwapsDialogError.message,
+            }}
+            primaryAction={{ label: 'Dismiss', onClick: () => setResumePendingSwapsError(null) }}
+            secondaryAction={{
+              label: 'Retry',
+              onClick: () => {
+                setResumePendingSwapsError(null);
+                setResumePendingSwapsRetryNonce((n) => n + 1);
+              },
+            }}
+          />
+        ) : null}
+
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Home
+                wallet={startup.wallet}
+                activeAccountId={activeAccountId}
+              />
+            }
+          />
+          <Route
+            path="/wallets"
+            element={
+              <Wallets
+                activeWalletId={startup.wallet.id}
+                onLoaded={(resp) => {
+                  setSeedPhrase(null);
+                  if (resp.lock_status === 'Locked') {
+                    setStartup({ kind: 'locked', wallet: resp.wallet });
+                    setAccounts([]);
+                    return;
+                  }
+                  setStartup({ kind: 'ready', wallet: resp.wallet, accounts: resp.accounts });
+                  setAccounts(resp.accounts);
+                }}
+              />
+            }
+          />
+          <Route
+            path="/create"
+            element={
+              <CreateWallet
+                onCreated={(args) => {
+                  setSeedPhrase(args.seedPhrase);
+                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                  setAccounts(args.accounts);
+                }}
+              />
+            }
+          />
+          <Route path="/restore" element={<RestoreWallet />} />
+          <Route
+            path="/restore/birthday"
+            element={
+              <RestoreBirthday
+                onRestored={(args) => {
+                  setStartup({ kind: 'ready', wallet: args.wallet, accounts: args.accounts });
+                  setAccounts(args.accounts);
+                }}
+              />
+            }
+          />
+          <Route path="/receive" element={<Receive activeAccountId={activeAccountId} />} />
+          <Route path="/send" element={<Send activeAccount={activeAccount} />} />
+          <Route path="/send/confirm" element={<SendConfirm walletId={startup.wallet.id} />} />
+          <Route path="/signing" element={<Signing walletId={startup.wallet.id} />} />
+          <Route
+            path="/swap"
+            element={<Swap wallet={startup.wallet} activeAccountId={activeAccountId} />}
+          />
+          <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
+          <Route path="/swap/crosspay" element={<CrossPay wallet={startup.wallet} activeAccountId={activeAccountId} />} />
+          <Route path="/swap/quote" element={<SwapQuote />} />
+          <Route path="/swap/deposit" element={<SwapDeposit />} />
+          <Route path="/swap/deposit/:swapId" element={<SwapDeposit />} />
+          <Route
+            path="/activity"
+            element={<Activity walletId={startup.wallet.id} activeAccountId={activeAccountId} />}
+          />
+          <Route
+            path="/settings"
+            element={
+              <Settings
+                wallet={startup.wallet}
+                torState={torState}
+                onSetTorEnabled={toggleTor}
+                onLogout={() => {
+                  setAccounts([]);
+                  setSyncProgress(null);
+                  setStartup({ kind: 'wallet-selection' });
+                  navigate('/wallets');
+                }}
+              />
+            }
+          />
+          <Route path="/settings/servers" element={<ServerSettings wallet={startup.wallet} />} />
+          <Route
+            path="/keystone/import"
+            element={
+              <ImportKeystone
+                walletId={startup.wallet.id}
+                walletNetwork={startup.wallet.network}
+                onAccountsUpdated={(next) => setAccounts(next)}
+              />
+            }
+          />
+          <Route
+            path="/backup"
+            element={<BackupChallenge walletId={startup.wallet.id} onVerified={() => setSeedPhrase(null)} />}
+          />
+          <Route
+            path="/backup/flow"
+            element={<BackupFlow walletId={startup.wallet.id} />}
+          />
+          <Route
+            path="/onboarding-backup"
+            element={
+              <OnboardingBackup
+                seedPhrase={seedPhrase ?? []}
+                onCleared={() => setSeedPhrase(null)}
+              />
+            }
+          />
+        </Routes>
+      </AppShell>
+      </FiatDisplayProvider>
+    );
+  }
+
+  return (
+    <>
+      {menuErrorDialog}
+      {content}
+    </>
   );
 }
 

@@ -124,8 +124,12 @@ where
             let state = app.state::<state::AppState>();
 
             // Enter tokio runtime context so TorManager can spawn bootstrap task
-            let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
-            let _guard = handle.enter();
+            // Tauri's desktop async runtime is Tokio; if this ever changes the match will
+            // become non-exhaustive at compile time rather than failing at runtime.
+            let runtime_handle = tauri::async_runtime::handle();
+            let _tokio_guard = match &runtime_handle {
+                tauri::async_runtime::RuntimeHandle::Tokio(handle) => handle.enter(),
+            };
 
             if let Err(err) = state.tor_manager.start_if_enabled() {
                 tracing::warn!(error = ?err, "failed to start Tor on app launch");
