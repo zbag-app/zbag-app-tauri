@@ -78,12 +78,22 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       event: string,
       handler: () => void | Promise<void>
     ) {
-      const unlisten = await listen(event, handler);
-      if (mounted) {
-        unlisteners.push(unlisten);
-      } else {
-        // Component unmounted before listener was set up - clean up immediately
-        unlisten();
+      try {
+        const unlisten = await listen(event, async () => {
+          try {
+            await handler();
+          } catch (err) {
+            console.error(`Menu: handler failed for ${event}`, err);
+          }
+        });
+        if (mounted) {
+          unlisteners.push(unlisten);
+        } else {
+          // Component unmounted before listener was set up - clean up immediately
+          unlisten();
+        }
+      } catch (err) {
+        console.error(`Menu: failed to register listener for ${event}`, err);
       }
     }
 
