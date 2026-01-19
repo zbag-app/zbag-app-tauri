@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { startSwap } from '../services/ipc';
 import type { SwapQuoteLocationState } from './Swap';
-import { getTokenById } from '../data/supportedTokens';
-import { formatAtomicAmount } from '../utils/amounts';
+import { formatAtomicAmountForToken } from '../utils/amounts';
 import { parseSwapError } from '../utils/swap';
 
 function formatDeadline(deadlineMs: number, nowMs: number): string {
@@ -53,10 +52,7 @@ export function SwapQuote() {
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
     if (!quote) return null;
-    const token = getTokenById(quote.output_asset);
-    if (!token) return `${quote.min_output_amount} (raw)`;
-    const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
-    return `${formatted} ${token.label}`;
+    return formatAtomicAmountForToken(quote.min_output_amount, quote.output_asset);
   }, [quote]);
 
   if (!quoteId || !quote) {

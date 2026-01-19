@@ -28,6 +28,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Swap-to-ZEC always targets ZEC in v1.
   const outputAsset = ZEC_ASSET_ID;
 
   const canSubmit = useMemo(() => {
@@ -137,6 +138,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               id="inputAsset"
               value={inputAsset}
               onChange={(e) => setInputAsset(e.currentTarget.value)}
+              disabled={submitting}
               className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getToZecTokens().map((t) => (
@@ -154,6 +156,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               value={inputAmount}
               onChange={(e) => setInputAmount(e.currentTarget.value)}
               placeholder="0.0"
+              disabled={submitting}
             />
           </div>
 
@@ -164,7 +167,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               value={destinationAddress}
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
               placeholder="u1... / zs... / etc"
-              disabled={loadingAddress}
+              disabled={loadingAddress || submitting}
               className="font-mono"
             />
           </div>
@@ -177,6 +180,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
               placeholder="Your address on the input asset chain for refunds if the swap fails"
               className="font-mono"
+              disabled={submitting}
             />
           </div>
 

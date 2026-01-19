@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
-import * as IPC from '../types/ipc';
+import type * as IPC from '../types/ipc';
+import { ErrorCodes } from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { getFromZecTokens, getTokenById, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
+import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 import { parseZecToZatoshis } from '../utils/zec';
 import { parseSwapError } from '../utils/swap';
-import { formatAtomicAmount } from '../utils/amounts';
+import { formatAtomicAmountForToken } from '../utils/amounts';
 
 export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
   const { wallet, activeAccountId } = props;
@@ -75,18 +76,23 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
-  // Clear error when form inputs change
+  // Clear errors and invalidate quotes when form inputs change.
   useEffect(() => {
+    if (submittingQuote || starting) return;
+
     setError(null);
+    if (quoteId || quote) {
+      setQuote(null);
+      setQuoteId(null);
+      setReauthToken(null);
+      setPassword('');
+    }
   }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
     if (!quote) return null;
-    const token = getTokenById(quote.output_asset);
-    if (!token) return `${quote.min_output_amount} (raw)`;
-    const formatted = formatAtomicAmount(quote.min_output_amount, token.decimals);
-    return `${formatted} ${token.label}`;
+    return formatAtomicAmountForToken(quote.min_output_amount, quote.output_asset);
   }, [quote]);
 
   if (wallet.network !== 'Mainnet') {
@@ -130,6 +136,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="outputAsset"
               value={outputAsset}
               onChange={(e) => setOutputAsset(e.currentTarget.value)}
+              disabled={submittingQuote || starting}
               className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
@@ -147,6 +154,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               value={inputAmountZec}
               onChange={(e) => setInputAmountZec(e.currentTarget.value)}
               placeholder="0.0"
+              disabled={submittingQuote || starting}
             />
           </div>
 
@@ -158,6 +166,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               onChange={(e) => setDestinationAddress(e.currentTarget.value)}
               placeholder="Paste the destination address for the target asset"
               className="font-mono"
+              disabled={submittingQuote || starting}
             />
           </div>
 
@@ -168,7 +177,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
               placeholder="Your ZEC address for refunds"
-              disabled={loadingRefundAddress}
+              disabled={loadingRefundAddress || submittingQuote || starting}
               className="font-mono"
             />
           </div>
@@ -176,7 +185,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
           <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
 
           <Button
-            disabled={!canQuote || submittingQuote}
+            disabled={!canQuote || submittingQuote || starting}
             onClick={async () => {
               if (!canQuote) return;
               setSubmittingQuote(true);
@@ -184,6 +193,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setQuote(null);
               setQuoteId(null);
               setReauthToken(null);
+              setPassword('');
 
               const parseResult = parseZecToZatoshis(inputAmountZec);
               if ('err' in parseResult) {
@@ -300,7 +310,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                     });
 
                     if ('err' in startRes) {
-                      if (startRes.err.code === IPC.ErrorCodes.PRIVACY_ACK_REQUIRED) {
+                      if (startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED) {
                         setError(
                           'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
                         );

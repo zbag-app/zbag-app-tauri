@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { formatAtomicAmount } from '../utils/amounts';
+import { formatAtomicAmount, formatAtomicAmountForToken } from '../utils/amounts';
 
 test('formatAtomicAmount formats various decimal places', () => {
   expect(formatAtomicAmount('1000000', 6)).toBe('1'); // USDC (6 decimals)
@@ -22,4 +22,9 @@ test('formatAtomicAmount passes through invalid input and decimals <= 0', () => 
   expect(formatAtomicAmount('  abc  ', 8)).toBe('abc');
   expect(formatAtomicAmount('123', 0)).toBe('123');
   expect(formatAtomicAmount('123', -1)).toBe('123');
+});
+
+test('formatAtomicAmountForToken formats known tokens and falls back for unknown tokens', () => {
+  expect(formatAtomicAmountForToken('100000000', 'nep141:zec.omft.near')).toBe('1 ZEC');
+  expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toBe('123 (raw)');
 });
