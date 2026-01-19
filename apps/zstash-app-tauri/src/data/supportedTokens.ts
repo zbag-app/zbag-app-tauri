@@ -59,6 +59,10 @@ export const supportedTokens: SupportedToken[] = [
   },
 ];
 
+const supportedTokensById = new Map<string, SupportedToken>(
+  supportedTokens.map((t) => [t.id, t] as [string, SupportedToken])
+);
+
 /** Get the ZEC asset ID */
 export const ZEC_ASSET_ID = 'nep141:zec.omft.near';
 
@@ -81,5 +85,5 @@ export function getFromZecTokens(): SupportedToken[] {
 
 /** Look up a token by its ID */
 export function getTokenById(id: string): SupportedToken | undefined {
-  return supportedTokens.find((t) => t.id === id);
+  return supportedTokensById.get(id);
 }
