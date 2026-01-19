@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { MenuEvents } from '../constants/menuEvents';
 import {
   lockWallet,
   logoutWallet,
@@ -11,32 +12,6 @@ import {
   getTorState,
   getLogLocation,
 } from '../services/ipc';
-
-/**
- * Menu event channel names from the backend.
- *
- * Keep in sync with `apps/zstash-app-tauri/src-tauri/src/menu.rs`.
- */
-const MenuEvents = {
-  NEW_WALLET: 'menu:new-wallet',
-  RESTORE_WALLET: 'menu:restore-wallet',
-  SWITCH_WALLET: 'menu:switch-wallet',
-  LOCK_WALLET: 'menu:lock-wallet',
-  LOGOUT: 'menu:logout',
-  SEND: 'menu:send',
-  RECEIVE: 'menu:receive',
-  SWAP: 'menu:swap',
-  ACTIVITY: 'menu:activity',
-  SYNC_NOW: 'menu:sync-now',
-  STOP_SYNC: 'menu:stop-sync',
-  VIEW_SEED: 'menu:view-seed',
-  VERIFY_BACKUP: 'menu:verify-backup',
-  HARDWARE_WALLET: 'menu:hardware-wallet',
-  TOGGLE_TOR: 'menu:toggle-tor',
-  SERVER_SETTINGS: 'menu:server-settings',
-  PREFERENCES: 'menu:preferences',
-  OPEN_LOGS: 'menu:open-logs',
-} as const;
 
 export interface UseMenuEventsOptions {
   /** Current wallet ID, if a wallet is loaded. */
