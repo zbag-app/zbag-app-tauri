@@ -12,6 +12,9 @@ import { getSwapStatus, refreshSwapStatus } from '../services/ipc';
 import { onSwapChanged } from '../services/events';
 import type { SwapDepositLocationState } from './SwapQuote';
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 export function SwapDeposit() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,6 +38,12 @@ export function SwapDeposit() {
   useEffect(() => {
     // Skip if no swapId, or if we already have the correct swap loaded
     if (swapId == null) return;
+    if (!isUuid(swapId)) {
+      setSwap(null);
+      setLoading(false);
+      setError('Invalid swap id.');
+      return;
+    }
     if (loadedSwapId === swapId) return;
 
     // Clear stale swap when navigating to a different swapId

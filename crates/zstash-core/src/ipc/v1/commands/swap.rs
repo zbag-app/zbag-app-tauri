@@ -98,6 +98,7 @@ pub struct GetSupportedTokensResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefreshSwapStatusResponse {
     pub schema_version: u32,
+    /// Best-effort: remote API failures are reflected via `swap.last_error`, not an `Err`.
     pub swap: SwapInfo,
 }
 

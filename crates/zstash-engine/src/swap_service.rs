@@ -74,6 +74,20 @@ fn load_owned_swap(conn: &Connection, wallet_id: Uuid, swap_id: Uuid) -> anyhow:
     Ok(swap)
 }
 
+fn next_state_from_remote_status(
+    wallet_manager: &Arc<Mutex<WalletManager>>,
+    wallet_id: Uuid,
+    swap: &SwapInfo,
+    remote_status: &zstash_network::near_intents::RemoteStatus,
+) -> SwapState {
+    let mapped = zstash_network::near_intents::map_remote_status_to_local_state(remote_status);
+    if mapped == SwapState::Confirming && has_confirmed_zcash_tx(wallet_manager, wallet_id, swap) {
+        SwapState::Completed
+    } else {
+        mapped
+    }
+}
+
 impl SwapService {
     pub fn new(
         app_db_path: PathBuf,
@@ -704,16 +718,12 @@ impl SwapService {
 
         match status_res {
             Ok(status) => {
-                let mapped =
-                    zstash_network::near_intents::map_remote_status_to_local_state(&status.status);
-                let mut next_state = mapped;
-
-                if mapped == SwapState::Confirming {
-                    let confirmed = has_confirmed_zcash_tx(&self.wallet_manager, wallet_id, &swap);
-                    if confirmed {
-                        next_state = SwapState::Completed;
-                    }
-                }
+                let next_state = next_state_from_remote_status(
+                    &self.wallet_manager,
+                    wallet_id,
+                    &swap,
+                    &status.status,
+                );
 
                 if next_state != swap.state {
                     swap.state = next_state;
@@ -838,23 +848,17 @@ impl SwapService {
                     Ok(status) => {
                         backoff = Duration::from_secs(5);
 
-                        let mapped = zstash_network::near_intents::map_remote_status_to_local_state(
+                        let next_state = next_state_from_remote_status(
+                            &wallet_manager,
+                            wallet_id,
+                            &swap,
                             &status.status,
                         );
-                        let mut next_state = mapped;
-
-                        if mapped == SwapState::Confirming {
-                            let confirmed =
-                                has_confirmed_zcash_tx(&wallet_manager, wallet_id, &swap);
-                            if confirmed {
-                                next_state = SwapState::Completed;
-                            }
-                        }
 
                         if next_state != swap.state {
                             swap.state = next_state;
                             swap.updated_at = chrono::Utc::now().timestamp_millis();
-                            swap.last_error = status.message.clone().or(swap.last_error);
+                            swap.last_error = status.message.clone().or(swap.last_error.take());
 
                             match open_app_db_connection(&app_db_path) {
                                 Ok(conn) => {
