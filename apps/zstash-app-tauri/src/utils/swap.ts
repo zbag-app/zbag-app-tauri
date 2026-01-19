@@ -1,4 +1,9 @@
-/** Parse known swap quote API error patterns for user-friendly display. */
+/**
+ * Parse known swap quote API error patterns for user-friendly display.
+ *
+ * The upstream 1Click API sometimes returns a 400 with "Failed to get quote", and the backend already keys off that
+ * message for retries.
+ */
 export function parseSwapError(message: string): string {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();

@@ -30,6 +30,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   const [password, setPassword] = useState('');
   const [reauthToken, setReauthToken] = useState<string | null>(null);
   // FromZec swaps always require transparent interaction (deposit address is transparent)
+  // Keep the acknowledgement sticky across re-quotes since the requirement does not change.
   const [privacyAck, setPrivacyAck] = useState(false);
 
   const [submittingQuote, setSubmittingQuote] = useState(false);
@@ -77,6 +78,8 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   }, [wallet.network, activeAccountId]);
 
   // Clear errors and invalidate quotes when form inputs change.
+  // Intentionally depends only on quote inputs (not quote/submission state) to avoid clearing a newly-received quote.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (submittingQuote || starting) return;
 
@@ -87,6 +90,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       setReauthToken(null);
       setPassword('');
     }
+    // Intentionally NOT resetting privacyAck; FromZec swaps always require transparent interaction.
   }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
 
   // Format min output amount with token symbol
