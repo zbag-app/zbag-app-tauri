@@ -322,6 +322,51 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
 }
 
 #[test]
+fn refresh_swap_status_is_noop_without_deposit_address() {
+    let root = temp_root("us16_refresh_noop_no_deposit_addr");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    // Insert a non-terminal swap without deposit_address
+    let swap = create_test_swap(SwapState::AwaitingDeposit, false);
+    let original_updated_at = swap.updated_at;
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet.id, &swap).expect("insert swap");
+    drop(conn);
+
+    // Mock server should NOT receive any requests if deposit_address is missing
+    let (base_url, server, request_count) = spawn_mock_status_server("SUCCESS", 0);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let res = swap_service
+        .refresh_swap_status(wallet.id, swap.id, None)
+        .expect("refresh swap status");
+
+    assert_eq!(res.swap.state, SwapState::AwaitingDeposit);
+    assert_eq!(res.swap.updated_at, original_updated_at);
+    assert_eq!(request_count.load(Ordering::SeqCst), 0);
+    server.join().expect("server joined");
+}
+
+#[test]
 fn refresh_swap_status_stores_error_on_api_failure() {
     let root = temp_root("us16_refresh_stores_error");
     let app_db_path = root.join("app.db");

@@ -708,12 +708,21 @@ impl SwapService {
 
         // Query remote API for latest status
         let status_res = block_on(async {
-            self.near
-                .get_status(zstash_network::near_intents::StatusRequest {
-                    deposit_address,
-                    deposit_memo: swap.deposit_memo.clone(),
-                })
-                .await
+            match tokio::time::timeout(
+                Duration::from_secs(30),
+                self.near
+                    .get_status(zstash_network::near_intents::StatusRequest {
+                        deposit_address,
+                        deposit_memo: swap.deposit_memo.clone(),
+                    }),
+            )
+            .await
+            {
+                Ok(res) => res,
+                Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
+                    "timeout".to_string(),
+                )),
+            }
         });
 
         match status_res {
@@ -728,7 +737,7 @@ impl SwapService {
                 if next_state != swap.state {
                     swap.state = next_state;
                     swap.updated_at = chrono::Utc::now().timestamp_millis();
-                    swap.last_error = status.message.clone().or(swap.last_error.take());
+                    swap.last_error = status.message.clone();
 
                     swap_meta::update_swap(&conn, wallet_id, &swap)
                         .context("failed to update swap")?;
@@ -858,7 +867,7 @@ impl SwapService {
                         if next_state != swap.state {
                             swap.state = next_state;
                             swap.updated_at = chrono::Utc::now().timestamp_millis();
-                            swap.last_error = status.message.clone().or(swap.last_error.take());
+                            swap.last_error = status.message.clone();
 
                             match open_app_db_connection(&app_db_path) {
                                 Ok(conn) => {
