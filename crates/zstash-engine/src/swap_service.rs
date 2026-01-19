@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context as _;
+use rusqlite::{Connection, OpenFlags};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -56,6 +57,21 @@ struct QuoteRecord {
 struct SwapJob {
     cancel: watch::Sender<bool>,
     handle: JoinHandle<()>,
+}
+
+fn load_owned_swap(conn: &Connection, wallet_id: Uuid, swap_id: Uuid) -> anyhow::Result<SwapInfo> {
+    let Some((owner_wallet_id, swap)) =
+        swap_meta::get_swap(conn, swap_id).context("failed to load swap")?
+    else {
+        return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
+    };
+
+    // Intentionally return "swap not found" on wallet mismatch to avoid leaking swap existence.
+    if owner_wallet_id != wallet_id {
+        return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
+    }
+
+    Ok(swap)
 }
 
 impl SwapService {
@@ -621,16 +637,7 @@ impl SwapService {
         swap_id: Uuid,
     ) -> anyhow::Result<GetSwapStatusResponse> {
         let conn = open_app_db_connection(&self.app_db_path)?;
-        let Some((owner_wallet_id, swap)) =
-            swap_meta::get_swap(&conn, swap_id).context("failed to load swap")?
-        else {
-            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
-        };
-
-        // Intentionally return "swap not found" on wallet mismatch to avoid leaking swap existence.
-        if owner_wallet_id != wallet_id {
-            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
-        }
+        let swap = load_owned_swap(&conn, wallet_id, swap_id)?;
 
         Ok(GetSwapStatusResponse {
             schema_version: SCHEMA_VERSION,
@@ -659,16 +666,7 @@ impl SwapService {
         on_swap_changed: Option<SwapEventHandler>,
     ) -> anyhow::Result<RefreshSwapStatusResponse> {
         let conn = open_app_db(&self.app_db_path)?;
-        let Some((owner_wallet_id, mut swap)) =
-            swap_meta::get_swap(&conn, swap_id).context("failed to load swap")?
-        else {
-            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
-        };
-
-        // Intentionally return "swap not found" on wallet mismatch to avoid leaking swap existence.
-        if owner_wallet_id != wallet_id {
-            return Err(ipc_err(errors::SWAP_FAILED, "swap not found"));
-        }
+        let mut swap = load_owned_swap(&conn, wallet_id, swap_id)?;
 
         // Only refresh if swap is in a non-terminal state
         if matches!(
@@ -755,7 +753,7 @@ impl SwapService {
         })
     }
 
-    /// Resume polling for all pending (non-terminal) swaps.
+    /// Resume polling for all pending (non-terminal) swaps that have a deposit address.
     ///
     /// This should be called on app startup or wallet load to continue
     /// tracking swaps that were in progress when the app was closed.
@@ -771,22 +769,19 @@ impl SwapService {
         let mut resumed_count = 0;
         for swap in swaps {
             // Only resume polling for non-terminal swaps
-            if matches!(
+            let should_poll = matches!(
                 swap.state,
                 SwapState::Draft
                     | SwapState::AwaitingDeposit
                     | SwapState::Pending
                     | SwapState::Confirming
-            ) {
-                // Check if we're already polling this swap
-                {
-                    let state = self.state.lock().expect("mutex poisoned");
-                    if state.jobs.contains_key(&swap.id) {
-                        continue;
-                    }
-                }
+            ) && swap.deposit_address.is_some();
 
-                self.start_polling(wallet_id, swap, on_swap_changed.clone());
+            if !should_poll {
+                continue;
+            }
+
+            if self.start_polling(wallet_id, swap, on_swap_changed.clone()) {
                 resumed_count += 1;
             }
         }
@@ -802,7 +797,7 @@ impl SwapService {
         wallet_id: Uuid,
         initial_swap: SwapInfo,
         on_swap_changed: Option<SwapEventHandler>,
-    ) {
+    ) -> bool {
         let swap_id = initial_swap.id;
         let state = Arc::clone(&self.state);
         let app_db_path = self.app_db_path.clone();
@@ -811,10 +806,11 @@ impl SwapService {
 
         let mut state_guard = self.state.lock().expect("mutex poisoned");
         if state_guard.jobs.contains_key(&swap_id) {
-            return;
+            return false;
         }
 
         let (cancel_tx, mut cancel_rx) = watch::channel(false);
+        // Intentionally hold the jobs mutex across spawn+insert to avoid TOCTOU duplicate jobs.
         let handle = crate::tokio_runtime::spawn(async move {
             let mut backoff = Duration::from_secs(5);
             let mut swap = initial_swap;
@@ -953,6 +949,8 @@ impl SwapService {
                 handle,
             },
         );
+
+        true
     }
 }
 

@@ -505,8 +505,6 @@ fn resume_pending_swaps_skips_swaps_without_deposit_address() {
         .resume_pending_swaps(wallet.id, None)
         .expect("resume pending swaps");
 
-    // Draft state IS considered non-terminal, so it gets counted in resumed_count
-    // But the actual polling will exit early because there's no deposit_address
-    // The resumed_count reflects that the swap was considered for resuming
-    assert_eq!(res.resumed_count, 1);
+    // Swaps without a deposit_address cannot be polled and should not be counted.
+    assert_eq!(res.resumed_count, 0);
 }
