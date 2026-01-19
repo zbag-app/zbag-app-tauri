@@ -317,19 +317,19 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                   setStarting(true);
                   setError(null);
 
-                  const token =
-                    reauthToken ??
-                    (await (async () => {
-                      const res = await reauthWallet({
-                        wallet_id: wallet.id,
-                        password,
-                        purpose: 'Spend',
-                      });
-                      if ('err' in res) throw new Error(res.err.message);
-                      return res.ok.reauth_token;
-                    })());
-
                   try {
+                    const token =
+                      reauthToken ??
+                      (await (async () => {
+                        const res = await reauthWallet({
+                          wallet_id: wallet.id,
+                          password,
+                          purpose: 'Spend',
+                        });
+                        if ('err' in res) throw new Error(res.err.message);
+                        return res.ok.reauth_token;
+                      })());
+
                     if (!reauthToken) {
                       setReauthToken(token);
                     }
