@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
-import type * as IPC from '../types/ipc';
+import * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -42,9 +42,8 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     if (!inputAmountZec.trim()) return false;
     if (!destinationAddress.trim()) return false;
     if (!refundAddress.trim()) return false;
-    if (!privacyAck) return false;
     return true;
-  }, [wallet.network, activeAccountId, outputAsset, inputAmountZec, destinationAddress, refundAddress, privacyAck]);
+  }, [wallet.network, activeAccountId, outputAsset, inputAmountZec, destinationAddress, refundAddress]);
 
   // Auto-populate refund address from wallet's shielded address
   useEffect(() => {
@@ -79,7 +78,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
   // Clear error when form inputs change
   useEffect(() => {
     setError(null);
-  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress, privacyAck]);
+  }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -265,9 +264,13 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
             <div className="flex gap-3">
               <Button
-                disabled={!password.trim() || starting}
+                disabled={!password.trim() || starting || !privacyAck}
                 onClick={async () => {
                   if (!quoteId) return;
+                  if (!privacyAck) {
+                    setError('This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.');
+                    return;
+                  }
 
                   setStarting(true);
                   setError(null);
@@ -289,14 +292,20 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                       setReauthToken(token);
                     }
 
-                    // Privacy was acknowledged upfront before getting quote
                     const startRes = await startSwap({
                       quote_id: quoteId,
-                      allow_transparent_interaction: true,
+                      allow_transparent_interaction: privacyAck,
                       reauth_token: token,
                     });
 
                     if ('err' in startRes) {
+                      if (startRes.err.code === IPC.ErrorCodes.PRIVACY_ACK_REQUIRED) {
+                        setError(
+                          'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
+                        );
+                        setStarting(false);
+                        return;
+                      }
                       setError(parseSwapError(startRes.err.message));
                       setStarting(false);
                       return;
