@@ -346,11 +346,16 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
             )}
 
-            <div className="flex gap-3">
-              <Button
-                disabled={!password.trim() || starting || quoteExpired || (privacyAckRequired && !privacyAck)}
-                onClick={async () => {
-                  if (!quoteId) return;
+	            <div className="flex gap-3">
+	              <Button
+	                disabled={
+	                  !(password.trim() || reauthToken) ||
+	                  starting ||
+	                  quoteExpired ||
+	                  (privacyAckRequired && !privacyAck)
+	                }
+	                onClick={async () => {
+	                  if (!quoteId) return;
 
                   setStarting(true);
                   setError(null);
@@ -368,15 +373,16 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                         return res.ok.reauth_token;
                       })());
 
-                    if (!reauthToken) {
-                      setReauthToken(token);
-                    }
+	                    if (!reauthToken) {
+	                      setReauthToken(token);
+	                    }
+	                    setPassword('');
 
-                    const allow = privacyAckRequired;
-                    const startRes = await startSwap({
-                      quote_id: quoteId,
-                      allow_transparent_interaction: allow,
-                      reauth_token: token,
+	                    const allow = privacyAck;
+	                    const startRes = await startSwap({
+	                      quote_id: quoteId,
+	                      allow_transparent_interaction: allow,
+	                      reauth_token: token,
                     });
 
                     if ('err' in startRes) {

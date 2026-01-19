@@ -386,7 +386,7 @@ const quoteExpired = useMemo(() => {
           <CardContent className="space-y-4">
             <div className="rounded-none bg-muted/50 p-4">
               <div className="text-lg font-semibold">
-                {quote.input_amount_formatted} → {quote.output_amount_formatted}
+                {quote.input_amount_formatted} -> {quote.output_amount_formatted}
               </div>
             </div>
 
@@ -462,6 +462,7 @@ const quoteExpired = useMemo(() => {
                       token = res.ok.reauth_token;
                       setReauthToken(token);
                     }
+                    setPassword('');
 
                     const startRes = await startSwap({
                       quote_id: quoteId,
