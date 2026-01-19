@@ -277,10 +277,6 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                 disabled={!password.trim() || starting || !privacyAck}
                 onClick={async () => {
                   if (!quoteId) return;
-                  if (!privacyAck) {
-                    setError('This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.');
-                    return;
-                  }
 
                   setStarting(true);
                   setError(null);

@@ -5,7 +5,8 @@ import { getTokenById } from '../data/supportedTokens';
  *
  * @param value - The amount in smallest units (e.g., zatoshis, wei) as a string
  * @param decimals - Number of decimal places (e.g., 8 for ZEC, 18 for ETH)
- * @note `value` must be a base-10 non-negative integer string; other formats are returned trimmed unchanged.
+ * @note `value` must be a base-10 non-negative integer string. Whitespace is trimmed; other formats (including empty)
+ * are returned unchanged after trim.
  * @returns Formatted decimal string (e.g., "1.5" for 150000000 zatoshis)
  */
 export function formatAtomicAmount(value: string, decimals: number): string {
