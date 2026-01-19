@@ -227,13 +227,18 @@ export function SwapDeposit() {
               onClick={async () => {
                 setError(null);
                 setRefreshing(true);
-                const res = await refreshSwapStatus({ swap_id: swap.id });
-                setRefreshing(false);
-                if ('err' in res) {
-                  setError(res.err.message);
-                  return;
+                try {
+                  const res = await refreshSwapStatus({ swap_id: swap.id });
+                  if ('err' in res) {
+                    setError(res.err.message);
+                    return;
+                  }
+                  setSwap(res.ok.swap);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                } finally {
+                  setRefreshing(false);
                 }
-                setSwap(res.ok.swap);
               }}
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
