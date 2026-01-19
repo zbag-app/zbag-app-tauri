@@ -336,6 +336,112 @@ fn request_swap_quote_exact_output_rejects_empty_output_amount() {
 }
 
 #[test]
+fn request_swap_quote_exact_output_rejects_whitespace_output_amount() {
+    let root = temp_root("us10_exact_output_whitespace_amount");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    // No server needed - request should fail validation before any network call.
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+        "http://127.0.0.1:1".to_string(),
+    )
+    .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: SwapMode::ExactOutput,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: String::new(),
+        output_asset: "nep141:wrap.near".to_string(),
+        output_amount: Some("   \n\t  ".to_string()),
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let err = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .unwrap_err();
+    let ipc = find_engine_ipc_error(&err).expect("ipc error");
+    assert_eq!(ipc.code, errors::INVALID_REQUEST);
+    assert!(
+        ipc.message.contains("output_amount"),
+        "Error message should mention output_amount: {}",
+        ipc.message
+    );
+}
+
+#[test]
+fn request_swap_quote_exact_output_truncates_excess_decimals() {
+    let root = temp_root("us10_exact_output_truncates_excess_decimals");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let (base_url, captured_request, server) = spawn_mock_1click_server_capturing_quote_request(1);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    // NEAR uses 24 decimals. Provide 25 fractional digits; the last digit should be truncated.
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: SwapMode::ExactOutput,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: String::new(),
+        output_asset: "nep141:wrap.near".to_string(),
+        output_amount: Some("1.1234567890123456789012345".to_string()),
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let _res = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .expect("quote should succeed");
+
+    server.join().expect("server joined");
+
+    let captured = captured_request.lock().expect("mutex poisoned").clone();
+    assert_eq!(captured.swap_type, Some("EXACT_OUTPUT".to_string()));
+    assert_eq!(
+        captured.amount,
+        Some("1123456789012345678901234".to_string()),
+        "should truncate to 24 decimals before converting to smallest units"
+    );
+}
+
+#[test]
 fn request_swap_quote_exact_output_rejects_zero_output_amount() {
     let root = temp_root("us10_exact_output_zero_amount");
     let app_db_path = root.join("app.db");
