@@ -133,10 +133,10 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -275,20 +275,21 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                   setStarting(true);
                   setError(null);
 
-                  const token =
-                    reauthToken ??
-                    (await (async () => {
+                  try {
+                    let token = reauthToken;
+                    if (!token) {
                       const res = await reauthWallet({
                         wallet_id: wallet.id,
                         password,
                         purpose: 'Spend',
                       });
-                      if ('err' in res) throw new Error(res.err.message);
-                      return res.ok.reauth_token;
-                    })()).toString();
+                      if ('err' in res) {
+                        setError(res.err.message);
+                        setStarting(false);
+                        return;
+                      }
 
-                  try {
-                    if (!reauthToken) {
+                      token = res.ok.reauth_token;
                       setReauthToken(token);
                     }
 

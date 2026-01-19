@@ -8,9 +8,10 @@ import { startSwap } from '../services/ipc';
 import type { SwapQuoteLocationState } from './Swap';
 import { getTokenById } from '../data/supportedTokens';
 import { formatAtomicAmount } from '../utils/amounts';
+import { parseSwapError } from '../utils/swap';
 
-function formatDeadline(deadlineMs: number): string {
-  const ms = deadlineMs - Date.now();
+function formatDeadline(deadlineMs: number, nowMs: number): string {
+  const ms = deadlineMs - nowMs;
   const secs = Math.max(0, Math.floor(ms / 1000));
   const mins = Math.floor(secs / 60);
   const rem = secs % 60;
@@ -27,6 +28,7 @@ export function SwapQuote() {
   const [state] = useState<SwapQuoteLocationState | null>(() => location.state as SwapQuoteLocationState | null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const quoteId = state?.quoteId ?? null;
   const quote = state?.quote ?? null;
@@ -37,10 +39,16 @@ export function SwapQuote() {
     }
   }, [location.pathname, location.state, navigate]);
 
+  useEffect(() => {
+    if (!quote) return;
+    const intervalId = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(intervalId);
+  }, [quote]);
+
   const expired = useMemo(() => {
     if (!quote) return false;
-    return Date.now() >= quote.deadline;
-  }, [quote]);
+    return nowMs >= quote.deadline;
+  }, [nowMs, quote]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -107,7 +115,7 @@ export function SwapQuote() {
                 Expires in
               </span>
               <div className={`font-mono font-semibold ${expired ? 'text-destructive' : ''}`}>
-                {expired ? 'Expired' : formatDeadline(quote.deadline)}
+                {expired ? 'Expired' : formatDeadline(quote.deadline, nowMs)}
               </div>
             </div>
           </div>
@@ -138,7 +146,7 @@ export function SwapQuote() {
                 setSubmitting(false);
 
                 if ('err' in res) {
-                  setError(res.err.message);
+                  setError(parseSwapError(res.err.message));
                   return;
                 }
 

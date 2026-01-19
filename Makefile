@@ -98,7 +98,7 @@ dev: ## Full Tauri development
 	@cd $(TAURI_DIR) && bun run tauri dev
 
 tauri-build: ## Tauri production build
-	@cd $(TAURI_DIR) && CI=true bun run tauri build
+	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build
 
 # ============================================================================
 # CLI
