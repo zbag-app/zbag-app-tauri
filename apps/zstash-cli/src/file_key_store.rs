@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use zstash_core::domain::Network;
-use zstash_core::permissions::{create_dir_all_secure, set_file_permissions};
+use zstash_core::permissions::{create_dir_all_secure, set_file_permissions, write_file_secure};
 use zstash_engine::key_store::KeyStore;
 
 /// File-based key store for CLI usage.
@@ -71,8 +71,16 @@ impl FileKeyStore {
 
         // Atomic write via temp file
         let tmp_path = self.keystore_path.with_extension("json.tmp");
-        fs::write(&tmp_path, &content)?;
-        fs::rename(&tmp_path, &self.keystore_path)?;
+        write_file_secure(&tmp_path, content.as_bytes()).with_context(|| {
+            format!("failed to write keystore temp file: {}", tmp_path.display())
+        })?;
+        fs::rename(&tmp_path, &self.keystore_path).with_context(|| {
+            format!(
+                "failed to move keystore temp file into place: {} -> {}",
+                tmp_path.display(),
+                self.keystore_path.display()
+            )
+        })?;
 
         // Set restrictive permissions on Unix (no-op on Windows)
         set_file_permissions(&self.keystore_path)?;
@@ -85,8 +93,17 @@ impl FileKeyStore {
             create_dir_all_secure(parent)?;
         }
         let tmp_path = path.with_extension("enc.tmp");
-        fs::write(&tmp_path, contents)?;
-        fs::rename(&tmp_path, path)?;
+        write_file_secure(&tmp_path, contents).with_context(|| {
+            format!("failed to write mnemonic temp file: {}", tmp_path.display())
+        })?;
+        fs::rename(&tmp_path, path).with_context(|| {
+            format!(
+                "failed to move mnemonic temp file into place: {} -> {}",
+                tmp_path.display(),
+                path.display()
+            )
+        })?;
+        set_file_permissions(path)?;
         Ok(())
     }
 }

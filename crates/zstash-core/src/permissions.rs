@@ -52,30 +52,14 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
 
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
-        // Use DirBuilder with mode on Unix for atomic creation with correct permissions
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
-                Ok(()) => {}
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    // Directory was created between our check and create - that's fine
-                    // Still try to set permissions (best-effort)
-                    let _ = set_dir_permissions(&dir);
-                }
-                Err(e) => return Err(e),
+        match create_dir_secure(&dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Directory was created between our check and create - that's fine.
+                // Still try to set permissions (best-effort).
+                let _ = set_dir_permissions(&dir);
             }
-        }
-
-        #[cfg(not(unix))]
-        {
-            match std::fs::create_dir(&dir) {
-                Ok(()) => {}
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    // Directory was created between our check and create - that's fine
-                }
-                Err(e) => return Err(e),
-            }
+            Err(e) => return Err(e),
         }
     }
 
@@ -112,38 +96,20 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
 
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
-        // Use DirBuilder with mode on Unix for atomic creation with correct permissions
-        // We use spawn_blocking since there's no async DirBuilder with mode support
-        #[cfg(unix)]
-        {
-            let dir_clone = dir.clone();
-            let result = tokio::task::spawn_blocking(move || {
-                use std::os::unix::fs::DirBuilderExt;
-                std::fs::DirBuilder::new().mode(0o700).create(&dir_clone)
-            })
+        let dir_clone = dir.clone();
+        let result = tokio::task::spawn_blocking(move || create_dir_secure(dir_clone))
             .await
             .map_err(io::Error::other)?;
 
-            match result {
-                Ok(()) => {}
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    // Directory was created between our check and create - that's fine
-                    // Still try to set permissions (best-effort)
-                    let _ = set_dir_permissions(&dir);
-                }
-                Err(e) => return Err(e),
+        match result {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Directory was created between our check and create - that's fine.
+                // Still try to set permissions (best-effort).
+                let dir_clone = dir.clone();
+                let _ = tokio::task::spawn_blocking(move || set_dir_permissions(dir_clone)).await;
             }
-        }
-
-        #[cfg(not(unix))]
-        {
-            match tokio::fs::create_dir(&dir).await {
-                Ok(()) => {}
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    // Directory was created between our check and create - that's fine
-                }
-                Err(e) => return Err(e),
-            }
+            Err(e) => return Err(e),
         }
     }
 
@@ -156,7 +122,8 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
             .map(|m| m.is_dir())
             .unwrap_or(false)
     {
-        let _ = set_dir_permissions(&path);
+        let path_clone = path.clone();
+        let _ = tokio::task::spawn_blocking(move || set_dir_permissions(path_clone)).await;
     }
 
     Ok(())
