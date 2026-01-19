@@ -45,6 +45,9 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
         match create_dir_secure(current) {
             Ok(()) => break,
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // Note: there's a small TOCTOU window here. `current` could be modified between the
+                // failed `create_dir_secure()` call and this check. We accept this because these
+                // paths are expected to be user-owned and not concurrently mutated.
                 if current.is_dir() {
                     if current == path {
                         // Best-effort: the directory might already exist with broader
@@ -87,6 +90,7 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
         match create_dir_secure(&dir) {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                // See note above about TOCTOU when checking `is_dir()` after `AlreadyExists`.
                 if dir.is_dir() {
                     let _ = set_dir_permissions(&dir);
                 } else {
@@ -135,8 +139,15 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
 
         match create_opts.open(path) {
             Ok(mut file) => {
-                file.write_all(contents)?;
-                file.sync_all()?;
+                if let Err(err) = (|| {
+                    file.write_all(contents)?;
+                    file.sync_all()?;
+                    Ok::<_, io::Error>(())
+                })() {
+                    drop(file);
+                    let _ = std::fs::remove_file(path);
+                    return Err(err);
+                }
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
@@ -156,8 +167,15 @@ pub fn write_file_secure(path: impl AsRef<Path>, contents: &[u8]) -> io::Result<
                 let mut tmp_opts = std::fs::OpenOptions::new();
                 tmp_opts.write(true).create_new(true).mode(0o600);
                 let mut tmp_file = tmp_opts.open(&tmp_path)?;
-                tmp_file.write_all(contents)?;
-                tmp_file.sync_all()?;
+                if let Err(err) = (|| {
+                    tmp_file.write_all(contents)?;
+                    tmp_file.sync_all()?;
+                    Ok::<_, io::Error>(())
+                })() {
+                    drop(tmp_file);
+                    let _ = std::fs::remove_file(&tmp_path);
+                    return Err(err);
+                }
                 std::fs::rename(&tmp_path, path).inspect_err(|_| {
                     let _ = std::fs::remove_file(&tmp_path);
                 })?;

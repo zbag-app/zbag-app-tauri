@@ -40,6 +40,8 @@ build-frontend: ## Build frontend dist (for Tauri)
 # ============================================================================
 
 test: ## Run all Rust library tests
+	# `zstash-core` includes async-gated tests (`--features async`). Running it separately keeps the
+	# rest of the workspace tests feature-default while still exercising the async code path.
 	@cargo test --workspace --exclude zstash-app-tauri --exclude zstash-core
 	@cargo test -p zstash-core --features async
 
