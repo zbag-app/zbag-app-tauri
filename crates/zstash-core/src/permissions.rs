@@ -11,12 +11,23 @@ use std::path::Path;
 
 /// Create a directory with secure permissions (0700 on Unix).
 ///
+/// On Unix, permissions are set atomically during creation using DirBuilder,
+/// preventing any window where the directory exists with broader permissions.
+///
 /// Returns an error if the directory already exists.
 pub fn create_dir_secure(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
-    std::fs::create_dir(path)?;
-    set_dir_permissions(path)?;
-    Ok(())
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(path)
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir(path)
+    }
 }
 
 /// Recursively create directories with secure permissions (0700 on Unix).
@@ -41,17 +52,30 @@ pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
 
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
-        // Use create_dir which fails if it already exists (race-safe)
-        match std::fs::create_dir(&dir) {
-            Ok(()) => {
-                set_dir_permissions(&dir)?;
+        // Use DirBuilder with mode on Unix for atomic creation with correct permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    // Directory was created between our check and create - that's fine
+                    // Still try to set permissions (best-effort)
+                    let _ = set_dir_permissions(&dir);
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                // Directory was created between our check and create_dir - that's fine
-                // Still try to set permissions (best-effort)
-                let _ = set_dir_permissions(&dir);
+        }
+
+        #[cfg(not(unix))]
+        {
+            match std::fs::create_dir(&dir) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    // Directory was created between our check and create - that's fine
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
         }
     }
 
@@ -75,7 +99,7 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
     // Collect all path components that need to be created
     let mut to_create = Vec::new();
     let mut current = path.as_path();
-    while !current.exists() {
+    while !tokio::fs::try_exists(&current).await.unwrap_or(false) {
         to_create.push(current.to_path_buf());
         match current.parent() {
             Some(parent) if !parent.as_os_str().is_empty() => current = parent,
@@ -88,23 +112,50 @@ pub async fn create_dir_all_secure_async(path: impl AsRef<Path>) -> io::Result<(
 
     // Create directories from root to leaf, setting permissions on each
     for dir in to_create.into_iter().rev() {
-        match tokio::fs::create_dir(&dir).await {
-            Ok(()) => {
-                set_dir_permissions(&dir)?;
+        // Use DirBuilder with mode on Unix for atomic creation with correct permissions
+        // We use spawn_blocking since there's no async DirBuilder with mode support
+        #[cfg(unix)]
+        {
+            let dir_clone = dir.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                use std::os::unix::fs::DirBuilderExt;
+                std::fs::DirBuilder::new().mode(0o700).create(&dir_clone)
+            })
+            .await
+            .map_err(io::Error::other)?;
+
+            match result {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    // Directory was created between our check and create - that's fine
+                    // Still try to set permissions (best-effort)
+                    let _ = set_dir_permissions(&dir);
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                // Directory was created between our check and create_dir - that's fine
-                // Still try to set permissions (best-effort)
-                let _ = set_dir_permissions(&dir);
+        }
+
+        #[cfg(not(unix))]
+        {
+            match tokio::fs::create_dir(&dir).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    // Directory was created between our check and create - that's fine
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) => return Err(e),
         }
     }
 
     // If path already existed, try to set permissions (best-effort)
     // We use best-effort here because the directory might be a system directory
     // that we cannot modify (e.g., /tmp or /var/folders/...)
-    if path_already_existed && path.is_dir() {
+    if path_already_existed
+        && tokio::fs::metadata(&path)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+    {
         let _ = set_dir_permissions(&path);
     }
 
@@ -304,5 +355,33 @@ mod tests {
         let meta = std::fs::metadata(&dir).unwrap();
         let mode = meta.permissions().mode() & 0o777;
         assert_eq!(mode, 0o700, "existing directory should have mode 0700");
+    }
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+#[cfg(feature = "async")]
+mod async_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_create_dir_all_secure_async_sets_0700() {
+        let tmp = tempdir().unwrap();
+        let nested = tmp.path().join("a").join("b").join("c");
+
+        create_dir_all_secure_async(&nested).await.unwrap();
+
+        // Check each directory in the chain has 0700
+        for dir in [
+            tmp.path().join("a"),
+            tmp.path().join("a").join("b"),
+            tmp.path().join("a").join("b").join("c"),
+        ] {
+            let meta = std::fs::metadata(&dir).unwrap();
+            let mode = meta.permissions().mode() & 0o777;
+            assert_eq!(mode, 0o700, "directory {:?} should have mode 0700", dir);
+        }
     }
 }
