@@ -231,7 +231,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
           const res = await getLogLocation();
           if ('ok' in res && res.ok.log_directory) {
             try {
-              await revealItemInDir(res.ok.log_directory);
+              await revealItemInDir(res.ok.current_log_file || res.ok.log_directory);
             } catch (err) {
               console.error('Menu: failed to reveal logs directory', err);
             }
