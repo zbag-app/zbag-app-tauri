@@ -53,7 +53,7 @@ impl KeyStoreKeychain {
         }
 
         let mut tmp = path.as_os_str().to_os_string();
-        tmp.push(".tmp");
+        tmp.push(format!(".tmp-{}", Uuid::new_v4()));
         let tmp_path = PathBuf::from(tmp);
 
         // Write temp file with secure permissions (0600 on Unix)

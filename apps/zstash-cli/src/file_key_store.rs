@@ -70,7 +70,9 @@ impl FileKeyStore {
         let content = serde_json::to_string_pretty(data)?;
 
         // Atomic write via temp file
-        let tmp_path = self.keystore_path.with_extension("json.tmp");
+        let tmp_path = self
+            .keystore_path
+            .with_extension(format!("json.tmp-{}", Uuid::new_v4()));
         write_file_secure(&tmp_path, content.as_bytes()).with_context(|| {
             format!("failed to write keystore temp file: {}", tmp_path.display())
         })?;
@@ -89,7 +91,7 @@ impl FileKeyStore {
         if let Some(parent) = path.parent() {
             create_dir_all_secure(parent)?;
         }
-        let tmp_path = path.with_extension("enc.tmp");
+        let tmp_path = path.with_extension(format!("enc.tmp-{}", Uuid::new_v4()));
         write_file_secure(&tmp_path, contents).with_context(|| {
             format!("failed to write mnemonic temp file: {}", tmp_path.display())
         })?;
