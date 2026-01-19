@@ -174,6 +174,58 @@ fn setup_from_zec_quote(
 }
 
 #[test]
+fn request_swap_quote_exact_input_rejects_zero_input_amount() {
+    let root = temp_root("us9_zero_input_amount");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    // No server needed - request should fail validation before any network call.
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+        "http://127.0.0.1:1".to_string(),
+    )
+    .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: Default::default(),
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: "0".to_string(),
+        output_asset: "nep141:wrap.near".to_string(),
+        output_amount: None,
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let err = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .unwrap_err();
+    let ipc = find_engine_ipc_error(&err).expect("ipc error");
+    assert_eq!(ipc.code, errors::INVALID_REQUEST);
+    assert!(
+        ipc.message.contains("greater than zero"),
+        "Error message should indicate amount must be > 0: {}",
+        ipc.message
+    );
+}
+
+#[test]
 fn start_swap_from_zec_requires_privacy_ack() {
     let root = temp_root("us9_privacy_ack");
     let app_db_path = root.join("app.db");

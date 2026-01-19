@@ -4,18 +4,12 @@ import { ArrowLeftRight, Clock, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { useNowMs } from '../hooks/useNowMs';
+import { formatCountdown } from '../lib/time';
 import { startSwap } from '../services/ipc';
 import type { SwapQuoteLocationState } from './Swap';
 import { formatAtomicAmountForToken } from '../utils/amounts';
 import { parseSwapError } from '../utils/swap';
-
-function formatDeadline(deadlineMs: number, nowMs: number): string {
-  const ms = deadlineMs - nowMs;
-  const secs = Math.max(0, Math.floor(ms / 1000));
-  const mins = Math.floor(secs / 60);
-  const rem = secs % 60;
-  return `${mins}:${rem.toString().padStart(2, '0')}`;
-}
 
 export type SwapDepositLocationState = {
   swap: IPC.SwapInfo;
@@ -27,10 +21,10 @@ export function SwapQuote() {
   const [state] = useState<SwapQuoteLocationState | null>(() => location.state as SwapQuoteLocationState | null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const quoteId = state?.quoteId ?? null;
   const quote = state?.quote ?? null;
+  const nowMs = useNowMs(quote != null);
 
   useEffect(() => {
     if (location.state !== null) {
@@ -38,25 +32,10 @@ export function SwapQuote() {
     }
   }, [location.pathname, location.state, navigate]);
 
-  useEffect(() => {
-    if (!quote) return;
-    if (Date.now() >= quote.deadline) return;
-
-    const intervalId = setInterval(() => {
-      const now = Date.now();
-      setNowMs(now);
-
-      if (now >= quote.deadline) {
-        clearInterval(intervalId);
-      }
-    }, 1000);
-    return () => clearInterval(intervalId);
-  }, [quote]);
-
   const expired = useMemo(() => {
     if (!quote) return false;
     return nowMs >= quote.deadline;
-  }, [nowMs, quote]);
+  }, [quote, nowMs]);
 
   // Format min output amount with token symbol
   const formattedMinOutput = useMemo(() => {
@@ -127,7 +106,7 @@ export function SwapQuote() {
                 Expires in
               </span>
               <div className={`font-mono font-semibold ${expired ? 'text-destructive' : ''}`}>
-                {expired ? 'Expired' : formatDeadline(quote.deadline, nowMs)}
+                {expired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
               </div>
             </div>
           </div>

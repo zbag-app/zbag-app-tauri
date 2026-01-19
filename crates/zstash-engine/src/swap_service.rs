@@ -985,5 +985,9 @@ fn convert_to_smallest_units(amount: &str, decimals: u8) -> anyhow::Result<Strin
             .ok_or_else(|| anyhow::anyhow!("amount overflow"))?;
     }
 
+    if result == 0 {
+        anyhow::bail!("amount must be greater than zero");
+    }
+
     Ok(result.to_string())
 }

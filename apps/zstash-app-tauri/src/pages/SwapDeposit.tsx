@@ -6,17 +6,11 @@ import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { useNowMs } from '../hooks/useNowMs';
+import { formatCountdown } from '../lib/time';
 import { getSwapStatus } from '../services/ipc';
 import { onSwapChanged } from '../services/events';
 import type { SwapDepositLocationState } from './SwapQuote';
-
-function formatDeadline(deadlineMs: number): string {
-  const ms = deadlineMs - Date.now();
-  const secs = Math.max(0, Math.floor(ms / 1000));
-  const mins = Math.floor(secs / 60);
-  const rem = secs % 60;
-  return `${mins}:${rem.toString().padStart(2, '0')}`;
-}
 
 export function SwapDeposit() {
   const navigate = useNavigate();
@@ -24,6 +18,7 @@ export function SwapDeposit() {
   const state = location.state as SwapDepositLocationState | null;
   const [swap, setSwap] = useState<IPC.SwapInfo | null>(state?.swap ?? null);
   const [error, setError] = useState<string | null>(null);
+  const nowMs = useNowMs(Boolean(swap?.deadline));
 
   useEffect(() => {
     if (location.state != null) {
@@ -33,8 +28,8 @@ export function SwapDeposit() {
 
   const expired = useMemo(() => {
     if (!swap?.deadline) return false;
-    return Date.now() >= swap.deadline;
-  }, [swap?.deadline]);
+    return nowMs >= swap.deadline;
+  }, [swap?.deadline, nowMs]);
 
   useEffect(() => {
     if (!swap) return;
@@ -110,7 +105,7 @@ export function SwapDeposit() {
           {swap.deadline && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
-              Deadline: {expired ? 'Expired' : `in ${formatDeadline(swap.deadline)}`}
+              Deadline: {expired ? 'Expired' : `in ${formatCountdown(swap.deadline, nowMs)}`}
             </div>
           )}
 

@@ -8,15 +8,9 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, supportedTokens } from '../data/supportedTokens';
+import { useNowMs } from '../hooks/useNowMs';
+import { formatCountdown } from '../lib/time';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
-
-function formatDeadline(deadlineMs: number, nowMs: number): string {
-  const ms = deadlineMs - nowMs;
-  const secs = Math.max(0, Math.floor(ms / 1000));
-  const mins = Math.floor(secs / 60);
-  const rem = secs % 60;
-  return `${mins}:${rem.toString().padStart(2, '0')}`;
-}
 
 /**
  * CrossPay page - Pay recipients in other currencies using ZEC.
@@ -36,7 +30,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
 
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const nowMs = useNowMs(quote != null);
 
   const [password, setPassword] = useState('');
   const [reauthToken, setReauthToken] = useState<string | null>(null);
@@ -113,12 +107,6 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
       cancelled = true;
     };
   }, [wallet.network, activeAccountId]);
-
-  useEffect(() => {
-    if (!quote) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [quote]);
 
   const quoteExpired = useMemo(() => {
     if (!quote) return false;
@@ -326,11 +314,11 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
               </div>
               <div className="space-y-1 col-span-2">
-                <span className="text-muted-foreground">Expires in</span>
-                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
-                  {quoteExpired ? 'Expired' : formatDeadline(quote.deadline, nowMs)}
-                </div>
-              </div>
+	                <span className="text-muted-foreground">Expires in</span>
+	                <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
+	                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+	                </div>
+	              </div>
             </div>
           </CardContent>
         </Card>
