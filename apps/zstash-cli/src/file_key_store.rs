@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use zstash_core::domain::Network;
+use zstash_core::permissions::{create_dir_all_secure, set_file_permissions};
 use zstash_engine::key_store::KeyStore;
 
 /// File-based key store for CLI usage.
@@ -64,7 +65,7 @@ impl FileKeyStore {
 
     fn save_keystore(&self, data: &KeyStoreData) -> anyhow::Result<()> {
         if let Some(parent) = self.keystore_path.parent() {
-            fs::create_dir_all(parent)?;
+            create_dir_all_secure(parent)?;
         }
         let content = serde_json::to_string_pretty(data)?;
 
@@ -73,19 +74,15 @@ impl FileKeyStore {
         fs::write(&tmp_path, &content)?;
         fs::rename(&tmp_path, &self.keystore_path)?;
 
-        // Set restrictive permissions on Unix
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&self.keystore_path, fs::Permissions::from_mode(0o600))?;
-        }
+        // Set restrictive permissions on Unix (no-op on Windows)
+        set_file_permissions(&self.keystore_path)?;
 
         Ok(())
     }
 
     fn write_file_atomic(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            create_dir_all_secure(parent)?;
         }
         let tmp_path = path.with_extension("enc.tmp");
         fs::write(&tmp_path, contents)?;
