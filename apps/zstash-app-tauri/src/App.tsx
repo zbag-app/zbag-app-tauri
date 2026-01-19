@@ -118,10 +118,53 @@ function AppInner() {
     if (startup.kind !== 'ready') return;
 
     // Resume polling for any in-progress swaps from previous sessions
-    resumePendingSwaps().catch((err) => {
-      console.warn('Failed to resume pending swaps:', err);
-    });
-  }, [startup.kind === 'ready' ? startup.wallet.id : null]);
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        timeoutId = window.setTimeout(() => {
+          timeoutId = null;
+          resolve();
+        }, ms);
+      });
+
+    async function run() {
+      const delaysMs = [0, 1000, 3000];
+      for (let attempt = 0; attempt < delaysMs.length; attempt++) {
+        if (cancelled) return;
+
+        const delayMs = delaysMs[attempt];
+        if (delayMs > 0) {
+          await sleep(delayMs);
+          if (cancelled) return;
+        }
+
+        try {
+          const res = await resumePendingSwaps();
+          if (cancelled) return;
+          if ('err' in res) {
+            throw new Error(res.err.message);
+          }
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          if (attempt === delaysMs.length - 1) {
+            console.warn('Failed to resume pending swaps:', err);
+          }
+        }
+      }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [activeWalletId]);
 
   // Throttled sync progress updates
   const throttledSetSync = useThrottledCallback(
@@ -401,6 +444,7 @@ function AppInner() {
         <Route path="/swap/from-zec" element={<SwapFromZec wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/crosspay" element={<CrossPay wallet={startup.wallet} activeAccountId={activeAccountId} />} />
         <Route path="/swap/quote" element={<SwapQuote />} />
+        <Route path="/swap/deposit" element={<SwapDeposit />} />
         <Route path="/swap/deposit/:swapId" element={<SwapDeposit />} />
         <Route
           path="/activity"

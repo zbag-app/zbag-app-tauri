@@ -415,6 +415,56 @@ fn refresh_swap_status_stores_error_on_api_failure() {
 }
 
 #[test]
+fn refresh_swap_status_clears_stale_last_error_on_success_without_state_change() {
+    let root = temp_root("us16_refresh_clears_stale_last_error");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    // Insert a swap already in Confirming state with a stale last_error.
+    // Remote status "SUCCESS" maps to Confirming (no local tx confirmation in this test),
+    // so the state won't change, but last_error should be cleared on a successful fetch.
+    let mut swap = create_test_swap(SwapState::Confirming, true);
+    swap.last_error = Some("stale error".to_string());
+    swap.updated_at = swap.updated_at.saturating_sub(1_000);
+    let original_updated_at = swap.updated_at;
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet.id, &swap).expect("insert swap");
+    drop(conn);
+
+    let (base_url, server, request_count) = spawn_mock_status_server("SUCCESS", 1);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let res = swap_service
+        .refresh_swap_status(wallet.id, swap.id, None)
+        .expect("refresh swap status");
+
+    assert_eq!(res.swap.state, SwapState::Confirming);
+    assert_eq!(res.swap.last_error, None);
+    assert!(res.swap.updated_at > original_updated_at);
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    server.join().expect("server joined");
+}
+
+#[test]
 fn refresh_swap_status_rejects_wrong_wallet() {
     let root = temp_root("us16_refresh_wrong_wallet");
     let app_db_path = root.join("app.db");
@@ -510,6 +560,49 @@ fn resume_pending_swaps_resumes_non_terminal_only() {
 
     // Only non-terminal swaps should be resumed (AwaitingDeposit and Pending)
     assert_eq!(res.resumed_count, 2);
+}
+
+#[test]
+fn resume_pending_swaps_is_idempotent_on_second_call() {
+    let root = temp_root("us16_resume_idempotent");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let swap_pending = create_test_swap(SwapState::Pending, true);
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet.id, &swap_pending).expect("insert pending swap");
+    drop(conn);
+
+    // No server needed for resume_pending_swaps (it just starts polling tasks)
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let res1 = swap_service
+        .resume_pending_swaps(wallet.id, None)
+        .expect("resume pending swaps (first)");
+    let res2 = swap_service
+        .resume_pending_swaps(wallet.id, None)
+        .expect("resume pending swaps (second)");
+
+    assert_eq!(res1.resumed_count, 1);
+    assert_eq!(res2.resumed_count, 0);
 }
 
 #[test]

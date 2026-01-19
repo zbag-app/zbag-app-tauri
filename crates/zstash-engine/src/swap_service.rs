@@ -29,6 +29,8 @@ use crate::wallet_manager::WalletManager;
 pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
 const TOKEN_DECIMALS_CACHE_TTL_MS: i64 = 5 * 60 * 1000;
 
+const NEAR_STATUS_TIMEOUT_SECS: u64 = 30;
+
 #[derive(Clone)]
 pub struct SwapService {
     app_db_path: PathBuf,
@@ -679,7 +681,7 @@ impl SwapService {
         swap_id: Uuid,
         on_swap_changed: Option<SwapEventHandler>,
     ) -> anyhow::Result<RefreshSwapStatusResponse> {
-        let conn = open_app_db(&self.app_db_path)?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
         let mut swap = load_owned_swap(&conn, wallet_id, swap_id)?;
 
         // Only refresh if swap is in a non-terminal state
@@ -709,7 +711,7 @@ impl SwapService {
         // Query remote API for latest status
         let status_res = block_on(async {
             match tokio::time::timeout(
-                Duration::from_secs(30),
+                Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
                 self.near
                     .get_status(zstash_network::near_intents::StatusRequest {
                         deposit_address,
@@ -720,7 +722,7 @@ impl SwapService {
             {
                 Ok(res) => res,
                 Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
-                    "timeout".to_string(),
+                    format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
                 )),
             }
         });
@@ -733,16 +735,19 @@ impl SwapService {
                     &swap,
                     &status.status,
                 );
+                let next_last_error = status.message.clone();
 
-                if next_state != swap.state {
+                if next_state != swap.state || next_last_error != swap.last_error {
                     swap.state = next_state;
                     swap.updated_at = chrono::Utc::now().timestamp_millis();
-                    swap.last_error = status.message.clone();
+                    swap.last_error = next_last_error;
 
                     swap_meta::update_swap(&conn, wallet_id, &swap)
                         .context("failed to update swap")?;
 
-                    if let Some(handler) = on_swap_changed.as_ref() {
+                    if let Some(handler) = on_swap_changed.as_ref()
+                        && is_active_wallet(&self.wallet_manager, wallet_id)
+                    {
                         handler(SwapChangedEvent {
                             schema_version: SCHEMA_VERSION,
                             event: "swap.changed".to_string(),
@@ -756,7 +761,9 @@ impl SwapService {
                 swap.updated_at = chrono::Utc::now().timestamp_millis();
                 swap_meta::update_swap(&conn, wallet_id, &swap).context("failed to update swap")?;
 
-                if let Some(handler) = on_swap_changed.as_ref() {
+                if let Some(handler) = on_swap_changed.as_ref()
+                    && is_active_wallet(&self.wallet_manager, wallet_id)
+                {
                     handler(SwapChangedEvent {
                         schema_version: SCHEMA_VERSION,
                         event: "swap.changed".to_string(),
@@ -781,25 +788,12 @@ impl SwapService {
         wallet_id: Uuid,
         on_swap_changed: Option<SwapEventHandler>,
     ) -> anyhow::Result<ResumePendingSwapsResponse> {
-        let conn = open_app_db(&self.app_db_path)?;
-        let swaps =
-            swap_meta::list_swaps_for_wallet(&conn, wallet_id).context("failed to list swaps")?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
+        let swaps = swap_meta::list_pollable_swaps_for_wallet(&conn, wallet_id)
+            .context("failed to list pollable swaps")?;
 
         let mut resumed_count = 0;
         for swap in swaps {
-            // Only resume polling for non-terminal swaps
-            let should_poll = matches!(
-                swap.state,
-                SwapState::Draft
-                    | SwapState::AwaitingDeposit
-                    | SwapState::Pending
-                    | SwapState::Confirming
-            ) && swap.deposit_address.is_some();
-
-            if !should_poll {
-                continue;
-            }
-
             if self.start_polling(wallet_id, swap, on_swap_changed.clone()) {
                 resumed_count += 1;
             }
@@ -835,6 +829,10 @@ impl SwapService {
             let mut swap = initial_swap;
 
             loop {
+                if !is_active_wallet(&wallet_manager, wallet_id) {
+                    break;
+                }
+
                 tokio::select! {
                     _ = cancel_rx.changed() => {
                         break;
@@ -842,16 +840,28 @@ impl SwapService {
                     _ = tokio::time::sleep(backoff) => {}
                 }
 
+                if !is_active_wallet(&wallet_manager, wallet_id) {
+                    break;
+                }
+
                 let Some(deposit_address) = swap.deposit_address.clone() else {
                     break;
                 };
 
-                let status_res = near
-                    .get_status(zstash_network::near_intents::StatusRequest {
+                let status_res = match tokio::time::timeout(
+                    Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
+                    near.get_status(zstash_network::near_intents::StatusRequest {
                         deposit_address,
                         deposit_memo: swap.deposit_memo.clone(),
-                    })
-                    .await;
+                    }),
+                )
+                .await
+                {
+                    Ok(res) => res,
+                    Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
+                        format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
+                    )),
+                };
 
                 match status_res {
                     Ok(status) => {
@@ -863,11 +873,12 @@ impl SwapService {
                             &swap,
                             &status.status,
                         );
+                        let next_last_error = status.message.clone();
 
-                        if next_state != swap.state {
+                        if next_state != swap.state || next_last_error != swap.last_error {
                             swap.state = next_state;
                             swap.updated_at = chrono::Utc::now().timestamp_millis();
-                            swap.last_error = status.message.clone();
+                            swap.last_error = next_last_error;
 
                             match open_app_db_connection(&app_db_path) {
                                 Ok(conn) => {
@@ -892,7 +903,9 @@ impl SwapService {
                                 }
                             }
 
-                            if let Some(handler) = on_swap_changed.as_ref() {
+                            if let Some(handler) = on_swap_changed.as_ref()
+                                && is_active_wallet(&wallet_manager, wallet_id)
+                            {
                                 handler(SwapChangedEvent {
                                     schema_version: SCHEMA_VERSION,
                                     event: "swap.changed".to_string(),
@@ -940,7 +953,9 @@ impl SwapService {
                                 );
                             }
                         }
-                        if let Some(handler) = on_swap_changed.as_ref() {
+                        if let Some(handler) = on_swap_changed.as_ref()
+                            && is_active_wallet(&wallet_manager, wallet_id)
+                        {
                             handler(SwapChangedEvent {
                                 schema_version: SCHEMA_VERSION,
                                 event: "swap.changed".to_string(),
@@ -1123,6 +1138,18 @@ fn has_confirmed_zcash_tx(
     }
 
     false
+}
+
+fn is_active_wallet(wallet_manager: &Arc<Mutex<WalletManager>>, wallet_id: Uuid) -> bool {
+    let Ok(mgr) = wallet_manager.lock() else {
+        return false;
+    };
+
+    let Some(active_wallet) = mgr.active_wallet_info() else {
+        return false;
+    };
+
+    active_wallet.id == wallet_id
 }
 
 fn parse_zatoshis(value: &str) -> Option<u64> {

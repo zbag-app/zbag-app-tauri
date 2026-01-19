@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftRight, RefreshCw, Copy, Clock } from 'lucide-react';
 import type * as IPC from '../types/ipc';
@@ -24,8 +24,9 @@ export function SwapDeposit() {
   const loadedSwapId = swap?.id ?? null;
   const [error, setError] = useState<string | null>(null);
   const nowMs = useNowMs(Boolean(swap?.deadline));
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(swap == null && swapId != null);
+  const [refreshingSwapId, setRefreshingSwapId] = useState<string | null>(null);
+  const currentSwapIdRef = useRef<string | null>(loadedSwapId);
 
   // Clear location state after reading it
   useEffect(() => {
@@ -79,31 +80,41 @@ export function SwapDeposit() {
     };
   }, [loadedSwapId, swapId]);
 
-  const expired = useMemo(() => {
-    if (!swap?.deadline) return false;
-    return nowMs >= swap.deadline;
-  }, [swap?.deadline, nowMs]);
+  const expired = swap?.deadline != null && nowMs >= swap.deadline;
 
   useEffect(() => {
-    if (!swap) return;
-    const swapId = swap.id;
+    currentSwapIdRef.current = loadedSwapId;
+  }, [loadedSwapId]);
+
+  const subscriptionSwapId = swapId != null && isUuid(swapId) ? swapId : loadedSwapId;
+
+  useEffect(() => {
+    if (subscriptionSwapId == null) return;
+    const swapId = subscriptionSwapId;
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
-    async function run() {
-      unlisten = await onSwapChanged((event) => {
+    onSwapChanged((event) => {
+      if (cancelled) return;
+      if (event.swap.id !== swapId) return;
+      setSwap(event.swap);
+    })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch((err) => {
         if (cancelled) return;
-        if (event.swap.id !== swapId) return;
-        setSwap(event.swap);
+        console.warn('Failed to subscribe to swap events:', err);
       });
-    }
-
-    run();
     return () => {
       cancelled = true;
-      if (unlisten) unlisten();
+      unlisten?.();
     };
-  }, [swap?.id]);
+  }, [subscriptionSwapId]);
 
   const copyAddress = async () => {
     if (swap?.deposit_address) {
@@ -232,26 +243,33 @@ export function SwapDeposit() {
           <div className="flex gap-3 flex-wrap">
             <Button
               variant="outline"
-              disabled={refreshing}
+              disabled={refreshingSwapId === swap.id}
               onClick={async () => {
                 setError(null);
-                setRefreshing(true);
+                const requestedSwapId = swap.id;
+                setRefreshingSwapId(requestedSwapId);
                 try {
-                  const res = await refreshSwapStatus({ swap_id: swap.id });
+                  const res = await refreshSwapStatus({ swap_id: requestedSwapId });
+                  if (currentSwapIdRef.current !== requestedSwapId) {
+                    return;
+                  }
                   if ('err' in res) {
                     setError(res.err.message);
                     return;
                   }
                   setSwap(res.ok.swap);
                 } catch (e) {
+                  if (currentSwapIdRef.current !== requestedSwapId) {
+                    return;
+                  }
                   setError(e instanceof Error ? e.message : String(e));
                 } finally {
-                  setRefreshing(false);
+                  setRefreshingSwapId((current) => (current === requestedSwapId ? null : current));
                 }
               }}
             >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh status'}
+              <RefreshCw className={`h-4 w-4 ${refreshingSwapId === swap.id ? 'animate-spin' : ''}`} />
+              {refreshingSwapId === swap.id ? 'Refreshing...' : 'Refresh status'}
             </Button>
             <Link to="/activity">
               <Button variant="outline">Activity</Button>

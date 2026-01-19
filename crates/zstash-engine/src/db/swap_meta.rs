@@ -107,35 +107,30 @@ pub fn list_swaps_for_wallet(
     )?;
 
     let swaps = stmt
-        .query_map([wallet_id.to_string()], |row| {
-            let id_str: String = row.get(0)?;
-            let swap_type: String = row.get(2)?;
-            let state: String = row.get(11)?;
-            Ok(SwapInfo {
-                id: Uuid::parse_str(&id_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?,
-                remote_id: row.get(1)?,
-                swap_type: parse_swap_type(&swap_type),
-                input_asset: row.get(3)?,
-                input_amount: row.get(4)?,
-                output_asset: row.get(5)?,
-                output_amount: row.get(6)?,
-                deposit_address: row.get(7)?,
-                deposit_memo: row.get(8)?,
-                destination_address: row.get(9)?,
-                refund_address: row.get(10)?,
-                state: parse_swap_state(&state),
-                deadline: row.get(12)?,
-                last_error: row.get(13)?,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-            })
-        })?
+        .query_map([wallet_id.to_string()], swap_info_from_list_row)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(swaps)
+}
+
+pub fn list_pollable_swaps_for_wallet(
+    conn: &Connection,
+    wallet_id: Uuid,
+) -> rusqlite::Result<Vec<SwapInfo>> {
+    let mut stmt = conn.prepare(
+        "SELECT
+            id, remote_id, swap_type, input_asset, input_amount, output_asset, output_amount,
+            deposit_address, deposit_memo, destination_address, refund_address,
+            state, deadline, last_error, created_at, updated_at
+         FROM swaps
+         WHERE wallet_id = ?1
+           AND deposit_address IS NOT NULL
+           AND state IN ('Draft', 'AwaitingDeposit', 'Pending', 'Confirming')
+         ORDER BY created_at DESC",
+    )?;
+
+    let swaps = stmt
+        .query_map([wallet_id.to_string()], swap_info_from_list_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(swaps)
@@ -180,6 +175,33 @@ pub fn update_swap(conn: &Connection, wallet_id: Uuid, swap: &SwapInfo) -> rusql
         ],
     )?;
     Ok(())
+}
+
+fn swap_info_from_list_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SwapInfo> {
+    let id_str: String = row.get(0)?;
+    let swap_type: String = row.get(2)?;
+    let state: String = row.get(11)?;
+
+    Ok(SwapInfo {
+        id: Uuid::parse_str(&id_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        remote_id: row.get(1)?,
+        swap_type: parse_swap_type(&swap_type),
+        input_asset: row.get(3)?,
+        input_amount: row.get(4)?,
+        output_asset: row.get(5)?,
+        output_amount: row.get(6)?,
+        deposit_address: row.get(7)?,
+        deposit_memo: row.get(8)?,
+        destination_address: row.get(9)?,
+        refund_address: row.get(10)?,
+        state: parse_swap_state(&state),
+        deadline: row.get(12)?,
+        last_error: row.get(13)?,
+        created_at: row.get(14)?,
+        updated_at: row.get(15)?,
+    })
 }
 
 fn parse_swap_type(value: &str) -> SwapType {
