@@ -47,8 +47,8 @@ export function SwapDeposit() {
     const id = swapId; // Capture for closure
     async function loadSwap() {
       const res = await getSwapStatus({ swap_id: id });
-      if (cancelled) return;
       setLoading(false);
+      if (cancelled) return;
       if ('err' in res) {
         setError(res.err.message);
         return;
@@ -60,7 +60,7 @@ export function SwapDeposit() {
     return () => {
       cancelled = true;
     };
-  }, [swap, swapId]);
+  }, [swapId]);
 
   const expired = useMemo(() => {
     if (!swap?.deadline) return false;
