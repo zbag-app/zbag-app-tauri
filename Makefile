@@ -40,13 +40,14 @@ build-frontend: ## Build frontend dist (for Tauri)
 # ============================================================================
 
 test: ## Run all Rust library tests
-	@cargo test --workspace --exclude zstash-app-tauri
+	@cargo test --workspace --exclude zstash-app-tauri --exclude zstash-core
+	@cargo test -p zstash-core --features async
 
 test-engine: ## Test zstash-engine crate
 	@cargo test -p zstash-engine
 
 test-core: ## Test zstash-core crate
-	@cargo test -p zstash-core
+	@cargo test -p zstash-core --features async
 
 test-network: ## Test zstash-network crate
 	@cargo test -p zstash-network

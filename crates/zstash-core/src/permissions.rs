@@ -36,41 +36,38 @@ pub fn create_dir_secure(path: impl AsRef<Path>) -> io::Result<()> {
 pub fn create_dir_all_secure(path: impl AsRef<Path>) -> io::Result<()> {
     let path = path.as_ref();
 
-    // Collect all path components that need to be created
-    let mut to_create = Vec::new();
-    let mut current = path;
-    while !current.exists() {
-        to_create.push(current.to_path_buf());
-        match current.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => current = parent,
-            _ => break,
-        }
-    }
-
-    // Check if path already exists before consuming to_create
-    let path_already_existed = to_create.is_empty();
-
-    // Create directories from root to leaf, setting permissions on each
-    for dir in to_create.into_iter().rev() {
-        match create_dir_secure(&dir) {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                // Directory was created between our check and create - that's fine.
-                // Still try to set permissions (best-effort).
-                let _ = set_dir_permissions(&dir);
+    // Avoid pre-checking with `Path::exists()` (TOCTOU + extra syscalls). Instead,
+    // try to create the leaf directory and, on `NotFound`, recursively create the
+    // missing parent chain.
+    match create_dir_secure(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            if path.is_dir() {
+                // Best-effort: the directory might already exist with broader
+                // permissions, or it may have been concurrently created.
+                //
+                // We intentionally don't fail if `chmod`/`set_permissions` fails,
+                // because callers may pass directories we don't own (e.g. system
+                // temp roots on macOS) and this helper is used for both creation
+                // and "ensure exists".
+                let _ = set_dir_permissions(path);
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("path exists but is not a directory: {}", path.display()),
+                ))
             }
-            Err(e) => return Err(e),
         }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => match path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => {
+                create_dir_all_secure(parent)?;
+                create_dir_all_secure(path)
+            }
+            _ => Err(e),
+        },
+        Err(e) => Err(e),
     }
-
-    // If path already existed, try to set permissions (best-effort)
-    // We use best-effort here because the directory might be a system directory
-    // that we cannot modify (e.g., /tmp or /var/folders/...)
-    if path_already_existed && path.is_dir() {
-        let _ = set_dir_permissions(path);
-    }
-
-    Ok(())
 }
 
 /// Recursively create directories with secure permissions (0700 on Unix).
