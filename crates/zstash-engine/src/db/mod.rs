@@ -50,8 +50,8 @@ pub fn open_sqlcipher_db(
         .context("failed to set busy_timeout")?;
 
     // `hex::encode` uses lowercase hex, matching the previous per-byte `format!("{byte:02x}")`
-    // implementation.
-    let mut dek_hex = hex::encode(dek.0);
+    // implementation. Use as_slice() to avoid copying the 32-byte key (arrays are Copy).
+    let mut dek_hex = hex::encode(dek.0.as_slice());
     let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
     conn.execute_batch(&pragma)
         .context("failed to apply wallet db encryption key")?;
