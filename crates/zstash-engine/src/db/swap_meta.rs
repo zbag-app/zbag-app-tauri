@@ -113,13 +113,21 @@ pub fn list_swaps_for_wallet(
     Ok(swaps)
 }
 
+/// Lists swaps eligible for polling/resume after app restart.
+///
+/// # States included
+///
+/// - **Draft**: Included because swap flows may persist a Draft swap with a deposit address
+///   before the state transitions (e.g., crash/restart during FromZec flows).
+/// - **AwaitingDeposit**, **Pending**: Standard active swap states.
+/// - **Confirming**: Included because the remote status may advance to a terminal state while
+///   the local DB still shows an intermediate state.
+///
+/// The `deposit_address IS NOT NULL` predicate ensures we only resume swaps that are actionable.
 pub fn list_pollable_swaps_for_wallet(
     conn: &Connection,
     wallet_id: Uuid,
 ) -> rusqlite::Result<Vec<SwapInfo>> {
-    // NOTE: `Draft` is included because swap flows may persist a Draft swap with a deposit address
-    // before the state transitions (e.g., crash/restart during FromZec flows). The
-    // `deposit_address IS NOT NULL` predicate ensures we only resume swaps that are actionable.
     let mut stmt = conn.prepare(
         "SELECT
             id, remote_id, swap_type, input_asset, input_amount, output_asset, output_amount,

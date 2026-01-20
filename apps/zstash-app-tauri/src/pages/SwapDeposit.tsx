@@ -10,6 +10,7 @@ import { useNowMs } from '../hooks/useNowMs';
 import { formatCountdown } from '../lib/time';
 import { getSwapStatus, refreshSwapStatus } from '../services/ipc';
 import { onSwapChanged } from '../services/events';
+import { createCancellableSleep } from '../lib/cancellableSleep';
 import type { SwapDepositLocationState } from './SwapQuote';
 
 function isUuid(value: string): boolean {
@@ -120,6 +121,47 @@ export function SwapDeposit() {
     };
   }, [subscriptionSwapId]);
 
+  // Fallback: if event subscription fails, periodically reload the swap from the local DB so the UI
+  // still updates while the backend poller is running.
+  useEffect(() => {
+    if (!swapEventsUnavailable) return;
+    if (loadedSwapId == null) return;
+
+    let cancelled = false;
+    const { sleep, cancel: cancelSleep } = createCancellableSleep();
+
+    const requestedSwapId = loadedSwapId;
+    async function poll() {
+      while (!cancelled) {
+        try {
+          const res = await getSwapStatus({ swap_id: requestedSwapId });
+          if (cancelled) return;
+          if (currentSwapIdRef.current !== requestedSwapId) return;
+          if ('ok' in res) {
+            setSwap(res.ok.swap);
+            if (
+              res.ok.swap.state === 'Completed' ||
+              res.ok.swap.state === 'Refunded' ||
+              res.ok.swap.state === 'Failed'
+            ) {
+              return;
+            }
+          }
+        } catch {
+          // Ignore: banner remains visible and user can still refresh manually.
+        }
+
+        await sleep(5000);
+      }
+    }
+
+    poll();
+    return () => {
+      cancelled = true;
+      cancelSleep();
+    };
+  }, [loadedSwapId, swapEventsUnavailable]);
+
   const copyAddress = async () => {
     if (swap?.deposit_address) {
       await navigator.clipboard.writeText(swap.deposit_address);
@@ -203,7 +245,7 @@ export function SwapDeposit() {
 
           {swapEventsUnavailable ? (
             <div className="rounded-none border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
-              Real-time updates are unavailable. Use &quot;Refresh status&quot; to update.
+              Real-time updates are unavailable. Auto-refreshing every 5s; you can also use &quot;Refresh status&quot;.
             </div>
           ) : null}
 

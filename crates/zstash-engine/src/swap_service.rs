@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context as _;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use tokio::sync::watch;
 use uuid::Uuid;
 
@@ -28,7 +29,7 @@ use crate::wallet_manager::WalletManager;
 pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
 const TOKEN_DECIMALS_CACHE_TTL_MS: i64 = 5 * 60 * 1000;
 
-const NEAR_STATUS_TIMEOUT_SECS: u64 = 30;
+const NEAR_STATUS_TIMEOUT_SECS: u64 = 15;
 
 #[derive(Clone)]
 pub struct SwapService {
@@ -59,6 +60,22 @@ struct SwapJob {
     cancel: watch::Sender<bool>,
 }
 
+#[derive(Debug)]
+struct SwapJobGuard {
+    state: Arc<Mutex<State>>,
+    swap_id: Uuid,
+}
+
+impl Drop for SwapJobGuard {
+    fn drop(&mut self) {
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        state.jobs.remove(&self.swap_id);
+    }
+}
+
 fn load_owned_swap(conn: &Connection, wallet_id: Uuid, swap_id: Uuid) -> anyhow::Result<SwapInfo> {
     let Some((owner_wallet_id, swap)) =
         swap_meta::get_swap(conn, swap_id).context("failed to load swap")?
@@ -85,6 +102,48 @@ fn next_state_from_remote_status(
         SwapState::Completed
     } else {
         mapped
+    }
+}
+
+/// Persist swap state to DB and emit change event.
+///
+/// Logs errors instead of propagating them, suitable for use in async polling loops.
+fn try_persist_and_emit_swap_change(
+    app_db_path: &std::path::Path,
+    wallet_id: Uuid,
+    swap: &SwapInfo,
+    wallet_manager: &Arc<Mutex<WalletManager>>,
+    on_swap_changed: Option<&SwapEventHandler>,
+) {
+    match open_app_db_connection(app_db_path) {
+        Ok(conn) => {
+            if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, swap) {
+                tracing::error!(
+                    wallet_id = %wallet_id,
+                    swap_id = %swap.id,
+                    error = ?db_err,
+                    "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
+                );
+            }
+        }
+        Err(db_err) => {
+            tracing::error!(
+                wallet_id = %wallet_id,
+                swap_id = %swap.id,
+                error = ?db_err,
+                "CRITICAL: failed to open app DB for swap state update"
+            );
+        }
+    }
+
+    if let Some(handler) = on_swap_changed
+        && is_active_wallet(wallet_manager, wallet_id)
+    {
+        handler(SwapChangedEvent {
+            schema_version: SCHEMA_VERSION,
+            event: "swap.changed".to_string(),
+            swap: swap.clone(),
+        });
     }
 }
 
@@ -829,151 +888,119 @@ impl SwapService {
                 .insert(swap_id, SwapJob { cancel: cancel_tx });
         }
 
-        crate::tokio_runtime::spawn(async move {
-            let mut backoff = Duration::from_secs(5);
-            let mut swap = initial_swap;
+        let state_for_task = Arc::clone(&state);
+        let spawn_result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            crate::tokio_runtime::spawn(async move {
+                let _job_guard = SwapJobGuard {
+                    state: state_for_task,
+                    swap_id,
+                };
 
-            loop {
-                if !is_active_wallet(&wallet_manager, wallet_id) {
-                    break;
-                }
+                let mut backoff = Duration::from_secs(5);
+                let mut swap = initial_swap;
 
-                tokio::select! {
-                    _ = cancel_rx.changed() => {
+                loop {
+                    // Check before sleeping so we don't wait out a full backoff interval after a
+                    // wallet switch.
+                    if !is_active_wallet(&wallet_manager, wallet_id) {
                         break;
                     }
-                    _ = tokio::time::sleep(backoff) => {}
-                }
 
-                if !is_active_wallet(&wallet_manager, wallet_id) {
-                    break;
-                }
-
-                let Some(deposit_address) = swap.deposit_address.clone() else {
-                    break;
-                };
-
-                let status_res = match tokio::time::timeout(
-                    Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
-                    near.get_status(zstash_network::near_intents::StatusRequest {
-                        deposit_address,
-                        deposit_memo: swap.deposit_memo.clone(),
-                    }),
-                )
-                .await
-                {
-                    Ok(res) => res,
-                    Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
-                        format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
-                    )),
-                };
-
-                match status_res {
-                    Ok(status) => {
-                        backoff = Duration::from_secs(5);
-
-                        let next_state = next_state_from_remote_status(
-                            &wallet_manager,
-                            wallet_id,
-                            &swap,
-                            &status.status,
-                        );
-                        let next_last_error = status.message.clone();
-
-                        if next_state != swap.state || next_last_error != swap.last_error {
-                            swap.state = next_state;
-                            swap.updated_at = chrono::Utc::now().timestamp_millis();
-                            swap.last_error = next_last_error;
-
-                            match open_app_db_connection(&app_db_path) {
-                                Ok(conn) => {
-                                    if let Err(db_err) =
-                                        swap_meta::update_swap(&conn, wallet_id, &swap)
-                                    {
-                                        tracing::error!(
-                                            wallet_id = %wallet_id,
-                                            swap_id = %swap.id,
-                                            error = ?db_err,
-                                            "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
-                                        );
-                                    }
-                                }
-                                Err(db_err) => {
-                                    tracing::error!(
-                                        wallet_id = %wallet_id,
-                                        swap_id = %swap.id,
-                                        error = ?db_err,
-                                        "CRITICAL: failed to open app DB for swap state update"
-                                    );
-                                }
-                            }
-
-                            if let Some(handler) = on_swap_changed.as_ref()
-                                && is_active_wallet(&wallet_manager, wallet_id)
-                            {
-                                handler(SwapChangedEvent {
-                                    schema_version: SCHEMA_VERSION,
-                                    event: "swap.changed".to_string(),
-                                    swap: swap.clone(),
-                                });
-                            }
-                        }
-
-                        if matches!(
-                            swap.state,
-                            SwapState::Completed | SwapState::Refunded | SwapState::Failed
-                        ) {
+                    tokio::select! {
+                        _ = cancel_rx.changed() => {
                             break;
                         }
+                        _ = tokio::time::sleep(backoff) => {}
                     }
-                    Err(zstash_network::near_intents::NearIntentsError::RateLimited {
-                        retry_after,
-                    }) => {
-                        backoff = retry_after
-                            .unwrap_or_else(|| backoff.saturating_mul(2))
-                            .min(Duration::from_secs(60));
+
+                    if !is_active_wallet(&wallet_manager, wallet_id) {
+                        break;
                     }
-                    Err(err) => {
-                        backoff = backoff.saturating_mul(2).min(Duration::from_secs(60));
-                        swap.last_error = Some(err.to_string());
-                        swap.updated_at = chrono::Utc::now().timestamp_millis();
-                        match open_app_db_connection(&app_db_path) {
-                            Ok(conn) => {
-                                if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap)
-                                {
-                                    tracing::error!(
-                                        wallet_id = %wallet_id,
-                                        swap_id = %swap.id,
-                                        error = ?db_err,
-                                        "CRITICAL: failed to persist swap state - swap may be inconsistent after restart"
-                                    );
-                                }
-                            }
-                            Err(db_err) => {
-                                tracing::error!(
-                                    wallet_id = %wallet_id,
-                                    swap_id = %swap.id,
-                                    error = ?db_err,
-                                    "CRITICAL: failed to open app DB for swap state update"
+
+                    let Some(deposit_address) = swap.deposit_address.clone() else {
+                        break;
+                    };
+
+                    let status_res = match tokio::time::timeout(
+                        Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
+                        near.get_status(zstash_network::near_intents::StatusRequest {
+                            deposit_address,
+                            deposit_memo: swap.deposit_memo.clone(),
+                        }),
+                    )
+                    .await
+                    {
+                        Ok(res) => res,
+                        Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
+                            format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
+                        )),
+                    };
+
+                    match status_res {
+                        Ok(status) => {
+                            backoff = Duration::from_secs(5);
+
+                            let next_state = next_state_from_remote_status(
+                                &wallet_manager,
+                                wallet_id,
+                                &swap,
+                                &status.status,
+                            );
+                            let next_last_error = status.message.clone();
+
+                            if next_state != swap.state || next_last_error != swap.last_error {
+                                swap.state = next_state;
+                                swap.updated_at = chrono::Utc::now().timestamp_millis();
+                                swap.last_error = next_last_error;
+
+                                try_persist_and_emit_swap_change(
+                                    &app_db_path,
+                                    wallet_id,
+                                    &swap,
+                                    &wallet_manager,
+                                    on_swap_changed.as_ref(),
                                 );
                             }
+
+                            if matches!(
+                                swap.state,
+                                SwapState::Completed | SwapState::Refunded | SwapState::Failed
+                            ) {
+                                break;
+                            }
                         }
-                        if let Some(handler) = on_swap_changed.as_ref()
-                            && is_active_wallet(&wallet_manager, wallet_id)
-                        {
-                            handler(SwapChangedEvent {
-                                schema_version: SCHEMA_VERSION,
-                                event: "swap.changed".to_string(),
-                                swap: swap.clone(),
-                            });
+                        Err(zstash_network::near_intents::NearIntentsError::RateLimited {
+                            retry_after,
+                        }) => {
+                            backoff = retry_after
+                                .unwrap_or_else(|| backoff.saturating_mul(2))
+                                .min(Duration::from_secs(60));
+                        }
+                        Err(err) => {
+                            backoff = backoff.saturating_mul(2).min(Duration::from_secs(60));
+                            swap.last_error = Some(err.to_string());
+                            swap.updated_at = chrono::Utc::now().timestamp_millis();
+                            try_persist_and_emit_swap_change(
+                                &app_db_path,
+                                wallet_id,
+                                &swap,
+                                &wallet_manager,
+                                on_swap_changed.as_ref(),
+                            );
                         }
                     }
                 }
-            }
+            });
+        }));
 
-            let mut state = state.lock().expect("mutex poisoned");
-            state.jobs.remove(&swap_id);
-        });
+        if spawn_result.is_err() {
+            let mut state_guard = match state.lock() {
+                Ok(state) => state,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            state_guard.jobs.remove(&swap_id);
+            return false;
+        }
 
         true
     }

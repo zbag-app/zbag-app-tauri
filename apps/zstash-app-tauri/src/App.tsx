@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
+import { ErrorCodes } from './types/ipc';
+import { createCancellableSleep } from './lib/cancellableSleep';
 import { Logo } from './components/brand/Logo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ErrorDialog } from './components/common/ErrorDialog';
@@ -42,6 +44,8 @@ import { Wallets } from './pages/Wallets';
 import { FiatDisplayProvider } from './context/FiatDisplayContext';
 
 const queryClient = new QueryClient();
+
+const RESUME_PENDING_SWAPS_RETRY_DELAYS_MS = [0, 1000, 3000] as const;
 
 type StartupState =
   | { kind: 'loading' }
@@ -122,18 +126,10 @@ function AppInner() {
 
     // Resume polling for any in-progress swaps from previous sessions
     let cancelled = false;
-    let timeoutId: number | null = null;
-
-    const sleep = (ms: number) =>
-      new Promise<void>((resolve) => {
-        timeoutId = window.setTimeout(() => {
-          timeoutId = null;
-          resolve();
-        }, ms);
-      });
+    const { sleep, cancel: cancelSleep } = createCancellableSleep();
 
     async function run() {
-      const delaysMs = [0, 1000, 3000];
+      const delaysMs = RESUME_PENDING_SWAPS_RETRY_DELAYS_MS;
       for (let attempt = 0; attempt < delaysMs.length; attempt++) {
         if (cancelled) return;
 
@@ -159,7 +155,7 @@ function AppInner() {
           if (attempt === delaysMs.length - 1) {
             console.warn('Failed to resume pending swaps:', err);
             setResumePendingSwapsError({
-              code: 'SWAP_RESUME_FAILED',
+              code: ErrorCodes.INTERNAL_ERROR,
               message: err instanceof Error ? err.message : String(err),
             });
           }
@@ -173,9 +169,7 @@ function AppInner() {
 
     return () => {
       cancelled = true;
-      if (timeoutId != null) {
-        window.clearTimeout(timeoutId);
-      }
+      cancelSleep();
     };
   }, [activeWalletId, resumePendingSwapsRetryNonce]);
 
@@ -366,10 +360,14 @@ function AppInner() {
     );
   }
 
-  const showTorErrorDialog = torState != null && torState.enabled && torState.status === 'Error' && !dismissedTorError;
-  const showTorToggleErrorDialog = torToggleError != null;
-  const showResumePendingSwapsErrorDialog =
-    resumePendingSwapsError != null && !showTorErrorDialog && !showTorToggleErrorDialog;
+  const torErrorState =
+    torState != null && torState.enabled && torState.status === 'Error' && !dismissedTorError
+      ? torState
+      : null;
+  const resumePendingSwapsDialogError =
+    resumePendingSwapsError != null && torErrorState == null && torToggleError == null
+      ? resumePendingSwapsError
+      : null;
 
   // Ready state - Main app with sidebar
   return (
@@ -381,9 +379,9 @@ function AppInner() {
       onLock={handleQuickLock}
     >
       {/* Tor Error Dialog */}
-      {showTorErrorDialog ? (
+      {torErrorState ? (
         <TorErrorDialog
-          state={torState!}
+          state={torErrorState}
           onClose={() => setDismissedTorError(true)}
           onDisable={() => toggleTor(false)}
           onRetry={() => toggleTor(true)}
@@ -391,20 +389,20 @@ function AppInner() {
       ) : null}
 
       {/* Tor Toggle Error Dialog */}
-      {showTorToggleErrorDialog ? (
+      {torToggleError ? (
         <ErrorDialog
           title="Tor toggle failed"
-          error={{ code: torToggleError!.code, message: torToggleError!.message }}
+          error={{ code: torToggleError.code, message: torToggleError.message }}
           primaryAction={{ label: 'Dismiss', onClick: () => setTorToggleError(null) }}
         />
       ) : null}
 
-      {showResumePendingSwapsErrorDialog ? (
+      {resumePendingSwapsDialogError ? (
         <ErrorDialog
           title="Failed to resume swaps"
           error={{
-            code: resumePendingSwapsError!.code,
-            message: resumePendingSwapsError!.message,
+            code: resumePendingSwapsDialogError.code,
+            message: resumePendingSwapsDialogError.message,
           }}
           primaryAction={{ label: 'Dismiss', onClick: () => setResumePendingSwapsError(null) }}
           secondaryAction={{
