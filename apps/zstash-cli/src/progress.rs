@@ -7,6 +7,19 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use zstash_core::domain::{SyncPhase, SyncProgress};
 
+fn phase_label(phase: SyncPhase) -> &'static str {
+    match phase {
+        SyncPhase::Idle => "Idle",
+        SyncPhase::Preparing => "Preparing",
+        SyncPhase::Downloading => "Downloading",
+        SyncPhase::Scanning => "Scanning",
+        SyncPhase::Enhancing => "Enhancing",
+        SyncPhase::CatchingUp => "Catching up",
+        SyncPhase::Offline => "Offline",
+        SyncPhase::Error => "Error",
+    }
+}
+
 /// Create a progress bar for sync operations.
 pub fn create_sync_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(100);
@@ -30,19 +43,27 @@ pub fn create_sync_progress_bar() -> ProgressBar {
 pub fn update_sync_progress(pb: &ProgressBar, progress: &SyncProgress) {
     pb.set_position(progress.progress_percent as u64);
 
-    let phase_str = match progress.phase {
-        SyncPhase::Idle => "Idle",
-        SyncPhase::Preparing => "Preparing",
-        SyncPhase::Downloading => "Downloading",
-        SyncPhase::Scanning => "Scanning",
-        SyncPhase::Enhancing => "Enhancing",
-        SyncPhase::CatchingUp => "Catching up",
+    let phase_str = if progress.phase == SyncPhase::Error {
+        progress
+            .error_message
+            .as_deref()
+            .map(|msg| format!("Error: {msg}"))
+            .unwrap_or_else(|| phase_label(progress.phase).to_string())
+    } else {
+        phase_label(progress.phase).to_string()
     };
 
-    let eta = progress
-        .eta_seconds
-        .map(|s| format!(" (ETA: {})", format_duration(s)))
-        .unwrap_or_default();
+    let eta = if matches!(progress.phase, SyncPhase::Offline | SyncPhase::Error) {
+        progress
+            .retry_in_seconds
+            .map(|s| format!(" (Retry in {})", format_duration(s)))
+            .unwrap_or_default()
+    } else {
+        progress
+            .eta_seconds
+            .map(|s| format!(" (ETA: {})", format_duration(s)))
+            .unwrap_or_default()
+    };
 
     let height_info = if progress.scan_frontier_height > 0 {
         format!(" - Block {}", progress.scan_frontier_height)
@@ -84,14 +105,7 @@ pub fn format_progress_log_line(
     start_height: u32,
     chain_tip: u32,
 ) -> String {
-    let phase_str = match progress.phase {
-        SyncPhase::Idle => "Idle",
-        SyncPhase::Preparing => "Preparing",
-        SyncPhase::Downloading => "Downloading",
-        SyncPhase::Scanning => "Scanning",
-        SyncPhase::Enhancing => "Enhancing",
-        SyncPhase::CatchingUp => "Catching up",
-    };
+    let phase_str = phase_label(progress.phase);
 
     let current_height = progress.scan_frontier_height;
     let blocks_scanned = current_height.saturating_sub(start_height);
@@ -102,10 +116,17 @@ pub fn format_progress_log_line(
         0.0
     };
 
-    let eta_str = progress
-        .eta_seconds
-        .map(|s| format!("ETA {} ({}s)", format_duration(s), s))
-        .unwrap_or_else(|| "ETA --".to_string());
+    let eta_str = if matches!(progress.phase, SyncPhase::Offline | SyncPhase::Error) {
+        progress
+            .retry_in_seconds
+            .map(|s| format!("Retry in {}", format_duration(s)))
+            .unwrap_or_else(|| "Retry --".to_string())
+    } else {
+        progress
+            .eta_seconds
+            .map(|s| format!("ETA {} ({}s)", format_duration(s), s))
+            .unwrap_or_else(|| "ETA --".to_string())
+    };
 
     format!(
         "[{}] {:>3}% | {:<10} | {:>9} / {:>9} | {:>5.0} blk/s | {}",

@@ -328,6 +328,8 @@ fn wallet_status_tracks_sync_progress_and_errors() {
             wallet_tip_height: 0,
             progress_percent: 0,
             eta_seconds: None,
+            retry_in_seconds: None,
+            error_message: None,
         },
     );
 
@@ -347,6 +349,8 @@ fn wallet_status_tracks_sync_progress_and_errors() {
             wallet_tip_height: 0,
             progress_percent: 100,
             eta_seconds: None,
+            retry_in_seconds: None,
+            error_message: None,
         },
     );
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
@@ -360,18 +364,49 @@ fn wallet_status_tracks_sync_progress_and_errors() {
             wallet_tip_height: 0,
             progress_percent: 5,
             eta_seconds: None,
+            retry_in_seconds: None,
+            error_message: None,
         },
     );
+    // Sync failures now emit Offline phase instead of transitioning Idle->Error
     mgr.observe_sync_progress(
         wallet.id,
         SyncProgress {
-            phase: SyncPhase::Idle,
-            scan_frontier_height: 0,
-            wallet_tip_height: 0,
-            progress_percent: 0,
+            phase: SyncPhase::Offline,
+            scan_frontier_height: 1000,
+            wallet_tip_height: 2000,
+            progress_percent: 50,
             eta_seconds: None,
+            retry_in_seconds: Some(20),
+            error_message: None,
         },
     );
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
-    assert!(matches!(status.sync_status, SyncStatus::Error { .. }));
+    assert!(matches!(
+        status.sync_status,
+        SyncStatus::Offline {
+            retry_in_seconds: 20
+        }
+    ));
+
+    // Test that SyncPhase::Error maps to SyncStatus::Error
+    mgr.observe_sync_progress(
+        wallet.id,
+        SyncProgress {
+            phase: SyncPhase::Error,
+            scan_frontier_height: 1000,
+            wallet_tip_height: 2000,
+            progress_percent: 50,
+            eta_seconds: None,
+            retry_in_seconds: Some(40),
+            error_message: Some("Failed to scan blocks".to_string()),
+        },
+    );
+    let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
+    assert_eq!(
+        status.sync_status,
+        SyncStatus::Error {
+            message: "Failed to scan blocks".to_string()
+        }
+    );
 }

@@ -19,6 +19,12 @@ use crate::state::AppState;
 use super::sync::start_sync_with_handlers;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
+/// Timeout for birthday height fetch to avoid UI blocking when offline.
+///
+/// This is a UX guardrail: if the network is unreachable, wallet creation should still succeed by
+/// falling back to a safe default scan start (Sapling activation).
+const BIRTHDAY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 #[tauri::command(rename = "zstash_create_wallet")]
 pub fn zstash_create_wallet(
     state: State<'_, AppState>,
@@ -39,9 +45,19 @@ pub fn zstash_create_wallet(
     // Fetch birthday height near chain tip for new wallet
     // This avoids scanning the entire blockchain for a brand new wallet
     let birthday_height = match grpc_url {
-        Ok(url) => tauri::async_runtime::block_on(
-            zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet(&url, tor_manager),
-        ),
+        Ok(url) => tauri::async_runtime::block_on(async {
+            let fetch_future = zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet(
+                &url,
+                tor_manager,
+            );
+            match tokio::time::timeout(BIRTHDAY_FETCH_TIMEOUT, fetch_future).await {
+                Ok(result) => result,
+                Err(_) => {
+                    warn!("birthday height fetch timed out, will use Sapling activation");
+                    None
+                }
+            }
+        }),
         Err(err) => {
             warn!(error = ?err, "failed to resolve gRPC URL for birthday fetch");
             None
@@ -114,6 +130,8 @@ pub fn zstash_load_wallet(
                     wallet_tip_height: 0,
                     progress_percent: 0,
                     eta_seconds: None,
+                    retry_in_seconds: None,
+                    error_message: None,
                 },
             );
         }
@@ -174,6 +192,8 @@ pub fn zstash_lock_wallet(
                 wallet_tip_height: 0,
                 progress_percent: 0,
                 eta_seconds: None,
+                retry_in_seconds: None,
+                error_message: None,
             },
         );
         let status = mgr.lock_wallet(request.wallet_id)?;

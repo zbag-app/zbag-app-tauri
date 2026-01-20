@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
 import { Separator } from "../ui/separator";
 import type { TorState, SyncProgress } from "../../types/ipc";
+import { formatEta } from "../../utils/time";
 
 interface SidebarProps {
   walletName: string;
@@ -32,8 +33,8 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-function getDisplayPhase(phase: string): string {
-  switch (phase) {
+function getSyncLabel(progress: SyncProgress): string {
+  switch (progress.phase) {
     case "Downloading":
     case "Scanning":
       return "Syncing";
@@ -41,8 +42,21 @@ function getDisplayPhase(phase: string): string {
       return "Catching up";
     case "Idle":
       return "Synced";
+    case "Offline": {
+      const retryInSeconds = progress.retry_in_seconds;
+      if (retryInSeconds == null) return "Offline";
+      if (retryInSeconds <= 0) return "Offline (retrying...)";
+      return `Offline (retry in ${formatEta(retryInSeconds)})`;
+    }
+    case "Error": {
+      const retryInSeconds = progress.retry_in_seconds;
+      const details = progress.error_message ? `: ${progress.error_message}` : "";
+      if (retryInSeconds == null) return `Error${details}`;
+      if (retryInSeconds <= 0) return `Error${details} (retrying...)`;
+      return `Error${details} (retry in ${formatEta(retryInSeconds)})`;
+    }
     default:
-      return phase;
+      return progress.phase;
   }
 }
 
@@ -141,7 +155,7 @@ export function Sidebar({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
-              {syncProgress ? getDisplayPhase(syncProgress.phase) : "Sync"}
+              {syncProgress ? getSyncLabel(syncProgress) : "Sync"}
             </span>
             <span className="font-mono text-foreground">{displayPercent.toFixed(1)}%</span>
           </div>

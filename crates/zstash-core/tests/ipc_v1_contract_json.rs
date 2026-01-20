@@ -1,6 +1,8 @@
 use serde_json::json;
 
-use zstash_core::domain::{BackupAction, ShieldAction, SyncStatus, WalletLockStatus, WalletStatus};
+use zstash_core::domain::{
+    BackupAction, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletLockStatus, WalletStatus,
+};
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
 use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
@@ -33,11 +35,26 @@ fn deny_unknown_fields_on_requests() {
 
 #[test]
 fn enum_json_shapes_match_contract() {
+    let offline_phase = serde_json::to_value(SyncPhase::Offline).unwrap();
+    assert_eq!(offline_phase, json!("Offline"));
+
     let syncing = serde_json::to_value(SyncStatus::Syncing {
         progress_percent: 42,
     })
     .unwrap();
     assert_eq!(syncing, json!({ "Syncing": { "progress_percent": 42 } }));
+
+    let offline = serde_json::to_value(SyncStatus::Offline {
+        retry_in_seconds: 20,
+    })
+    .unwrap();
+    assert_eq!(offline, json!({ "Offline": { "retry_in_seconds": 20 } }));
+
+    let err = serde_json::to_value(SyncStatus::Error {
+        message: "oops".to_string(),
+    })
+    .unwrap();
+    assert_eq!(err, json!({ "Error": { "message": "oops" } }));
 
     let shield = serde_json::to_value(ShieldAction::Available {
         amount: "1".to_string(),
@@ -47,6 +64,59 @@ fn enum_json_shapes_match_contract() {
 
     let backup = serde_json::to_value(BackupAction::Required).unwrap();
     assert_eq!(backup, json!("Required"));
+}
+
+#[test]
+fn sync_progress_retry_in_seconds_is_number_or_absent() {
+    let no_retry = SyncProgress {
+        phase: SyncPhase::Idle,
+        scan_frontier_height: 0,
+        wallet_tip_height: 0,
+        progress_percent: 0,
+        eta_seconds: None,
+        retry_in_seconds: None,
+        error_message: None,
+    };
+    let no_retry_json = serde_json::to_value(&no_retry).unwrap();
+    assert!(
+        no_retry_json.get("retry_in_seconds").is_none(),
+        "retry_in_seconds must be omitted when None"
+    );
+    assert!(
+        no_retry_json.get("error_message").is_none(),
+        "error_message must be omitted when None"
+    );
+
+    let with_retry = SyncProgress {
+        phase: SyncPhase::Offline,
+        scan_frontier_height: 123,
+        wallet_tip_height: 456,
+        progress_percent: 42,
+        eta_seconds: None,
+        retry_in_seconds: Some(20),
+        error_message: None,
+    };
+    let with_retry_json = serde_json::to_value(&with_retry).unwrap();
+    assert_eq!(with_retry_json["retry_in_seconds"], json!(20));
+    assert!(
+        with_retry_json.get("error_message").is_none(),
+        "error_message must be omitted when None"
+    );
+
+    let with_error = SyncProgress {
+        phase: SyncPhase::Error,
+        scan_frontier_height: 123,
+        wallet_tip_height: 456,
+        progress_percent: 42,
+        eta_seconds: None,
+        retry_in_seconds: Some(20),
+        error_message: Some("Failed to scan blocks".to_string()),
+    };
+    let with_error_json = serde_json::to_value(&with_error).unwrap();
+    assert_eq!(
+        with_error_json["error_message"],
+        json!("Failed to scan blocks")
+    );
 }
 
 #[test]

@@ -4,8 +4,27 @@ import type * as IPC from '../../types/ipc';
 import { onWalletStatus } from '../../services/events';
 import { getWalletStatus } from '../../services/ipc';
 import { ShieldPrompt } from './ShieldPrompt';
+import { formatEta } from '../../utils/time';
 import { formatZatoshisToZec } from '../../utils/zec';
 import { Button } from '../ui/button';
+
+function getSyncLabel(syncStatus: IPC.SyncStatus): string {
+  if (syncStatus === 'Synced') return 'Synced';
+  if ('Syncing' in syncStatus) {
+    // Cap at 99% while still syncing (matches SyncProgressWidget)
+    const percent = Math.min(syncStatus.Syncing.progress_percent, 99);
+    return `Syncing (${percent}%)`;
+  }
+  if ('Offline' in syncStatus) {
+    const retryInSeconds = syncStatus.Offline.retry_in_seconds;
+    if (retryInSeconds <= 0) return 'Offline (retrying...)';
+    return `Offline (retry in ${formatEta(retryInSeconds)})`;
+  }
+  if ('Error' in syncStatus) {
+    return `Error: ${syncStatus.Error.message}`;
+  }
+  return 'Unknown';
+}
 
 function Card(props: { title: string; children: ReactNode }) {
   return (
@@ -36,16 +55,7 @@ export function StatusWidget(props: {
 
   const syncLabel = useMemo(() => {
     if (!status) return null;
-    if (status.sync_status === 'Synced') return 'Synced';
-    if (typeof status.sync_status === 'object' && 'Syncing' in status.sync_status) {
-      // Cap at 99% while still syncing (matches SyncProgressWidget)
-      const percent = Math.min(status.sync_status.Syncing.progress_percent, 99);
-      return `Syncing (${percent}%)`;
-    }
-    if (typeof status.sync_status === 'object' && 'Error' in status.sync_status) {
-      return `Error: ${status.sync_status.Error.message}`;
-    }
-    return 'Unknown';
+    return getSyncLabel(status.sync_status);
   }, [status]);
 
   const refresh = async () => {

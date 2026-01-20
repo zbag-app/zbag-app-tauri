@@ -51,7 +51,7 @@ const SANDBLASTING_RANGE: std::ops::RangeInclusive<u32> = 1_710_000..=2_050_000;
 const LOOKAHEAD_BATCHES: usize = 2;
 
 /// Poll interval once the wallet is caught up to tip.
-const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
+pub(crate) const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Maximum backoff after repeated sync failures.
 const MAX_POLL_BACKOFF: std::time::Duration = std::time::Duration::from_secs(5 * 60);
@@ -178,6 +178,8 @@ impl SyncService {
                     wallet_tip_height: 0,
                     progress_percent: 0,
                     eta_seconds: None,
+                    retry_in_seconds: None,
+                    error_message: None,
                 },
             );
         }
@@ -309,6 +311,8 @@ impl SyncService {
                 wallet_tip_height: 0,
                 progress_percent: 0,
                 eta_seconds: None,
+                retry_in_seconds: None,
+                error_message: None,
             });
 
             // Check cancellation
@@ -391,6 +395,8 @@ impl SyncService {
             );
 
             let mut poll_backoff = POLL_INTERVAL;
+            // When entering Offline/Error backoff, emit `retry_in_seconds` before sleeping so the UI
+            // can show a countdown based on the full backoff duration.
 
             // === Persistent sync loop ===
             'auto_sync: loop {
@@ -416,12 +422,15 @@ impl SyncService {
                             .flatten()
                             .map(u32::from)
                             .unwrap_or(0);
+                        let retry_in_seconds = poll_backoff.as_secs();
                         update(SyncProgress {
-                            phase: SyncPhase::Idle,
+                            phase: SyncPhase::Offline,
                             scan_frontier_height: fully_scanned,
                             wallet_tip_height,
                             progress_percent,
                             eta_seconds: None,
+                            retry_in_seconds: Some(retry_in_seconds),
+                            error_message: None,
                         });
 
                         tokio::time::sleep(poll_backoff).await;
@@ -439,7 +448,7 @@ impl SyncService {
                     "got chain tip"
                 );
 
-                // Update chain tip in wallet (retry with backoff on transient errors).
+                // Update chain tip in wallet (retry with backoff on local DB errors).
                 if let Err(err) = wdb.update_chain_tip(chain_tip) {
                     tracing::warn!(
                         wallet_id = %wallet_id,
@@ -447,12 +456,15 @@ impl SyncService {
                         "failed to update chain tip"
                     );
                     let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+                    let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
-                        phase: SyncPhase::Idle,
+                        phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
                         wallet_tip_height: u32::from(chain_tip),
                         progress_percent,
                         eta_seconds: None,
+                        retry_in_seconds: Some(retry_in_seconds),
+                        error_message: Some("Failed to update wallet chain tip".to_string()),
                     });
 
                     tokio::time::sleep(poll_backoff).await;
@@ -466,6 +478,7 @@ impl SyncService {
                 // === Main sync loop (one pass to tip) ===
                 let mut sync_complete = false;
                 let mut sync_error = false;
+                let mut sync_error_message: Option<&'static str> = None;
                 'sync_loop: loop {
                     // Check cancellation at start of each iteration
                     if *cancel_rx.borrow() {
@@ -483,6 +496,7 @@ impl SyncService {
                                 error = ?err,
                                 "failed to get scan ranges"
                             );
+                            sync_error_message = Some("Failed to determine scan ranges");
                             sync_error = true;
                             break 'sync_loop;
                         }
@@ -624,6 +638,8 @@ impl SyncService {
                             wallet_tip_height: u32::from(wallet_tip),
                             progress_percent,
                             eta_seconds: None,
+                            retry_in_seconds: None,
+                            error_message: None,
                         });
 
                         // === Fetch tree state ONCE at the start of the range ===
@@ -641,6 +657,7 @@ impl SyncService {
                                         error = ?err,
                                         "tree state fetch failed, aborting sync"
                                     );
+                                    sync_error_message = Some("Failed to fetch chain state");
                                     sync_error = true;
                                     break 'sync_loop;
                                 }
@@ -712,6 +729,8 @@ impl SyncService {
                                                     error = ?err,
                                                     "tree state fetch failed for batch, aborting range"
                                                 );
+                                                sync_error_message =
+                                                    Some("Failed to fetch chain state");
                                                 range_error = true;
                                                 break;
                                             }
@@ -761,6 +780,8 @@ impl SyncService {
                                                         error = ?truncate_err,
                                                         "failed to truncate wallet for reorg recovery"
                                                     );
+                                                    sync_error_message =
+                                                        Some("Failed to rewind wallet after reorg");
                                                     range_error = true;
                                                     break;
                                                 }
@@ -795,6 +816,7 @@ impl SyncService {
                                                     error = ?err,
                                                     "failed to scan blocks, aborting range"
                                                 );
+                                                sync_error_message = Some("Failed to scan blocks");
                                                 range_error = true;
                                                 break;
                                             }
@@ -828,6 +850,8 @@ impl SyncService {
                                         wallet_tip_height: u32::from(wallet_tip),
                                         progress_percent,
                                         eta_seconds: None,
+                                        retry_in_seconds: None,
+                                        error_message: None,
                                     });
                                 }
                                 DownloadResult::RangeComplete => {
@@ -838,6 +862,7 @@ impl SyncService {
                                     break;
                                 }
                                 DownloadResult::Error(_err) => {
+                                    sync_error_message = Some("Failed to download blocks");
                                     range_error = true;
                                     break;
                                 }
@@ -873,18 +898,23 @@ impl SyncService {
                             wallet_tip_height: u32::from(wallet_tip),
                             progress_percent,
                             eta_seconds: None,
+                            retry_in_seconds: None,
+                            error_message: None,
                         });
                     }
                 }
 
                 if sync_error {
                     let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+                    let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
-                        phase: SyncPhase::Idle,
+                        phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
                         wallet_tip_height: u32::from(chain_tip),
                         progress_percent,
                         eta_seconds: None,
+                        retry_in_seconds: Some(retry_in_seconds),
+                        error_message: sync_error_message.map(str::to_string),
                     });
 
                     tokio::time::sleep(poll_backoff).await;
@@ -903,6 +933,8 @@ impl SyncService {
                         wallet_tip_height: u32::from(chain_tip),
                         progress_percent: 100,
                         eta_seconds: None,
+                        retry_in_seconds: None,
+                        error_message: None,
                     });
                 }
 
@@ -1046,12 +1078,18 @@ fn default_progress() -> SyncProgress {
         wallet_tip_height: 0,
         progress_percent: 0,
         eta_seconds: None,
+        retry_in_seconds: None,
+        error_message: None,
     }
 }
 
 fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> SyncProgress {
     // Reset/clear ETA once syncing is done (or aborted) so we don't leak stale estimates.
-    if progress.phase == SyncPhase::Idle {
+    // For Offline/Error states, keep the retry_in_seconds but clear ETA.
+    if matches!(
+        progress.phase,
+        SyncPhase::Idle | SyncPhase::Offline | SyncPhase::Error
+    ) {
         progress.eta_seconds = None;
         state.progress_estimates.remove(&wallet_id);
         return progress;

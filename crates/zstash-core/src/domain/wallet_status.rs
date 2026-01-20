@@ -17,8 +17,16 @@ pub enum BackupAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SyncStatus {
     Synced,
-    Syncing { progress_percent: u8 },
-    Error { message: String },
+    Syncing {
+        progress_percent: u8,
+    },
+    /// Network unreachable; retrying with exponential backoff. Cached funds remain visible.
+    Offline {
+        retry_in_seconds: u64,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

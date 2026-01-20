@@ -83,6 +83,8 @@ pub(crate) fn start_sync_with_handlers(
                     wallet_tip_height: 0,
                     progress_percent: 0,
                     eta_seconds: None,
+                    retry_in_seconds: None,
+                    error_message: None,
                 },
             );
             Ok(true)

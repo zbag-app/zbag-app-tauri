@@ -1282,21 +1282,19 @@ impl WalletManager {
     }
 
     pub fn observe_sync_progress(&mut self, wallet_id: Uuid, progress: SyncProgress) {
-        let prev = self.cached_sync_status.get(&wallet_id).cloned();
-
         let next = match progress.phase {
             SyncPhase::Idle => {
-                if progress.progress_percent >= 100 {
-                    self.sync_stop_requested.remove(&wallet_id);
-                    SyncStatus::Synced
-                } else if self.sync_stop_requested.remove(&wallet_id) {
-                    SyncStatus::Synced
-                } else if matches!(prev, Some(SyncStatus::Syncing { .. })) {
-                    SyncStatus::Error {
-                        message: "sync failed".to_string(),
-                    }
-                } else {
-                    SyncStatus::Synced
+                // WalletStatus treats Idle as Synced. Offline/local failures are surfaced explicitly
+                // via SyncPhase::Offline / SyncPhase::Error, and `sync_stop_requested` is best-effort.
+                self.sync_stop_requested.remove(&wallet_id);
+                SyncStatus::Synced
+            }
+            SyncPhase::Offline => {
+                // Network unreachable, retrying with backoff. Cached funds remain visible.
+                SyncStatus::Offline {
+                    retry_in_seconds: progress
+                        .retry_in_seconds
+                        .unwrap_or(crate::sync_service::POLL_INTERVAL.as_secs()),
                 }
             }
             SyncPhase::CatchingUp => {
@@ -1309,6 +1307,14 @@ impl WalletManager {
                     SyncStatus::Syncing {
                         progress_percent: progress.progress_percent,
                     }
+                }
+            }
+            SyncPhase::Error => {
+                // Local error (DB, scan, etc.) - not a network issue.
+                SyncStatus::Error {
+                    message: progress
+                        .error_message
+                        .unwrap_or_else(|| "Sync failed due to local error".to_string()),
                 }
             }
             _ => SyncStatus::Syncing {

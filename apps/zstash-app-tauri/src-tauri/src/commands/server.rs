@@ -20,6 +20,25 @@ use crate::state::AppState;
 use super::util::map_anyhow;
 use super::util::system_time_to_unix_ms;
 
+/// Timeout for server probe to avoid UI blocking when offline.
+///
+/// This is a UX guardrail: long enough for slow networks/Tor circuits, short enough to keep the
+/// UI responsive when the endpoint is unreachable.
+const SERVER_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+fn probe_chain_name_with_timeout(
+    client: &zstash_network::grpc_client::GrpcClient,
+) -> anyhow::Result<String> {
+    let info = tauri::async_runtime::block_on(async {
+        match tokio::time::timeout(SERVER_PROBE_TIMEOUT, client.probe_server()).await {
+            Ok(result) => result,
+            Err(_) => Err(anyhow::anyhow!("connection timed out")),
+        }
+    })?;
+
+    Ok(info.chain_name)
+}
+
 fn parse_network(chain_name: &str) -> anyhow::Result<Network> {
     let name = chain_name.trim().to_lowercase();
     match name.as_str() {
@@ -57,17 +76,14 @@ pub fn zstash_add_server(
             Arc::clone(&state.tor_manager),
         );
 
-        let started = Instant::now();
-        let info =
-            tauri::async_runtime::block_on(async { client.probe_server().await }).map_err(|e| {
-                ipc_err(
-                    errors::SERVER_UNAVAILABLE,
-                    format!("server probe failed: {e}"),
-                )
-            })?;
-        let _latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let chain_name = probe_chain_name_with_timeout(&client).map_err(|e| {
+            ipc_err(
+                errors::SERVER_UNAVAILABLE,
+                format!("server probe failed: {e}"),
+            )
+        })?;
 
-        let network = parse_network(&info.chain_name)?;
+        let network = parse_network(&chain_name)?;
 
         let now_ms = system_time_to_unix_ms(std::time::SystemTime::now())?;
         let server = ServerInfo {
@@ -207,12 +223,12 @@ pub fn zstash_test_server(
         );
 
         let started = Instant::now();
-        let probe = tauri::async_runtime::block_on(async { client.probe_server().await });
+        let probe = probe_chain_name_with_timeout(&client);
         let latency_ms = u64::try_from(started.elapsed().as_millis()).ok();
 
         match probe {
-            Ok(info) => {
-                let network = parse_network(&info.chain_name)?;
+            Ok(chain_name) => {
+                let network = parse_network(&chain_name)?;
                 if network != server.network {
                     return Ok(TestServerResponse {
                         schema_version: SCHEMA_VERSION,

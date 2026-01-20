@@ -135,7 +135,11 @@ export type SyncPhase =
   | 'Downloading'
   | 'Scanning'
   | 'Enhancing'
-  | 'CatchingUp';
+  | 'CatchingUp'
+  /** Network is unreachable; sync is retrying with exponential backoff. */
+  | 'Offline'
+  /** Sync encountered a local error (DB, scan); retrying with backoff. */
+  | 'Error';
 
 export interface SyncProgress {
   phase: SyncPhase;
@@ -143,6 +147,10 @@ export interface SyncProgress {
   wallet_tip_height: number;
   progress_percent: number;
   eta_seconds: number | null;
+  /** Seconds until the next retry attempt (populated when phase is Offline or Error). */
+  retry_in_seconds?: number;
+  /** User-safe, high-level error message (populated when phase is Error). */
+  error_message?: string;
 }
 
 // ============================================================================
@@ -224,6 +232,8 @@ export type BackupAction = 'Required' | 'Complete';
 export type SyncStatus =
   | 'Synced'
   | { Syncing: { progress_percent: number } }
+  /** Network unreachable; retrying with exponential backoff. Cached funds remain visible. */
+  | { Offline: { retry_in_seconds: number } }
   | { Error: { message: string } };
 export type ShieldAction =
   | 'None'
