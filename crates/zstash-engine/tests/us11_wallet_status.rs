@@ -1,14 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use uuid::Uuid;
-use zeroize::Zeroize;
 
 use zstash_core::domain::{
     AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus,
 };
-use zstash_engine::db::{backup_meta, wallet_encryption_meta};
+use zstash_engine::db::{
+    OpenSqlcipherOptions, backup_meta, open_sqlcipher_db, wallet_encryption_meta,
+};
 use zstash_engine::encryption;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::wallet_manager::WalletManager;
@@ -97,23 +98,16 @@ fn wallet_db_path(wallets_root: &Path, network: Network, wallet_id: Uuid) -> Pat
         .join("wallet.sqlite")
 }
 
-fn open_sqlcipher_conn(path: &Path, dek: &[u8; 32]) -> Connection {
-    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-        .expect("open wallet db");
-
-    let mut dek_hex = dek.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
-    conn.execute_batch(&pragma).expect("apply key");
-    dek_hex.zeroize();
-    pragma.zeroize();
-
-    rusqlite::vtab::array::load_module(&conn).expect("load sqlite array module");
-
-    let _: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-        .expect("validate db");
-
-    conn
+fn open_sqlcipher_conn(path: &Path, dek: &encryption::Dek) -> Connection {
+    open_sqlcipher_db(
+        path,
+        dek,
+        OpenSqlcipherOptions {
+            create_if_missing: false,
+            load_array_module: true,
+        },
+    )
+    .expect("open wallet db")
 }
 
 fn consensus_network(network: Network) -> zcash_protocol::consensus::Network {
@@ -164,7 +158,7 @@ fn insert_transparent_utxos(
     let db_path = wallet_db_path(mgr.wallets_root(), network, wallet_id);
     assert!(db_path.exists(), "wallet db file should exist");
 
-    let mut conn = open_sqlcipher_conn(&db_path, &dek.0);
+    let mut conn = open_sqlcipher_conn(&db_path, &dek);
     let params = consensus_network(network);
 
     use zcash_protocol::consensus::Parameters as _;

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, bail};
-use rusqlite::{Connection, OpenFlags, params};
+use rusqlite::{Connection, params};
 
 use super::schema::INITIAL_SCHEMA_V1;
 
@@ -22,14 +22,7 @@ pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
     }
 
     let migrate_result = (|| {
-        let conn = Connection::open_with_flags(
-            db_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-        )
-        .with_context(|| format!("failed to open app metadata db: {}", db_path.display()))?;
-
-        conn.execute_batch("PRAGMA foreign_keys = ON;")
-            .context("failed to enable foreign_keys")?;
+        let conn = super::open_app_db_connection(db_path)?;
 
         apply_migrations(&conn)?;
         Ok::<(), anyhow::Error>(())
@@ -70,9 +63,6 @@ fn snapshot_path(db_path: &Path) -> PathBuf {
 }
 
 pub fn apply_migrations(conn: &Connection) -> anyhow::Result<()> {
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .context("failed to enable foreign_keys")?;
-
     let current_version = current_version(conn)?;
     if current_version > LATEST_VERSION {
         bail!(

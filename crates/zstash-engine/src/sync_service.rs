@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::Context as _;
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use zeroize::Zeroize;
 
 use std::io::Write as _;
 
@@ -31,7 +30,7 @@ use zstash_core::errors;
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 
-use crate::db::AppDb;
+use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
@@ -1029,26 +1028,15 @@ fn record_balance(
     }
 }
 
-fn open_wallet_db(wallet_db_path: &PathBuf, dek: &Dek) -> anyhow::Result<Connection> {
-    let conn = Connection::open_with_flags(wallet_db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-        .with_context(|| format!("failed to open wallet db: {}", wallet_db_path.display()))?;
-
-    let mut dek_hex = dek.0.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
-    conn.execute_batch(&pragma)
-        .context("failed to apply wallet db encryption key")?;
-
-    dek_hex.zeroize();
-    pragma.zeroize();
-
-    rusqlite::vtab::array::load_module(&conn).context("failed to load sqlite array module")?;
-
-    // Force an early read to detect an incorrect key.
-    let _: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-        .context("wallet db is not readable (incorrect key or corrupted db)")?;
-
-    Ok(conn)
+fn open_wallet_db(wallet_db_path: &Path, dek: &Dek) -> anyhow::Result<Connection> {
+    open_sqlcipher_db(
+        wallet_db_path,
+        dek,
+        OpenSqlcipherOptions {
+            create_if_missing: false,
+            load_array_module: true,
+        },
+    )
 }
 
 fn default_progress() -> SyncProgress {

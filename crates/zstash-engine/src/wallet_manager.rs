@@ -8,7 +8,6 @@ use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::RngCore as _;
 use rand::seq::SliceRandom as _;
-use rusqlite::OpenFlags;
 use secrecy::SecretVec;
 use uuid::Uuid;
 use zeroize::Zeroize;
@@ -22,7 +21,10 @@ use zstash_core::errors;
 
 use crate::birthday;
 use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
-use crate::db::{AppDb, account_meta, backup_meta, wallet_encryption_meta, wallet_meta};
+use crate::db::{
+    AppDb, OpenSqlcipherOptions, account_meta, backup_meta, open_sqlcipher_db,
+    wallet_encryption_meta, wallet_meta,
+};
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
 };
@@ -2154,29 +2156,14 @@ impl WalletManager {
         dek: &Dek,
         create_if_missing: bool,
     ) -> anyhow::Result<rusqlite::Connection> {
-        let flags = if create_if_missing {
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
-        } else {
-            OpenFlags::SQLITE_OPEN_READ_WRITE
-        };
-
-        let conn = rusqlite::Connection::open_with_flags(wallet_db_path, flags)
-            .with_context(|| format!("failed to open wallet db: {}", wallet_db_path.display()))?;
-
-        let mut dek_hex = dek.0.iter().map(|b| format!("{b:02x}")).collect::<String>();
-        let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
-        conn.execute_batch(&pragma)
-            .context("failed to apply wallet db encryption key")?;
-
-        dek_hex.zeroize();
-        pragma.zeroize();
-
-        // Force an early read to detect an incorrect key.
-        let _: i64 = conn
-            .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-            .context("wallet db is not readable (incorrect key or corrupted db)")?;
-
-        Ok(conn)
+        open_sqlcipher_db(
+            wallet_db_path,
+            dek,
+            OpenSqlcipherOptions {
+                create_if_missing,
+                load_array_module: false,
+            },
+        )
     }
 
     fn issue_backup_challenge(&mut self, wallet_id: Uuid) -> anyhow::Result<BackupChallenge> {

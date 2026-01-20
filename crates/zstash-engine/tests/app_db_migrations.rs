@@ -1,21 +1,14 @@
-use std::path::PathBuf;
+mod common;
 
-use rusqlite::Connection;
-use uuid::Uuid;
-
-use zstash_engine::db::migrations;
-
-fn temp_db_path() -> PathBuf {
-    std::env::temp_dir().join(format!("zstash_app_db_test_{}.sqlite", Uuid::new_v4()))
-}
+use zstash_engine::db::{migrations, open_app_db_connection};
 
 #[test]
 fn app_db_initial_migration_creates_schema_and_seeds_servers() {
-    let db_path = temp_db_path();
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("migration should succeed");
 
-    let conn = Connection::open(&db_path).expect("should open db");
+    let conn = open_app_db_connection(&db_path).expect("should open db");
 
     let tables: Vec<String> = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -68,12 +61,12 @@ fn app_db_initial_migration_creates_schema_and_seeds_servers() {
 
 #[test]
 fn app_db_migration_is_idempotent() {
-    let db_path = temp_db_path();
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("first migration should succeed");
     migrations::migrate_with_rollback(&db_path).expect("second migration should succeed");
 
-    let conn = Connection::open(&db_path).expect("should open db");
+    let conn = open_app_db_connection(&db_path).expect("should open db");
     let server_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM servers", [], |row| row.get(0))
         .unwrap();

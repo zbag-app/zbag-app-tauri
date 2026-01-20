@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context as _;
-use rusqlite::OpenFlags;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
@@ -19,7 +18,7 @@ use zstash_core::ipc::v1::commands::swap::{
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::SwapChangedEvent;
 
-use crate::db::{account_meta, swap_meta};
+use crate::db::{account_meta, open_app_db_connection, swap_meta};
 use crate::error::ipc_err;
 use crate::tokio_runtime::block_on;
 use crate::wallet_manager::WalletManager;
@@ -261,7 +260,7 @@ impl SwapService {
             updated_at: now_ms,
         };
 
-        let conn = open_app_db(&self.app_db_path)?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
         swap_meta::insert_swap(&conn, wallet_id, &swap).context("failed to insert swap")?;
 
         if let Some(handler) = on_swap_changed.as_ref() {
@@ -309,7 +308,7 @@ impl SwapService {
             .clone()
             .ok_or_else(|| ipc_err(errors::SWAP_FAILED, "quote missing deposit address"))?;
 
-        let conn = open_app_db(&self.app_db_path)?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
         let accounts =
             account_meta::list_accounts(&conn, wallet_id).context("failed to list accounts")?;
         let account_id = accounts
@@ -436,7 +435,7 @@ impl SwapService {
         wallet_id: Uuid,
         swap_id: Uuid,
     ) -> anyhow::Result<GetSwapStatusResponse> {
-        let conn = open_app_db(&self.app_db_path)?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
         let Some((owner_wallet_id, swap)) =
             swap_meta::get_swap(&conn, swap_id).context("failed to load swap")?
         else {
@@ -454,7 +453,7 @@ impl SwapService {
     }
 
     pub fn list_swaps(&self, wallet_id: Uuid) -> anyhow::Result<ListSwapsResponse> {
-        let conn = open_app_db(&self.app_db_path)?;
+        let conn = open_app_db_connection(&self.app_db_path)?;
         let swaps =
             swap_meta::list_swaps_for_wallet(&conn, wallet_id).context("failed to list swaps")?;
         Ok(ListSwapsResponse {
@@ -529,7 +528,7 @@ impl SwapService {
                             swap.updated_at = chrono::Utc::now().timestamp_millis();
                             swap.last_error = status.message.clone().or(swap.last_error);
 
-                            match open_app_db(&app_db_path) {
+                            match open_app_db_connection(&app_db_path) {
                                 Ok(conn) => {
                                     if let Err(db_err) =
                                         swap_meta::update_swap(&conn, wallet_id, &swap)
@@ -579,7 +578,7 @@ impl SwapService {
                         backoff = backoff.saturating_mul(2).min(Duration::from_secs(60));
                         swap.last_error = Some(err.to_string());
                         swap.updated_at = chrono::Utc::now().timestamp_millis();
-                        match open_app_db(&app_db_path) {
+                        match open_app_db_connection(&app_db_path) {
                             Ok(conn) => {
                                 if let Err(db_err) = swap_meta::update_swap(&conn, wallet_id, &swap)
                                 {
@@ -865,19 +864,6 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
         Network::Mainnet => zcash_protocol::consensus::Network::MainNetwork,
         Network::Testnet => zcash_protocol::consensus::Network::TestNetwork,
     }
-}
-
-fn open_app_db(path: &Path) -> anyhow::Result<rusqlite::Connection> {
-    let conn = rusqlite::Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-    )
-    .with_context(|| format!("failed to open app metadata db: {}", path.display()))?;
-
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .context("failed to enable foreign_keys")?;
-
-    Ok(conn)
 }
 
 /// Get decimals for a given asset ID.

@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use uuid::Uuid;
-use zeroize::Zeroize;
 
 use zstash_core::domain::{Network, WalletLockStatus};
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::wallet_encryption_meta;
+use zstash_engine::db::{OpenSqlcipherOptions, open_sqlcipher_db, wallet_encryption_meta};
 use zstash_engine::encryption;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::wallet_manager::WalletManager;
@@ -124,27 +123,6 @@ fn wallet_db_path(wallets_root: &Path, network: Network, wallet_id: Uuid) -> Pat
         .join("wallet.sqlite")
 }
 
-fn open_sqlcipher_conn(path: &Path, dek: &[u8; 32], create_if_missing: bool) -> Connection {
-    let flags = if create_if_missing {
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
-    } else {
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-    };
-    let conn = Connection::open_with_flags(path, flags).expect("open wallet db");
-
-    let mut dek_hex = dek.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
-    conn.execute_batch(&pragma).expect("apply key");
-    dek_hex.zeroize();
-    pragma.zeroize();
-
-    let _: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-        .expect("validate db");
-
-    conn
-}
-
 #[test]
 fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
     let root = temp_root("wallet_db_enc");
@@ -200,7 +178,8 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
     )
     .expect("unwrap DEK");
 
-    let conn = open_sqlcipher_conn(&db_path, &dek.0, false);
+    let conn = open_sqlcipher_db(&db_path, &dek, OpenSqlcipherOptions::default())
+        .expect("open wallet db with key");
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| r.get(0))
         .expect("query sqlite_master");
@@ -245,7 +224,15 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
     // Replace the wallet DB with a minimal encrypted DB to force migrations to make changes.
     let db_path = wallet_db_path(&wallets_root, Network::Testnet, wallet.id);
     std::fs::remove_file(&db_path).expect("remove migrated db");
-    let conn = open_sqlcipher_conn(&db_path, &dek.0, true);
+    let conn = open_sqlcipher_db(
+        &db_path,
+        &dek,
+        OpenSqlcipherOptions {
+            create_if_missing: true,
+            ..Default::default()
+        },
+    )
+    .expect("open wallet db with key");
     conn.execute_batch("CREATE TABLE dummy(id INTEGER); INSERT INTO dummy(id) VALUES (1);")
         .expect("seed dummy table");
     drop(conn);
@@ -258,7 +245,8 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
     mgr.__set_wallet_db_force_validate_fail(false);
 
     // Ensure the DB was restored to the pre-migration snapshot (dummy table exists, accounts does not).
-    let conn = open_sqlcipher_conn(&db_path, &dek.0, false);
+    let conn = open_sqlcipher_db(&db_path, &dek, OpenSqlcipherOptions::default())
+        .expect("open wallet db with key");
     let tables: Vec<String> = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         .unwrap()
