@@ -386,7 +386,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                     }
                     setPassword('');
 
-                    const allow = privacyAck;
+                    const allow = privacyAckRequired && privacyAck;
                     const startRes = await startSwap({
                       quote_id: quoteId,
                       allow_transparent_interaction: allow,
