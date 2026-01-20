@@ -269,6 +269,8 @@ export interface ServerInfo {
   network: Network;
   is_default: boolean;
   last_success_at: UnixTimestampMs | null;
+  /** Validation error message if the URL is invalid, `null` if valid. */
+  validation_error?: string | null;
 }
 
 // ============================================================================
@@ -823,10 +825,20 @@ export interface AddServerResponse extends VersionedPayload {
   server: ServerInfo;
 }
 
+/**
+ * Note: if the stored server configuration is invalid (e.g. malformed `grpc_url`), the backend
+ * returns an IPC error rather than `{ success: false }`.
+ */
 export interface SetDefaultServerResponse extends VersionedPayload {
   success: boolean;
 }
 
+/**
+ * Health-check response.
+ *
+ * Invalid stored configuration is reported as `success: false` with an `error` message (instead of
+ * failing the IPC call).
+ */
 export interface TestServerResponse extends VersionedPayload {
   success: boolean;
   latency_ms: number | null;

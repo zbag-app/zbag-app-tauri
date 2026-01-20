@@ -10848,6 +10848,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "url",
  "uuid",
  "zcash_client_backend",
  "zcash_client_sqlite",

@@ -47,6 +47,7 @@ pub fn get_server(conn: &Connection, server_id: Uuid) -> rusqlite::Result<Option
         },
         is_default: row.get::<_, i64>(4)? != 0,
         last_success_at: row.get(5)?,
+        validation_error: None,
     }))
 }
 
@@ -75,6 +76,7 @@ pub fn list_servers(conn: &Connection) -> rusqlite::Result<Vec<ServerInfo>> {
                 },
                 is_default: row.get::<_, i64>(4)? != 0,
                 last_success_at: row.get(5)?,
+                validation_error: None,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;

@@ -9,6 +9,8 @@ use console::style;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, ServerInfo};
+use zstash_engine::error::find_engine_ipc_error;
+use zstash_engine::grpc_url::validate_grpc_url;
 use zstash_network::grpc_client::GrpcClient;
 
 use crate::cli_app_state::CliAppState;
@@ -68,6 +70,8 @@ async fn list_servers(data_dir: &Path, output: &OutputMode) -> Result<()> {
         zstash_engine::db::server_meta::list_servers(wm.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?
     };
+    // Intentionally do not validate URLs here: this is a read-only listing, and invalid/legacy
+    // stored entries are rejected when used (set default, test, resolve).
 
     print_server_list(output, &servers);
     Ok(())
@@ -83,6 +87,9 @@ async fn add_server(data_dir: &Path, name: &str, url: &str, output: &OutputMode)
     if url.is_empty() {
         anyhow::bail!("gRPC URL is required");
     }
+
+    // Validate URL format and scheme policy (release: HTTPS only; debug: allow HTTP localhost)
+    validate_grpc_url(url)?;
 
     let state = CliAppState::new(data_dir, false)?;
 
@@ -110,6 +117,7 @@ async fn add_server(data_dir: &Path, name: &str, url: &str, output: &OutputMode)
         network,
         is_default: false,
         last_success_at: Some(now_ms),
+        validation_error: None,
     };
 
     {
@@ -138,6 +146,9 @@ async fn set_default_server(
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
 
+    // Defense-in-depth: stored values may be tampered with or come from legacy versions.
+    validate_grpc_url(&server.grpc_url)?;
+
     {
         let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
         zstash_engine::db::server_meta::set_default_server(wm.app_db_mut().conn_mut(), server_id)
@@ -159,6 +170,23 @@ async fn test_server(data_dir: &Path, server_id_str: &str, output: &OutputMode) 
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
+
+    // Validate URL format and scheme policy (release: HTTPS only; debug: allow HTTP localhost).
+    // `test_server` is a health-check, so invalid stored configuration is reported as a test
+    // failure rather than failing the CLI command itself.
+    if let Err(err) = validate_grpc_url(&server.grpc_url) {
+        let message = find_engine_ipc_error(&err)
+            .map(|engine| engine.message.clone())
+            .unwrap_or_else(|| err.to_string());
+        print_test_result(
+            output,
+            &server,
+            false,
+            None,
+            Some(format!("stored server configuration is invalid: {message}")),
+        );
+        return Ok(());
+    }
 
     if !output.is_json() {
         println!("Testing server {}...", style(&server.grpc_url).cyan());

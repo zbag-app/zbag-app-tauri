@@ -27,6 +27,7 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 keyring.workspace = true
+url.workspace = true
 zip32.workspace = true
 zcash_proofs.workspace = true
 prost.workspace = true

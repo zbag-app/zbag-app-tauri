@@ -27,6 +27,9 @@ struct GrpcUrlOverrideGuard {
 }
 
 impl GrpcUrlOverrideGuard {
+    /// Sets `ZSTASH_GRPC_URL` for test isolation.
+    /// Tests use `http://127.0.0.1:9999` - port 9999 is intentionally unreachable
+    /// so network calls fail predictably without external dependencies.
     fn set(url: &str) -> Self {
         let prev = std::env::var("ZSTASH_GRPC_URL").ok();
         unsafe {
@@ -341,7 +344,7 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
 #[test]
 fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
     let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("not-a-valid-grpc-url");
+    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
 
     let root = temp_root("us3_shield_sweep");
     let app_db_path = root.join("app.db");
@@ -422,7 +425,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
 #[test]
 fn shield_funds_is_blocked_until_backup_complete() {
     let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("not-a-valid-grpc-url");
+    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
 
     let root = temp_root("us3_shield_backup_gate");
     let app_db_path = root.join("app.db");
@@ -454,7 +457,7 @@ fn shield_funds_is_blocked_until_backup_complete() {
 #[test]
 fn shield_funds_insufficient_fee_includes_details() {
     let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("not-a-valid-grpc-url");
+    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
 
     let root = temp_root("us3_shield_fee_insufficient");
     let app_db_path = root.join("app.db");
@@ -515,7 +518,7 @@ fn shield_funds_insufficient_fee_includes_details() {
 #[test]
 fn shield_funds_batches_large_input_sets() {
     let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("not-a-valid-grpc-url");
+    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
 
     let root = temp_root("us3_shield_batching");
     let app_db_path = root.join("app.db");

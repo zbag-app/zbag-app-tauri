@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use tauri::State;
+use tracing::warn;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, ServerInfo};
@@ -11,7 +12,8 @@ use zstash_core::ipc::v1::commands::server::{
     SetDefaultServerRequest, SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
 use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zstash_engine::error::ipc_err;
+use zstash_engine::error::{find_engine_ipc_error, ipc_err};
+use zstash_engine::grpc_url::validate_grpc_url;
 
 use crate::state::AppState;
 
@@ -48,6 +50,7 @@ pub fn zstash_add_server(
         if grpc_url.is_empty() {
             return Err(ipc_err(errors::INVALID_REQUEST, "grpc_url required"));
         }
+        validate_grpc_url(grpc_url)?;
 
         let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
             grpc_url.to_string(),
@@ -74,6 +77,7 @@ pub fn zstash_add_server(
             network,
             is_default: false,
             last_success_at: Some(now_ms),
+            validation_error: None,
         };
 
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
@@ -102,6 +106,17 @@ pub fn zstash_set_default_server(
             zstash_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
                 .map_err(|e| anyhow::anyhow!(e))?
                 .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?;
+        // Defense-in-depth: stored values may be tampered with or come from legacy versions.
+        validate_grpc_url(&server.grpc_url).map_err(|err| {
+            warn!(
+                server_id = %server.id,
+                error = ?err,
+                "stored server URL failed validation"
+            );
+            err
+        })?;
+        // `set_default_server` is state-changing: invalid stored configuration should fail the
+        // command (propagating an IPC error) so the caller can prompt the user to fix it.
         mgr.ensure_server_network_matches_active_wallet(server.network)?;
 
         zstash_engine::db::server_meta::set_default_server(
@@ -130,6 +145,21 @@ pub fn zstash_list_servers(
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let servers = zstash_engine::db::server_meta::list_servers(mgr.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?;
+        // Validate each server's URL and populate validation_error so the frontend can display
+        // invalid servers with a warning. Invalid servers are still rejected when used (set default,
+        // test, resolve), but informing the frontend lets it show them greyed out with a warning.
+        let servers = servers
+            .into_iter()
+            .map(|mut server| {
+                if let Err(err) = validate_grpc_url(&server.grpc_url) {
+                    let message = zstash_engine::error::find_engine_ipc_error(&err)
+                        .map(|e| e.message.clone())
+                        .unwrap_or_else(|| err.to_string());
+                    server.validation_error = Some(message);
+                }
+                server
+            })
+            .collect();
 
         Ok(ListServersResponse {
             schema_version: SCHEMA_VERSION,
@@ -154,6 +184,22 @@ pub fn zstash_test_server(
                 .map_err(|e| anyhow::anyhow!(e))?
                 .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?
         };
+
+        // Defense-in-depth: re-validate stored URLs in case of DB tampering or legacy values.
+        // `test_server` is a health-check: invalid stored configuration is reported as
+        // `success: false` rather than failing the IPC command itself.
+        if let Err(err) = validate_grpc_url(&server.grpc_url) {
+            let message = find_engine_ipc_error(&err)
+                .map(|engine| engine.message.clone())
+                .unwrap_or_else(|| err.to_string());
+            warn!(server_id = %server.id, error = %message, "stored server URL failed validation");
+            return Ok(TestServerResponse {
+                schema_version: SCHEMA_VERSION,
+                success: false,
+                latency_ms: None,
+                error: Some(format!("stored server configuration is invalid: {message}")),
+            });
+        }
 
         let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
             server.grpc_url.clone(),

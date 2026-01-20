@@ -18,4 +18,8 @@ pub struct ServerInfo {
     pub network: Network,
     pub is_default: bool,
     pub last_success_at: Option<i64>,
+    /// Validation error message if the URL is invalid, `None` if valid.
+    /// Populated by `list_servers` to inform the frontend which servers have invalid URLs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validation_error: Option<String>,
 }

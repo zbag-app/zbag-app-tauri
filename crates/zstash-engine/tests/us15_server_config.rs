@@ -111,6 +111,7 @@ fn set_default_server_is_scoped_to_server_network() {
         network: Network::Testnet,
         is_default: false,
         last_success_at: None,
+        validation_error: None,
     };
     zstash_engine::db::server_meta::insert_server(mgr.app_db().conn(), &new_testnet, now_ms)
         .expect("insert server");
