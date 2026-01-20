@@ -27,7 +27,6 @@ export function KeystoneSetup(props: {
   const [network, setNetwork] = useState<IPC.Network>('Testnet');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [rememberUnlock, setRememberUnlock] = useState(false);
   const [birthdayHeight, setBirthdayHeight] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +86,7 @@ export function KeystoneSetup(props: {
         name: name.trim(),
         network,
         password,
-        remember_unlock: rememberUnlock,
+        remember_unlock: false,
         ufvk: ufvk.trim(),
         birthday_height: birthday,
         seed_fingerprint: seedFingerprint,
@@ -301,18 +300,6 @@ export function KeystoneSetup(props: {
                 Leave blank to scan from Sapling activation (slower but complete).
               </p>
             </div>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberUnlock}
-                onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-                className="rounded border-border h-4 w-4 accent-primary"
-              />
-              <span className="text-sm text-muted-foreground">
-                Remember unlock (stores unlock material in OS keychain)
-              </span>
-            </label>
 
             {error && (
               <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">

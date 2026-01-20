@@ -262,8 +262,11 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
     );
 }
 
+/// Keychain auto-unlock is DISABLED (see issue #45).
+/// This test verifies that wallets created with remember_unlock=true
+/// do NOT auto-unlock on load - password is always required.
 #[test]
-fn keychain_auto_unlock_does_not_satisfy_reauth() {
+fn keychain_auto_unlock_is_disabled() {
     let root = temp_root("wallet_keychain_reauth");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -279,6 +282,7 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         )
         .expect("create wallet manager");
 
+        // Even though we pass remember_unlock=true, the feature is disabled
         mgr.create_wallet("Test Wallet", Network::Testnet, password, true, None)
             .expect("create wallet")
             .wallet
@@ -289,13 +293,19 @@ fn keychain_auto_unlock_does_not_satisfy_reauth() {
         WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
             .expect("create wallet manager");
 
-    let (_wallet, lock_status) = mgr.load_wallet(wallet_id).expect("load wallet");
-    assert_eq!(lock_status, WalletLockStatus::Unlocked);
+    // Auto-unlock is disabled, so wallet should be Locked after load
+    let (wallet, lock_status) = mgr.load_wallet(wallet_id).expect("load wallet");
+    assert_eq!(lock_status, WalletLockStatus::Locked);
+    assert!(
+        !wallet.remember_unlock_enabled,
+        "remember_unlock_enabled should always be false (feature disabled)"
+    );
 
+    // Reauth still validates password (doesn't require wallet to be unlocked)
     assert!(
         mgr.reauth_wallet(wallet_id, "", ReauthPurpose::Spend)
             .is_err(),
-        "reauth must require password input even when auto-unlocked"
+        "reauth must require password input"
     );
     assert!(
         mgr.reauth_wallet(wallet_id, "wrong", ReauthPurpose::Spend)

@@ -88,6 +88,8 @@ pub struct CreateKeystoneWalletRequest {
     pub name: String,
     pub network: Network,
     pub password: String,
+    /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+    /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
     pub ufvk: String,
     /// Optional birthday height for faster sync.

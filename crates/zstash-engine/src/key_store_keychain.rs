@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use base64::Engine as _;
 use uuid::Uuid;
 
 use zstash_core::domain::Network;
@@ -106,36 +105,51 @@ impl KeyStore for KeyStoreKeychain {
         }
     }
 
+    /// DISABLED: Keychain-based auto-unlock is disabled due to security concerns.
+    ///
+    /// macOS Keychain with biometric access (`kSecAccessControlBiometryAny`) allows ANY enrolled
+    /// fingerprint on the device to authenticate - it does not distinguish between different users'
+    /// fingerprints. This is problematic for shared devices or situations where someone else's
+    /// fingerprint was added to the device.
+    ///
+    /// See: https://github.com/zstashapp/zstash/issues/45
     fn store_keychain_unlock_material(
         &self,
-        wallet_id: Uuid,
-        network: Network,
-        unlock_material: &[u8],
+        _wallet_id: Uuid,
+        _network: Network,
+        _unlock_material: &[u8],
     ) -> anyhow::Result<()> {
-        let entry = self.keychain_entry(wallet_id, network)?;
-        let secret_b64 = base64::engine::general_purpose::STANDARD.encode(unlock_material);
-        entry
-            .set_password(&secret_b64)
-            .context("failed to store keychain unlock material")?;
+        // No-op: Do not store DEK in keychain to prevent false sense of biometric security
         Ok(())
     }
 
+    /// DISABLED: Keychain-based auto-unlock is disabled due to security concerns.
+    ///
+    /// Always returns None to require password entry on every unlock.
+    /// See `store_keychain_unlock_material` for rationale.
     fn load_keychain_unlock_material(
         &self,
         wallet_id: Uuid,
         network: Network,
     ) -> anyhow::Result<Option<Vec<u8>>> {
-        let entry = self.keychain_entry(wallet_id, network)?;
-        match entry.get_password() {
-            Ok(secret_b64) => {
-                let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(secret_b64)
-                    .context("invalid keychain unlock material encoding")?;
-                Ok(Some(decoded))
+        // Clean up any previously stored keychain entries to prevent stale data
+        match self.delete_keychain_unlock_material(wallet_id, network) {
+            Ok(()) => {
+                tracing::debug!(
+                    wallet_id = %wallet_id,
+                    "cleaned up stale keychain entry during disabled auto-unlock load"
+                );
             }
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(err) => Err(err).context("failed to read keychain unlock material"),
+            Err(e) => {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    error = ?e,
+                    "failed to clean up stale keychain entry during disabled auto-unlock load"
+                );
+            }
         }
+        // Always return None to require password entry
+        Ok(None)
     }
 
     fn delete_keychain_unlock_material(

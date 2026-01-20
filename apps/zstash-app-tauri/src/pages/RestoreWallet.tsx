@@ -31,7 +31,6 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
   const [network, setNetwork] = useState<IPC.Network>('Testnet');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [rememberUnlock, setRememberUnlock] = useState(false);
   const [seedPhrase, setSeedPhrase] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +59,7 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
       name: name.trim(),
       network,
       password,
-      remember_unlock: rememberUnlock,
+      remember_unlock: false,
       seed_phrase: seedPhrase.trim(),
     });
 
@@ -135,18 +134,6 @@ export function RestoreWallet(props: { onContinue: (data: RestoreFlowData) => vo
                 placeholder="Confirm password"
               />
             </div>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberUnlock}
-                onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-                className="rounded-none border-border h-4 w-4 accent-primary"
-              />
-              <span className="text-sm text-muted-foreground">
-                Remember unlock (stores unlock material in OS keychain)
-              </span>
-            </label>
 
             <div className="space-y-2">
               <Label htmlFor="seedPhrase">Seed phrase (24 words)</Label>

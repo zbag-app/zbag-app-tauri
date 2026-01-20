@@ -18,6 +18,8 @@ pub trait KeyStore: Send + Sync {
 
     fn delete_encrypted_mnemonic(&self, wallet_id: Uuid, network: Network) -> anyhow::Result<()>;
 
+    /// VESTIGIAL: Keychain auto-unlock is disabled. This method is a no-op.
+    /// See https://github.com/zstashapp/zstash/issues/45
     fn store_keychain_unlock_material(
         &self,
         wallet_id: Uuid,
@@ -25,12 +27,15 @@ pub trait KeyStore: Send + Sync {
         unlock_material: &[u8],
     ) -> anyhow::Result<()>;
 
+    /// VESTIGIAL: Keychain auto-unlock is disabled. Always returns `Ok(None)`.
+    /// See https://github.com/zstashapp/zstash/issues/45
     fn load_keychain_unlock_material(
         &self,
         wallet_id: Uuid,
         network: Network,
     ) -> anyhow::Result<Option<Vec<u8>>>;
 
+    /// Deletes any existing keychain entry. Still functional for cleanup.
     fn delete_keychain_unlock_material(
         &self,
         wallet_id: Uuid,

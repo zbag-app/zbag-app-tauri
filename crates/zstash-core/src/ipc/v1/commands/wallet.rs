@@ -18,6 +18,8 @@ pub struct CreateWalletRequest {
     pub name: String,
     pub network: Network,
     pub password: String,
+    /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+    /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
 }
 
@@ -47,6 +49,8 @@ pub struct UnlockWalletRequest {
     pub schema_version: u32,
     pub wallet_id: Uuid,
     pub password: String,
+    /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+    /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
 }
 

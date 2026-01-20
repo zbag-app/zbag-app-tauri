@@ -8,7 +8,6 @@ export function UnlockWallet(props: {
 }) {
   const { wallet, onUnlocked } = props;
   const [password, setPassword] = useState('');
-  const [rememberUnlock, setRememberUnlock] = useState(wallet.remember_unlock_enabled);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,7 +18,7 @@ export function UnlockWallet(props: {
       const unlockRes = await unlockWallet({
         wallet_id: wallet.id,
         password,
-        remember_unlock: rememberUnlock,
+        remember_unlock: false,
       });
       if ('err' in unlockRes) {
         setError(unlockRes.err.message);
@@ -62,14 +61,6 @@ export function UnlockWallet(props: {
           value={password}
           onChange={(e) => setPassword(e.currentTarget.value)}
         />
-      </label>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="checkbox"
-          checked={rememberUnlock}
-          onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-        />
-        <span>Remember unlock</span>
       </label>
       {error ? <div className="text-sm text-destructive">{error}</div> : null}
       <button type="submit" disabled={!password || submitting}>

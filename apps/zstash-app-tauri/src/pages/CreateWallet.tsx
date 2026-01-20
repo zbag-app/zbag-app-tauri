@@ -22,7 +22,6 @@ export function CreateWallet(props: {
   const [network, setNetwork] = useState<IPC.Network>('Testnet');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [rememberUnlock, setRememberUnlock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +46,7 @@ export function CreateWallet(props: {
         name: name.trim(),
         network,
         password,
-        remember_unlock: rememberUnlock,
+        remember_unlock: false,
       });
       if ('err' in created) {
         setError(created.err.message);
@@ -136,18 +135,6 @@ export function CreateWallet(props: {
                 placeholder="Confirm password"
               />
             </div>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberUnlock}
-                onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-                className="rounded-none border-border h-4 w-4 accent-primary"
-              />
-              <span className="text-sm text-muted-foreground">
-                Remember unlock (stores unlock material in OS keychain)
-              </span>
-            </label>
 
             {error && (
               <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">

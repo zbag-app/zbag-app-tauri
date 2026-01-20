@@ -155,33 +155,12 @@ impl WalletManager {
             return Ok((wallet, WalletLockStatus::Unlocked));
         }
 
-        let mut lock_status = WalletLockStatus::Locked;
-        let mut dek: Option<Dek> = None;
-        let mut wallet_db: Option<rusqlite::Connection> = None;
+        let lock_status = WalletLockStatus::Locked;
+        let dek: Option<Dek> = None;
+        let wallet_db: Option<rusqlite::Connection> = None;
 
-        if wallet.remember_unlock_enabled
-            && let Some(mut material) = self
-                .key_store
-                .load_keychain_unlock_material(wallet_id, wallet.network)?
-        {
-            if material.len() == 32 {
-                let mut dek_bytes = [0u8; 32];
-                dek_bytes.copy_from_slice(&material);
-                let candidate_dek = Dek(dek_bytes);
-                if let Ok(conn) = self.open_wallet_db_with_dek(
-                    &directory_path,
-                    wallet.network,
-                    &candidate_dek,
-                    None,
-                    false,
-                ) {
-                    lock_status = WalletLockStatus::Unlocked;
-                    dek = Some(candidate_dek);
-                    wallet_db = Some(conn);
-                }
-            }
-            material.zeroize();
-        }
+        // NOTE: Keychain-based auto-unlock is disabled pending a secure implementation.
+        // See issue #45 for context. The remember_unlock_enabled field is always false.
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
@@ -205,7 +184,7 @@ impl WalletManager {
         name: &str,
         network: Network,
         password: &str,
-        remember_unlock: bool,
+        _remember_unlock: bool,
         birthday_height: Option<u32>,
     ) -> anyhow::Result<CreateWalletResult> {
         if name.trim().is_empty() {
@@ -244,7 +223,8 @@ impl WalletManager {
             name: name.to_string(),
             wallet_type: WalletType::Software,
             network,
-            remember_unlock_enabled: remember_unlock,
+            // Note: remember_unlock is disabled (see issue #45)
+            remember_unlock_enabled: false,
             created_at: now_ms,
             last_opened_at: None,
         };
@@ -353,11 +333,7 @@ impl WalletManager {
         )
         .context("failed to insert account metadata")?;
 
-        if remember_unlock {
-            self.key_store
-                .store_keychain_unlock_material(wallet.id, network, &dek.0)
-                .context("failed to store keychain unlock material")?;
-        }
+        // Note: remember_unlock is disabled (see issue #45), so we skip keychain storage
 
         let backup_challenge = self.issue_backup_challenge(wallet.id)?;
 
@@ -387,7 +363,7 @@ impl WalletManager {
         name: &str,
         network: Network,
         password: &str,
-        remember_unlock: bool,
+        _remember_unlock: bool,
         seed_phrase: &str,
         birthday_date_ms: Option<i64>,
     ) -> anyhow::Result<RestoreWalletResult> {
@@ -438,7 +414,8 @@ impl WalletManager {
             name: name.to_string(),
             wallet_type: WalletType::Software,
             network,
-            remember_unlock_enabled: remember_unlock,
+            // Note: remember_unlock is disabled (see issue #45)
+            remember_unlock_enabled: false,
             created_at: now_ms,
             last_opened_at: None,
         };
@@ -540,11 +517,7 @@ impl WalletManager {
         )
         .context("failed to insert account metadata")?;
 
-        if remember_unlock {
-            self.key_store
-                .store_keychain_unlock_material(wallet.id, network, &dek.0)
-                .context("failed to store keychain unlock material")?;
-        }
+        // Note: remember_unlock is disabled (see issue #45), so we skip keychain storage
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
@@ -576,7 +549,7 @@ impl WalletManager {
         name: &str,
         network: Network,
         password: &str,
-        remember_unlock: bool,
+        _remember_unlock: bool,
         ufvk: &str,
         birthday_height: Option<u32>,
         seed_fingerprint: Option<&str>,
@@ -614,7 +587,8 @@ impl WalletManager {
             name: name.to_string(),
             wallet_type: WalletType::WatchOnly,
             network,
-            remember_unlock_enabled: remember_unlock,
+            // Note: remember_unlock is disabled (see issue #45)
+            remember_unlock_enabled: false,
             created_at: now_ms,
             last_opened_at: None,
         };
@@ -751,11 +725,7 @@ impl WalletManager {
         account_meta::upsert_account(self.app_db.conn(), wallet.id, &account, now_ms)
             .context("failed to insert account metadata")?;
 
-        if remember_unlock {
-            self.key_store
-                .store_keychain_unlock_material(wallet.id, network, &dek.0)
-                .context("failed to store keychain unlock material")?;
-        }
+        // Note: remember_unlock is disabled (see issue #45), so we skip keychain storage
 
         self.active_wallet = Some(ActiveWallet {
             wallet: wallet.clone(),
@@ -778,7 +748,7 @@ impl WalletManager {
         &mut self,
         wallet_id: Uuid,
         password: &str,
-        remember_unlock: bool,
+        _remember_unlock: bool,
     ) -> anyhow::Result<WalletLockStatus> {
         let Some((wallet, directory_path_str)) =
             wallet_meta::get_wallet(self.app_db.conn(), wallet_id)?
@@ -825,12 +795,9 @@ impl WalletManager {
             .open_wallet_db_with_dek(&directory_path, wallet.network, &dek, None, false)
             .context("failed to open wallet db")?;
 
-        wallet_meta::set_remember_unlock_enabled(self.app_db.conn(), wallet_id, remember_unlock)?;
-        if remember_unlock {
-            self.key_store
-                .store_keychain_unlock_material(wallet_id, wallet.network, &dek.0)
-                .context("failed to store keychain unlock material")?;
-        } else if let Err(e) = self
+        // Note: remember_unlock is disabled (see issue #45), always clean up any stale keychain entries
+        wallet_meta::set_remember_unlock_enabled(self.app_db.conn(), wallet_id, false)?;
+        if let Err(e) = self
             .key_store
             .delete_keychain_unlock_material(wallet_id, wallet.network)
         {

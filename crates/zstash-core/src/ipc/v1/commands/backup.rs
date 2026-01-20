@@ -35,6 +35,8 @@ pub struct RestoreWalletRequest {
     pub name: String,
     pub network: Network,
     pub password: String,
+    /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+    /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
     pub seed_phrase: String,
     pub birthday_date: Option<UnixTimestampMs>,

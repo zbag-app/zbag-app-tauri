@@ -536,7 +536,6 @@ function UnlockGate(props: {
 }) {
   const { wallet, onUnlocked, onBack } = props;
   const [password, setPassword] = useState('');
-  const [rememberUnlock, setRememberUnlock] = useState(wallet.remember_unlock_enabled);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
@@ -544,7 +543,7 @@ function UnlockGate(props: {
     const unlockRes = await unlockWallet({
       wallet_id: wallet.id,
       password,
-      remember_unlock: rememberUnlock,
+      remember_unlock: false,
     });
     if ('err' in unlockRes) {
       setError(unlockRes.err.message);
@@ -591,15 +590,6 @@ function UnlockGate(props: {
               }}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={rememberUnlock}
-              onChange={(e) => setRememberUnlock(e.currentTarget.checked)}
-              className="rounded-none border-border h-4 w-4 accent-primary"
-            />
-            <span className="text-muted-foreground">Remember unlock</span>
-          </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-3">
             <Button onClick={submit} disabled={!password} className="flex-1">

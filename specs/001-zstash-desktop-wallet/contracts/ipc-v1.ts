@@ -56,8 +56,8 @@ export interface WalletInfo {
   wallet_type: WalletType;
   network: Network;
   /**
-   * Persisted OS keychain-backed auto-unlock preference.
-   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   * DISABLED: Keychain-based auto-unlock is disabled due to security concerns (issue #45).
+   * This field is vestigial and always false. Retained for schema compatibility.
    */
   remember_unlock_enabled: boolean;
   created_at: UnixTimestampMs;
@@ -298,8 +298,8 @@ export interface CreateWalletRequest extends VersionedPayload {
   /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
   password: string;
   /**
-   * Persist the wallet's OS keychain-backed auto-unlock preference and store unlock material in the OS keychain.
-   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   * DISABLED: Keychain-based auto-unlock is disabled due to security concerns (issue #45).
+   * This parameter is ignored; always treated as false. Retained for schema compatibility.
    */
   remember_unlock: boolean;
 }
@@ -307,8 +307,8 @@ export interface CreateWalletRequest extends VersionedPayload {
 /**
  * Load an existing wallet and set it as the active wallet for account-scoped requests/events.
  *
- * Loading MAY attempt OS keychain auto-unlock (if enabled for the wallet). `LoadWalletResponse.lock_status`
- * reflects the post-attempt state.
+ * NOTE: Keychain-based auto-unlock is disabled due to security concerns (issue #45).
+ * Wallets always load in Locked state and require password entry via UnlockWallet.
  *
  * Accounts are available only when the encrypted wallet DB is unlocked:
  * - If `lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty array.
@@ -331,9 +331,8 @@ export interface UnlockWalletRequest extends VersionedPayload {
   wallet_id: string;
   password: string;
   /**
-   * Updates the wallet's persisted OS keychain-backed auto-unlock preference.
-   * If true, ensure keychain unlock material is stored/updated; if false, disable and remove any stored keychain entry.
-   * Note: OS keychain auto-unlock must not satisfy per-action re-auth.
+   * DISABLED: Keychain-based auto-unlock is disabled due to security concerns (issue #45).
+   * This parameter is ignored; always treated as false. Retained for schema compatibility.
    */
   remember_unlock: boolean;
 }
@@ -479,7 +478,10 @@ export interface RestoreWalletRequest extends VersionedPayload {
   network: Network;
   /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
   password: string;
-  /** Store unlock material in OS keychain (cannot satisfy per-action re-auth) */
+  /**
+   * DISABLED: Keychain-based auto-unlock is disabled due to security concerns (issue #45).
+   * This parameter is ignored; always treated as false. Retained for schema compatibility.
+   */
   remember_unlock: boolean;
   seed_phrase: string;
   /** Approximate date of first transaction (unix timestamp, ms) */
