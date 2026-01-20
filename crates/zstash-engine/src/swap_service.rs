@@ -21,6 +21,7 @@ use zstash_core::ipc::v1::events::SwapChangedEvent;
 
 use crate::db::{account_meta, swap_meta};
 use crate::error::ipc_err;
+use crate::tokio_runtime::block_on;
 use crate::wallet_manager::WalletManager;
 
 pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
@@ -877,15 +878,6 @@ fn open_app_db(path: &Path) -> anyhow::Result<rusqlite::Connection> {
         .context("failed to enable foreign_keys")?;
 
     Ok(conn)
-}
-
-fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => handle.block_on(future),
-        Err(_) => tokio::runtime::Runtime::new()
-            .expect("create tokio runtime")
-            .block_on(future),
-    }
 }
 
 /// Get decimals for a given asset ID.

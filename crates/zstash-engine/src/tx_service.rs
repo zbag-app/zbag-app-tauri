@@ -32,6 +32,7 @@ use crate::db::AppDb;
 use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::reauth::Clock;
+use crate::tokio_runtime::block_on;
 
 const PROPOSAL_TTL: Duration = Duration::from_secs(10 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -1889,18 +1890,6 @@ fn update_queued_broadcast_error<C: Clock>(
         )
     })?;
     Ok(())
-}
-
-fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => {
-            // Use block_in_place to avoid "cannot start runtime from within runtime" panic
-            tokio::task::block_in_place(|| handle.block_on(future))
-        }
-        Err(_) => tokio::runtime::Runtime::new()
-            .expect("create tokio runtime")
-            .block_on(future),
-    }
 }
 
 fn to_unix_ms(time: SystemTime) -> anyhow::Result<i64> {
