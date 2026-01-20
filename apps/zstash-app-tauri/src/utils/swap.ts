@@ -4,6 +4,9 @@
  * The upstream 1Click API sometimes returns a 400 with "Failed to get quote", and the backend already keys off that
  * message for retries.
  */
+export const PRIVACY_ACK_REQUIRED_MESSAGE =
+  'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.';
+
 export function parseSwapError(message: string): string {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();

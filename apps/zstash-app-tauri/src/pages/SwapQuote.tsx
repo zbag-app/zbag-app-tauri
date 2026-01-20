@@ -144,19 +144,24 @@ export function SwapQuote() {
               onClick={async () => {
                 setSubmitting(true);
                 setError(null);
-                const res = await startSwap({
-                  quote_id: quoteId,
-                  allow_transparent_interaction: false,
-                  reauth_token: null,
-                });
-                setSubmitting(false);
+                try {
+                  const res = await startSwap({
+                    quote_id: quoteId,
+                    allow_transparent_interaction: false,
+                    reauth_token: null,
+                  });
 
-                if ('err' in res) {
-                  setError(parseSwapError(res.err.message));
-                  return;
+                  if ('err' in res) {
+                    setError(parseSwapError(res.err.message));
+                    return;
+                  }
+
+                  navigate('/swap/deposit', { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Failed to start swap');
+                } finally {
+                  setSubmitting(false);
                 }
-
-                navigate('/swap/deposit', { state: { swap: res.ok.swap } satisfies SwapDepositLocationState });
               }}
               className="flex-1"
             >

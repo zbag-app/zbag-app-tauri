@@ -11,7 +11,7 @@ import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 import { parseZecToZatoshis } from '../utils/zec';
-import { parseSwapError } from '../utils/swap';
+import { parseSwapError, PRIVACY_ACK_REQUIRED_MESSAGE } from '../utils/swap';
 import { formatAtomicAmountForToken } from '../utils/amounts';
 
 export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
@@ -85,19 +85,25 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       if (activeAccountId == null) return;
 
       setLoadingRefundAddress(true);
-      const res = await getReceiveAddress({
-        account_id: activeAccountId,
-        address_type: 'ShieldedOnly',
-      });
-      if (cancelled) return;
-      setLoadingRefundAddress(false);
+      try {
+        const res = await getReceiveAddress({
+          account_id: activeAccountId,
+          address_type: 'ShieldedOnly',
+        });
+        if (cancelled) return;
 
-      if ('err' in res) {
-        setError(res.err.message);
-        return;
+        if ('err' in res) {
+          setError(res.err.message);
+          return;
+        }
+
+        setRefundAddress(res.ok.address.encoded);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load refund address');
+      } finally {
+        if (!cancelled) setLoadingRefundAddress(false);
       }
-
-      setRefundAddress(res.ok.address.encoded);
     }
 
     loadRefundAddress();
@@ -262,7 +268,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
           <Button
             disabled={!canQuote || submittingQuote || starting}
             onClick={async () => {
-              if (!canQuote) return;
+              if (!canQuote || !inputAmountZatoshis) return;
               setSubmittingQuote(true);
               setError(null);
               setQuote(null);
@@ -270,28 +276,28 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               setReauthToken(null);
               setPassword('');
 
-              if (!inputAmountZatoshis) {
+              try {
+                const res = await requestSwapQuote({
+                  swap_type: 'FromZec',
+                  input_asset: ZEC_ASSET_ID,
+                  input_amount: inputAmountZatoshis,
+                  output_asset: outputAssetTrimmed,
+                  destination_address: destinationAddressTrimmed ? destinationAddressTrimmed : null,
+                  refund_address: refundAddressTrimmed ? refundAddressTrimmed : null,
+                });
+
+                if ('err' in res) {
+                  setError(parseSwapError(res.err.message));
+                  return;
+                }
+
+                setQuoteId(res.ok.quote_id);
+                setQuote(res.ok.quote);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to request quote');
+              } finally {
                 setSubmittingQuote(false);
-                return;
               }
-
-              const res = await requestSwapQuote({
-                swap_type: 'FromZec',
-                input_asset: ZEC_ASSET_ID,
-                input_amount: inputAmountZatoshis,
-                output_asset: outputAssetTrimmed,
-                destination_address: destinationAddressTrimmed ? destinationAddressTrimmed : null,
-                refund_address: refundAddressTrimmed ? refundAddressTrimmed : null,
-              });
-              setSubmittingQuote(false);
-
-              if ('err' in res) {
-                setError(parseSwapError(res.err.message));
-                return;
-              }
-
-              setQuoteId(res.ok.quote_id);
-              setQuote(res.ok.quote);
             }}
             className="w-full"
           >
@@ -379,7 +385,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                     if ('err' in startRes) {
                       const message =
                         startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED
-                          ? 'This swap requires transparent interaction. Confirm the privacy acknowledgement to continue.'
+                          ? PRIVACY_ACK_REQUIRED_MESSAGE
                           : parseSwapError(startRes.err.message);
                       setError(message);
                       return;

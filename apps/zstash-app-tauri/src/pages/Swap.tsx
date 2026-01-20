@@ -49,19 +49,25 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
       if (activeAccountId == null) return;
 
       setLoadingAddress(true);
-      const res = await getReceiveAddress({
-        account_id: activeAccountId,
-        address_type: 'ShieldedOnly',
-      });
-      if (cancelled) return;
-      setLoadingAddress(false);
+      try {
+        const res = await getReceiveAddress({
+          account_id: activeAccountId,
+          address_type: 'ShieldedOnly',
+        });
+        if (cancelled) return;
 
-      if ('err' in res) {
-        setError(res.err.message);
-        return;
+        if ('err' in res) {
+          setError(res.err.message);
+          return;
+        }
+
+        setDestinationAddress(res.ok.address.encoded);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load destination address');
+      } finally {
+        if (!cancelled) setLoadingAddress(false);
       }
-
-      setDestinationAddress(res.ok.address.encoded);
     }
 
     loadDefaultAddress();
@@ -204,24 +210,29 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
               setSubmitting(true);
               setError(null);
 
-              const res = await requestSwapQuote({
-                swap_type: 'ToZec',
-                input_asset: inputAsset,
-                input_amount: inputAmount,
-                output_asset: outputAsset,
-                destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
-                refund_address: refundAddress.trim() ? refundAddress.trim() : null,
-              });
-              setSubmitting(false);
+              try {
+                const res = await requestSwapQuote({
+                  swap_type: 'ToZec',
+                  input_asset: inputAsset,
+                  input_amount: inputAmount,
+                  output_asset: outputAsset,
+                  destination_address: destinationAddress.trim() ? destinationAddress.trim() : null,
+                  refund_address: refundAddress.trim() ? refundAddress.trim() : null,
+                });
 
-              if ('err' in res) {
-                setError(parseSwapError(res.err.message));
-                return;
+                if ('err' in res) {
+                  setError(parseSwapError(res.err.message));
+                  return;
+                }
+
+                navigate('/swap/quote', {
+                  state: { quoteId: res.ok.quote_id, quote: res.ok.quote } satisfies SwapQuoteLocationState,
+                });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Failed to request quote');
+              } finally {
+                setSubmitting(false);
               }
-
-              navigate('/swap/quote', {
-                state: { quoteId: res.ok.quote_id, quote: res.ok.quote } satisfies SwapQuoteLocationState,
-              });
             }}
             className="w-full"
           >

@@ -36,15 +36,15 @@ export function formatAtomicAmount(value: string, decimals: number): string {
  *
  * Returns `{ value: '', isRaw: false }` for empty/whitespace input.
  *
- * Falls back to showing the raw atomic value as `<value> (raw)` with `isRaw=true` if the token is unknown or the
- * input is not a base-10 integer string.
+ * Falls back to showing the raw atomic value with `isRaw=true` if the token is unknown or the input is not a base-10
+ * integer string.
  */
 export function formatAtomicAmountForToken(value: string, tokenId: string): FormattedAmountForToken {
   const trimmed = value.trim();
   if (!trimmed) return { value: '', isRaw: false };
 
   const token = getTokenById(tokenId);
-  if (!token) return { value: `${trimmed} (raw)`, isRaw: true };
-  if (!/^\d+$/.test(trimmed)) return { value: `${trimmed} (raw)`, isRaw: true };
+  if (!token) return { value: trimmed, isRaw: true };
+  if (!/^\d+$/.test(trimmed)) return { value: trimmed, isRaw: true };
   return { value: `${formatAtomicAmount(trimmed, token.decimals)} ${token.label}`, isRaw: false };
 }

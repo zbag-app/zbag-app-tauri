@@ -40,7 +40,7 @@ test('formatAtomicAmountForToken formats known tokens and falls back for unknown
     value: '1 ZEC',
     isRaw: false,
   });
-  expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toEqual({ value: '123 (raw)', isRaw: true });
-  expect(formatAtomicAmountForToken('abc', 'nep141:zec.omft.near')).toEqual({ value: 'abc (raw)', isRaw: true });
+  expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toEqual({ value: '123', isRaw: true });
+  expect(formatAtomicAmountForToken('abc', 'nep141:zec.omft.near')).toEqual({ value: 'abc', isRaw: true });
   expect(formatAtomicAmountForToken('   ', 'unknown-token')).toEqual({ value: '', isRaw: false });
 });
