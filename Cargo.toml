@@ -37,8 +37,8 @@ rand = "0.8"
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 
-# Async runtime
-tokio = { version = "1", features = ["full"] }
+# Async runtime (minimal features: rt, rt-multi-thread, sync, time, macros, fs)
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "fs"] }
 
 # Logging
 tracing = "0.1"
