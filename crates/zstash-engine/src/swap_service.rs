@@ -155,7 +155,9 @@ impl SwapService {
             .to_string();
 
         // Calculate deadline (2 hours from now, like Zashi)
-        let deadline = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        let deadline_dt = chrono::Utc::now() + chrono::Duration::hours(2);
+        let deadline = deadline_dt.to_rfc3339();
+        let deadline_ms_fallback = deadline_dt.timestamp_millis();
 
         // App fee: 50 basis points (0.50%) to match Zashi
         // Affiliate recipient for zSTASH swap fees
@@ -209,7 +211,10 @@ impl SwapService {
             output_amount: quote_res.amount_out.clone(),
             output_amount_formatted: quote_res.amount_out_formatted.clone(),
             min_output_amount: quote_res.min_amount_out.clone(),
-            deadline: quote_res.deadline_ms.unwrap_or(0),
+            deadline: quote_res
+                .deadline_ms
+                .filter(|ms| *ms > 0)
+                .unwrap_or(deadline_ms_fallback),
             time_estimate_secs: quote_res.time_estimate_secs,
             deposit_address: quote_res.deposit_address.clone(),
             deposit_memo: quote_res.deposit_memo.clone(),

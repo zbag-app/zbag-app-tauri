@@ -98,6 +98,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
 const quoteExpired = useMemo(() => {
     if (!quote) return false;
+    if (quote.deadline === 0) return false;
     return nowMs >= quote.deadline;
   }, [quote, nowMs]);
 
@@ -405,7 +406,7 @@ const quoteExpired = useMemo(() => {
                   Expires in
                 </span>
                 <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
-                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+                  {quote.deadline === 0 ? '-' : quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
                 </div>
               </div>
             </div>
@@ -436,7 +437,8 @@ const quoteExpired = useMemo(() => {
                 disabled={!password.trim() || starting || quoteExpired || !privacyAck}
                 onClick={async () => {
                   if (!quoteId) return;
-                  if (quoteExpired) {
+                  if (!quote) return;
+                  if (quote.deadline !== 0 && Date.now() >= quote.deadline) {
                     setPassword('');
                     setReauthToken(null);
                     setError('Quote expired');

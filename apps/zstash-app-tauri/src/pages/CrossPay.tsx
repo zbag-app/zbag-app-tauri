@@ -107,6 +107,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
 
   const quoteExpired = useMemo(() => {
     if (!quote) return false;
+    if (quote.deadline === 0) return false;
     return nowMs >= quote.deadline;
   }, [quote, nowMs]);
 
@@ -316,7 +317,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                   Expires in
                 </span>
                 <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
-                  {quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+                  {quote.deadline === 0 ? '—' : quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
                 </div>
               </div>
             </div>
@@ -346,25 +347,26 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               <PrivacyWarning acknowledged={privacyAck} onAcknowledgedChange={setPrivacyAck} />
             )}
 
-              <div className="flex gap-3">
-                <Button
-                  disabled={
-                    !(password.trim() || reauthToken) ||
-                    starting ||
-                    quoteExpired ||
-                    (privacyAckRequired && !privacyAck)
+            <div className="flex gap-3">
+              <Button
+                disabled={
+                  !(password.trim() || reauthToken) ||
+                  starting ||
+                  quoteExpired ||
+                  (privacyAckRequired && !privacyAck)
+                }
+                onClick={async () => {
+                  if (!quoteId) return;
+                  if (!quote) return;
+                  if (quote.deadline !== 0 && Date.now() >= quote.deadline) {
+                    setPassword('');
+                    setReauthToken(null);
+                    setError('Quote expired');
+                    return;
                   }
-                  onClick={async () => {
-                    if (!quoteId) return;
-                    if (quoteExpired) {
-                      setPassword('');
-                      setReauthToken(null);
-                      setError('Quote expired');
-                      return;
-                    }
 
-                    setStarting(true);
-                    setError(null);
+                  setStarting(true);
+                  setError(null);
 
                   try {
                     const token =
@@ -379,16 +381,16 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                         return res.ok.reauth_token;
                       })());
 
-                      if (!reauthToken) {
-                        setReauthToken(token);
-                      }
-                      setPassword('');
+                    if (!reauthToken) {
+                      setReauthToken(token);
+                    }
+                    setPassword('');
 
-                      const allow = privacyAck;
-                      const startRes = await startSwap({
-                        quote_id: quoteId,
-                        allow_transparent_interaction: allow,
-                        reauth_token: token,
+                    const allow = privacyAck;
+                    const startRes = await startSwap({
+                      quote_id: quoteId,
+                      allow_transparent_interaction: allow,
+                      reauth_token: token,
                     });
 
                     if ('err' in startRes) {
