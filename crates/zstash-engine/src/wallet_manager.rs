@@ -262,14 +262,7 @@ impl WalletManager {
         let dek = generate_dek();
         let kdf = default_kdf_params();
         let aead = default_aead_params();
-        let wrapped_dek_b64 = wrap_dek(
-            wallet.id,
-            wallet.network,
-            password,
-            &kdf.salt_b64,
-            &aead.nonce_b64,
-            &dek,
-        )?;
+        let wrapped_dek_b64 = wrap_dek(wallet.id, wallet.network, password, &kdf, &aead, &dek)?;
 
         wallet_encryption_meta::insert_wallet_encryption(
             self.app_db.conn(),
@@ -468,14 +461,7 @@ impl WalletManager {
         let dek = generate_dek();
         let kdf = default_kdf_params();
         let aead = default_aead_params();
-        let wrapped_dek_b64 = wrap_dek(
-            wallet.id,
-            wallet.network,
-            password,
-            &kdf.salt_b64,
-            &aead.nonce_b64,
-            &dek,
-        )?;
+        let wrapped_dek_b64 = wrap_dek(wallet.id, wallet.network, password, &kdf, &aead, &dek)?;
 
         wallet_encryption_meta::insert_wallet_encryption(
             self.app_db.conn(),
@@ -648,14 +634,7 @@ impl WalletManager {
         let dek = generate_dek();
         let kdf = default_kdf_params();
         let aead = default_aead_params();
-        let wrapped_dek_b64 = wrap_dek(
-            wallet.id,
-            wallet.network,
-            password,
-            &kdf.salt_b64,
-            &aead.nonce_b64,
-            &dek,
-        )?;
+        let wrapped_dek_b64 = wrap_dek(wallet.id, wallet.network, password, &kdf, &aead, &dek)?;
 
         wallet_encryption_meta::insert_wallet_encryption(
             self.app_db.conn(),
@@ -826,11 +805,19 @@ impl WalletManager {
             wallet_id,
             wallet.network,
             password,
-            &meta.kdf.salt_b64,
-            &meta.aead.nonce_b64,
+            &meta.kdf,
+            &meta.aead,
             &meta.wrapped_dek_b64,
         )
-        .map_err(|_e| ipc_err(errors::INVALID_WALLET_PASSWORD, "invalid wallet password"))?;
+        .map_err(|e| {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                network = ?wallet.network,
+                error = ?e,
+                "failed to unwrap wallet DEK"
+            );
+            ipc_err(errors::INVALID_WALLET_PASSWORD, "invalid wallet password")
+        })?;
 
         let conn = self
             .open_wallet_db_with_dek(&directory_path, wallet.network, &dek, None, false)
@@ -949,11 +936,19 @@ impl WalletManager {
             wallet_id,
             wallet.network,
             password,
-            &meta.kdf.salt_b64,
-            &meta.aead.nonce_b64,
+            &meta.kdf,
+            &meta.aead,
             &meta.wrapped_dek_b64,
         )
-        .map_err(|_e| ipc_err(errors::INVALID_WALLET_PASSWORD, "invalid wallet password"))?;
+        .map_err(|e| {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                network = ?wallet.network,
+                error = ?e,
+                "failed to unwrap wallet DEK for reauth"
+            );
+            ipc_err(errors::INVALID_WALLET_PASSWORD, "invalid wallet password")
+        })?;
 
         let (token, expires_at) = self.reauth.issue(wallet_id, purpose);
         Ok((token, expires_at))

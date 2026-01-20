@@ -155,8 +155,8 @@ fn insert_transparent_utxos(
         wallet_id,
         network,
         password,
-        &meta.kdf.salt_b64,
-        &meta.aead.nonce_b64,
+        &meta.kdf,
+        &meta.aead,
         &meta.wrapped_dek_b64,
     )
     .expect("unwrap DEK");

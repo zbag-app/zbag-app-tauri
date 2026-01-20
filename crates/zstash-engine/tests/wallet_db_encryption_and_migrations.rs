@@ -194,8 +194,8 @@ fn wallet_db_is_encrypted_and_unlock_requires_correct_password() {
         wallet.id,
         Network::Testnet,
         password,
-        &meta.kdf.salt_b64,
-        &meta.aead.nonce_b64,
+        &meta.kdf,
+        &meta.aead,
         &meta.wrapped_dek_b64,
     )
     .expect("unwrap DEK");
@@ -236,8 +236,8 @@ fn wallet_db_migration_snapshot_rolls_back_on_validation_failure() {
         wallet.id,
         Network::Testnet,
         password,
-        &meta.kdf.salt_b64,
-        &meta.aead.nonce_b64,
+        &meta.kdf,
+        &meta.aead,
         &meta.wrapped_dek_b64,
     )
     .expect("unwrap DEK");
