@@ -40,7 +40,16 @@ export function SwapQuote() {
 
   useEffect(() => {
     if (!quote) return;
-    const intervalId = setInterval(() => setNowMs(Date.now()), 1000);
+    if (Date.now() >= quote.deadline) return;
+
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      setNowMs(now);
+
+      if (now >= quote.deadline) {
+        clearInterval(intervalId);
+      }
+    }, 1000);
     return () => clearInterval(intervalId);
   }, [quote]);
 
