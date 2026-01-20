@@ -167,7 +167,9 @@ function AppInner() {
       }
     }
 
-    run();
+    run().catch(() => {
+      // Errors are handled inside run()
+    });
 
     return () => {
       cancelled = true;

@@ -117,6 +117,9 @@ pub fn list_pollable_swaps_for_wallet(
     conn: &Connection,
     wallet_id: Uuid,
 ) -> rusqlite::Result<Vec<SwapInfo>> {
+    // NOTE: `Draft` is included because swap flows may persist a Draft swap with a deposit address
+    // before the state transitions (e.g., crash/restart during FromZec flows). The
+    // `deposit_address IS NOT NULL` predicate ensures we only resume swaps that are actionable.
     let mut stmt = conn.prepare(
         "SELECT
             id, remote_id, swap_type, input_asset, input_amount, output_asset, output_amount,
