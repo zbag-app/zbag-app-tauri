@@ -13,6 +13,8 @@ import { validateDecimalAmount } from '../lib/amount';
 import { formatCountdown } from '../lib/time';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
 
+const QUOTE_EXPIRY_BUFFER_MS = 10_000;
+
 /**
  * CrossPay page - Pay recipients in other currencies using ZEC.
  *
@@ -108,7 +110,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
   const quoteExpired = useMemo(() => {
     if (!quote) return false;
     if (quote.deadline === 0) return false;
-    return nowMs >= quote.deadline;
+    return nowMs + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline;
   }, [quote, nowMs]);
 
   if (wallet.network !== 'Mainnet') {
@@ -358,7 +360,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 onClick={async () => {
                   if (!quoteId) return;
                   if (!quote) return;
-                  if (quote.deadline !== 0 && Date.now() >= quote.deadline) {
+                  if (quote.deadline !== 0 && Date.now() + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline) {
                     setPassword('');
                     setReauthToken(null);
                     setError('Quote expired');
@@ -400,7 +402,12 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                         return;
                       }
                       setPassword('');
-                      setReauthToken(null);
+                      if (
+                        startRes.err.code === 'REAUTH_TOKEN_INVALID' ||
+                        startRes.err.code === 'REAUTH_TOKEN_EXPIRED'
+                      ) {
+                        setReauthToken(null);
+                      }
                       setError(startRes.err.message);
                       setStarting(false);
                       return;

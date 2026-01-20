@@ -24,6 +24,8 @@ import { parseZecToZatoshis } from '../utils/zec';
 import { parseSwapError, PRIVACY_ACK_REQUIRED_MESSAGE } from '../utils/swap';
 import { formatAtomicAmountForToken } from '../utils/amounts';
 
+const QUOTE_EXPIRY_BUFFER_MS = 10_000;
+
 export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: number | null }) {
   const { wallet, activeAccountId } = props;
   const navigate = useNavigate();
@@ -99,7 +101,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 const quoteExpired = useMemo(() => {
     if (!quote) return false;
     if (quote.deadline === 0) return false;
-    return nowMs >= quote.deadline;
+    return nowMs + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline;
   }, [quote, nowMs]);
 
   // Load supported tokens from API
@@ -387,7 +389,7 @@ const quoteExpired = useMemo(() => {
           <CardContent className="space-y-4">
             <div className="rounded-none bg-muted/50 p-4">
               <div className="text-lg font-semibold">
-                {quote.input_amount_formatted} -> {quote.output_amount_formatted}
+                {quote.input_amount_formatted} {'->'} {quote.output_amount_formatted}
               </div>
             </div>
 
@@ -438,7 +440,7 @@ const quoteExpired = useMemo(() => {
                 onClick={async () => {
                   if (!quoteId) return;
                   if (!quote) return;
-                  if (quote.deadline !== 0 && Date.now() >= quote.deadline) {
+                  if (quote.deadline !== 0 && Date.now() + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline) {
                     setPassword('');
                     setReauthToken(null);
                     setError('Quote expired');
@@ -473,6 +475,12 @@ const quoteExpired = useMemo(() => {
                     });
 
                     if ('err' in startRes) {
+                      if (
+                        startRes.err.code === ErrorCodes.REAUTH_TOKEN_INVALID ||
+                        startRes.err.code === ErrorCodes.REAUTH_TOKEN_EXPIRED
+                      ) {
+                        setReauthToken(null);
+                      }
                       const message =
                         startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED
                           ? PRIVACY_ACK_REQUIRED_MESSAGE
