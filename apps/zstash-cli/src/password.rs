@@ -5,23 +5,40 @@ use std::io::{self, Write};
 use anyhow::{Context as _, Result};
 use zeroize::Zeroizing;
 
+use zstash_core::sensitive::SensitiveString;
+
+/// Wrap a provided password argument in `Zeroizing`, rejecting empty strings.
+#[must_use = "the returned password is sensitive; use it and drop it promptly"]
+pub fn wrap_password_arg(password: Option<String>) -> Result<Option<Zeroizing<String>>> {
+    let password = password.map(Zeroizing::new);
+    if let Some(p) = password.as_ref()
+        && p.is_empty()
+    {
+        anyhow::bail!("password cannot be empty");
+    }
+    Ok(password)
+}
+
 /// Get password, either from provided value or by prompting.
-pub fn get_password(provided: Option<&str>, prompt: &str) -> Result<String> {
+#[must_use = "the returned password is sensitive; use it and drop it promptly"]
+pub fn get_password(provided: Option<&str>, prompt: &str) -> Result<Zeroizing<String>> {
     match provided {
-        Some(p) => Ok(p.to_string()),
+        Some(p) => Ok(Zeroizing::new(p.to_string())),
         None => {
             eprint!("{}", prompt);
             io::stderr().flush()?;
-            let password = rpassword::read_password().context("failed to read password")?;
-            Ok(password)
+            Ok(Zeroizing::new(
+                rpassword::read_password().context("failed to read password")?,
+            ))
         }
     }
 }
 
 /// Get password with confirmation (for wallet creation).
-pub fn get_password_with_confirm(provided: Option<&str>) -> Result<String> {
+#[must_use = "the returned password is sensitive; use it and drop it promptly"]
+pub fn get_password_with_confirm(provided: Option<&str>) -> Result<Zeroizing<String>> {
     match provided {
-        Some(p) => Ok(p.to_string()),
+        Some(p) => Ok(Zeroizing::new(p.to_string())),
         None => {
             eprint!("Password: ");
             io::stderr().flush()?;
@@ -34,36 +51,39 @@ pub fn get_password_with_confirm(provided: Option<&str>) -> Result<String> {
 
             eprint!("Confirm password: ");
             io::stderr().flush()?;
-            let confirm =
-                Zeroizing::new(rpassword::read_password().context("failed to read password")?);
+            let confirm_password =
+                Zeroizing::new(rpassword::read_password().context("failed to read confirmation")?);
 
-            if *password != *confirm {
+            if *password != *confirm_password {
                 anyhow::bail!("passwords do not match");
             }
 
-            Ok(password.to_string())
+            Ok(password)
         }
     }
 }
 
 /// Get seed phrase, either from provided value or by prompting.
-pub fn get_seed_phrase(provided: Option<&str>) -> Result<String> {
+pub fn get_seed_phrase(provided: Option<SensitiveString>) -> Result<SensitiveString> {
     match provided {
-        Some(s) => {
-            validate_seed_phrase(s)?;
-            Ok(s.to_string())
+        Some(mut phrase) => {
+            phrase.trim_in_place();
+            validate_seed_phrase(phrase.as_ref())?;
+            Ok(phrase)
         }
         None => {
             eprintln!("Enter your 24-word seed phrase (words separated by spaces):");
             eprint!("> ");
             io::stderr().flush()?;
 
-            let mut phrase = String::new();
-            io::stdin().read_line(&mut phrase)?;
+            let mut raw_phrase = Zeroizing::new(String::new());
+            io::stdin().read_line(&mut raw_phrase)?;
 
-            let phrase = phrase.trim().to_string();
-            validate_seed_phrase(&phrase)?;
-
+            // Move the owned buffer into `SensitiveString` (which zeroizes on drop) and then trim
+            // in-place to avoid allocating a second copy.
+            let mut phrase = SensitiveString::new(std::mem::take(&mut *raw_phrase));
+            phrase.trim_in_place();
+            validate_seed_phrase(phrase.as_ref())?;
             Ok(phrase)
         }
     }

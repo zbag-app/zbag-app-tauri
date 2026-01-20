@@ -24,19 +24,18 @@ pub struct BalanceArgs {
 }
 
 pub async fn run(args: BalanceArgs, data_dir: &Path, output: &OutputMode) -> Result<()> {
+    let BalanceArgs {
+        account_id,
+        wallet,
+        password,
+    } = args;
+    let mut provided_password = password::wrap_password_arg(password)?;
     let state = CliAppState::new(data_dir, false)?;
 
     // If wallet specified, load it
-    let wallet_info = if let Some(wallet_prefix) = &args.wallet {
-        let info = state.get_wallet_by_prefix(wallet_prefix)?;
-        let (_, unlocked) = state.load_wallet(info.id)?;
-        if !unlocked {
-            let password = password::get_password(args.password.as_deref(), "Password: ")?;
-            state.unlock_wallet(info.id, &password, false)?;
-        }
-        info
+    let wallet_info = if let Some(wallet_prefix) = wallet.as_deref() {
+        state.get_wallet_by_prefix(wallet_prefix)?
     } else {
-        // Try to find an active wallet
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
             anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
@@ -44,21 +43,26 @@ pub async fn run(args: BalanceArgs, data_dir: &Path, output: &OutputMode) -> Res
         if wallets.len() > 1 {
             anyhow::bail!(
                 "multiple wallets found - specify one with: zstash balance {} --wallet <ID>",
-                args.account_id
+                account_id
             );
         }
-        let info = wallets.into_iter().next().unwrap();
-        let (_, unlocked) = state.load_wallet(info.id)?;
-        if !unlocked {
-            let password = password::get_password(args.password.as_deref(), "Password: ")?;
-            state.unlock_wallet(info.id, &password, false)?;
-        }
-        info
+        wallets.into_iter().next().unwrap()
     };
+
+    let (_, unlocked) = state.load_wallet(wallet_info.id)?;
+    if !unlocked {
+        let password = match provided_password.take() {
+            Some(p) => p,
+            None => password::get_password(None, "Password: ")?,
+        };
+        state.unlock_wallet(wallet_info.id, &password, false)?;
+    }
+    // Drop any unused provided password promptly.
+    let _ = provided_password.take();
 
     let balance = {
         let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-        wm.get_balance(args.account_id)?
+        wm.get_balance(account_id)?
     };
 
     output.print_balance(&balance, &wallet_info.name);

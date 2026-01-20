@@ -37,16 +37,27 @@ pub async fn run(
     enable_tor: bool,
     output: &OutputMode,
 ) -> Result<()> {
+    let SyncArgs {
+        wallet,
+        password,
+        progress_log,
+    } = args;
+    let mut provided_password = password::wrap_password_arg(password)?;
     let state = CliAppState::new(data_dir, enable_tor)?;
 
-    let wallet_info = state.get_wallet_by_prefix(&args.wallet)?;
+    let wallet_info = state.get_wallet_by_prefix(&wallet)?;
 
     // Load and unlock wallet if needed
     let (info, unlocked) = state.load_wallet(wallet_info.id)?;
     if !unlocked {
-        let password = password::get_password(args.password.as_deref(), "Password: ")?;
+        let password = match provided_password.take() {
+            Some(p) => p,
+            None => password::get_password(None, "Password: ")?,
+        };
         state.unlock_wallet(wallet_info.id, &password, false)?;
     }
+    // Drop any unused provided password promptly.
+    let _ = provided_password.take();
 
     // Get wallet DB path and DEK
     let (wallet_db_path, wallet_dek, account_ids) = {
@@ -116,7 +127,7 @@ pub async fn run(
     }
 
     // Spawn progress logger task if enabled
-    let logger_handle = if args.progress_log && !output.is_json() {
+    let logger_handle = if progress_log && !output.is_json() {
         let pb = progress_bar.clone();
         let sync_service = state.sync_service.clone();
         let wallet_id = wallet_info.id;

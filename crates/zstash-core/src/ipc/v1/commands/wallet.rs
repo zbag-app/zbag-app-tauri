@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{AccountInfo, Network, WalletInfo, WalletLockStatus};
+use crate::sensitive::SensitiveString;
 
 use super::super::common::UnixTimestampMs;
 
@@ -17,7 +18,9 @@ pub struct CreateWalletRequest {
     pub schema_version: u32,
     pub name: String,
     pub network: Network,
-    pub password: String,
+    /// SECURITY: `SensitiveString` helps limit retention on the Rust side, but this data still
+    /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
+    pub password: SensitiveString,
     /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
     /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
@@ -48,7 +51,9 @@ pub struct GetWalletStatusRequest {
 pub struct UnlockWalletRequest {
     pub schema_version: u32,
     pub wallet_id: Uuid,
-    pub password: String,
+    /// SECURITY: `SensitiveString` helps limit retention on the Rust side, but this data still
+    /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
+    pub password: SensitiveString,
     /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
     /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,
@@ -66,7 +71,7 @@ pub struct LockWalletRequest {
 pub struct ReauthWalletRequest {
     pub schema_version: u32,
     pub wallet_id: Uuid,
-    pub password: String,
+    pub password: SensitiveString,
     pub purpose: ReauthPurpose,
 }
 
@@ -97,7 +102,12 @@ pub struct BackupChallenge {
 pub struct CreateWalletResponse {
     pub schema_version: u32,
     pub wallet: WalletInfo,
-    pub seed_phrase: Vec<String>,
+    /// The freshly generated 24-word seed phrase.
+    ///
+    /// SECURITY: `SensitiveString` helps limit retention on the Rust side, but this data still
+    /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
+    /// Callers should minimize the lifetime of this value and avoid persisting it.
+    pub seed_phrase: Vec<SensitiveString>,
     pub backup_challenge: BackupChallenge,
 }
 
@@ -123,7 +133,12 @@ pub struct ReauthWalletResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewSeedPhraseResponse {
     pub schema_version: u32,
-    pub seed_phrase: Vec<String>,
+    /// The 24-word seed phrase for the wallet.
+    ///
+    /// SECURITY: `SensitiveString` helps limit retention on the Rust side, but this data still
+    /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
+    /// Callers should minimize the lifetime of this value and avoid persisting it.
+    pub seed_phrase: Vec<SensitiveString>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

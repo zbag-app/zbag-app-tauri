@@ -4,6 +4,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use clap::{Args, Subcommand};
+use zeroize::Zeroizing;
 
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 
@@ -45,6 +46,9 @@ enum TxCommand {
         wallet: Option<String>,
 
         /// Password (will prompt if not provided)
+        ///
+        /// SECURITY: Avoid passing passwords via CLI arguments when possible.
+        /// They may be stored in shell history or visible to other processes.
         #[arg(short, long)]
         password: Option<String>,
 
@@ -67,6 +71,9 @@ enum TxCommand {
         wallet: Option<String>,
 
         /// Password (will prompt if not provided)
+        ///
+        /// SECURITY: Avoid passing passwords via CLI arguments when possible.
+        /// They may be stored in shell history or visible to other processes.
         #[arg(short, long)]
         password: Option<String>,
     },
@@ -89,6 +96,9 @@ enum TxCommand {
         wallet: Option<String>,
 
         /// Password (will prompt if wallet is locked)
+        ///
+        /// SECURITY: Avoid passing passwords via CLI arguments when possible.
+        /// They may be stored in shell history or visible to other processes.
         #[arg(short, long)]
         password: Option<String>,
     },
@@ -103,6 +113,9 @@ enum TxCommand {
         wallet: Option<String>,
 
         /// Password (will prompt if not provided)
+        ///
+        /// SECURITY: Avoid passing passwords via CLI arguments when possible.
+        /// They may be stored in shell history or visible to other processes.
         #[arg(short, long)]
         password: Option<String>,
     },
@@ -125,11 +138,11 @@ pub async fn run(
             password,
             yes,
         } => {
+            let provided_password = password::wrap_password_arg(password)?;
             let state = CliAppState::new(data_dir, enable_tor)?;
-
-            // Load and unlock wallet
-            let wallet_info =
-                load_and_unlock_wallet(&state, wallet.as_deref(), password.as_deref())?;
+            let (wallet_info, unlocked) = load_wallet(&state, wallet.as_deref())?;
+            let unlock_password =
+                unlock_if_needed(&state, wallet_info.id, unlocked, provided_password.as_ref())?;
 
             // Prepare the transaction
             let prepare_response = {
@@ -156,13 +169,29 @@ pub async fn run(
             }
 
             // Re-authenticate for spending
-            let password = password::get_password(password.as_deref(), "Password: ")?;
+            let prompted_reauth_password =
+                if provided_password.is_some() || unlock_password.is_some() {
+                    None
+                } else {
+                    Some(password::get_password(None, "Password: ")?)
+                };
             let reauth_token = {
+                let reauth_password = if let Some(p) = provided_password.as_ref() {
+                    p
+                } else if let Some(p) = unlock_password.as_ref() {
+                    p
+                } else {
+                    prompted_reauth_password.as_ref().expect("prompted above")
+                };
+
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
                 let (token, _expires) =
-                    wm.reauth_wallet(wallet_info.id, &password, ReauthPurpose::Spend)?;
+                    wm.reauth_wallet(wallet_info.id, reauth_password, ReauthPurpose::Spend)?;
                 token
             };
+            drop(prompted_reauth_password);
+            drop(unlock_password);
+            drop(provided_password);
 
             // Confirm and broadcast
             let confirm_response = {
@@ -179,20 +208,36 @@ pub async fn run(
             wallet,
             password,
         } => {
+            let provided_password = password::wrap_password_arg(password)?;
             let state = CliAppState::new(data_dir, enable_tor)?;
-
-            // Load and unlock wallet
-            let wallet_info =
-                load_and_unlock_wallet(&state, wallet.as_deref(), password.as_deref())?;
+            let (wallet_info, unlocked) = load_wallet(&state, wallet.as_deref())?;
+            let unlock_password =
+                unlock_if_needed(&state, wallet_info.id, unlocked, provided_password.as_ref())?;
 
             // Re-authenticate for spending
-            let password = password::get_password(password.as_deref(), "Password: ")?;
+            let prompted_reauth_password =
+                if provided_password.is_some() || unlock_password.is_some() {
+                    None
+                } else {
+                    Some(password::get_password(None, "Password: ")?)
+                };
             let reauth_token = {
+                let reauth_password = if let Some(p) = provided_password.as_ref() {
+                    p
+                } else if let Some(p) = unlock_password.as_ref() {
+                    p
+                } else {
+                    prompted_reauth_password.as_ref().expect("prompted above")
+                };
+
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
                 let (token, _expires) =
-                    wm.reauth_wallet(wallet_info.id, &password, ReauthPurpose::Spend)?;
+                    wm.reauth_wallet(wallet_info.id, reauth_password, ReauthPurpose::Spend)?;
                 token
             };
+            drop(prompted_reauth_password);
+            drop(unlock_password);
+            drop(provided_password);
 
             // Shield funds
             let response = {
@@ -210,10 +255,13 @@ pub async fn run(
             wallet,
             password,
         } => {
+            let provided_password = password::wrap_password_arg(password)?;
             let state = CliAppState::new(data_dir, false)?;
-
-            // Load and unlock wallet
-            load_and_unlock_wallet(&state, wallet.as_deref(), password.as_deref())?;
+            let (wallet_info, unlocked) = load_wallet(&state, wallet.as_deref())?;
+            let unlock_password =
+                unlock_if_needed(&state, wallet_info.id, unlocked, provided_password.as_ref())?;
+            drop(unlock_password);
+            drop(provided_password);
 
             // List transactions
             let response = {
@@ -254,20 +302,36 @@ pub async fn run(
             wallet,
             password,
         } => {
+            let provided_password = password::wrap_password_arg(password)?;
             let state = CliAppState::new(data_dir, enable_tor)?;
-
-            // Load and unlock wallet
-            let wallet_info =
-                load_and_unlock_wallet(&state, wallet.as_deref(), password.as_deref())?;
+            let (wallet_info, unlocked) = load_wallet(&state, wallet.as_deref())?;
+            let unlock_password =
+                unlock_if_needed(&state, wallet_info.id, unlocked, provided_password.as_ref())?;
 
             // Re-authenticate for spending
-            let password = password::get_password(password.as_deref(), "Password: ")?;
+            let prompted_reauth_password =
+                if provided_password.is_some() || unlock_password.is_some() {
+                    None
+                } else {
+                    Some(password::get_password(None, "Password: ")?)
+                };
             let reauth_token = {
+                let reauth_password = if let Some(p) = provided_password.as_ref() {
+                    p
+                } else if let Some(p) = unlock_password.as_ref() {
+                    p
+                } else {
+                    prompted_reauth_password.as_ref().expect("prompted above")
+                };
+
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
                 let (token, _expires) =
-                    wm.reauth_wallet(wallet_info.id, &password, ReauthPurpose::Spend)?;
+                    wm.reauth_wallet(wallet_info.id, reauth_password, ReauthPurpose::Spend)?;
                 token
             };
+            drop(prompted_reauth_password);
+            drop(unlock_password);
+            drop(provided_password);
 
             // Retry broadcast
             let result_txid = {
@@ -282,11 +346,10 @@ pub async fn run(
     Ok(())
 }
 
-fn load_and_unlock_wallet(
+fn load_wallet(
     state: &CliAppState,
     wallet_prefix: Option<&str>,
-    password: Option<&str>,
-) -> Result<zstash_core::domain::WalletInfo> {
+) -> Result<(zstash_core::domain::WalletInfo, bool)> {
     let wallet_info = if let Some(prefix) = wallet_prefix {
         state.get_wallet_by_prefix(prefix)?
     } else {
@@ -301,10 +364,28 @@ fn load_and_unlock_wallet(
     };
 
     let (_, unlocked) = state.load_wallet(wallet_info.id)?;
-    if !unlocked {
-        let password = password::get_password(password, "Password: ")?;
-        state.unlock_wallet(wallet_info.id, &password, false)?;
+    Ok((wallet_info, unlocked))
+}
+
+fn unlock_if_needed(
+    state: &CliAppState,
+    wallet_id: uuid::Uuid,
+    unlocked: bool,
+    provided_password: Option<&Zeroizing<String>>,
+) -> Result<Option<Zeroizing<String>>> {
+    if unlocked {
+        return Ok(None);
     }
 
-    Ok(wallet_info)
+    match provided_password {
+        Some(p) => {
+            state.unlock_wallet(wallet_id, p, false)?;
+            Ok(None)
+        }
+        None => {
+            let password = password::get_password(None, "Password: ")?;
+            state.unlock_wallet(wallet_id, &password, false)?;
+            Ok(Some(password))
+        }
+    }
 }

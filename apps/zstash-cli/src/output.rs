@@ -4,6 +4,7 @@ use console::style;
 use serde::Serialize;
 
 use zstash_core::domain::{Balance, Network, SyncProgress, WalletInfo};
+use zstash_core::sensitive::SensitiveString;
 
 /// Output mode for CLI.
 #[derive(Clone)]
@@ -92,7 +93,7 @@ impl OutputMode {
     }
 
     /// Print wallet created message with seed phrase.
-    pub fn print_wallet_created(&self, wallet: &WalletInfo, seed_phrase: &[String]) {
+    pub fn print_wallet_created(&self, wallet: &WalletInfo, seed_phrase: &[SensitiveString]) {
         if self.json {
             self.print_json(&serde_json::json!({
                 "wallet": wallet,
@@ -117,7 +118,7 @@ impl OutputMode {
             println!();
 
             for (i, word) in seed_phrase.iter().enumerate() {
-                print!("{:>2}. {:<12}", i + 1, word);
+                print!("{:>2}. {:<12}", i + 1, word.as_ref());
                 if (i + 1) % 4 == 0 {
                     println!();
                 }

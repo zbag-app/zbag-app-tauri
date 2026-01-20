@@ -6,6 +6,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
 
 use zstash_core::domain::Network;
+use zstash_core::sensitive::SensitiveString;
 use zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet;
 
 use crate::cli_app_state::CliAppState;
@@ -54,8 +55,12 @@ enum WalletCommand {
         password: Option<String>,
 
         /// Seed phrase (24 words, will prompt if not provided)
+        ///
+        /// SECURITY: Avoid passing seed phrases via CLI arguments when possible. They may be
+        /// stored in shell history or visible to other processes via process listings. Prefer the
+        /// interactive prompts.
         #[arg(long)]
-        seed: Option<String>,
+        seed: Option<SensitiveString>,
 
         /// Birthday date (YYYY-MM-DD) for faster sync
         #[arg(long)]
@@ -124,8 +129,9 @@ pub async fn run(
             password,
             remember,
         } => {
+            let mut provided_password = password::wrap_password_arg(password)?;
+
             let state = CliAppState::new(data_dir, enable_tor)?;
-            let password = password::get_password_with_confirm(password.as_deref())?;
             let network: Network = network.into();
 
             // Fetch birthday height from chain tip for new wallet
@@ -133,8 +139,16 @@ pub async fn run(
             let birthday =
                 fetch_birthday_height_for_new_wallet(&grpc_url, state.tor_manager.clone()).await;
 
-            let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-            let result = wm.create_wallet(&name, network, &password, remember, birthday)?;
+            let password = match provided_password.take() {
+                Some(p) => p,
+                None => password::get_password_with_confirm(None)?,
+            };
+
+            let result = {
+                let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+                wm.create_wallet(&name, network, &password, remember, birthday)?
+            };
+            drop(password);
 
             output.print_wallet_created(&result.wallet, &result.seed_phrase);
         }
@@ -147,22 +161,36 @@ pub async fn run(
             birthday,
             remember,
         } => {
+            let mut provided_password = password::wrap_password_arg(password)?;
+
             let state = CliAppState::new(data_dir, enable_tor)?;
-            let password = password::get_password_with_confirm(password.as_deref())?;
-            let seed_phrase = password::get_seed_phrase(seed.as_deref())?;
+            let password = match provided_password.take() {
+                Some(p) => p,
+                None => password::get_password_with_confirm(None)?,
+            };
+            if seed.is_some() {
+                eprintln!(
+                    "SECURITY WARNING: Avoid passing seed phrases via CLI arguments (`--seed`) when possible. \
+They may be stored in shell history or visible to other processes via process listings."
+                );
+            }
+            let seed_phrase = password::get_seed_phrase(seed)?;
             let network: Network = network.into();
 
             let birthday_ms = birthday.map(|b| parse_birthday_date(&b)).transpose()?;
 
-            let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-            let result = wm.restore_wallet(
-                &name,
-                network,
-                &password,
-                remember,
-                &seed_phrase,
-                birthday_ms,
-            )?;
+            let result = {
+                let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+                wm.restore_wallet(
+                    &name,
+                    network,
+                    &password,
+                    remember,
+                    seed_phrase,
+                    birthday_ms,
+                )?
+            };
+            drop(password);
 
             output.print_wallet_restored(&result.wallet, result.birthday_height);
         }
@@ -184,6 +212,8 @@ pub async fn run(
             password,
             remember,
         } => {
+            let mut provided_password = password::wrap_password_arg(password)?;
+
             let state = CliAppState::new(data_dir, false)?;
             let wallet_info = state.get_wallet_by_prefix(&wallet)?;
 
@@ -197,8 +227,12 @@ pub async fn run(
                 return Ok(());
             }
 
-            let password = password::get_password(password.as_deref(), "Password: ")?;
+            let password = match provided_password.take() {
+                Some(p) => p,
+                None => password::get_password(None, "Password: ")?,
+            };
             state.unlock_wallet(wallet_info.id, &password, remember)?;
+            drop(password);
 
             output.print_message(&format!("Wallet '{}' unlocked", wallet_info.name));
         }

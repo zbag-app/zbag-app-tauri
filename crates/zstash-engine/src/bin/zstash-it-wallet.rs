@@ -143,8 +143,11 @@ fn load_or_create_mnemonic(path: &Path, force_new: bool) -> anyhow::Result<(Stri
     let mnemonic = Mnemonic::from_entropy(&entropy).context("generate mnemonic")?;
     entropy.zeroize();
 
-    let phrase = mnemonic.words().collect::<Vec<_>>().join(" ");
-    write_secret_file(path, phrase.as_bytes())?;
+    let mut phrase = mnemonic.to_string();
+    if let Err(err) = write_secret_file(path, phrase.as_bytes()) {
+        phrase.zeroize();
+        return Err(err);
+    }
 
     Ok((phrase, "generated"))
 }

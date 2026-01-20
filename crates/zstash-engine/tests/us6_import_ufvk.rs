@@ -1,3 +1,5 @@
+mod common;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -101,19 +103,6 @@ fn temp_root(prefix: &str) -> PathBuf {
     root
 }
 
-fn solve_backup_challenge(seed_phrase: &[String], indices: &[u8]) -> HashMap<u8, String> {
-    indices
-        .iter()
-        .map(|idx| {
-            let word = seed_phrase
-                .get((*idx as usize).saturating_sub(1))
-                .cloned()
-                .unwrap_or_default();
-            (*idx, word)
-        })
-        .collect()
-}
-
 #[test]
 fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
     let root = temp_root("us6_import_ufvk");
@@ -128,7 +117,8 @@ fn import_ufvk_creates_hardware_signer_account_and_blocks_spend() {
     let created = mgr
         .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
-    let answers = solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
+    let answers =
+        common::solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
     mgr.verify_backup(
         created.wallet.id,
         &created.backup_challenge.challenge_id,

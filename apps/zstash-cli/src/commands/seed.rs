@@ -7,6 +7,7 @@ use clap::Args;
 use console::style;
 
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::sensitive::SensitiveString;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -24,19 +25,14 @@ pub struct SeedArgs {
 }
 
 pub async fn run(args: SeedArgs, data_dir: &Path, output: &OutputMode) -> Result<()> {
+    let SeedArgs { wallet, password } = args;
+    let mut provided_password = password::wrap_password_arg(password)?;
     let state = CliAppState::new(data_dir, false)?;
 
     // If wallet specified, load it; otherwise find the single wallet or error
-    let wallet_info = if let Some(wallet_prefix) = &args.wallet {
-        let info = state.get_wallet_by_prefix(wallet_prefix)?;
-        let (_, unlocked) = state.load_wallet(info.id)?;
-        if !unlocked {
-            let password = password::get_password(args.password.as_deref(), "Password: ")?;
-            state.unlock_wallet(info.id, &password, false)?;
-        }
-        info
+    let wallet_info = if let Some(wallet_prefix) = wallet.as_deref() {
+        state.get_wallet_by_prefix(wallet_prefix)?
     } else {
-        // Try to find a wallet
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
             anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
@@ -44,21 +40,25 @@ pub async fn run(args: SeedArgs, data_dir: &Path, output: &OutputMode) -> Result
         if wallets.len() > 1 {
             anyhow::bail!("multiple wallets found - specify one with: zstash seed --wallet <ID>");
         }
-        let info = wallets.into_iter().next().unwrap();
-        let (_, unlocked) = state.load_wallet(info.id)?;
-        if !unlocked {
-            let password = password::get_password(args.password.as_deref(), "Password: ")?;
-            state.unlock_wallet(info.id, &password, false)?;
-        }
-        info
+        wallets.into_iter().next().unwrap()
     };
 
-    // Re-authenticate to view seed phrase
-    // The reauth flow requires password even if wallet is already unlocked
-    let reauth_password = password::get_password(
-        args.password.as_deref(),
-        "Re-enter password to view seed phrase: ",
-    )?;
+    let (_, unlocked) = state.load_wallet(wallet_info.id)?;
+    // Re-authenticate to view seed phrase (the reauth flow requires a password even if the wallet
+    // is already unlocked). Prefer consuming a provided password via `take()` to minimize the
+    // sensitive value's lifetime.
+    let reauth_password = if !unlocked {
+        let pwd = match provided_password.take() {
+            Some(p) => p,
+            None => password::get_password(None, "Password: ")?,
+        };
+        state.unlock_wallet(wallet_info.id, &pwd, false)?;
+        pwd
+    } else if let Some(p) = provided_password.take() {
+        p
+    } else {
+        password::get_password(None, "Re-enter password to view seed phrase: ")?
+    };
 
     let seed_phrase = {
         let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
@@ -74,12 +74,14 @@ pub async fn run(args: SeedArgs, data_dir: &Path, output: &OutputMode) -> Result
         wm.view_seed_phrase(wallet_info.id, &token)?
     };
 
+    drop(reauth_password);
+
     print_seed_phrase(output, &wallet_info.name, &seed_phrase);
 
     Ok(())
 }
 
-fn print_seed_phrase(output: &OutputMode, wallet_name: &str, seed_phrase: &[String]) {
+fn print_seed_phrase(output: &OutputMode, wallet_name: &str, seed_phrase: &[SensitiveString]) {
     if output.is_json() {
         println!(
             "{}",
@@ -104,7 +106,7 @@ fn print_seed_phrase(output: &OutputMode, wallet_name: &str, seed_phrase: &[Stri
         println!();
 
         for (i, word) in seed_phrase.iter().enumerate() {
-            print!("{:>2}. {:<12}", i + 1, word);
+            print!("{:>2}. {:<12}", i + 1, word.as_ref());
             if (i + 1) % 4 == 0 {
                 println!();
             }

@@ -1,3 +1,5 @@
+mod common;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -6,6 +8,8 @@ use uuid::Uuid;
 
 use zstash_core::domain::{BackupAction, Network, WalletLockStatus};
 use zstash_core::errors;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::sensitive::SensitiveString;
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::wallet_manager::WalletManager;
@@ -117,19 +121,6 @@ fn assert_ipc_err_code(err: &anyhow::Error, code: &str) {
     assert_eq!(ipc.code, code, "unexpected error: {ipc:?}");
 }
 
-fn solve_backup_challenge(seed_phrase: &[String], indices: &[u8]) -> HashMap<u8, String> {
-    indices
-        .iter()
-        .map(|idx| {
-            let word = seed_phrase
-                .get((*idx as usize).saturating_sub(1))
-                .cloned()
-                .unwrap_or_default();
-            (*idx, word)
-        })
-        .collect()
-}
-
 #[test]
 fn create_wallet_issues_backup_challenge_and_requires_backup() {
     let root = temp_root("us1_backup_challenge");
@@ -185,7 +176,8 @@ fn verify_backup_marks_backup_complete() {
         .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
-    let answers = solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
+    let answers =
+        common::solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
     mgr.verify_backup(
         created.wallet.id,
         &created.backup_challenge.challenge_id,
@@ -209,6 +201,47 @@ fn verify_backup_marks_backup_complete() {
 }
 
 #[test]
+fn verify_backup_accepts_case_insensitive_words() {
+    let root = temp_root("us1_verify_backup_case_insensitive");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let key_store = TestKeyStore::default();
+    let mut mgr =
+        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
+            .expect("create wallet manager");
+
+    let created = mgr
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .expect("create wallet");
+
+    let mut answers =
+        common::solve_backup_challenge(&created.seed_phrase, &created.backup_challenge.indices);
+    let idx = *answers
+        .keys()
+        .next()
+        .expect("challenge should have indices");
+    let upper = answers
+        .get(&idx)
+        .expect("challenge answer exists")
+        .as_ref()
+        .to_ascii_uppercase();
+    answers.insert(idx, upper.into());
+
+    mgr.verify_backup(
+        created.wallet.id,
+        &created.backup_challenge.challenge_id,
+        &answers,
+    )
+    .expect("verify backup (case-insensitive)");
+
+    let status = mgr
+        .compute_wallet_status(created.wallet.id)
+        .expect("compute wallet status");
+    assert_eq!(status.backup_status, BackupAction::Complete);
+}
+
+#[test]
 fn backup_challenge_invalidates_after_five_failures_and_requires_new_challenge() {
     let root = temp_root("us1_backup_failures");
     let app_db_path = root.join("app.db");
@@ -223,11 +256,11 @@ fn backup_challenge_invalidates_after_five_failures_and_requires_new_challenge()
         .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
-    let wrong_answers: HashMap<u8, String> = created
+    let wrong_answers: HashMap<u8, SensitiveString> = created
         .backup_challenge
         .indices
         .iter()
-        .map(|idx| (*idx, "wrong".to_string()))
+        .map(|idx| (*idx, "wrong".to_string().into()))
         .collect();
 
     for _ in 0..4 {
@@ -258,7 +291,7 @@ fn backup_challenge_invalidates_after_five_failures_and_requires_new_challenge()
         created.backup_challenge.challenge_id
     );
 
-    let answers = solve_backup_challenge(&created.seed_phrase, &new_challenge.indices);
+    let answers = common::solve_backup_challenge(&created.seed_phrase, &new_challenge.indices);
     mgr.verify_backup(created.wallet.id, &new_challenge.challenge_id, &answers)
         .expect("verify backup");
 
@@ -401,5 +434,37 @@ fn create_wallet_end_to_end_duration_is_under_sixty_seconds_in_release() {
     assert!(
         elapsed.as_secs() < 60,
         "CreateWallet took too long: {elapsed:?}"
+    );
+}
+
+#[test]
+fn view_seed_phrase_returns_original_words() {
+    // NOTE: This test validates functional correctness only; memory zeroization is verified via
+    // code review (and is not practical to assert reliably in safe Rust tests).
+    let root = temp_root("us1_view_seed_phrase");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let key_store = TestKeyStore::default();
+    let mut mgr =
+        WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
+            .expect("create wallet manager");
+
+    let created = mgr
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .expect("create wallet");
+
+    let (token, _expires_at) = mgr
+        .reauth_wallet(created.wallet.id, "pw", ReauthPurpose::ViewSeedPhrase)
+        .expect("reauth wallet");
+
+    let viewed = mgr
+        .view_seed_phrase(created.wallet.id, &token)
+        .expect("view seed phrase");
+
+    assert_eq!(viewed.len(), 24, "seed phrase must have 24 words");
+    assert_eq!(
+        viewed, created.seed_phrase,
+        "viewed words must match created words"
     );
 }

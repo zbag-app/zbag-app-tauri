@@ -2,6 +2,7 @@ use serde_json::json;
 
 use zstash_core::domain::{BackupAction, ShieldAction, SyncStatus, WalletLockStatus, WalletStatus};
 use zstash_core::errors;
+use zstash_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
 use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
 use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
@@ -61,7 +62,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
             created_at: 0,
             last_opened_at: None,
         },
-        seed_phrase: vec!["abandon".to_string(); 24],
+        seed_phrase: vec!["abandon".to_string().into(); 24],
         backup_challenge: zstash_core::ipc::v1::commands::wallet::BackupChallenge {
             challenge_id: "c".to_string(),
             indices: vec![1, 2, 3, 4],
@@ -71,7 +72,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
 
     let view_seed = ViewSeedPhraseResponse {
         schema_version: SCHEMA_VERSION,
-        seed_phrase: vec!["abandon".to_string(); 24],
+        seed_phrase: vec!["abandon".to_string().into(); 24],
     };
 
     let get_balance = GetBalanceResponse {
@@ -104,4 +105,31 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
     let status_json = serde_json::to_string(&wallet_status).unwrap();
     assert!(!status_json.contains("\"seed_phrase\""));
     assert!(!status_json.to_lowercase().contains("mnemonic"));
+}
+
+#[test]
+fn ipc_debug_redacts_sensitive_strings() {
+    let restore = RestoreWalletRequest {
+        schema_version: SCHEMA_VERSION,
+        name: "w".to_string(),
+        network: zstash_core::domain::Network::Testnet,
+        password: "pw".into(),
+        remember_unlock: false,
+        seed_phrase: "this is secret".into(),
+        birthday_date: None,
+    };
+    let restore_dbg = format!("{restore:?}");
+    assert!(!restore_dbg.contains("this is secret"));
+    assert!(!restore_dbg.contains("pw"));
+    assert!(restore_dbg.contains("[REDACTED]"));
+
+    let verify = VerifyBackupRequest {
+        schema_version: SCHEMA_VERSION,
+        wallet_id: uuid::Uuid::nil(),
+        challenge_id: "c".to_string(),
+        word_challenges: std::collections::BTreeMap::from([(1u8, "this is secret".into())]),
+    };
+    let verify_dbg = format!("{verify:?}");
+    assert!(!verify_dbg.contains("this is secret"));
+    assert!(verify_dbg.contains("[REDACTED]"));
 }

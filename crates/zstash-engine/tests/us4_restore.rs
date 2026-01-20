@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use zstash_core::domain::{AddressType, BackupAction, Network};
 use zstash_core::errors;
+use zstash_core::sensitive::SensitiveString;
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::wallet_manager::WalletManager;
@@ -134,7 +135,7 @@ fn restore_wallet_rejects_invalid_seed_phrase() {
             Network::Testnet,
             "pw",
             false,
-            "this is not a valid 24 word seed phrase",
+            SensitiveString::from("this is not a valid 24 word seed phrase"),
             None,
         )
         .expect_err("restore must fail");
@@ -156,7 +157,13 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
     let created = mgr
         .create_wallet("Seed Source", Network::Testnet, "pw", false, None)
         .expect("create wallet");
-    let seed_phrase = created.seed_phrase.join(" ");
+    let seed_phrase = created
+        .seed_phrase
+        .iter()
+        .map(AsRef::as_ref)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let seed_phrase: SensitiveString = seed_phrase.into();
 
     let restored = mgr
         .restore_wallet(
@@ -164,7 +171,7 @@ fn restore_wallet_marks_backup_complete_and_spend_is_not_blocked_by_backup_requi
             Network::Testnet,
             "pw2",
             false,
-            &seed_phrase,
+            seed_phrase,
             None,
         )
         .expect("restore wallet");
@@ -202,7 +209,13 @@ fn restore_wallet_returns_birthday_height_estimate() {
     let created = mgr
         .create_wallet("Seed Source", Network::Mainnet, "pw", false, None)
         .expect("create wallet");
-    let seed_phrase = created.seed_phrase.join(" ");
+    let seed_phrase = created
+        .seed_phrase
+        .iter()
+        .map(AsRef::as_ref)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let seed_phrase: SensitiveString = seed_phrase.into();
 
     let birthday_date_ms: i64 = 1_704_067_200_000; // 2024-01-01T00:00:00Z
     let expected =
@@ -214,7 +227,7 @@ fn restore_wallet_returns_birthday_height_estimate() {
             Network::Mainnet,
             "pw2",
             false,
-            &seed_phrase,
+            seed_phrase,
             Some(birthday_date_ms),
         )
         .expect("restore wallet");

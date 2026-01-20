@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use zstash_core::domain::{Network, SwapIntent, SwapType};
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_core::sensitive::SensitiveString;
 use zstash_engine::db::backup_meta;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::swap_service::SwapService;
@@ -249,7 +250,7 @@ fn regression_no_secret_logging() {
                 Network::Testnet,
                 password,
                 false,
-                restore_phrase,
+                SensitiveString::from(restore_phrase),
                 None,
             )
             .expect("restore wallet should succeed");

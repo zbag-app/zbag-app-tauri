@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{AccountInfo, Network, RecipientKind, TransactionType, WalletInfo, Zatoshis};
+use crate::sensitive::SensitiveString;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigningSummary {
@@ -87,7 +88,9 @@ pub struct CreateKeystoneWalletRequest {
     pub schema_version: u32,
     pub name: String,
     pub network: Network,
-    pub password: String,
+    /// SECURITY: `SensitiveString` helps limit retention on the Rust side, but this data still
+    /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
+    pub password: SensitiveString,
     /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
     /// See https://github.com/zstashapp/zstash/issues/45
     pub remember_unlock: bool,

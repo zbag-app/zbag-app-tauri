@@ -30,7 +30,7 @@ zcash_transparent = "0.6.3"
 zip32 = "0.2"
 
 # Mnemonic + randomness
-bip39 = "2"
+bip39 = { version = "2", features = ["zeroize"] }
 rand = "0.8"
 
 # Crypto (KDF + AEAD)

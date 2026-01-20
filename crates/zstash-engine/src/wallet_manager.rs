@@ -10,7 +10,7 @@ use rand::RngCore as _;
 use rand::seq::SliceRandom as _;
 use secrecy::SecretVec;
 use uuid::Uuid;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use zstash_core::domain::{
     AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
@@ -43,6 +43,7 @@ use zstash_core::ipc::v1::commands::transaction::{
 use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
+use zstash_core::sensitive::SensitiveString;
 
 pub struct WalletManager {
     app_db: AppDb,
@@ -72,7 +73,7 @@ struct ActiveWallet {
 #[derive(Debug, Clone)]
 pub struct CreateWalletResult {
     pub wallet: WalletInfo,
-    pub seed_phrase: Vec<String>,
+    pub seed_phrase: Vec<SensitiveString>,
     pub backup_challenge: BackupChallenge,
 }
 
@@ -206,17 +207,34 @@ impl WalletManager {
         let now_ms = chrono::Utc::now().timestamp_millis();
         let mut entropy = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut entropy);
-        let mnemonic = Mnemonic::from_entropy(&entropy).map_err(|e| {
-            ipc_err(
-                errors::INTERNAL_ERROR,
-                format!("failed to generate mnemonic: {e}"),
-            )
-        })?;
+        let mnemonic = match Mnemonic::from_entropy(&entropy) {
+            Ok(m) => Zeroizing::new(m),
+            Err(e) => {
+                entropy.zeroize();
+                return Err(ipc_err(
+                    errors::INTERNAL_ERROR,
+                    format!("failed to generate mnemonic: {e}"),
+                ));
+            }
+        };
         entropy.zeroize();
-        let seed_phrase: Vec<String> = mnemonic.words().map(|w| w.to_string()).collect();
+        let seed_phrase: Vec<SensitiveString> =
+            mnemonic.words().map(SensitiveString::from).collect();
         if seed_phrase.len() != 24 {
             return Err(ipc_err(errors::INTERNAL_ERROR, "mnemonic must be 24 words"));
         }
+
+        let seed = {
+            let seed_bytes = Zeroizing::new(mnemonic.to_seed_normalized(""));
+            drop(mnemonic);
+
+            // `SecretVec` owns heap-allocated bytes. Converting the fixed-size seed array into a
+            // `Vec<u8>` requires one unavoidable copy. Drop the stack buffer immediately after
+            // the copy.
+            let seed_vec = seed_bytes.to_vec();
+            drop(seed_bytes);
+            SecretVec::new(seed_vec)
+        };
 
         let wallet = WalletInfo {
             id: Uuid::new_v4(),
@@ -256,12 +274,8 @@ impl WalletManager {
             },
         )?;
 
-        let mut seed_bytes = mnemonic.to_seed_normalized("");
-        let seed = SecretVec::new(seed_bytes.to_vec());
-        seed_bytes.zeroize();
-
         let mut conn = self
-            .open_wallet_db_with_dek(&wallet_dir, network, &dek, Some(seed), true)
+            .open_wallet_db_with_dek(&wallet_dir, network, &dek, None, true)
             .context("failed to initialize encrypted wallet db")?;
 
         {
@@ -293,10 +307,6 @@ impl WalletManager {
                 None,
             );
 
-            let mut seed_bytes = mnemonic.to_seed_normalized("");
-            let seed = SecretVec::new(seed_bytes.to_vec());
-            seed_bytes.zeroize();
-
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut conn,
                 params,
@@ -306,16 +316,23 @@ impl WalletManager {
             let _ = wdb
                 .create_account(&wallet.name, &seed, &birthday, None)
                 .context("failed to create wallet account")?;
+            drop(seed);
 
             wdb.update_chain_tip(birthday.height())
                 .context("failed to set initial chain tip")?;
         }
 
-        let mut mnemonic_phrase = seed_phrase.join(" ");
-        let encrypted_mnemonic =
+        let encrypted_mnemonic = {
+            let mnemonic_phrase = Zeroizing::new(
+                seed_phrase
+                    .iter()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
             encrypt_mnemonic(wallet.id, wallet.network, &dek, mnemonic_phrase.as_bytes())
-                .context("failed to encrypt mnemonic")?;
-        mnemonic_phrase.zeroize();
+                .context("failed to encrypt mnemonic")?
+        };
 
         self.key_store
             .store_encrypted_mnemonic(wallet.id, wallet.network, &encrypted_mnemonic)
@@ -364,7 +381,7 @@ impl WalletManager {
         network: Network,
         password: &str,
         _remember_unlock: bool,
-        seed_phrase: &str,
+        seed_phrase: SensitiveString,
         birthday_date_ms: Option<i64>,
     ) -> anyhow::Result<RestoreWalletResult> {
         if name.trim().is_empty() {
@@ -383,16 +400,20 @@ impl WalletManager {
             return Err(ipc_err(errors::INVALID_REQUEST, "password required"));
         }
 
-        let mut phrase = seed_phrase.trim().to_string();
-        let mnemonic = Mnemonic::parse_in_normalized(bip39::Language::English, phrase.as_str())
-            .map_err(|_e| ipc_err(errors::INVALID_SEED_PHRASE, "invalid seed phrase"))?;
+        let mnemonic =
+            match Mnemonic::parse_in_normalized(bip39::Language::English, seed_phrase.trim()) {
+                Ok(m) => Zeroizing::new(m),
+                Err(_e) => {
+                    return Err(ipc_err(errors::INVALID_SEED_PHRASE, "invalid seed phrase"));
+                }
+            };
         if mnemonic.words().count() != 24 {
             return Err(ipc_err(
                 errors::INVALID_SEED_PHRASE,
                 "seed phrase must be 24 words",
             ));
         }
-        phrase.zeroize();
+        drop(seed_phrase);
 
         let now_ms = chrono::Utc::now().timestamp_millis();
 
@@ -452,12 +473,19 @@ impl WalletManager {
             },
         )?;
 
-        let mut seed_bytes = mnemonic.to_seed_normalized("");
-        let seed = SecretVec::new(seed_bytes.to_vec());
-        seed_bytes.zeroize();
+        let encrypted_mnemonic = {
+            let normalized_phrase = Zeroizing::new(mnemonic.to_string());
+            encrypt_mnemonic(
+                wallet.id,
+                wallet.network,
+                &dek,
+                normalized_phrase.as_bytes(),
+            )
+            .context("failed to encrypt mnemonic")?
+        };
 
         let mut conn = self
-            .open_wallet_db_with_dek(&wallet_dir, network, &dek, Some(seed), true)
+            .open_wallet_db_with_dek(&wallet_dir, network, &dek, None, true)
             .context("failed to initialize encrypted wallet db")?;
 
         {
@@ -472,9 +500,11 @@ impl WalletManager {
             );
             let birthday = AccountBirthday::from_parts(birthday_state, None);
 
-            let mut seed_bytes = mnemonic.to_seed_normalized("");
-            let seed = SecretVec::new(seed_bytes.to_vec());
-            seed_bytes.zeroize();
+            let seed = {
+                let seed_bytes = Zeroizing::new(mnemonic.to_seed_normalized(""));
+                drop(mnemonic);
+                SecretVec::new(seed_bytes.to_vec())
+            };
 
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut conn,
@@ -487,19 +517,12 @@ impl WalletManager {
                 .create_account(&wallet.name, &seed, &birthday, None)
                 .context("failed to create wallet account")?;
 
+            // Drop seed early to minimize lifetime of sensitive material
+            drop(seed);
+
             wdb.update_chain_tip(birthday.height())
                 .context("failed to set initial chain tip")?;
         }
-
-        let mut normalized_phrase = mnemonic.words().collect::<Vec<_>>().join(" ");
-        let encrypted_mnemonic = encrypt_mnemonic(
-            wallet.id,
-            wallet.network,
-            &dek,
-            normalized_phrase.as_bytes(),
-        )
-        .context("failed to encrypt mnemonic")?;
-        normalized_phrase.zeroize();
 
         self.key_store
             .store_encrypted_mnemonic(wallet.id, wallet.network, &encrypted_mnemonic)
@@ -927,7 +950,7 @@ impl WalletManager {
         &mut self,
         wallet_id: Uuid,
         reauth_token: &str,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> anyhow::Result<Vec<SensitiveString>> {
         // Check for watch-only wallet early (before consuming reauth token)
         if let Some(active) = self.active_wallet.as_ref()
             && active.wallet.id == wallet_id
@@ -963,7 +986,13 @@ impl WalletManager {
         let phrase = self
             .decrypt_mnemonic(wallet.id, wallet.network, &dek)
             .context("failed to decrypt mnemonic")?;
-        Ok(phrase.split_whitespace().map(|w| w.to_string()).collect())
+        // NOTE: The returned words are sensitive. Callers should avoid persisting them and
+        // should zeroize them as soon as they're no longer needed.
+        let words = phrase
+            .split_whitespace()
+            .map(SensitiveString::from)
+            .collect();
+        Ok(words)
     }
 
     pub fn consume_reauth_token(
@@ -992,35 +1021,41 @@ impl WalletManager {
     ) -> anyhow::Result<zcash_client_backend::keys::UnifiedSpendingKey> {
         let (wallet, dek) = self.require_unlocked_wallet_snapshot(wallet_id)?;
 
-        let mut phrase = self
-            .decrypt_mnemonic(wallet.id, wallet.network, &dek)
-            .context("failed to decrypt mnemonic")?;
+        let mnemonic = {
+            let phrase = self
+                .decrypt_mnemonic(wallet.id, wallet.network, &dek)
+                .context("failed to decrypt mnemonic")?;
+            match Mnemonic::parse_in_normalized(bip39::Language::English, phrase.trim()) {
+                Ok(m) => Zeroizing::new(m),
+                Err(_e) => {
+                    return Err(ipc_err(errors::INTERNAL_ERROR, "invalid stored mnemonic"));
+                }
+            }
+        };
 
-        let mnemonic = Mnemonic::parse_in_normalized(bip39::Language::English, phrase.trim())
-            .map_err(|e| {
-                ipc_err(
-                    errors::INTERNAL_ERROR,
-                    format!("invalid stored mnemonic: {e}"),
-                )
-            })?;
-        phrase.zeroize();
-
-        let mut seed_bytes = mnemonic.to_seed_normalized("");
-        let account = zip32::AccountId::try_from(account_id)
-            .map_err(|_| ipc_err(errors::INVALID_REQUEST, "invalid account_id"))?;
+        let seed_bytes = Zeroizing::new(mnemonic.to_seed_normalized(""));
+        drop(mnemonic);
+        let account = match zip32::AccountId::try_from(account_id) {
+            Ok(a) => a,
+            Err(_) => {
+                return Err(ipc_err(errors::INVALID_REQUEST, "invalid account_id"));
+            }
+        };
         let params = zcash_consensus_network(wallet.network);
-        let usk = zcash_client_backend::keys::UnifiedSpendingKey::from_seed(
+        let usk = match zcash_client_backend::keys::UnifiedSpendingKey::from_seed(
             &params,
-            &seed_bytes,
+            &*seed_bytes,
             account,
-        )
-        .map_err(|e| {
-            ipc_err(
-                errors::INTERNAL_ERROR,
-                format!("failed to derive spending key: {e}"),
-            )
-        })?;
-        seed_bytes.zeroize();
+        ) {
+            Ok(k) => k,
+            Err(e) => {
+                return Err(ipc_err(
+                    errors::INTERNAL_ERROR,
+                    format!("failed to derive spending key: {e}"),
+                ));
+            }
+        };
+        drop(seed_bytes);
 
         Ok(usk)
     }
@@ -1059,7 +1094,7 @@ impl WalletManager {
         &mut self,
         wallet_id: Uuid,
         challenge_id: &str,
-        word_challenges: &HashMap<u8, String>,
+        word_challenges: &HashMap<u8, SensitiveString>,
     ) -> anyhow::Result<()> {
         // Check for watch-only wallet (no seed to back up)
         if let Some(active) = self.active_wallet.as_ref()
@@ -1108,29 +1143,45 @@ impl WalletManager {
             state.indices.clone()
         };
 
-        let (wallet, dek) = self.require_unlocked_wallet_snapshot(wallet_id)?;
-        let phrase = self
-            .decrypt_mnemonic(wallet.id, wallet.network, &dek)
-            .context("failed to decrypt mnemonic")?;
-        let words: Vec<&str> = phrase.split_whitespace().collect();
-        if words.len() != 24 {
-            return Err(ipc_err(errors::INTERNAL_ERROR, "invalid stored mnemonic"));
-        }
+        let ok = {
+            let (wallet, dek) = self.require_unlocked_wallet_snapshot(wallet_id)?;
+            let phrase = self
+                .decrypt_mnemonic(wallet.id, wallet.network, &dek)
+                .context("failed to decrypt mnemonic")?;
+            let words: Vec<&str> = phrase.split_whitespace().collect();
+            if words.len() != 24 {
+                None
+            } else {
+                let mut ok = true;
+                for index in &indices {
+                    let Some(expected) = (*index)
+                        .checked_sub(1)
+                        .and_then(|i| words.get(i as usize))
+                        .copied()
+                    else {
+                        ok = false;
+                        continue;
+                    };
 
-        let mut ok = true;
-        for index in &indices {
-            let expected = words
-                .get((*index as usize).saturating_sub(1))
-                .copied()
-                .unwrap_or_default();
-            let actual = word_challenges
-                .get(index)
-                .map(|w| w.trim().to_lowercase())
-                .unwrap_or_default();
-            if expected != actual {
-                ok = false;
+                    let Some(actual) = word_challenges.get(index) else {
+                        ok = false;
+                        continue;
+                    };
+
+                    // NOTE: This comparison is intentionally lenient (trim + ASCII
+                    // case-insensitive) for UX. Historically this was strict equality.
+                    //
+                    // SECURITY: This is not a constant-time comparison. This flow is local-only
+                    // backup verification (not authentication / not network-exposed) and the
+                    // challenge reveals only a small subset of words.
+                    if !actual.trim().eq_ignore_ascii_case(expected) {
+                        ok = false;
+                    }
+                }
+                Some(ok)
             }
-        }
+        };
+        let ok = ok.ok_or_else(|| ipc_err(errors::INTERNAL_ERROR, "invalid stored mnemonic"))?;
 
         if ok {
             backup_meta::mark_backup_complete(self.app_db.conn(), wallet_id, now_ms, "challenge")?;
@@ -2222,7 +2273,7 @@ impl WalletManager {
         wallet_id: Uuid,
         network: Network,
         dek: &Dek,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<Zeroizing<String>> {
         let Some(bytes) = self
             .key_store
             .load_encrypted_mnemonic(wallet_id, network)
@@ -2231,9 +2282,20 @@ impl WalletManager {
             return Err(ipc_err(errors::INTERNAL_ERROR, "mnemonic not found"));
         };
 
-        let plaintext = decrypt_mnemonic(wallet_id, network, dek, &bytes)
+        let mut plaintext_bytes = decrypt_mnemonic_bytes(wallet_id, network, dek, &bytes)
             .context("failed to decrypt mnemonic")?;
-        String::from_utf8(plaintext).context("mnemonic plaintext is not valid UTF-8")
+        let plaintext = std::mem::take(&mut *plaintext_bytes);
+        match String::from_utf8(plaintext) {
+            Ok(s) => Ok(Zeroizing::new(s)),
+            Err(e) => {
+                let mut bytes = e.into_bytes();
+                bytes.zeroize();
+                Err(ipc_err(
+                    errors::INTERNAL_ERROR,
+                    "mnemonic plaintext is not valid UTF-8",
+                ))
+            }
+        }
     }
 }
 
@@ -2293,12 +2355,16 @@ fn encrypt_mnemonic(
     Ok(out)
 }
 
-fn decrypt_mnemonic(
+/// Decrypt the stored mnemonic ciphertext into plaintext bytes.
+///
+/// SECURITY: Callers must not persist these bytes. Convert them into a `Zeroizing<String>`
+/// immediately (e.g., via `String::from_utf8`) so the underlying allocation is zeroized on drop.
+fn decrypt_mnemonic_bytes(
     wallet_id: Uuid,
     network: Network,
     dek: &Dek,
     bytes: &[u8],
-) -> anyhow::Result<Vec<u8>> {
+) -> anyhow::Result<Zeroizing<Vec<u8>>> {
     if bytes.len() < 1 + 24 + 16 {
         anyhow::bail!("encrypted mnemonic is too short");
     }
@@ -2313,7 +2379,7 @@ fn decrypt_mnemonic(
     let cipher = XChaCha20Poly1305::new_from_slice(&dek.0)
         .map_err(|e| anyhow::anyhow!("failed to init AEAD: {e}"))?;
     let aad = mnemonic_aad(wallet_id, network);
-    cipher
+    let plaintext = cipher
         .decrypt(
             XNonce::from_slice(nonce),
             Payload {
@@ -2321,7 +2387,8 @@ fn decrypt_mnemonic(
                 aad: aad.as_bytes(),
             },
         )
-        .map_err(|e| anyhow::anyhow!("failed to decrypt mnemonic: {e}"))
+        .map_err(|e| anyhow::anyhow!("failed to decrypt mnemonic: {e}"))?;
+    Ok(Zeroizing::new(plaintext))
 }
 
 /// Safety margin for birthday height below chain tip.

@@ -7,6 +7,9 @@ use std::path::Path;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use console::style;
+use zeroize::Zeroizing;
+
+use zstash_core::sensitive::SensitiveString;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -32,8 +35,12 @@ enum BackupCommand {
 
         /// Full seed phrase (24 words, space-separated) for automatic verification
         /// The CLI will extract the words needed for the challenge
+        ///
+        /// SECURITY: Avoid passing seed phrases via CLI arguments when possible. They may be
+        /// stored in shell history or visible to other processes via process listings. Prefer the
+        /// interactive prompts.
         #[arg(long)]
-        seed: Option<String>,
+        seed: Option<SensitiveString>,
     },
 }
 
@@ -43,26 +50,18 @@ pub async fn run(args: BackupArgs, data_dir: &Path, output: &OutputMode) -> Resu
             wallet,
             password,
             seed,
-        } => {
-            run_verify(
-                &wallet,
-                password.as_deref(),
-                seed.as_deref(),
-                data_dir,
-                output,
-            )
-            .await
-        }
+        } => run_verify(&wallet, password, seed, data_dir, output).await,
     }
 }
 
 async fn run_verify(
     wallet_prefix: &str,
-    password: Option<&str>,
-    seed: Option<&str>,
+    password: Option<String>,
+    seed: Option<SensitiveString>,
     data_dir: &Path,
     output: &OutputMode,
 ) -> Result<()> {
+    let mut provided_password = password::wrap_password_arg(password)?;
     let state = CliAppState::new(data_dir, false)?;
 
     // Find and load the wallet
@@ -71,33 +70,51 @@ async fn run_verify(
 
     // Unlock if needed
     if !unlocked {
-        let pwd = password::get_password(password, "Password: ")?;
+        let pwd = match provided_password.take() {
+            Some(p) => p,
+            None => password::get_password(None, "Password: ")?,
+        };
         state.unlock_wallet(wallet_info.id, &pwd, false)?;
     }
+    // Drop any unused provided password promptly.
+    let _ = provided_password.take();
 
     // If seed phrase provided, do automatic verification
     if let Some(seed_phrase) = seed {
-        let words: Vec<&str> = seed_phrase.split_whitespace().collect();
-        if words.len() != 24 {
-            anyhow::bail!("seed phrase must be 24 words, got {}", words.len());
-        }
+        eprintln!(
+            "SECURITY WARNING: Avoid passing seed phrases via CLI arguments (`--seed`) when possible. \
+They may be stored in shell history or visible to other processes via process listings."
+        );
 
-        // Get challenge and immediately verify (challenge is in-memory only)
-        let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-        let challenge = wm.get_backup_challenge(wallet_info.id)?;
+        // Get challenge (challenge is in-memory only)
+        let challenge = {
+            let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+            wm.get_backup_challenge(wallet_info.id)?
+        };
 
         // Extract words at the challenge indices (1-indexed)
-        let mut word_map: HashMap<u8, String> = HashMap::new();
-        for &index in &challenge.indices {
-            let word_idx = (index as usize).saturating_sub(1); // Convert to 0-indexed
-            if word_idx >= words.len() {
-                anyhow::bail!("invalid index {} for 24-word seed", index);
+        let mut word_map: HashMap<u8, SensitiveString> = HashMap::new();
+        {
+            let words: Vec<&str> = seed_phrase.split_whitespace().collect();
+            if words.len() != 24 {
+                anyhow::bail!("seed phrase must be 24 words, got {}", words.len());
             }
-            word_map.insert(index, words[word_idx].to_lowercase());
+
+            for &index in &challenge.indices {
+                let word_idx = (index as usize).saturating_sub(1); // Convert to 0-indexed
+                if word_idx >= words.len() {
+                    anyhow::bail!("invalid index {} for 24-word seed", index);
+                }
+                word_map.insert(index, words[word_idx].into());
+            }
         }
+        drop(seed_phrase);
 
         // Verify
-        let result = wm.verify_backup(wallet_info.id, &challenge.challenge_id, &word_map);
+        let result = {
+            let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+            wm.verify_backup(wallet_info.id, &challenge.challenge_id, &word_map)
+        };
 
         if output.is_json() {
             match &result {
@@ -169,7 +186,7 @@ async fn run_verify(
     println!("(This verifies you have correctly backed up your seed phrase)");
     println!();
 
-    let mut word_map: HashMap<u8, String> = HashMap::new();
+    let mut word_map: HashMap<u8, SensitiveString> = HashMap::new();
 
     for &index in &challenge.indices {
         let word = prompt_word(index)?;
@@ -209,14 +226,16 @@ async fn run_verify(
 }
 
 /// Prompt user to enter a seed word at a specific index.
-fn prompt_word(index: u8) -> Result<String> {
+fn prompt_word(index: u8) -> Result<SensitiveString> {
     eprint!("  Word #{}: ", index);
     io::stderr().flush()?;
 
-    let mut word = String::new();
-    io::stdin().read_line(&mut word)?;
+    let mut raw_word = Zeroizing::new(String::new());
+    io::stdin().read_line(&mut raw_word)?;
 
-    let word = word.trim().to_lowercase();
+    let mut word = SensitiveString::new(std::mem::take(&mut *raw_word));
+    word.trim_in_place();
+
     if word.is_empty() {
         anyhow::bail!("word cannot be empty");
     }

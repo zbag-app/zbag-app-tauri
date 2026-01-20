@@ -4,6 +4,8 @@
 Tauri v2 Zcash wallet (Rust backend + React frontend).
 
 - **Secrets stay in Rust** - mnemonic only crosses IPC for create/restore/backup/view
+- **SensitiveString is defense-in-depth** - Rust drop zeroization only; not a guarantee against core dumps, debugger inspection, or frontend/JS retention
+- **Use Zeroizing vs SensitiveString** - `Zeroizing<T>` for short-lived internal secrets; `SensitiveString` for IPC-facing string fields (serde-transparent)
 - **Shielded-by-default** - transparent inputs only for shielding tx
 - **Fail-closed Tor** - blocks rather than downgrades
 - **Typed IPC contracts** - versioned request/response
