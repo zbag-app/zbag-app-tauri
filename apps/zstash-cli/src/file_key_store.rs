@@ -68,48 +68,13 @@ impl FileKeyStore {
             create_dir_all_secure(parent)?;
         }
         let content = serde_json::to_string_pretty(data)?;
-
-        // Atomic write via temp file
-        let tmp_path = self
-            .keystore_path
-            .with_extension(format!("json.tmp-{}", Uuid::new_v4()));
-        write_file_secure(&tmp_path, content.as_bytes()).with_context(|| {
-            format!("failed to write keystore temp file: {}", tmp_path.display())
+        write_file_secure(&self.keystore_path, content.as_bytes()).with_context(|| {
+            format!(
+                "failed to write keystore file: {}",
+                self.keystore_path.display()
+            )
         })?;
-        fs::rename(&tmp_path, &self.keystore_path)
-            .inspect_err(|_| {
-                let _ = fs::remove_file(&tmp_path);
-            })
-            .with_context(|| {
-                format!(
-                    "failed to move keystore temp file into place: {} -> {}",
-                    tmp_path.display(),
-                    self.keystore_path.display()
-                )
-            })?;
 
-        Ok(())
-    }
-
-    fn write_file_atomic(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
-        if let Some(parent) = path.parent() {
-            create_dir_all_secure(parent)?;
-        }
-        let tmp_path = path.with_extension(format!("enc.tmp-{}", Uuid::new_v4()));
-        write_file_secure(&tmp_path, contents).with_context(|| {
-            format!("failed to write mnemonic temp file: {}", tmp_path.display())
-        })?;
-        fs::rename(&tmp_path, path)
-            .inspect_err(|_| {
-                let _ = fs::remove_file(&tmp_path);
-            })
-            .with_context(|| {
-                format!(
-                    "failed to move mnemonic temp file into place: {} -> {}",
-                    tmp_path.display(),
-                    path.display()
-                )
-            })?;
         Ok(())
     }
 }
@@ -122,7 +87,16 @@ impl KeyStore for FileKeyStore {
         encrypted_mnemonic: &[u8],
     ) -> anyhow::Result<()> {
         let path = self.mnemonic_path(wallet_id, network);
-        Self::write_file_atomic(&path, encrypted_mnemonic)
+        if let Some(parent) = path.parent() {
+            create_dir_all_secure(parent)?;
+        }
+        write_file_secure(&path, encrypted_mnemonic).with_context(|| {
+            format!(
+                "failed to write encrypted mnemonic file: {}",
+                path.display()
+            )
+        })?;
+        Ok(())
     }
 
     fn load_encrypted_mnemonic(

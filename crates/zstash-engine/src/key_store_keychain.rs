@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Context as _;
 use uuid::Uuid;
@@ -41,41 +41,6 @@ impl KeyStoreKeychain {
         let username = format!("wallet-dek:{wallet_id}:{}", network_dir_name(network));
         keyring::Entry::new(&self.service, &username).context("failed to construct keychain entry")
     }
-
-    fn write_file_atomic(path: &Path, contents: &[u8]) -> anyhow::Result<()> {
-        if let Some(parent) = path.parent() {
-            create_dir_all_secure(parent).with_context(|| {
-                format!(
-                    "failed to create key store parent directory: {}",
-                    parent.display()
-                )
-            })?;
-        }
-
-        let mut tmp = path.as_os_str().to_os_string();
-        tmp.push(format!(".tmp-{}", Uuid::new_v4()));
-        let tmp_path = PathBuf::from(tmp);
-
-        // Write temp file with secure permissions (0600 on Unix)
-        write_file_secure(&tmp_path, contents).with_context(|| {
-            format!(
-                "failed to write key store temp file: {}",
-                tmp_path.display()
-            )
-        })?;
-        std::fs::rename(&tmp_path, path)
-            .inspect_err(|_| {
-                let _ = std::fs::remove_file(&tmp_path);
-            })
-            .with_context(|| {
-                format!(
-                    "failed to move key store temp file into place: {} -> {}",
-                    tmp_path.display(),
-                    path.display()
-                )
-            })?;
-        Ok(())
-    }
 }
 
 impl KeyStore for KeyStoreKeychain {
@@ -86,7 +51,21 @@ impl KeyStore for KeyStoreKeychain {
         encrypted_mnemonic: &[u8],
     ) -> anyhow::Result<()> {
         let path = self.mnemonic_path(wallet_id, network);
-        Self::write_file_atomic(&path, encrypted_mnemonic)
+        if let Some(parent) = path.parent() {
+            create_dir_all_secure(parent).with_context(|| {
+                format!(
+                    "failed to create key store parent directory: {}",
+                    parent.display()
+                )
+            })?;
+        }
+        write_file_secure(&path, encrypted_mnemonic).with_context(|| {
+            format!(
+                "failed to write encrypted mnemonic file: {}",
+                path.display()
+            )
+        })?;
+        Ok(())
     }
 
     fn load_encrypted_mnemonic(
