@@ -8,6 +8,14 @@ fn main() {
     let state = zstash_app_tauri_lib::state::AppState::new()
         .expect("failed to initialize application state");
 
+    // Log version at startup
+    let version_info = zstash_core::version::VersionInfo::current();
+    tracing::info!(
+        version = %version_info.version,
+        git_commit = %version_info.git_commit,
+        "zSTASH Desktop starting"
+    );
+
     tauri::Builder::default()
         .manage(state)
         .setup(|app| {
@@ -100,6 +108,8 @@ fn main() {
             zstash_app_tauri_lib::commands::server::zstash_set_default_server,
             zstash_app_tauri_lib::commands::server::zstash_test_server,
             zstash_app_tauri_lib::commands::server::zstash_list_servers,
+            // Version
+            zstash_app_tauri_lib::commands::version::zstash_get_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

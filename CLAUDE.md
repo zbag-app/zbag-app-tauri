@@ -88,6 +88,23 @@ Update:
 - Commits: `US<N>:`, `docs:`, `chore:`, `fix:`
 - Pre-commit: `make pre-commit`
 
+## Changelog & Releases
+
+Uses [git-cliff](https://git-cliff.org/) for automated changelog generation from conventional commits.
+
+```bash
+make changelog           # Regenerate CHANGELOG.md from git history
+make changelog-unreleased # Preview unreleased changes
+```
+
+**Releasing a version:**
+1. `make changelog`
+2. `git add CHANGELOG.md && git commit -m "chore: update changelog for v0.1.4"`
+3. `git tag v0.1.4`
+4. `git push && git push origin --tags`
+
+Config: `cliff.toml`
+
 ## Zcash Imports (librustzcash 0.21+)
 
 `zcash_protocol::{consensus, memo, value}` | `zip32::ExtendedSpendingKey`

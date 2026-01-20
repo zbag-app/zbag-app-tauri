@@ -640,6 +640,23 @@ export interface GetLogLocationResponse extends VersionedPayload {
   current_log_file: string;
 }
 
+/** Get application version information */
+export interface GetVersionRequest extends VersionedPayload {}
+
+/** Version information */
+export interface VersionInfo {
+  /** SemVer version string (e.g., "0.1.0") */
+  version: string;
+  /** Short git commit hash (e.g., "abc1234"), empty if unavailable */
+  git_commit: string;
+  /** Full version string for display (e.g., "0.1.0 (abc1234)") */
+  full_version: string;
+}
+
+export interface GetVersionResponse extends VersionedPayload {
+  version_info: VersionInfo;
+}
+
 // ============================================================================
 // Command Responses
 // ============================================================================
@@ -1067,6 +1084,9 @@ export const Commands = {
 
   // Logs
   GET_LOG_LOCATION: 'zstash_get_log_location',
+
+  // Version
+  GET_VERSION: 'zstash_get_version',
 } as const;
 
 // ============================================================================

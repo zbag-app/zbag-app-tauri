@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
 import { LogoutDialog } from '../components/common/LogoutDialog';
-import { getLogLocation } from '../services/ipc';
+import { getLogLocation, getVersion } from '../services/ipc';
 
 export function Settings(props: {
   wallet: IPC.WalletInfo;
@@ -18,18 +18,26 @@ export function Settings(props: {
   const { wallet, torState, onSetTorEnabled, onLogout } = props;
   const [logLocation, setLogLocation] = useState<IPC.GetLogLocationResponse | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
+  const [versionInfo, setVersionInfo] = useState<IPC.VersionInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
-      const res = await getLogLocation();
+      const [logRes, versionRes] = await Promise.all([getLogLocation(), getVersion()]);
       if (cancelled) return;
-      if ('err' in res) {
-        setLogError(res.err.message);
-        return;
+
+      if ('err' in logRes) {
+        setLogError(logRes.err.message);
+      } else {
+        setLogLocation(logRes.ok);
       }
-      setLogLocation(res.ok);
+
+      if ('ok' in versionRes) {
+        setVersionInfo(versionRes.ok.version_info);
+      } else {
+        console.warn('Failed to fetch version info:', versionRes.err.message);
+      }
     }
 
     run();
@@ -189,6 +197,30 @@ export function Settings(props: {
           ) : (
             <div className="text-sm text-muted-foreground">Loading log location...</div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* About Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            About
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Version</span>
+              <span className="font-mono">{versionInfo?.version ?? '-'}</span>
+            </div>
+            {versionInfo?.git_commit && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Commit</span>
+                <span className="font-mono">{versionInfo.git_commit}</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

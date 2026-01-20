@@ -4,3 +4,4 @@ pub mod domain;
 pub mod errors;
 pub mod ipc;
 pub mod sensitive;
+pub mod version;

@@ -6,10 +6,12 @@ use zstash_core::domain::{
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
 use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
+use zstash_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
 use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
 };
 use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::version::VersionInfo;
 
 #[test]
 fn schema_version_enforcement() {
@@ -202,4 +204,23 @@ fn ipc_debug_redacts_sensitive_strings() {
     let verify_dbg = format!("{verify:?}");
     assert!(!verify_dbg.contains("this is secret"));
     assert!(verify_dbg.contains("[REDACTED]"));
+}
+
+#[test]
+fn version_response_json_shape() {
+    let request = GetVersionRequest {
+        schema_version: SCHEMA_VERSION,
+    };
+    let request_json = serde_json::to_value(&request).unwrap();
+    assert_eq!(request_json["schema_version"], json!(SCHEMA_VERSION));
+
+    let response = GetVersionResponse {
+        schema_version: SCHEMA_VERSION,
+        version_info: VersionInfo::current(),
+    };
+    let response_json = serde_json::to_value(&response).unwrap();
+    assert!(response_json.get("version_info").is_some());
+    assert!(response_json["version_info"].get("version").is_some());
+    assert!(response_json["version_info"].get("git_commit").is_some());
+    assert!(response_json["version_info"].get("full_version").is_some());
 }

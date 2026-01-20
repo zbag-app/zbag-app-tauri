@@ -11,6 +11,7 @@ TAURI_DIR := apps/zstash-app-tauri
         pre-commit check audit check-telemetry \
         dev tauri-build \
         cli cli-dev cli-run cli-wallet-list cli-wallet-create cli-sync cli-balance cli-address \
+        changelog changelog-unreleased \
         clean clean-frontend clean-all
 
 # ============================================================================
@@ -134,6 +135,16 @@ cli-balance: cli ## Check balance (requires WALLET=<name>)
 cli-address: cli ## Get receive address (requires WALLET=<name>)
 	@test -n "$(WALLET)" || (echo "Error: WALLET is required (e.g., make cli-address WALLET=mywallet)" && exit 1)
 	@$(CLI_RELEASE) address --wallet $(WALLET)
+
+# ============================================================================
+# Changelog
+# ============================================================================
+
+changelog: ## Generate CHANGELOG.md from git history
+	@git-cliff --output CHANGELOG.md
+
+changelog-unreleased: ## Preview unreleased changes
+	@git-cliff --unreleased
 
 # ============================================================================
 # Clean

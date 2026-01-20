@@ -8,6 +8,7 @@ pub mod swap;
 pub mod sync;
 pub mod tor;
 pub mod transaction;
+pub mod version;
 pub mod wallet;
 
 mod util;

@@ -222,3 +222,7 @@ export async function listServers(): Promise<IPC.IpcResult<IPC.ListServersRespon
 export async function getLogLocation(): Promise<IPC.IpcResult<IPC.GetLogLocationResponse>> {
   return invoke(IPC.Commands.GET_LOG_LOCATION, { request: versioned({}) });
 }
+
+export async function getVersion(): Promise<IPC.IpcResult<IPC.GetVersionResponse>> {
+  return invoke(IPC.Commands.GET_VERSION, { request: versioned({}) });
+}

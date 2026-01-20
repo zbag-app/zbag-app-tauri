@@ -34,6 +34,20 @@
 - Follow existing commit patterns: `US<N>: ...`, `docs: ...`, `chore: ...`, `fix: ...` (imperative, concise).
 - PRs: link the relevant spec/issue, include a brief test plan (commands run), and add screenshots for UI changes.
 
+## Changelog & Releases
+
+Uses [git-cliff](https://git-cliff.org/) for automated changelog generation from conventional commits.
+
+- `make changelog` - Regenerate CHANGELOG.md from git history
+- `make changelog-unreleased` - Preview unreleased changes
+- Config: `cliff.toml`
+
+**Releasing a version:**
+1. `make changelog`
+2. `git add CHANGELOG.md && git commit -m "chore: update changelog for vX.Y.Z"`
+3. `git tag vX.Y.Z`
+4. `git push && git push origin --tags`
+
 ## Version Control (jj/Jujutsu)
 
 This repository uses jj (Jujutsu) colocated on Git for version control workflow.

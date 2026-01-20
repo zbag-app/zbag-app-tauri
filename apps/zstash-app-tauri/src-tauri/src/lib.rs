@@ -42,6 +42,8 @@ pub fn run() {
             commands::swap::zstash_list_swaps,
             // Logs
             commands::logs::zstash_get_log_location,
+            // Version
+            commands::version::zstash_get_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
