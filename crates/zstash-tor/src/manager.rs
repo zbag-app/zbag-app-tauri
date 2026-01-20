@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use http::Uri;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -18,27 +17,15 @@ type BootstrapFuture =
     Pin<Box<dyn Future<Output = Result<zcash_client_backend::tor::Client, String>> + Send>>;
 type BootstrapFn = Arc<dyn Fn(PathBuf) -> BootstrapFuture + Send + Sync>;
 
-type HealthcheckFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send>>;
-type HealthcheckFn =
-    Arc<dyn Fn(zcash_client_backend::tor::Client) -> HealthcheckFuture + Send + Sync>;
-
 #[derive(Clone)]
 pub struct TorManagerConfig {
     pub tor_dir: PathBuf,
     pub bootstrap_timeout: Duration,
-    pub healthcheck_timeout: Duration,
-    pub healthcheck_url: Uri,
     pub bootstrap: BootstrapFn,
-    pub health_check: HealthcheckFn,
 }
 
 impl TorManagerConfig {
     pub fn new(tor_dir: PathBuf) -> Self {
-        let healthcheck_url: Uri = "https://example.com/"
-            .parse()
-            .expect("static healthcheck URL must be valid");
-        let healthcheck_url_for_closure = healthcheck_url.clone();
-
         let bootstrap: BootstrapFn = Arc::new(|tor_dir| {
             Box::pin(async move {
                 zcash_client_backend::tor::Client::create(&tor_dir, |_| {})
@@ -47,30 +34,10 @@ impl TorManagerConfig {
             })
         });
 
-        let health_check: HealthcheckFn = Arc::new(move |client| {
-            let url = healthcheck_url_for_closure.clone();
-            Box::pin(async move {
-                client
-                    .http_get(
-                        url,
-                        |builder| builder,
-                        |_body| async { Ok(()) },
-                        0,
-                        |_| None,
-                    )
-                    .await
-                    .map(|_| ())
-                    .map_err(|e| e.to_string())
-            })
-        });
-
         Self {
             tor_dir,
             bootstrap_timeout: Duration::from_secs(60),
-            healthcheck_timeout: Duration::from_secs(15),
-            healthcheck_url,
             bootstrap,
-            health_check,
         }
     }
 }
@@ -96,7 +63,21 @@ pub struct TorManager {
 }
 
 impl TorManager {
-    pub fn new(config: TorManagerConfig, initial_state: TorState) -> Self {
+    pub fn new(config: TorManagerConfig, mut initial_state: TorState) -> Self {
+        // If Tor is disabled, `Off` is the only sensible runtime status.
+        if !initial_state.enabled {
+            initial_state.status = TorStatus::Off;
+            initial_state.last_error = None;
+        }
+
+        // A Tor client cannot be restored from persisted state. If we start in `On`,
+        // callers may temporarily observe an inconsistent "On but no client" state
+        // until bootstrap is (re-)started.
+        if initial_state.status == TorStatus::On {
+            initial_state.status = TorStatus::Off;
+            initial_state.last_error = None;
+        }
+
         let initial_event = TorStatusEvent {
             schema_version: SCHEMA_VERSION,
             event: "tor.status".to_string(),
@@ -140,6 +121,15 @@ impl TorManager {
         Ok(())
     }
 
+    /// Enables or disables Tor, updating [`TorState`] and emitting a status event.
+    ///
+    /// - `set_enabled(false)`: Immediately sets status to `Off`, cancels any in-progress
+    ///   bootstrap, and clears the client.
+    /// - `set_enabled(true)` when already `On` with a client: No-op (returns current state).
+    /// - `set_enabled(true)` otherwise (including `Error` or `Connecting` states): Cancels
+    ///   any in-progress bootstrap and starts a fresh one.
+    ///
+    /// To force a restart when already `On`, toggle `set_enabled(false)` then `set_enabled(true)`.
     pub fn set_enabled(&self, enabled: bool) -> Result<TorState, TorManagerError> {
         tokio::runtime::Handle::try_current().map_err(|_| TorManagerError::MissingTokioRuntime)?;
 
@@ -192,9 +182,22 @@ impl TorManager {
         });
     }
 
-    fn set_state(&self, state: TorState, client: Option<zcash_client_backend::tor::Client>) {
+    fn set_status_if_active(
+        &self,
+        cancel_rx: &watch::Receiver<bool>,
+        status: TorStatus,
+        last_error: Option<String>,
+        client: Option<zcash_client_backend::tor::Client>,
+    ) {
         let mut inner = self.inner.lock().expect("mutex poisoned");
-        inner.state = state;
+        // `cancel_rx` prevents stale bootstrap tasks (from prior enable/restart cycles)
+        // from publishing state, while `enabled` ensures we never publish while Tor is
+        // disabled even if cancellation races.
+        if *cancel_rx.borrow() || !inner.state.enabled {
+            return;
+        }
+        inner.state.status = status;
+        inner.state.last_error = last_error;
         inner.tor_client = client;
         self.publish_state_locked(&inner);
     }
@@ -209,18 +212,21 @@ impl TorManager {
             }
 
             if let Err(err) = tokio::fs::create_dir_all(&config.tor_dir).await {
-                if *cancel_rx.borrow() {
-                    return;
-                }
                 warn!("failed to create tor directory: {err}");
-                this.set_state(
-                    TorState {
-                        enabled: true,
-                        status: TorStatus::Error,
-                        last_error: Some(format!("failed to create tor directory: {err}")),
-                    },
+                // No explicit cancellation check needed: set_status_if_active has an internal
+                // guard, and we return immediately after.
+                this.set_status_if_active(
+                    &cancel_rx,
+                    TorStatus::Error,
+                    Some(format!("failed to create tor directory: {err}")),
                     None,
                 );
+                return;
+            }
+
+            // If Tor was disabled (or restart requested) while creating the directory,
+            // exit before starting bootstrap work.
+            if *cancel_rx.borrow() {
                 return;
             }
 
@@ -229,70 +235,29 @@ impl TorManager {
                 res = timeout(config.bootstrap_timeout, (config.bootstrap)(config.tor_dir.clone())) => res,
             } {
                 Err(_) => {
-                    this.set_state(
-                        TorState {
-                            enabled: true,
-                            status: TorStatus::Error,
-                            last_error: Some("Tor bootstrap timed out".to_string()),
-                        },
+                    this.set_status_if_active(
+                        &cancel_rx,
+                        TorStatus::Error,
+                        Some("Tor bootstrap timed out".to_string()),
                         None,
                     );
                     return;
                 }
                 Ok(Err(err)) => {
-                    this.set_state(
-                        TorState {
-                            enabled: true,
-                            status: TorStatus::Error,
-                            last_error: Some(err),
-                        },
-                        None,
-                    );
+                    this.set_status_if_active(&cancel_rx, TorStatus::Error, Some(err), None);
                     return;
                 }
                 Ok(Ok(client)) => client,
             };
 
-            let health = tokio::select! {
-                _ = cancel_rx.changed() => return,
-                res = timeout(config.healthcheck_timeout, (config.health_check)(client.clone())) => res,
-            };
-
-            match health {
-                Err(_) => {
-                    this.set_state(
-                        TorState {
-                            enabled: true,
-                            status: TorStatus::Error,
-                            last_error: Some("Tor health check timed out".to_string()),
-                        },
-                        None,
-                    );
-                }
-                Ok(Err(err)) => {
-                    this.set_state(
-                        TorState {
-                            enabled: true,
-                            status: TorStatus::Error,
-                            last_error: Some(err),
-                        },
-                        None,
-                    );
-                }
-                Ok(Ok(())) => {
-                    this.set_state(
-                        TorState {
-                            enabled: true,
-                            status: TorStatus::On,
-                            last_error: None,
-                        },
-                        Some(client),
-                    );
-                }
-            }
+            // Bootstrap success indicates Tor is ready - first real network call
+            // (to lightwalletd) will validate actual connectivity
+            this.set_status_if_active(&cancel_rx, TorStatus::On, None, Some(client));
         });
 
         let mut inner = self.inner.lock().expect("mutex poisoned");
+        // Cancellation is the primary shutdown mechanism, but keeping a handle lets us
+        // best-effort abort on fast toggles.
         inner.bootstrap_task = Some(handle);
     }
 
