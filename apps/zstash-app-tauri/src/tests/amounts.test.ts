@@ -36,8 +36,11 @@ test('formatAtomicAmount passes through extremely large numeric strings', () => 
 });
 
 test('formatAtomicAmountForToken formats known tokens and falls back for unknown tokens', () => {
-  expect(formatAtomicAmountForToken('100000000', 'nep141:zec.omft.near')).toBe('1 ZEC');
-  expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toBe('123 (raw)');
-  expect(formatAtomicAmountForToken('abc', 'nep141:zec.omft.near')).toBe('abc (raw)');
-  expect(formatAtomicAmountForToken('   ', 'unknown-token')).toBe('');
+  expect(formatAtomicAmountForToken('100000000', 'nep141:zec.omft.near')).toEqual({
+    value: '1 ZEC',
+    isRaw: false,
+  });
+  expect(formatAtomicAmountForToken('  123  ', 'unknown-token')).toEqual({ value: '123 (raw)', isRaw: true });
+  expect(formatAtomicAmountForToken('abc', 'nep141:zec.omft.near')).toEqual({ value: 'abc (raw)', isRaw: true });
+  expect(formatAtomicAmountForToken('   ', 'unknown-token')).toEqual({ value: '', isRaw: false });
 });

@@ -1,5 +1,10 @@
 import { getTokenById } from '../data/supportedTokens';
 
+export type FormattedAmountForToken = {
+  value: string;
+  isRaw: boolean;
+};
+
 /**
  * Format an atomic/smallest-unit amount to a human-readable decimal string.
  *
@@ -29,17 +34,17 @@ export function formatAtomicAmount(value: string, decimals: number): string {
 /**
  * Format an atomic amount using known token metadata.
  *
- * Returns `''` for empty/whitespace input.
+ * Returns `{ value: '', isRaw: false }` for empty/whitespace input.
  *
- * Falls back to showing the raw atomic value as `<value> (raw)` if the token is unknown or the input is not a
- * base-10 integer string.
+ * Falls back to showing the raw atomic value as `<value> (raw)` with `isRaw=true` if the token is unknown or the
+ * input is not a base-10 integer string.
  */
-export function formatAtomicAmountForToken(value: string, tokenId: string): string {
+export function formatAtomicAmountForToken(value: string, tokenId: string): FormattedAmountForToken {
   const trimmed = value.trim();
-  if (!trimmed) return '';
+  if (!trimmed) return { value: '', isRaw: false };
 
   const token = getTokenById(tokenId);
-  if (!token) return `${trimmed} (raw)`;
-  if (!/^\d+$/.test(trimmed)) return `${trimmed} (raw)`;
-  return `${formatAtomicAmount(trimmed, token.decimals)} ${token.label}`;
+  if (!token) return { value: `${trimmed} (raw)`, isRaw: true };
+  if (!/^\d+$/.test(trimmed)) return { value: `${trimmed} (raw)`, isRaw: true };
+  return { value: `${formatAtomicAmount(trimmed, token.decimals)} ${token.label}`, isRaw: false };
 }

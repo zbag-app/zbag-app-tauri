@@ -106,7 +106,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
-  // Clear errors when quote inputs change (even if the semantic/canonical values are unchanged).
+  // Clear errors when quote inputs change (clear on any keystroke, even if canonical values are unchanged).
   useEffect(() => {
     setError(null);
   }, [outputAsset, inputAmountZec, destinationAddress, refundAddress]);
@@ -161,7 +161,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     if (!quote) return null;
     return formatAtomicAmountForToken(quote.min_output_amount, quote.output_asset);
   }, [quote]);
-  const minOutputIsRaw = formattedMinOutput?.endsWith(' (raw)') ?? false;
+  const minOutputIsRaw = formattedMinOutput?.isRaw ?? false;
 
   if (wallet.network !== 'Mainnet') {
     return (
@@ -315,7 +315,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
                 <span className="text-muted-foreground">{minOutputIsRaw ? 'Min. output (raw)' : 'Min. output'}</span>
-                <div className="font-semibold">{formattedMinOutput}</div>
+                <div className="font-semibold">{formattedMinOutput?.value}</div>
               </div>
               <div className="space-y-1">
                 <span className="text-muted-foreground">Est. time</span>
