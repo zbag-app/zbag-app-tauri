@@ -6,19 +6,27 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 
-interface LogoutConfirmDialogProps {
+interface LogoutDialogModalProps {
   walletId: string | null;
   open: boolean;
   onClose: () => void;
   onLogout: () => void;
 }
 
-export function LogoutConfirmDialog(props: LogoutConfirmDialogProps) {
+export function LogoutDialogModal(props: LogoutDialogModalProps) {
   const { walletId, open, onClose, onLogout } = props;
 
   const dialogRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useFocusTrap(dialogRef, open);
   useKeyboardShortcuts(
@@ -60,14 +68,14 @@ export function LogoutConfirmDialog(props: LogoutConfirmDialogProps) {
 
       const logoutRes = await logoutWallet({ wallet_id: walletId });
       if ('err' in logoutRes) {
-        setError(logoutRes.err.message);
+        if (mountedRef.current) setError(logoutRes.err.message);
         return;
       }
 
       onClose();
       onLogout();
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -118,3 +126,4 @@ export function LogoutConfirmDialog(props: LogoutConfirmDialogProps) {
     </div>
   );
 }
+

@@ -73,13 +73,13 @@ apps/zstash-app-tauri/
 
 ### Adding Tauri Commands
 
-Register in BOTH `src-tauri/src/lib.rs` AND `main.rs` (main.rs = runtime entry).
+Commands are registered in `apps/zstash-app-tauri/src-tauri/src/lib.rs` (the single `run()` builder).
+`apps/zstash-app-tauri/src-tauri/src/main.rs` is a thin wrapper that calls `zstash_app_tauri_lib::run()`.
 
 Update:
-- `lib.rs`: `commands::wallet::zstash_xxx`
-- `main.rs`: `zstash_app_tauri_lib::commands::wallet::zstash_xxx`
-- `zstash-core/src/ipc/v1/commands/` - Request/Response types
-- `src/types/ipc.ts` + `src/services/ipc.ts`
+- `apps/zstash-app-tauri/src-tauri/src/lib.rs`: `commands::wallet::zstash_xxx`
+- `crates/zstash-core/src/ipc/v1/commands/` - Request/Response types
+- `apps/zstash-app-tauri/src/types/ipc.ts` + `apps/zstash-app-tauri/src/services/ipc.ts`
 
 ## Toolchain
 

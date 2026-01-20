@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { MenuEvents } from '../constants/menuEvents';
+import type * as IPC from '../types/ipc';
 import {
   lockWallet,
   logoutWallet,
@@ -16,6 +17,8 @@ import {
 export interface UseMenuEventsOptions {
   /** Current wallet ID, if a wallet is loaded. */
   walletId: string | null;
+  /** Whether the current wallet is unlocked/ready for wallet routes and actions. */
+  walletUnlocked: boolean;
   /** Callback when wallet is locked via menu. */
   onLocked?: () => void;
   /** Callback when user requests logout via menu. */
@@ -23,7 +26,7 @@ export interface UseMenuEventsOptions {
   /** Callback when user logs out via menu. */
   onLogout?: () => void;
   /** Callback to update Tor state after toggle. */
-  onTorStateChanged?: (enabled: boolean) => void;
+  onTorStateChanged?: (state: IPC.TorState) => void;
   /** Callback for user-visible error reporting. */
   onError?: (title: string, error: { code: string; message: string }) => void;
 }
@@ -33,11 +36,12 @@ export interface UseMenuEventsOptions {
  * Must be used within a Router context.
  */
 export function useMenuEvents(options: UseMenuEventsOptions): void {
-  const { walletId, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError } = options;
+  const { walletId, walletUnlocked, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError } = options;
   const navigate = useNavigate();
 
   // Use refs to avoid stale closures in event handlers
   const walletIdRef = useRef(walletId);
+  const walletUnlockedRef = useRef(walletUnlocked);
   const onLockedRef = useRef(onLocked);
   const onLogoutRequestedRef = useRef(onLogoutRequested);
   const onLogoutRef = useRef(onLogout);
@@ -47,12 +51,13 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
 
   useEffect(() => {
     walletIdRef.current = walletId;
+    walletUnlockedRef.current = walletUnlocked;
     onLockedRef.current = onLocked;
     onLogoutRequestedRef.current = onLogoutRequested;
     onLogoutRef.current = onLogout;
     onTorStateChangedRef.current = onTorStateChanged;
     onErrorRef.current = onError;
-  }, [walletId, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError]);
+  }, [walletId, walletUnlocked, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError]);
 
   useEffect(() => {
     let mounted = true;
@@ -82,9 +87,20 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       if (id) return id;
       onErrorRef.current?.('Wallet required', {
         code: 'WALLET_REQUIRED',
-        message: 'Select a wallet to use this menu item.',
+        message: 'Create or select a wallet to use this menu item.',
       });
       navigate('/wallets');
+      return null;
+    }
+
+    function ensureWalletUnlocked(): string | null {
+      const id = ensureWalletLoaded();
+      if (!id) return null;
+      if (walletUnlockedRef.current) return id;
+      onErrorRef.current?.('Wallet locked', {
+        code: 'WALLET_LOCKED',
+        message: 'Unlock your wallet to use this menu item.',
+      });
       return null;
     }
 
@@ -122,55 +138,55 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       // Navigation events (wallet required)
       listeners.push(
         addListener(MenuEvents.PREFERENCES, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/settings');
         })
       );
       listeners.push(
         addListener(MenuEvents.SEND, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/send');
         })
       );
       listeners.push(
         addListener(MenuEvents.RECEIVE, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/receive');
         })
       );
       listeners.push(
         addListener(MenuEvents.SWAP, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/swap');
         })
       );
       listeners.push(
         addListener(MenuEvents.ACTIVITY, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/activity');
         })
       );
       listeners.push(
         addListener(MenuEvents.VIEW_SEED, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/backup/flow');
         })
       );
       listeners.push(
         addListener(MenuEvents.VERIFY_BACKUP, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/backup');
         })
       );
       listeners.push(
         addListener(MenuEvents.HARDWARE_WALLET, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/keystone/import');
         })
       );
       listeners.push(
         addListener(MenuEvents.SERVER_SETTINGS, () => {
-          if (!ensureWalletLoaded()) return;
+          if (!ensureWalletUnlocked()) return;
           navigate('/settings/servers');
         })
       );
@@ -180,6 +196,13 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
         addListener(MenuEvents.LOCK_WALLET, async () => {
           const id = ensureWalletLoaded();
           if (!id) return;
+          if (!walletUnlockedRef.current) {
+            onErrorRef.current?.('Wallet already locked', {
+              code: 'WALLET_LOCKED',
+              message: 'Your wallet is already locked.',
+            });
+            return;
+          }
           const res = await lockWallet({ wallet_id: id });
           if ('ok' in res && res.ok.locked) {
             onLockedRef.current?.();
@@ -255,7 +278,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
               const currentEnabled = stateRes.ok.state.enabled;
               const res = await setTorEnabled({ enabled: !currentEnabled });
               if ('ok' in res) {
-                onTorStateChangedRef.current?.(res.ok.state.enabled);
+                onTorStateChangedRef.current?.(res.ok.state);
               } else if ('err' in res) {
                 reportError('Toggle Tor failed', res.err);
               }
