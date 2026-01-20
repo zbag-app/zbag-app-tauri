@@ -5,7 +5,7 @@ use rusqlite::{Connection, OpenFlags, params};
 
 use super::schema::INITIAL_SCHEMA_V1;
 
-pub const LATEST_VERSION: i64 = 1;
+pub const LATEST_VERSION: i64 = 2;
 
 pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
     let existed = db_path.exists();
@@ -87,6 +87,11 @@ pub fn apply_migrations(conn: &Connection) -> anyhow::Result<()> {
         record_version(conn, 1)?;
     }
 
+    if current_version < 2 {
+        apply_v2(conn)?;
+        record_version(conn, 2)?;
+    }
+
     Ok(())
 }
 
@@ -122,6 +127,13 @@ fn apply_v1(conn: &Connection) -> anyhow::Result<()> {
     seed_servers_v1(conn)?;
     seed_tor_settings_v1(conn)?;
 
+    Ok(())
+}
+
+fn apply_v2(_conn: &Connection) -> anyhow::Result<()> {
+    // No-op migration for forward compatibility.
+    // Databases may have been upgraded to v2 by experimental code that was
+    // never merged. The v2 migration made no schema changes.
     Ok(())
 }
 
