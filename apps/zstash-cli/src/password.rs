@@ -23,7 +23,12 @@ pub fn wrap_password_arg(password: Option<String>) -> Result<Option<Zeroizing<St
 #[must_use = "the returned password is sensitive; use it and drop it promptly"]
 pub fn get_password(provided: Option<&str>, prompt: &str) -> Result<Zeroizing<String>> {
     match provided {
-        Some(p) => Ok(Zeroizing::new(p.to_string())),
+        Some(p) => {
+            if p.is_empty() {
+                anyhow::bail!("password cannot be empty");
+            }
+            Ok(Zeroizing::new(p.to_string()))
+        }
         None => {
             eprint!("{}", prompt);
             io::stderr().flush()?;
@@ -38,7 +43,12 @@ pub fn get_password(provided: Option<&str>, prompt: &str) -> Result<Zeroizing<St
 #[must_use = "the returned password is sensitive; use it and drop it promptly"]
 pub fn get_password_with_confirm(provided: Option<&str>) -> Result<Zeroizing<String>> {
     match provided {
-        Some(p) => Ok(Zeroizing::new(p.to_string())),
+        Some(p) => {
+            if p.is_empty() {
+                anyhow::bail!("password cannot be empty");
+            }
+            Ok(Zeroizing::new(p.to_string()))
+        }
         None => {
             eprint!("Password: ");
             io::stderr().flush()?;
