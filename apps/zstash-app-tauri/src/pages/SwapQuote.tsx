@@ -33,7 +33,7 @@ export function SwapQuote() {
   const quote = state?.quote ?? null;
 
   useEffect(() => {
-    if (location.state != null) {
+    if (location.state !== null) {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
@@ -115,6 +115,12 @@ export function SwapQuote() {
               <span className="text-muted-foreground">Est. time</span>
               <div className="font-semibold">{Math.ceil(quote.time_estimate_secs / 60)} min</div>
             </div>
+            {quote.app_fee_bps !== null && (
+              <div className="space-y-1">
+                <span className="text-muted-foreground">App fee</span>
+                <div className="font-semibold">{(quote.app_fee_bps / 100).toFixed(2)}%</div>
+              </div>
+            )}
             <div className="space-y-1 col-span-2">
               <span className="text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />

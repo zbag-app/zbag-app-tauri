@@ -76,4 +76,6 @@ pub struct SwapQuote {
     pub deposit_memo: Option<String>,
     /// Correlation ID for tracking the quote
     pub correlation_id: String,
+    /// App/affiliate fee in basis points (1 bps = 0.01%). 50 bps = 0.50%.
+    pub app_fee_bps: Option<u32>,
 }

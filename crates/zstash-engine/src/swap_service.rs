@@ -17,6 +17,7 @@ use zstash_core::ipc::v1::commands::swap::{
 };
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::SwapChangedEvent;
+use zstash_network::near_intents::AppFee;
 
 use crate::db::{account_meta, open_app_db_connection, swap_meta};
 use crate::error::ipc_err;
@@ -128,6 +129,12 @@ impl SwapService {
         // Calculate deadline (2 hours from now, like Zashi)
         let deadline = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
 
+        // App fee: 50 basis points (0.50%) to match Zashi
+        // Affiliate recipient for zSTASH swap fees
+        const APP_FEE_BPS: u32 = 50;
+        const _: () = assert!(APP_FEE_BPS <= 500, "App fee should not exceed 5%");
+        const AFFILIATE_RECIPIENT: &str = "zstash.near";
+
         // Use dry=false to get deposit address directly (like Zashi)
         let req = zstash_network::near_intents::QuoteRequest {
             origin_asset: intent.input_asset.clone(),
@@ -137,7 +144,10 @@ impl SwapService {
             slippage_tolerance: 100, // 1%
             quote_waiting_time_ms: Some(3000),
             referral: Some("zstash".to_string()),
-            app_fees: None,
+            app_fees: Some(vec![AppFee {
+                recipient: AFFILIATE_RECIPIENT.to_string(),
+                fee: APP_FEE_BPS,
+            }]),
             deposit_type: "ORIGIN_CHAIN".to_string(),
             refund_to,
             refund_type: "ORIGIN_CHAIN".to_string(),
@@ -168,6 +178,7 @@ impl SwapService {
             deposit_address: quote_res.deposit_address.clone(),
             deposit_memo: quote_res.deposit_memo.clone(),
             correlation_id: quote_res.correlation_id.clone(),
+            app_fee_bps: Some(APP_FEE_BPS),
         };
 
         // Use correlation_id as the quote_id for tracking

@@ -156,6 +156,26 @@ fn spawn_mock_1click_quote_server(
             "deadline must be present"
         );
 
+        // Verify appFees is present with correct structure (50 bps to zstash.near)
+        let app_fees = json.get("appFees").expect("appFees must be present");
+        let app_fees_arr = app_fees.as_array().expect("appFees must be an array");
+        assert_eq!(
+            app_fees_arr.len(),
+            1,
+            "appFees should have exactly one entry"
+        );
+        let fee_entry = &app_fees_arr[0];
+        assert_eq!(
+            fee_entry.get("recipient").and_then(|v| v.as_str()),
+            Some("zstash.near"),
+            "affiliate recipient should be zstash.near"
+        );
+        assert_eq!(
+            fee_entry.get("fee").and_then(|v| v.as_u64()),
+            Some(50),
+            "app fee should be 50 bps"
+        );
+
         let deadline_iso = "2026-01-10T00:00:00Z";
         let deposit_address = "0x0c79D7017D764b3109CEEFF082f3ea6d7b95e8ac";
 
@@ -248,6 +268,11 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
     assert_eq!(res.quote.output_amount, "672703");
     assert!(res.quote.deadline > 0);
     assert!(res.quote.deposit_address.is_some());
+    assert_eq!(
+        res.quote.app_fee_bps,
+        Some(50),
+        "app_fee_bps should be 50 in response"
+    );
 
     server.join().expect("server joined");
 }

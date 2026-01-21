@@ -209,6 +209,8 @@ export interface SwapQuote {
   deposit_memo: string | null;
   /** Correlation ID for tracking the quote */
   correlation_id: string;
+  /** App/affiliate fee in basis points (1 bps = 0.01%). 50 bps = 0.50%. */
+  app_fee_bps: number | null;
 }
 
 // ============================================================================
