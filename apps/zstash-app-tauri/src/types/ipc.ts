@@ -681,8 +681,10 @@ export interface GetVersionRequest extends VersionedPayload {}
 export interface VersionInfo {
   /** SemVer version string (e.g., "0.1.0") */
   version: string;
-  /** Short git commit hash (e.g., "abc1234"), empty if unavailable */
-  git_commit: string;
+  /** Short git commit hash (e.g., "abc1234"), null for release builds */
+  git_commit: string | null;
+  /** Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC") */
+  build_timestamp: string;
   /** Full version string for display (e.g., "0.1.0 (abc1234)") */
   full_version: string;
 }

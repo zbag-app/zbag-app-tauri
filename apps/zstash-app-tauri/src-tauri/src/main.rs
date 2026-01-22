@@ -12,7 +12,8 @@ fn main() {
     let version_info = zstash_core::version::VersionInfo::current();
     tracing::info!(
         version = %version_info.version,
-        git_commit = %version_info.git_commit,
+        git_commit = version_info.git_commit.as_deref().unwrap_or("release"),
+        build_timestamp = %version_info.build_timestamp,
         "zSTASH Desktop starting"
     );
 
