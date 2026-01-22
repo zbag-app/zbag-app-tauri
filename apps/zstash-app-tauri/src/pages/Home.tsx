@@ -117,8 +117,6 @@ export function Home(props: {
   const totalFiat = showFiat && balance ? zatoshisToFiat(balance.total, exchangeRate.price) : null;
   const shieldedFiat = showFiat && balance ? zatoshisToFiat(balance.shielded_spendable, exchangeRate.price) : null;
   const transparentFiat = showFiat && balance ? zatoshisToFiat(balance.transparent_total, exchangeRate.price) : null;
-  // Prefix for approximate fiat values (all fiat values are approximate)
-  const fiatPrefix = fiatIsStale ? '~' : '~';
 
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
@@ -142,7 +140,7 @@ export function Home(props: {
                 </div>
                 {showFiat && totalFiat !== null && (
                   <p className={cn("text-lg mt-1", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                    {fiatPrefix}{formatFiat(totalFiat, exchangeRate.currency)}
+                    {formatFiat(totalFiat, exchangeRate.currency)}
                   </p>
                 )}
                 {fiatSettings?.enabled && !exchangeRate && (
@@ -237,7 +235,7 @@ export function Home(props: {
                 </div>
                 {showFiat && shieldedFiat !== null && (
                   <div className={cn("text-xs", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                    {fiatPrefix}{formatFiat(shieldedFiat, exchangeRate.currency)}
+                    {formatFiat(shieldedFiat, exchangeRate.currency)}
                   </div>
                 )}
                 {balance.shielded_pending !== '0' && (
@@ -272,7 +270,7 @@ export function Home(props: {
                 </div>
                 {showFiat && transparentFiat !== null && (
                   <div className={cn("text-xs", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                    {fiatPrefix}{formatFiat(transparentFiat, exchangeRate.currency)}
+                    {formatFiat(transparentFiat, exchangeRate.currency)}
                   </div>
                 )}
               </div>

@@ -264,7 +264,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                       Value: {formatZatoshisToZec(tx.value)} ZEC
                       {fiatSettings?.enabled && exchangeRate && (
                         <span className={fiatIsStale ? "text-muted-foreground/60" : undefined} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                          {' '}(~{formatFiat(zatoshisToFiat(tx.value, exchangeRate.price), exchangeRate.currency)})
+                          {' '}({formatFiat(zatoshisToFiat(tx.value, exchangeRate.price), exchangeRate.currency)})
                         </span>
                       )}
                     </span>

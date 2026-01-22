@@ -185,7 +185,7 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
                 <span className="text-muted-foreground">Up to 8 decimal places</span>
                 {fiatSettings?.enabled && exchangeRate && amountZatoshis && (
                   <span className={fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground"} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                    ~{formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
+                    {formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
                   </span>
                 )}
               </div>
