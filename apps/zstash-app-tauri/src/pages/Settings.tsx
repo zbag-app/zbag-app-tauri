@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
-import { FIAT_CURRENCIES, FIAT_CURRENCY_DISPLAY_NAMES } from '../types/ipc';
+import type { FiatCurrency } from '../types/ipc';
 import { Link } from 'react-router-dom';
 import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight, Info, DollarSign, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
+import { FiatCurrencySelect } from '../components/ui/FiatCurrencySelect';
 import { LogoutDialog } from '../components/common/LogoutDialog';
 import { getLogLocation, getVersion } from '../services/ipc';
 import { useFiatDisplayContext } from '../context/FiatDisplayContext';
@@ -256,16 +257,11 @@ export function Settings(props: {
               {fiatSettings?.enabled && (
                 <div className="space-y-2">
                   <label className="text-sm text-muted-foreground">Currency</label>
-                  <select
+                  <FiatCurrencySelect
                     value={fiatSettings.currency}
-                    onChange={(e) => handleCurrencyChange(e.target.value as IPC.FiatCurrency)}
+                    onChange={(currency: FiatCurrency) => handleCurrencyChange(currency)}
                     disabled={fiatSaving}
-                    className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm"
-                  >
-                    {FIAT_CURRENCIES.map((c) => (
-                      <option key={c} value={c}>{FIAT_CURRENCY_DISPLAY_NAMES[c]}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               )}
 
