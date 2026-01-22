@@ -7,7 +7,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { buildSigningRequest, prepareSend } from '../services/ipc';
-import { parseZecToZatoshis } from '../utils/zec';
+import { parseZecToZatoshis, formatFiat, zatoshisToFiat } from '../utils/zec';
+import { useFiatDisplay } from '../hooks/useFiatDisplay';
 
 export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const { activeAccount } = props;
@@ -20,6 +21,9 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const [transparentRecipient, setTransparentRecipient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Use centralized fiat display hook
+  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplay();
 
   const parsedAmount = useMemo(() => parseZecToZatoshis(amount), [amount]);
   const amountZatoshis = 'ok' in parsedAmount ? parsedAmount.ok : null;
@@ -177,7 +181,14 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
                 inputMode="decimal"
                 placeholder="0.12345678"
               />
-              <p className="text-xs text-muted-foreground">Up to 8 decimal places</p>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Up to 8 decimal places</span>
+                {fiatSettings?.enabled && exchangeRate && amountZatoshis && (
+                  <span className="text-muted-foreground">
+                    {formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
+                  </span>
+                )}
+              </div>
               {amountError && (
                 <p className="text-xs text-destructive">{amountError}</p>
               )}

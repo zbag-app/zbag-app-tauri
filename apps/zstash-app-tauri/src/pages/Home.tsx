@@ -8,8 +8,9 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { onBalanceChanged } from '../services/events';
 import { getBalance, getWalletStatus } from '../services/ipc';
-import { formatZatoshisToZec } from '../utils/zec';
+import { formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
 import { cn } from '../lib/utils';
+import { useFiatDisplay } from '../hooks/useFiatDisplay';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
@@ -20,6 +21,16 @@ export function Home(props: {
   const [status, setStatus] = useState<IPC.WalletStatus | null>(null);
   const [balance, setBalance] = useState<IPC.Balance | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Use centralized fiat display hook
+  const {
+    settings: fiatSettings,
+    rate: exchangeRate,
+    refreshError: fiatRefreshError,
+    refreshCooldownSecs,
+    refreshRate,
+    loading: fiatLoading,
+  } = useFiatDisplay();
 
   const refreshBalance = async () => {
     if (activeAccountId === null) {
@@ -100,6 +111,12 @@ export function Home(props: {
   const totalZec = balance ? formatZatoshisToZec(balance.total) : '0';
   const [wholePart, decimalPart] = totalZec.split('.');
 
+  // Calculate fiat value if enabled
+  const showFiat = fiatSettings?.enabled && exchangeRate;
+  const totalFiat = showFiat && balance ? zatoshisToFiat(balance.total, exchangeRate.price) : null;
+  const shieldedFiat = showFiat && balance ? zatoshisToFiat(balance.shielded_spendable, exchangeRate.price) : null;
+  const transparentFiat = showFiat && balance ? zatoshisToFiat(balance.transparent_total, exchangeRate.price) : null;
+
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
       {error && (
@@ -114,11 +131,42 @@ export function Home(props: {
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-2">Total Balance</p>
             {balance ? (
-              <div className="flex items-baseline justify-center gap-1">
-                <span className="text-5xl font-bold balance-number">{wholePart}</span>
-                <span className="text-2xl text-muted-foreground">.{decimalPart || '00'}</span>
-                <span className="text-xl text-muted-foreground ml-2">ZEC</span>
-              </div>
+              <>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-5xl font-bold balance-number">{wholePart}</span>
+                  <span className="text-2xl text-muted-foreground">.{decimalPart || '00'}</span>
+                  <span className="text-xl text-muted-foreground ml-2">ZEC</span>
+                </div>
+                {showFiat && totalFiat !== null && (
+                  <p className="text-lg text-muted-foreground mt-1">
+                    {formatFiat(totalFiat, exchangeRate.currency)}
+                  </p>
+                )}
+                {fiatSettings?.enabled && !exchangeRate && (
+                  <div className="text-sm text-muted-foreground mt-2">
+                    {fiatLoading ? (
+                      <span>Fetching exchange rate...</span>
+                    ) : (
+                      <span>
+                        Fiat rate unavailable
+                        {refreshCooldownSecs > 0 ? ` (retry in ${refreshCooldownSecs}s)` : ''}.
+                      </span>
+                    )}
+                    {fiatRefreshError ? (
+                      <span className="block text-xs text-muted-foreground mt-1">{fiatRefreshError}</span>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => refreshRate(true)}
+                      disabled={fiatLoading}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-2xl text-muted-foreground">
                 {activeAccountId === null ? 'No active account' : 'Loading...'}
@@ -184,6 +232,11 @@ export function Home(props: {
                 <div className="text-xl font-semibold balance-number">
                   {formatZatoshisToZec(balance.shielded_spendable)} <span className="text-sm text-muted-foreground">ZEC</span>
                 </div>
+                {showFiat && shieldedFiat !== null && (
+                  <div className="text-xs text-muted-foreground">
+                    {formatFiat(shieldedFiat, exchangeRate.currency)}
+                  </div>
+                )}
                 {balance.shielded_pending !== '0' && (
                   <div className="text-xs text-muted-foreground">
                     +{formatZatoshisToZec(balance.shielded_pending)} pending
@@ -210,8 +263,15 @@ export function Home(props: {
           </CardHeader>
           <CardContent>
             {balance ? (
-              <div className="text-xl font-semibold balance-number">
-                {formatZatoshisToZec(balance.transparent_total)} <span className="text-sm text-muted-foreground">ZEC</span>
+              <div className="space-y-1">
+                <div className="text-xl font-semibold balance-number">
+                  {formatZatoshisToZec(balance.transparent_total)} <span className="text-sm text-muted-foreground">ZEC</span>
+                </div>
+                {showFiat && transparentFiat !== null && (
+                  <div className="text-xs text-muted-foreground">
+                    {formatFiat(transparentFiat, exchangeRate.currency)}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-muted-foreground">-</div>

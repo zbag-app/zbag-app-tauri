@@ -61,6 +61,12 @@ pub const SWAP_UNSUPPORTED_NETWORK: &str = "E6004";
 pub const TOR_NOT_READY: &str = "E7001";
 pub const TOR_CONNECTION_FAILED: &str = "E7002";
 
+// Exchange rate errors
+pub const EXCHANGE_RATE_DISABLED: &str = "E8001";
+pub const EXCHANGE_RATE_FETCH_FAILED: &str = "E8002";
+pub const EXCHANGE_RATE_RATE_LIMITED: &str = "E8003";
+pub const EXCHANGE_RATE_PRIVACY_ACK_REQUIRED: &str = "E8004";
+
 // Watch-only wallet errors
 pub const WATCH_ONLY_NO_SEED: &str = "E9010";
 pub const WATCH_ONLY_NO_BACKUP: &str = "E9011";

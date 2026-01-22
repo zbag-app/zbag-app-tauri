@@ -94,6 +94,7 @@ pub fn open_app_db_connection(path: &Path) -> anyhow::Result<Connection> {
 
 pub mod account_meta;
 pub mod backup_meta;
+pub mod fiat_meta;
 pub mod migrations;
 pub mod rotation_meta;
 pub mod schema;

@@ -226,6 +226,38 @@ export interface TorState {
 }
 
 // ============================================================================
+// Exchange Rate Types
+// ============================================================================
+
+export type FiatCurrency = 'USD' | 'EUR' | 'GBP' | 'CHF' | 'CAD' | 'AUD' | 'JPY';
+
+export const FIAT_CURRENCIES: FiatCurrency[] = ['USD', 'EUR', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY'];
+
+export const FIAT_CURRENCY_SYMBOLS: Record<FiatCurrency, string> = {
+  USD: '$',
+  EUR: '\u20AC',
+  GBP: '\u00A3',
+  CHF: 'CHF',
+  CAD: 'C$',
+  AUD: 'A$',
+  JPY: '\u00A5',
+};
+
+export interface ExchangeRate {
+  currency: FiatCurrency;
+  /** Price of 1 ZEC in the fiat currency */
+  price: number;
+  /** When this rate was fetched (Unix timestamp in milliseconds) */
+  fetched_at_ms: UnixTimestampMs;
+}
+
+export interface FiatDisplaySettings {
+  enabled: boolean;
+  currency: FiatCurrency;
+  privacy_acknowledged: boolean;
+}
+
+// ============================================================================
 // Wallet Status Types
 // ============================================================================
 
@@ -660,6 +692,43 @@ export interface GetVersionResponse extends VersionedPayload {
 }
 
 // ============================================================================
+// Exchange Rate Command Requests/Responses
+// ============================================================================
+
+/** Get fiat display settings */
+export interface GetFiatSettingsRequest extends VersionedPayload {}
+
+export interface GetFiatSettingsResponse extends VersionedPayload {
+  settings: FiatDisplaySettings;
+}
+
+/** Set fiat display settings */
+export interface SetFiatSettingsRequest extends VersionedPayload {
+  enabled: boolean;
+  currency: FiatCurrency;
+  /** Required when enabling fiat display */
+  privacy_acknowledged: boolean;
+}
+
+export interface SetFiatSettingsResponse extends VersionedPayload {
+  settings: FiatDisplaySettings;
+}
+
+/** Get exchange rate */
+export interface GetExchangeRateRequest extends VersionedPayload {
+  /** Force refresh even if cached rate is not stale */
+  force_refresh?: boolean;
+}
+
+export interface GetExchangeRateResponse extends VersionedPayload {
+  rate: ExchangeRate | null;
+  is_stale: boolean;
+  fiat_enabled: boolean;
+  /** Seconds until next refresh is allowed (0 if allowed now) */
+  refresh_cooldown_secs: number;
+}
+
+// ============================================================================
 // Command Responses
 // ============================================================================
 
@@ -1011,6 +1080,12 @@ export const ErrorCodes = {
   TOR_NOT_READY: 'E7001',
   TOR_CONNECTION_FAILED: 'E7002',
 
+  // Exchange rate errors
+  EXCHANGE_RATE_DISABLED: 'E8001',
+  EXCHANGE_RATE_FETCH_FAILED: 'E8002',
+  EXCHANGE_RATE_RATE_LIMITED: 'E8003',
+  EXCHANGE_RATE_PRIVACY_ACK_REQUIRED: 'E8004',
+
   // Watch-only wallet errors
   WATCH_ONLY_NO_SEED: 'E9010',
   WATCH_ONLY_NO_BACKUP: 'E9011',
@@ -1089,6 +1164,11 @@ export const Commands = {
 
   // Version
   GET_VERSION: 'zstash_get_version',
+
+  // Exchange Rate
+  GET_FIAT_SETTINGS: 'zstash_get_fiat_settings',
+  SET_FIAT_SETTINGS: 'zstash_set_fiat_settings',
+  GET_EXCHANGE_RATE: 'zstash_get_exchange_rate',
 } as const;
 
 // ============================================================================

@@ -30,6 +30,37 @@ export function formatZatoshisToZec(input: string): string {
   return formatAtomicAmount(input, 8);
 }
 
+/**
+ * Format a fiat value with the appropriate currency symbol.
+ */
+export function formatFiat(value: number, currency: string): string {
+  const symbols: Record<string, string> = {
+    USD: '$',
+    EUR: '\u20AC',
+    GBP: '\u00A3',
+    CHF: 'CHF ',
+    CAD: 'C$',
+    AUD: 'A$',
+    JPY: '\u00A5',
+  };
+  const symbol = symbols[currency] ?? '$';
+
+  // JPY doesn't use decimals
+  if (currency === 'JPY') {
+    return `${symbol}${Math.round(value).toLocaleString()}`;
+  }
+
+  return `${symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Convert zatoshis to fiat value.
+ */
+export function zatoshisToFiat(zatoshis: string, rate: number): number {
+  const zec = parseFloat(formatZatoshisToZec(zatoshis));
+  return zec * rate;
+}
+
 export function formatRelativeTime(timestampMs: number): string {
   const now = Date.now();
   const diffMs = now - timestampMs;

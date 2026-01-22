@@ -110,6 +110,10 @@ fn main() {
             zstash_app_tauri_lib::commands::server::zstash_list_servers,
             // Version
             zstash_app_tauri_lib::commands::version::zstash_get_version,
+            // Exchange Rate
+            zstash_app_tauri_lib::commands::exchange_rate::zstash_get_fiat_settings,
+            zstash_app_tauri_lib::commands::exchange_rate::zstash_set_fiat_settings,
+            zstash_app_tauri_lib::commands::exchange_rate::zstash_get_exchange_rate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

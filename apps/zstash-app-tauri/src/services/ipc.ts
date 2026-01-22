@@ -226,3 +226,19 @@ export async function getLogLocation(): Promise<IPC.IpcResult<IPC.GetLogLocation
 export async function getVersion(): Promise<IPC.IpcResult<IPC.GetVersionResponse>> {
   return invoke(IPC.Commands.GET_VERSION, { request: versioned({}) });
 }
+
+export async function getFiatSettings(): Promise<IPC.IpcResult<IPC.GetFiatSettingsResponse>> {
+  return invoke(IPC.Commands.GET_FIAT_SETTINGS, { request: versioned({}) });
+}
+
+export async function setFiatSettings(
+  request: Omit<IPC.SetFiatSettingsRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.SetFiatSettingsResponse>> {
+  return invoke(IPC.Commands.SET_FIAT_SETTINGS, { request: versioned(request) });
+}
+
+export async function getExchangeRate(
+  request: Omit<IPC.GetExchangeRateRequest, 'schema_version'>
+): Promise<IPC.IpcResult<IPC.GetExchangeRateResponse>> {
+  return invoke(IPC.Commands.GET_EXCHANGE_RATE, { request: versioned(request) });
+}

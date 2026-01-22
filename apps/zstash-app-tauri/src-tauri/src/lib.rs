@@ -44,6 +44,10 @@ pub fn run() {
             commands::logs::zstash_get_log_location,
             // Version
             commands::version::zstash_get_version,
+            // Exchange Rate
+            commands::exchange_rate::zstash_get_fiat_settings,
+            commands::exchange_rate::zstash_set_fiat_settings,
+            commands::exchange_rate::zstash_get_exchange_rate,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

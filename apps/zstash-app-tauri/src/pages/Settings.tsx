@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
+import { FIAT_CURRENCIES } from '../types/ipc';
 import { Link } from 'react-router-dom';
-import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight, Info } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight, Info, DollarSign, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
 import { LogoutDialog } from '../components/common/LogoutDialog';
-import { getLogLocation, getVersion } from '../services/ipc';
+import { getLogLocation, getVersion, getFiatSettings, setFiatSettings } from '../services/ipc';
 
 export function Settings(props: {
   wallet: IPC.WalletInfo;
@@ -19,6 +20,13 @@ export function Settings(props: {
   const [logLocation, setLogLocation] = useState<IPC.GetLogLocationResponse | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState<IPC.VersionInfo | null>(null);
+
+  // Fiat settings state
+  const [fiatSettings, setFiatSettingsState] = useState<IPC.FiatDisplaySettings | null>(null);
+  const [fiatError, setFiatError] = useState<string | null>(null);
+  const [fiatSaving, setFiatSaving] = useState(false);
+  const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
+  const [pendingFiatEnabled, setPendingFiatEnabled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +53,96 @@ export function Settings(props: {
       cancelled = true;
     };
   }, []);
+
+  // Load fiat settings
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const res = await getFiatSettings();
+      if (cancelled) return;
+      if ('err' in res) {
+        setFiatError(res.err.message);
+        return;
+      }
+      setFiatSettingsState(res.ok.settings);
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleFiatToggle = async (enabled: boolean) => {
+    if (enabled && !fiatSettings?.privacy_acknowledged) {
+      // Show privacy warning before enabling
+      setPendingFiatEnabled(true);
+      setShowPrivacyWarning(true);
+      return;
+    }
+
+    setFiatSaving(true);
+    setFiatError(null);
+
+    const res = await setFiatSettings({
+      enabled,
+      currency: fiatSettings?.currency ?? 'USD',
+      privacy_acknowledged: fiatSettings?.privacy_acknowledged ?? false,
+    });
+
+    setFiatSaving(false);
+
+    if ('err' in res) {
+      setFiatError(res.err.message);
+      return;
+    }
+
+    setFiatSettingsState(res.ok.settings);
+  };
+
+  const handlePrivacyAcknowledge = async () => {
+    setFiatSaving(true);
+    setFiatError(null);
+
+    const res = await setFiatSettings({
+      enabled: pendingFiatEnabled,
+      currency: fiatSettings?.currency ?? 'USD',
+      privacy_acknowledged: true,
+    });
+
+    setFiatSaving(false);
+    setShowPrivacyWarning(false);
+
+    if ('err' in res) {
+      setFiatError(res.err.message);
+      return;
+    }
+
+    setFiatSettingsState(res.ok.settings);
+  };
+
+  const handleCurrencyChange = async (currency: IPC.FiatCurrency) => {
+    if (!fiatSettings) return;
+
+    setFiatSaving(true);
+    setFiatError(null);
+
+    const res = await setFiatSettings({
+      enabled: fiatSettings.enabled,
+      currency,
+      privacy_acknowledged: fiatSettings.privacy_acknowledged,
+    });
+
+    setFiatSaving(false);
+
+    if ('err' in res) {
+      setFiatError(res.err.message);
+      return;
+    }
+
+    setFiatSettingsState(res.ok.settings);
+  };
 
   const getTorStatusBadge = () => {
     if (!torState?.enabled) return <Badge variant="secondary">Off</Badge>;
@@ -120,6 +218,120 @@ export function Settings(props: {
             <div className="rounded-none border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
               Status: {torState.status}. Some operations may be blocked until Tor is connected.
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fiat Display Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Fiat Display
+            </CardTitle>
+            {fiatSettings?.enabled && <Badge variant="success">On</Badge>}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Show approximate fiat equivalents for balances and transaction amounts.
+          </p>
+
+          {/* Privacy Warning Dialog */}
+          {showPrivacyWarning && (
+            <div className="rounded-lg border border-warning/50 bg-warning/5 p-4 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-warning">Privacy Notice</h4>
+                  <div className="text-sm space-y-2">
+                    <p>
+                      Enabling fiat display requires fetching exchange rates from third-party services.
+                    </p>
+                    {torState?.enabled ? (
+                      <p>
+                        Exchange rates are fetched over Tor to protect your IP address. Ensure Tor use is allowed in your region.
+                      </p>
+                    ) : (
+                      <p className="text-destructive">
+                        <strong>Warning:</strong> Tor is currently disabled. Exchange rate requests will expose your IP address to the rate provider.
+                      </p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Because we pull the conversion rate from exchanges, an exchange might be able to see that the exchange rate was queried before a transaction occurred.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      onClick={handlePrivacyAcknowledge}
+                      disabled={fiatSaving}
+                    >
+                      {fiatSaving ? 'Enabling...' : 'I Understand, Enable'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowPrivacyWarning(false);
+                        setPendingFiatEnabled(false);
+                      }}
+                      disabled={fiatSaving}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!showPrivacyWarning && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fiatSettings?.enabled ?? false}
+                  onChange={(e) => handleFiatToggle(e.currentTarget.checked)}
+                  disabled={fiatSaving}
+                  className="rounded border-border h-4 w-4 accent-primary"
+                  aria-label="Show fiat values"
+                />
+                <span className="text-sm">Show fiat values</span>
+              </label>
+
+              {fiatSettings?.enabled && (
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Currency</label>
+                  <select
+                    value={fiatSettings.currency}
+                    onChange={(e) => handleCurrencyChange(e.target.value as IPC.FiatCurrency)}
+                    disabled={fiatSaving}
+                    className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm"
+                  >
+                    {FIAT_CURRENCIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {fiatSettings?.enabled && !torState?.enabled && (
+                <div className="rounded-lg border border-warning/50 bg-warning/5 p-3 text-sm text-warning">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      Tor is disabled. Exchange rate requests will expose your IP address to the rate provider.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {fiatError && (
+            <div className="text-sm text-destructive">{fiatError}</div>
           )}
         </CardContent>
       </Card>

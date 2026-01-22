@@ -8,7 +8,8 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
 import { onSwapChanged, onTransactionChanged } from '../services/events';
-import { formatRelativeTime, formatZatoshisToZec } from '../utils/zec';
+import { formatRelativeTime, formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
+import { useFiatDisplay } from '../hooks/useFiatDisplay';
 
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
@@ -24,6 +25,9 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [retryPassword, setRetryPassword] = useState('');
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+
+  // Use centralized fiat display hook
+  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplay();
 
   const limit = 50;
 
@@ -256,7 +260,12 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                   </div>
                   <div className="flex items-center gap-3 text-sm flex-wrap">
                     <span className="font-medium">{tx.tx_type}</span>
-                    <span className="text-muted-foreground">Value: {formatZatoshisToZec(tx.value)} ZEC</span>
+                    <span className="text-muted-foreground">
+                      Value: {formatZatoshisToZec(tx.value)} ZEC
+                      {fiatSettings?.enabled && exchangeRate && (
+                        <> ({formatFiat(zatoshisToFiat(tx.value, exchangeRate.price), exchangeRate.currency)})</>
+                      )}
+                    </span>
                     <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
                   </div>
                   {tx.memo && (

@@ -200,3 +200,33 @@ fn seed_tor_settings_v1(conn: &Connection) -> anyhow::Result<()> {
     .context("failed to seed tor_settings")?;
     Ok(())
 }
+
+fn apply_v2(conn: &Connection) -> anyhow::Result<()> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS fiat_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            enabled INTEGER NOT NULL DEFAULT 0,
+            currency TEXT NOT NULL DEFAULT 'USD',
+            privacy_acknowledged INTEGER NOT NULL DEFAULT 0,
+            updated_at INTEGER NOT NULL
+        );
+        "#,
+    )
+    .context("failed to create fiat_settings table")?;
+
+    seed_fiat_settings_v2(conn)?;
+
+    Ok(())
+}
+
+fn seed_fiat_settings_v2(conn: &Connection) -> anyhow::Result<()> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    conn.execute(
+        "INSERT OR IGNORE INTO fiat_settings (id, enabled, currency, privacy_acknowledged, updated_at)
+         VALUES (1, 0, 'USD', 0, ?1)",
+        params![now_ms],
+    )
+    .context("failed to seed fiat_settings")?;
+    Ok(())
+}

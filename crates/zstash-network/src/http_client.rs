@@ -10,6 +10,8 @@ use thiserror::Error;
 
 use crate::transport::{SelectedTransport, TransportConfig, TransportError, TransportSelector};
 
+const DEFAULT_USER_AGENT: &str = concat!("zstash/", env!("CARGO_PKG_VERSION"));
+
 #[derive(Debug, Clone)]
 pub struct JsonResponse {
     pub status: u16,
@@ -36,6 +38,7 @@ impl HttpClient {
         let direct = reqwest::Client::builder()
             .timeout(transport.config().timeout)
             .no_proxy()
+            .user_agent(DEFAULT_USER_AGENT)
             .build()?;
         Ok(Self { direct, transport })
     }
@@ -61,7 +64,26 @@ impl HttpClient {
 
                 let res = tokio::time::timeout(
                     self.transport.config().timeout,
-                    client.http_get_json::<serde_json::Value>(uri, 0, |_| None),
+                    client.http_get(
+                        uri,
+                        |builder| {
+                            builder
+                                .header(http::header::ACCEPT, "application/json")
+                                .header(http::header::USER_AGENT, DEFAULT_USER_AGENT)
+                        },
+                        |body| async move {
+                            let aggregated = body
+                                .collect()
+                                .await
+                                .map_err(zcash_client_backend::tor::http::HttpError::from)?
+                                .aggregate();
+                            let value = serde_json::from_reader(aggregated.reader())
+                                .map_err(zcash_client_backend::tor::http::HttpError::from)?;
+                            Ok(value)
+                        },
+                        0,
+                        |_| None,
+                    ),
                 )
                 .await
                 .map_err(|_| HttpClientError::Timeout)?
@@ -114,6 +136,7 @@ impl HttpClient {
                             builder
                                 .header(http::header::ACCEPT, "application/json")
                                 .header(http::header::CONTENT_TYPE, "application/json")
+                                .header(http::header::USER_AGENT, DEFAULT_USER_AGENT)
                         },
                         body,
                         |body| async move {

@@ -1,0 +1,185 @@
+import { useCallback, useEffect, useState } from 'react';
+import type * as IPC from '../types/ipc';
+import { onTorStatus } from '../services/events';
+import { getExchangeRate, getFiatSettings, setFiatSettings } from '../services/ipc';
+
+interface FiatDisplayState {
+  settings: IPC.FiatDisplaySettings | null;
+  rate: IPC.ExchangeRate | null;
+  isStale: boolean;
+  refreshCooldownSecs: number;
+  loading: boolean;
+  error: string | null;
+  /** Error from periodic background refresh (does not prevent display of stale data) */
+  refreshError: string | null;
+}
+
+export function useFiatDisplay() {
+  const [state, setState] = useState<FiatDisplayState>({
+    settings: null,
+    rate: null,
+    isStale: true,
+    refreshCooldownSecs: 0,
+    loading: true,
+    error: null,
+    refreshError: null,
+  });
+
+  const fetchRate = useCallback(async (force = false) => {
+    const res = await getExchangeRate(force ? { force_refresh: true } : {});
+    if ('ok' in res) {
+      const rate = res.ok.rate;
+      setState((prev) => ({
+        ...prev,
+        // Preserve an existing rate if the backend can't return one right now,
+        // but only when it matches the currently-selected currency.
+        rate:
+          rate ??
+          (prev.rate && prev.settings && prev.rate.currency === prev.settings.currency ? prev.rate : null),
+        isStale: rate ? res.ok.is_stale : true,
+        refreshCooldownSecs: res.ok.refresh_cooldown_secs,
+        refreshError: rate
+          ? null
+          : res.ok.refresh_cooldown_secs > 0
+            ? `Exchange rate temporarily unavailable. Retry in ${res.ok.refresh_cooldown_secs}s.`
+            : 'Exchange rate temporarily unavailable.',
+      }));
+      return rate;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      isStale: true,
+      refreshError: res.err.message,
+    }));
+    return null;
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true }));
+    const res = await getFiatSettings();
+    if ('err' in res) {
+      setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
+      return;
+    }
+    setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
+
+    // If fiat is enabled, also load the rate
+    if (res.ok.settings.enabled) {
+      await fetchRate();
+      setState((prev) => ({ ...prev, loading: false }));
+    } else {
+      setState((prev) => ({
+        ...prev,
+        rate: null,
+        isStale: true,
+        refreshCooldownSecs: 0,
+        refreshError: null,
+        loading: false,
+      }));
+    }
+  }, [fetchRate]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  // Refresh rate periodically when enabled (every 5 minutes)
+  useEffect(() => {
+    if (!state.settings?.enabled) return;
+
+    const interval = setInterval(async () => {
+      await fetchRate();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [state.settings?.enabled, fetchRate]);
+
+  // If fiat is enabled but we don't have a rate yet, retry more frequently.
+  useEffect(() => {
+    if (!state.settings?.enabled) return;
+    if (state.rate) return;
+
+    const delaySecs = state.refreshCooldownSecs > 0 ? state.refreshCooldownSecs : 10;
+    const timeout = setTimeout(() => {
+      fetchRate().catch(() => {});
+    }, delaySecs * 1000);
+
+    return () => clearTimeout(timeout);
+  }, [state.settings?.enabled, state.rate, state.refreshCooldownSecs, fetchRate]);
+
+  // When Tor becomes ready, immediately retry (common case: fiat enabled while Tor is connecting).
+  useEffect(() => {
+    if (!state.settings?.enabled) return;
+    if (state.rate) return;
+
+    let unlisten: (() => void) | null = null;
+    onTorStatus((evt) => {
+      if (!evt.state.enabled) return;
+      if (evt.state.status !== 'On') return;
+      fetchRate().catch(() => {});
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      unlisten?.();
+    };
+  }, [state.settings?.enabled, state.rate, fetchRate]);
+
+  const updateSettings = useCallback(
+    async (enabled: boolean, currency: IPC.FiatCurrency, privacyAcknowledged: boolean) => {
+      setState((prev) => ({ ...prev, loading: true, error: null }));
+
+      const res = await setFiatSettings({
+        enabled,
+        currency,
+        privacy_acknowledged: privacyAcknowledged,
+      });
+
+      if ('err' in res) {
+        setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
+        return false;
+      }
+
+      setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
+
+      // If enabled, fetch the rate
+      if (enabled) {
+        await fetchRate();
+        setState((prev) => ({ ...prev, loading: false }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          rate: null,
+          isStale: true,
+          refreshCooldownSecs: 0,
+          refreshError: null,
+          loading: false,
+        }));
+      }
+
+      return true;
+    },
+    [fetchRate]
+  );
+
+  const refreshRate = useCallback(async (force = false) => {
+    await fetchRate(force);
+  }, [fetchRate]);
+
+  return {
+    settings: state.settings,
+    rate: state.rate,
+    isStale: state.isStale,
+    refreshCooldownSecs: state.refreshCooldownSecs,
+    loading: state.loading,
+    error: state.error,
+    refreshError: state.refreshError,
+    updateSettings,
+    refreshRate,
+    reload: loadSettings,
+  };
+}
