@@ -31,8 +31,14 @@ export function useFiatDisplay() {
   // Extract enabled to a stable primitive to avoid unnecessary effect re-runs
   const enabled = state.settings?.enabled ?? false;
 
-  const fetchRate = useCallback(async (force = false) => {
+  const fetchRate = useCallback(async (options?: { force?: boolean; signal?: AbortSignal }) => {
+    const force = options?.force ?? false;
+    const signal = options?.signal;
     const res = await getExchangeRate(force ? { force_refresh: true } : {});
+
+    // Check abort before updating state
+    if (signal?.aborted) return null;
+
     if ('ok' in res) {
       const rate = res.ok.rate;
       setState((prev) => ({
@@ -100,16 +106,14 @@ export function useFiatDisplay() {
   useEffect(() => {
     if (!enabled) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
 
-    const interval = setInterval(async () => {
-      if (!cancelled) {
-        await fetchRate();
-      }
+    const interval = setInterval(() => {
+      fetchRate({ signal: controller.signal }).catch(() => {});
     }, 5 * 60 * 1000);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearInterval(interval);
     };
   }, [enabled, fetchRate]);
@@ -119,7 +123,7 @@ export function useFiatDisplay() {
     if (!enabled) return;
     if (state.rate) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     const baseDelaySecs = 10;
     const maxDelaySecs = 300; // 5 minutes
@@ -129,13 +133,11 @@ export function useFiatDisplay() {
         ? state.refreshCooldownSecs
         : Math.min(baseDelaySecs * Math.pow(2, state.retryAttempt), maxDelaySecs);
     const timeout = setTimeout(() => {
-      if (!cancelled) {
-        fetchRate().catch(() => {});
-      }
+      fetchRate({ signal: controller.signal }).catch(() => {});
     }, delaySecs * 1000);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(timeout);
     };
   }, [enabled, state.rate, state.refreshCooldownSecs, state.retryAttempt, fetchRate]);
@@ -145,17 +147,17 @@ export function useFiatDisplay() {
     if (!enabled) return;
     if (state.rate) return;
 
-    let mounted = true;
+    const controller = new AbortController();
     let unlisten: (() => void) | null = null;
 
     onTorStatus((evt) => {
-      if (!mounted) return;
+      if (controller.signal.aborted) return;
       if (!evt.state.enabled) return;
       if (evt.state.status !== 'On') return;
-      fetchRate().catch(() => {});
+      fetchRate({ signal: controller.signal }).catch(() => {});
     })
       .then((fn) => {
-        if (mounted) {
+        if (!controller.signal.aborted) {
           unlisten = fn;
         } else {
           // Component unmounted before promise resolved - clean up immediately
@@ -165,7 +167,7 @@ export function useFiatDisplay() {
       .catch(() => {});
 
     return () => {
-      mounted = false;
+      controller.abort();
       unlisten?.();
     };
   }, [enabled, state.rate, fetchRate]);
@@ -209,7 +211,7 @@ export function useFiatDisplay() {
   );
 
   const refreshRate = useCallback(async (force = false) => {
-    await fetchRate(force);
+    await fetchRate({ force });
   }, [fetchRate]);
 
   return {
