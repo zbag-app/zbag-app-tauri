@@ -74,25 +74,34 @@ export function useFiatDisplay() {
 
   const loadSettings = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true }));
-    const res = await getFiatSettings();
-    if ('err' in res) {
-      setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
-      return;
-    }
-    setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
 
-    // If fiat is enabled, also load the rate
-    if (res.ok.settings.enabled) {
-      await fetchRate();
-      setState((prev) => ({ ...prev, loading: false }));
-    } else {
+    try {
+      const res = await getFiatSettings();
+      if ('err' in res) {
+        setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
+        return;
+      }
+      setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
+
+      // If fiat is enabled, also load the rate
+      if (res.ok.settings.enabled) {
+        await fetchRate();
+        setState((prev) => ({ ...prev, loading: false }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          rate: null,
+          isStale: true,
+          refreshCooldownSecs: 0,
+          refreshError: null,
+          retryAttempt: 0,
+          loading: false,
+        }));
+      }
+    } catch (err) {
       setState((prev) => ({
         ...prev,
-        rate: null,
-        isStale: true,
-        refreshCooldownSecs: 0,
-        refreshError: null,
-        retryAttempt: 0,
+        error: err instanceof Error ? err.message : 'Failed to load fiat settings',
         loading: false,
       }));
     }
@@ -176,36 +185,45 @@ export function useFiatDisplay() {
     async (enabled: boolean, currency: IPC.FiatCurrency, privacyAcknowledged: boolean) => {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
-      const res = await setFiatSettings({
-        enabled,
-        currency,
-        privacy_acknowledged: privacyAcknowledged,
-      });
+      try {
+        const res = await setFiatSettings({
+          enabled,
+          currency,
+          privacy_acknowledged: privacyAcknowledged,
+        });
 
-      if ('err' in res) {
-        setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
-        return false;
-      }
+        if ('err' in res) {
+          setState((prev) => ({ ...prev, error: res.err.message, loading: false }));
+          return false;
+        }
 
-      setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
+        setState((prev) => ({ ...prev, settings: res.ok.settings, error: null }));
 
-      // If enabled, fetch the rate
-      if (enabled) {
-        await fetchRate();
-        setState((prev) => ({ ...prev, loading: false }));
-      } else {
+        // If enabled, fetch the rate
+        if (enabled) {
+          await fetchRate();
+          setState((prev) => ({ ...prev, loading: false }));
+        } else {
+          setState((prev) => ({
+            ...prev,
+            rate: null,
+            isStale: true,
+            refreshCooldownSecs: 0,
+            refreshError: null,
+            retryAttempt: 0,
+            loading: false,
+          }));
+        }
+
+        return true;
+      } catch (err) {
         setState((prev) => ({
           ...prev,
-          rate: null,
-          isStale: true,
-          refreshCooldownSecs: 0,
-          refreshError: null,
-          retryAttempt: 0,
+          error: err instanceof Error ? err.message : 'Failed to update fiat settings',
           loading: false,
         }));
+        return false;
       }
-
-      return true;
     },
     [fetchRate]
   );

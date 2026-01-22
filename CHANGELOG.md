@@ -8,21 +8,11 @@ All notable changes to zSTASH will be documented in this file.
 
 - Use AbortController to prevent state updates on unmounted component in useFiatDisplay
 
-
-### Miscellaneous
-
-- Bump version to 0.1.8 and update changelog
-
 ## [0.1.8] - 2026-01-22
 
 ### Bug Fixes
 
 - Remove unused FIAT_CURRENCY_DISPLAY_NAMES constant
-
-
-### Miscellaneous
-
-- Tag v0.1.4-v0.1.7 and update changelog
 
 ## [0.1.7] - 2026-01-22
 
