@@ -47,9 +47,11 @@ export function formatFiat(value: number, currency: string): string {
 
 /**
  * Convert zatoshis to fiat value.
+ * Uses BigInt to preserve precision of zatoshis before converting to fiat.
  */
 export function zatoshisToFiat(zatoshis: string, rate: number): number {
-  const zec = parseFloat(formatZatoshisToZec(zatoshis));
+  const zats = BigInt(zatoshis);
+  const zec = Number(zats) / Number(ZATOSHI_PER_ZEC);
   return zec * rate;
 }
 

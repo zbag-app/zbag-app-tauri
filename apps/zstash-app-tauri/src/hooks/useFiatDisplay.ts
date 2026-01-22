@@ -25,6 +25,9 @@ export function useFiatDisplay() {
     refreshError: null,
   });
 
+  // Extract enabled to a stable primitive to avoid unnecessary effect re-runs
+  const enabled = state.settings?.enabled ?? false;
+
   const fetchRate = useCallback(async (force = false) => {
     const res = await getExchangeRate(force ? { force_refresh: true } : {});
     if ('ok' in res) {
@@ -86,18 +89,18 @@ export function useFiatDisplay() {
 
   // Refresh rate periodically when enabled (every 5 minutes)
   useEffect(() => {
-    if (!state.settings?.enabled) return;
+    if (!enabled) return;
 
     const interval = setInterval(async () => {
       await fetchRate();
     }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [state.settings?.enabled, fetchRate]);
+  }, [enabled, fetchRate]);
 
   // If fiat is enabled but we don't have a rate yet, retry more frequently.
   useEffect(() => {
-    if (!state.settings?.enabled) return;
+    if (!enabled) return;
     if (state.rate) return;
 
     const delaySecs = state.refreshCooldownSecs > 0 ? state.refreshCooldownSecs : 10;
@@ -106,28 +109,37 @@ export function useFiatDisplay() {
     }, delaySecs * 1000);
 
     return () => clearTimeout(timeout);
-  }, [state.settings?.enabled, state.rate, state.refreshCooldownSecs, fetchRate]);
+  }, [enabled, state.rate, state.refreshCooldownSecs, fetchRate]);
 
   // When Tor becomes ready, immediately retry (common case: fiat enabled while Tor is connecting).
   useEffect(() => {
-    if (!state.settings?.enabled) return;
+    if (!enabled) return;
     if (state.rate) return;
 
+    let mounted = true;
     let unlisten: (() => void) | null = null;
+
     onTorStatus((evt) => {
+      if (!mounted) return;
       if (!evt.state.enabled) return;
       if (evt.state.status !== 'On') return;
       fetchRate().catch(() => {});
     })
       .then((fn) => {
-        unlisten = fn;
+        if (mounted) {
+          unlisten = fn;
+        } else {
+          // Component unmounted before promise resolved - clean up immediately
+          fn();
+        }
       })
       .catch(() => {});
 
     return () => {
+      mounted = false;
       unlisten?.();
     };
-  }, [state.settings?.enabled, state.rate, fetchRate]);
+  }, [enabled, state.rate, fetchRate]);
 
   const updateSettings = useCallback(
     async (enabled: boolean, currency: IPC.FiatCurrency, privacyAcknowledged: boolean) => {
