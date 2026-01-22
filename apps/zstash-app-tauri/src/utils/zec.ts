@@ -1,4 +1,5 @@
 import { formatAtomicAmount } from './amounts';
+import { FIAT_CURRENCY_SYMBOLS, FiatCurrency } from '../types/ipc';
 
 const ZATOSHI_PER_ZEC = 100_000_000n;
 
@@ -34,16 +35,7 @@ export function formatZatoshisToZec(input: string): string {
  * Format a fiat value with the appropriate currency symbol.
  */
 export function formatFiat(value: number, currency: string): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '\u20AC',
-    GBP: '\u00A3',
-    CHF: 'CHF ',
-    CAD: 'C$',
-    AUD: 'A$',
-    JPY: '\u00A5',
-  };
-  const symbol = symbols[currency] ?? '$';
+  const symbol = FIAT_CURRENCY_SYMBOLS[currency as FiatCurrency] ?? '$';
 
   // JPY doesn't use decimals
   if (currency === 'JPY') {
