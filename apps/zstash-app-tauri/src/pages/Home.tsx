@@ -26,6 +26,7 @@ export function Home(props: {
   const {
     settings: fiatSettings,
     rate: exchangeRate,
+    isStale: fiatIsStale,
     refreshError: fiatRefreshError,
     refreshCooldownSecs,
     refreshRate,
@@ -111,11 +112,13 @@ export function Home(props: {
   const totalZec = balance ? formatZatoshisToZec(balance.total) : '0';
   const [wholePart, decimalPart] = totalZec.split('.');
 
-  // Calculate fiat value if enabled
+  // Calculate fiat value if enabled (show even if stale, but with indicator)
   const showFiat = fiatSettings?.enabled && exchangeRate;
   const totalFiat = showFiat && balance ? zatoshisToFiat(balance.total, exchangeRate.price) : null;
   const shieldedFiat = showFiat && balance ? zatoshisToFiat(balance.shielded_spendable, exchangeRate.price) : null;
   const transparentFiat = showFiat && balance ? zatoshisToFiat(balance.transparent_total, exchangeRate.price) : null;
+  // Prefix for approximate fiat values (all fiat values are approximate)
+  const fiatPrefix = fiatIsStale ? '~' : '~';
 
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
@@ -138,8 +141,8 @@ export function Home(props: {
                   <span className="text-xl text-muted-foreground ml-2">ZEC</span>
                 </div>
                 {showFiat && totalFiat !== null && (
-                  <p className="text-lg text-muted-foreground mt-1">
-                    {formatFiat(totalFiat, exchangeRate.currency)}
+                  <p className={cn("text-lg mt-1", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
+                    {fiatPrefix}{formatFiat(totalFiat, exchangeRate.currency)}
                   </p>
                 )}
                 {fiatSettings?.enabled && !exchangeRate && (
@@ -233,8 +236,8 @@ export function Home(props: {
                   {formatZatoshisToZec(balance.shielded_spendable)} <span className="text-sm text-muted-foreground">ZEC</span>
                 </div>
                 {showFiat && shieldedFiat !== null && (
-                  <div className="text-xs text-muted-foreground">
-                    {formatFiat(shieldedFiat, exchangeRate.currency)}
+                  <div className={cn("text-xs", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
+                    {fiatPrefix}{formatFiat(shieldedFiat, exchangeRate.currency)}
                   </div>
                 )}
                 {balance.shielded_pending !== '0' && (
@@ -268,8 +271,8 @@ export function Home(props: {
                   {formatZatoshisToZec(balance.transparent_total)} <span className="text-sm text-muted-foreground">ZEC</span>
                 </div>
                 {showFiat && transparentFiat !== null && (
-                  <div className="text-xs text-muted-foreground">
-                    {formatFiat(transparentFiat, exchangeRate.currency)}
+                  <div className={cn("text-xs", fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground")} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
+                    {fiatPrefix}{formatFiat(transparentFiat, exchangeRate.currency)}
                   </div>
                 )}
               </div>

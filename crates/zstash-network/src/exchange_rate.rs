@@ -212,55 +212,24 @@ impl ExchangeRateService {
 
         let mut rates = Vec::new();
 
-        if let Some(price) = prices.usd {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::USD,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.eur {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::EUR,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.gbp {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::GBP,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.chf {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::CHF,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.cad {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::CAD,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.aud {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::AUD,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
-        if let Some(price) = prices.jpy {
-            rates.push(ExchangeRate {
-                currency: FiatCurrency::JPY,
-                price,
-                fetched_at_ms: now_ms,
-            });
-        }
+        // Helper to push a rate if the price is present
+        let mut push_rate = |currency: FiatCurrency, price_opt: Option<f64>| {
+            if let Some(price) = price_opt {
+                rates.push(ExchangeRate {
+                    currency,
+                    price,
+                    fetched_at_ms: now_ms,
+                });
+            }
+        };
+
+        push_rate(FiatCurrency::USD, prices.usd);
+        push_rate(FiatCurrency::EUR, prices.eur);
+        push_rate(FiatCurrency::GBP, prices.gbp);
+        push_rate(FiatCurrency::CHF, prices.chf);
+        push_rate(FiatCurrency::CAD, prices.cad);
+        push_rate(FiatCurrency::AUD, prices.aud);
+        push_rate(FiatCurrency::JPY, prices.jpy);
 
         // Update cache
         {
@@ -280,10 +249,12 @@ impl ExchangeRateService {
         currency: FiatCurrency,
         force_refresh: bool,
     ) -> Result<ExchangeRate, ExchangeRateError> {
-        // Try cached rate first if not forcing refresh
+        // Try cached rate first if not forcing refresh.
+        // Use is_cache_stale() which relies on monotonic time (Instant) rather than
+        // rate.is_stale() which uses wall-clock time that can be affected by clock adjustments.
         if !force_refresh
+            && !self.is_cache_stale()
             && let Some(rate) = self.get_cached_rate(currency)
-            && !rate.is_stale()
         {
             return Ok(rate);
         }

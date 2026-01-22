@@ -23,7 +23,7 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const [submitting, setSubmitting] = useState(false);
 
   // Use centralized fiat display context
-  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplayContext();
+  const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
 
   const parsedAmount = useMemo(() => parseZecToZatoshis(amount), [amount]);
   const amountZatoshis = 'ok' in parsedAmount ? parsedAmount.ok : null;
@@ -184,8 +184,8 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Up to 8 decimal places</span>
                 {fiatSettings?.enabled && exchangeRate && amountZatoshis && (
-                  <span className="text-muted-foreground">
-                    {formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
+                  <span className={fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground"} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
+                    ~{formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
                   </span>
                 )}
               </div>

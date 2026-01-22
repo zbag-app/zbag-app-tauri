@@ -48,6 +48,10 @@ export function formatFiat(value: number, currency: string): string {
 /**
  * Convert zatoshis to fiat value.
  * Uses BigInt to preserve precision of zatoshis before converting to fiat.
+ *
+ * Note: `Number(zats)` loses precision for values exceeding `Number.MAX_SAFE_INTEGER`
+ * (approximately 90 million ZEC). This is acceptable for display purposes since
+ * such balances are extremely unlikely, and the fiat conversion is already approximate.
  */
 export function zatoshisToFiat(zatoshis: string, rate: number): number {
   const zats = BigInt(zatoshis);

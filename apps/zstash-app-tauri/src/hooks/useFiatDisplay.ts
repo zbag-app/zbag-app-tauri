@@ -55,8 +55,10 @@ export function useFiatDisplay() {
       return rate;
     }
 
+    // Clear rate on failure to prevent displaying wrong-currency values after a currency change
     setState((prev) => ({
       ...prev,
+      rate: null,
       isStale: true,
       refreshError: res.err.message,
       retryAttempt: prev.retryAttempt + 1,
@@ -98,17 +100,26 @@ export function useFiatDisplay() {
   useEffect(() => {
     if (!enabled) return;
 
+    let cancelled = false;
+
     const interval = setInterval(async () => {
-      await fetchRate();
+      if (!cancelled) {
+        await fetchRate();
+      }
     }, 5 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [enabled, fetchRate]);
 
   // If fiat is enabled but we don't have a rate yet, retry with exponential backoff.
   useEffect(() => {
     if (!enabled) return;
     if (state.rate) return;
+
+    let cancelled = false;
 
     const baseDelaySecs = 10;
     const maxDelaySecs = 300; // 5 minutes
@@ -118,10 +129,15 @@ export function useFiatDisplay() {
         ? state.refreshCooldownSecs
         : Math.min(baseDelaySecs * Math.pow(2, state.retryAttempt), maxDelaySecs);
     const timeout = setTimeout(() => {
-      fetchRate().catch(() => {});
+      if (!cancelled) {
+        fetchRate().catch(() => {});
+      }
     }, delaySecs * 1000);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [enabled, state.rate, state.refreshCooldownSecs, state.retryAttempt, fetchRate]);
 
   // When Tor becomes ready, immediately retry (common case: fiat enabled while Tor is connecting).

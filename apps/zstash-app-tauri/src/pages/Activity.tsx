@@ -27,7 +27,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [retryError, setRetryError] = useState<string | null>(null);
 
   // Use centralized fiat display context
-  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplayContext();
+  const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
 
   const limit = 50;
 
@@ -263,7 +263,9 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                     <span className="text-muted-foreground">
                       Value: {formatZatoshisToZec(tx.value)} ZEC
                       {fiatSettings?.enabled && exchangeRate && (
-                        <> ({formatFiat(zatoshisToFiat(tx.value, exchangeRate.price), exchangeRate.currency)})</>
+                        <span className={fiatIsStale ? "text-muted-foreground/60" : undefined} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
+                          {' '}(~{formatFiat(zatoshisToFiat(tx.value, exchangeRate.price), exchangeRate.currency)})
+                        </span>
                       )}
                     </span>
                     <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
