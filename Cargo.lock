@@ -10767,7 +10767,7 @@ checksum = "ac93432f5b761b22864c774aac244fa5c0fd877678a4c37ebf6cf42208f9c9ec"
 
 [[package]]
 name = "zstash-app-tauri"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "serde",
@@ -10788,7 +10788,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-cli"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -10815,7 +10815,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-core"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -10826,7 +10826,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-engine"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "argon2",
@@ -10867,7 +10867,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-keystone"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "base64 0.22.1",
  "pczt",
@@ -10880,7 +10880,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-network"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "bytes",
@@ -10904,7 +10904,7 @@ dependencies = [
 
 [[package]]
 name = "zstash-tor"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "tempfile",
