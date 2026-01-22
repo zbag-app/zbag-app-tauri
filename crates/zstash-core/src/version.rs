@@ -137,10 +137,15 @@ mod tests {
 
     #[test]
     fn build_timestamp_format() {
+        // Guard against empty timestamp
+        assert!(
+            !BUILD_TIMESTAMP.is_empty(),
+            "BUILD_TIMESTAMP is empty - build.rs may not have run or ENV var missing"
+        );
         // Build timestamp should be in UTC format
         assert!(
             BUILD_TIMESTAMP.ends_with("UTC"),
-            "build timestamp should end with UTC"
+            "BUILD_TIMESTAMP should end with UTC, got: {BUILD_TIMESTAMP}"
         );
     }
 }

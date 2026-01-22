@@ -34,7 +34,21 @@ export function useFiatDisplay() {
   const fetchRate = useCallback(async (options?: { force?: boolean; signal?: AbortSignal }) => {
     const force = options?.force ?? false;
     const signal = options?.signal;
-    const res = await getExchangeRate(force ? { force_refresh: true } : {});
+
+    let res;
+    try {
+      res = await getExchangeRate(force ? { force_refresh: true } : {});
+    } catch (err) {
+      if (signal?.aborted) return null;
+      setState((prev) => ({
+        ...prev,
+        rate: null,
+        isStale: true,
+        refreshError: err instanceof Error ? err.message : String(err),
+        retryAttempt: prev.retryAttempt + 1,
+      }));
+      return null;
+    }
 
     // Check abort before updating state
     if (signal?.aborted) return null;
