@@ -131,10 +131,16 @@ impl ExchangeRateService {
     /// This method respects rate limiting and will return a cached value if
     /// the rate limit has not elapsed, unless `force` is true.
     ///
-    /// Note: When `force` is true, we bypass rate limiting but do NOT update
-    /// `last_fetch`. This prevents forced refreshes from resetting the normal
-    /// refresh timer, which would cause unexpected rate limiting for subsequent
-    /// normal requests.
+    /// # Force refresh behavior
+    ///
+    /// When `force` is true:
+    /// - **Bypasses client-side rate limiting**: The 120-second cooldown between
+    ///   requests is skipped.
+    /// - **Does NOT update `last_fetch`**: This prevents forced refreshes from
+    ///   resetting the normal refresh timer, so subsequent normal requests are
+    ///   not penalized.
+    /// - **Still subject to CoinGecko's server-side rate limiting**: The API may
+    ///   return HTTP 429 responses if too many requests are made.
     pub async fn fetch_rates(&self, force: bool) -> Result<Vec<ExchangeRate>, ExchangeRateError> {
         // Check rate limiting
         let cooldown = self.refresh_cooldown_secs();

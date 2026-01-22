@@ -80,7 +80,7 @@ impl ExchangeRate {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
-        let age_ms = now_ms - self.fetched_at_ms;
+        let age_ms = now_ms.saturating_sub(self.fetched_at_ms);
         age_ms > 15 * 60 * 1000 // 15 minutes
     }
 }
