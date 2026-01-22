@@ -34,6 +34,18 @@ Standard git workflow. Common commands:
 - `git push` - Push to remote
 - `git pull --rebase` - Update from remote
 
+### Git Worktrees
+
+**Always create new worktrees one level up** in `/Users/bioharz/git/zstashapp/`:
+```bash
+git worktree add ../zstash-issue-<N> -b fix/description
+```
+
+**Important:**
+- Do NOT make changes to `main` or `dev` branches in this directory unless the user explicitly requests it
+- This directory should remain on `dev` for reference; use worktrees for feature work
+- Existing worktrees: `git worktree list`
+
 ## Architecture
 
 ```
