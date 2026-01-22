@@ -1,10 +1,25 @@
 pub mod commands;
 pub mod events;
 pub mod state;
+#[cfg(feature = "test-bridge")]
+pub mod test_bridge;
 pub mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // When test-bridge feature is enabled, run only the HTTP bridge server (no Tauri)
+    #[cfg(feature = "test-bridge")]
+    {
+        run_test_bridge_only();
+        return;
+    }
+
+    #[cfg(not(feature = "test-bridge"))]
+    run_tauri_app();
+}
+
+#[cfg(not(feature = "test-bridge"))]
+fn run_tauri_app() {
     let state = state::AppState::new().expect("failed to initialize application state");
 
     tauri::Builder::default()
@@ -51,4 +66,36 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Run the test bridge HTTP server only (no Tauri webview).
+///
+/// This mode is used for E2E testing with Playwright/Chrome MCP.
+/// The frontend is served by Vite and talks to this HTTP server.
+#[cfg(feature = "test-bridge")]
+fn run_test_bridge_only() {
+    use std::sync::Arc;
+
+    println!("Starting zstash in test-bridge mode...");
+
+    let state = Arc::new(state::AppState::new().expect("failed to initialize application state"));
+
+    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+    rt.block_on(async {
+        if let Err(e) = test_bridge::start_test_bridge(state).await {
+            eprintln!("Failed to start test bridge: {}", e);
+            std::process::exit(1);
+        }
+
+        println!(
+            "Test bridge server running on http://127.0.0.1:{}",
+            test_bridge::TEST_BRIDGE_PORT
+        );
+        println!("Press Ctrl+C to stop");
+
+        // Keep running indefinitely - the server will shutdown when the process exits
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        }
+    });
 }

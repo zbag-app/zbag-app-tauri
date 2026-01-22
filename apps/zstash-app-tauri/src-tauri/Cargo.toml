@@ -38,6 +38,13 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 uuid.workspace = true
 
+# Test bridge dependencies (optional)
+axum = { version = "0.7", optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Enable HTTP test bridge for E2E testing (Playwright/Chrome MCP)
+# When enabled, the app runs as an HTTP server instead of Tauri webview
+test-bridge = ["dep:axum", "dep:tower-http"]

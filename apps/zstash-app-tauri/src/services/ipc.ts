@@ -1,5 +1,32 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import * as IPC from '../types/ipc';
+
+// Test bridge URL for E2E testing (Playwright/Chrome MCP)
+const TEST_BRIDGE_URL = 'http://127.0.0.1:19816';
+const USE_TEST_BRIDGE = import.meta.env.VITE_TEST_BRIDGE === 'true';
+
+/**
+ * Invoke a Tauri command, using HTTP transport when VITE_TEST_BRIDGE is enabled.
+ *
+ * In test mode, commands are sent to the test bridge HTTP server instead of
+ * Tauri's IPC. This enables E2E testing with Playwright and Chrome MCP against
+ * the real Rust backend without requiring the Tauri webview.
+ */
+async function invoke<T>(cmd: string, args: { request: unknown }): Promise<T> {
+  if (USE_TEST_BRIDGE) {
+    const res = await fetch(`${TEST_BRIDGE_URL}/invoke/${cmd}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Test bridge error: ${res.status} ${text}`);
+    }
+    return res.json();
+  }
+  return tauriInvoke<T>(cmd, args);
+}
 
 function versioned<T extends object>(request: T): T & IPC.VersionedPayload {
   return { ...request, schema_version: IPC.SCHEMA_VERSION };

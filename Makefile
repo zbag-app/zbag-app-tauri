@@ -7,6 +7,7 @@ TAURI_DIR := apps/zstash-app-tauri
 
 .PHONY: help install build build-release build-frontend \
         test test-engine test-core test-network test-keystone test-tor test-migrations \
+        test-e2e test-bridge test-bridge-build \
         fmt fmt-check clippy clippy-strict lint \
         pre-commit check audit check-telemetry \
         dev tauri-build \
@@ -58,6 +59,19 @@ test-tor: ## Test zstash-tor crate
 
 test-migrations: ## Run migration tests
 	@cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+
+# ============================================================================
+# E2E Testing
+# ============================================================================
+
+test-e2e: ## Run Playwright E2E tests (starts test bridge automatically)
+	@./scripts/e2e-test.sh
+
+test-bridge-build: ## Build the test bridge server
+	@cargo build -p zstash-app-tauri --features test-bridge
+
+test-bridge: test-bridge-build ## Run the test bridge server
+	@cargo run -p zstash-app-tauri --features test-bridge
 
 # ============================================================================
 # Lint/Format (Rust)
