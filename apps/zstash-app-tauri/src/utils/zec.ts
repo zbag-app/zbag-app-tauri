@@ -84,6 +84,8 @@ export function parseFiatToZatoshis(input: string, rate: number): ParseAmountRes
   const value = input.trim();
   if (!value) return { err: 'Enter an amount.' };
   if (value.startsWith('-')) return { err: 'Amount must be positive.' };
+  // Only allow digits and optional decimal point (reject scientific notation like "1e5")
+  if (!/^\d*(?:\.\d*)?$/.test(value)) return { err: 'Invalid amount.' };
 
   const num = parseFloat(value);
   if (isNaN(num)) return { err: 'Invalid amount.' };

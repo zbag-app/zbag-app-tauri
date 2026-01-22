@@ -151,10 +151,13 @@ export function useFiatDisplay() {
     const baseDelaySecs = 10;
     const maxDelaySecs = 300; // 5 minutes
     // Use cooldown from backend if set, otherwise apply exponential backoff
-    const delaySecs =
+    const baseDelay =
       state.refreshCooldownSecs > 0
         ? state.refreshCooldownSecs
         : Math.min(baseDelaySecs * Math.pow(2, state.retryAttempt), maxDelaySecs);
+    // Add jitter (0-30%) to prevent thundering herd
+    const jitter = 1 + Math.random() * 0.3;
+    const delaySecs = Math.round(baseDelay * jitter);
     const timeout = setTimeout(() => {
       fetchRate({ signal: controller.signal }).catch(() => {});
     }, delaySecs * 1000);

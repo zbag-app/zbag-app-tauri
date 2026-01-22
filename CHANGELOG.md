@@ -2,6 +2,13 @@
 
 All notable changes to zSTASH will be documented in this file.
 
+## [0.1.10] - 2026-01-22
+
+### Bug Fixes
+
+- Add jitter to retry backoff to prevent thundering herd
+- Reject scientific notation in fiat amount input
+
 ## [0.1.9] - 2026-01-22
 
 ### Bug Fixes
