@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
 import { onSwapChanged, onTransactionChanged } from '../services/events';
 import { formatRelativeTime, formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
-import { useFiatDisplay } from '../hooks/useFiatDisplay';
+import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
@@ -26,8 +26,8 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
 
-  // Use centralized fiat display hook
-  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplay();
+  // Use centralized fiat display context
+  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplayContext();
 
   const limit = 50;
 

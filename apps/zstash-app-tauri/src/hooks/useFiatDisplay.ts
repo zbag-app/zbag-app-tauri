@@ -12,6 +12,8 @@ interface FiatDisplayState {
   error: string | null;
   /** Error from periodic background refresh (does not prevent display of stale data) */
   refreshError: string | null;
+  /** Retry attempt counter for exponential backoff */
+  retryAttempt: number;
 }
 
 export function useFiatDisplay() {
@@ -23,6 +25,7 @@ export function useFiatDisplay() {
     loading: true,
     error: null,
     refreshError: null,
+    retryAttempt: 0,
   });
 
   // Extract enabled to a stable primitive to avoid unnecessary effect re-runs
@@ -46,6 +49,8 @@ export function useFiatDisplay() {
           : res.ok.refresh_cooldown_secs > 0
             ? `Exchange rate temporarily unavailable. Retry in ${res.ok.refresh_cooldown_secs}s.`
             : 'Exchange rate temporarily unavailable.',
+        // Reset retry counter on successful fetch with rate, otherwise increment for backoff
+        retryAttempt: rate ? 0 : prev.retryAttempt + 1,
       }));
       return rate;
     }
@@ -54,6 +59,7 @@ export function useFiatDisplay() {
       ...prev,
       isStale: true,
       refreshError: res.err.message,
+      retryAttempt: prev.retryAttempt + 1,
     }));
     return null;
   }, []);
@@ -78,6 +84,7 @@ export function useFiatDisplay() {
         isStale: true,
         refreshCooldownSecs: 0,
         refreshError: null,
+        retryAttempt: 0,
         loading: false,
       }));
     }
@@ -98,18 +105,24 @@ export function useFiatDisplay() {
     return () => clearInterval(interval);
   }, [enabled, fetchRate]);
 
-  // If fiat is enabled but we don't have a rate yet, retry more frequently.
+  // If fiat is enabled but we don't have a rate yet, retry with exponential backoff.
   useEffect(() => {
     if (!enabled) return;
     if (state.rate) return;
 
-    const delaySecs = state.refreshCooldownSecs > 0 ? state.refreshCooldownSecs : 10;
+    const baseDelaySecs = 10;
+    const maxDelaySecs = 300; // 5 minutes
+    // Use cooldown from backend if set, otherwise apply exponential backoff
+    const delaySecs =
+      state.refreshCooldownSecs > 0
+        ? state.refreshCooldownSecs
+        : Math.min(baseDelaySecs * Math.pow(2, state.retryAttempt), maxDelaySecs);
     const timeout = setTimeout(() => {
       fetchRate().catch(() => {});
     }, delaySecs * 1000);
 
     return () => clearTimeout(timeout);
-  }, [enabled, state.rate, state.refreshCooldownSecs, fetchRate]);
+  }, [enabled, state.rate, state.refreshCooldownSecs, state.retryAttempt, fetchRate]);
 
   // When Tor becomes ready, immediately retry (common case: fiat enabled while Tor is connecting).
   useEffect(() => {
@@ -169,6 +182,7 @@ export function useFiatDisplay() {
           isStale: true,
           refreshCooldownSecs: 0,
           refreshError: null,
+          retryAttempt: 0,
           loading: false,
         }));
       }

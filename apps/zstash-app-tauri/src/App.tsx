@@ -39,6 +39,7 @@ import { SwapFromZec } from './pages/SwapFromZec';
 import { SwapQuote } from './pages/SwapQuote';
 import { ServerSettings } from './pages/ServerSettings';
 import { Wallets } from './pages/Wallets';
+import { FiatDisplayProvider } from './context/FiatDisplayContext';
 
 const queryClient = new QueryClient();
 
@@ -317,6 +318,7 @@ function AppInner() {
 
   // Ready state - Main app with sidebar
   return (
+    <FiatDisplayProvider>
     <AppShell
       wallet={startup.wallet}
       torState={torState}
@@ -476,6 +478,7 @@ function AppInner() {
         />
       </Routes>
     </AppShell>
+    </FiatDisplayProvider>
   );
 }
 

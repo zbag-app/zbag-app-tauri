@@ -188,6 +188,11 @@ impl ExchangeRateService {
             }
         };
 
+        if response.status == 429 {
+            let retry_secs = response.retry_after.map(|d| d.as_secs()).unwrap_or(60);
+            return Err(ExchangeRateError::RateLimited(retry_secs));
+        }
+
         if response.status != 200 {
             return Err(ExchangeRateError::ParseError(format!(
                 "API returned status {}",

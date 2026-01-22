@@ -8,7 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { buildSigningRequest, prepareSend } from '../services/ipc';
 import { parseZecToZatoshis, formatFiat, zatoshisToFiat } from '../utils/zec';
-import { useFiatDisplay } from '../hooks/useFiatDisplay';
+import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
 export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const { activeAccount } = props;
@@ -22,8 +22,8 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Use centralized fiat display hook
-  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplay();
+  // Use centralized fiat display context
+  const { settings: fiatSettings, rate: exchangeRate } = useFiatDisplayContext();
 
   const parsedAmount = useMemo(() => parseZecToZatoshis(amount), [amount]);
   const amountZatoshis = 'ok' in parsedAmount ? parsedAmount.ok : null;

@@ -243,6 +243,16 @@ export const FIAT_CURRENCY_SYMBOLS: Record<FiatCurrency, string> = {
   JPY: '\u00A5',
 };
 
+export const FIAT_CURRENCY_DISPLAY_NAMES: Record<FiatCurrency, string> = {
+  USD: 'US Dollar ($)',
+  EUR: 'Euro (\u20AC)',
+  GBP: 'British Pound (\u00A3)',
+  CHF: 'Swiss Franc (CHF)',
+  CAD: 'Canadian Dollar (C$)',
+  AUD: 'Australian Dollar (A$)',
+  JPY: 'Japanese Yen (\u00A5)',
+};
+
 export interface ExchangeRate {
   currency: FiatCurrency;
   /** Price of 1 ZEC in the fiat currency */

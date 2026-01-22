@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../types/ipc';
-import { FIAT_CURRENCIES } from '../types/ipc';
+import { FIAT_CURRENCIES, FIAT_CURRENCY_DISPLAY_NAMES } from '../types/ipc';
 import { Link } from 'react-router-dom';
 import { Settings as SettingsIcon, Server, Shield, Key, FileText, ChevronRight, Info, DollarSign, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -8,7 +8,8 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ViewSeedPhraseDialog } from '../components/common/ViewSeedPhraseDialog';
 import { LogoutDialog } from '../components/common/LogoutDialog';
-import { getLogLocation, getVersion, getFiatSettings, setFiatSettings } from '../services/ipc';
+import { getLogLocation, getVersion } from '../services/ipc';
+import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
 export function Settings(props: {
   wallet: IPC.WalletInfo;
@@ -21,10 +22,15 @@ export function Settings(props: {
   const [logError, setLogError] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState<IPC.VersionInfo | null>(null);
 
-  // Fiat settings state
-  const [fiatSettings, setFiatSettingsState] = useState<IPC.FiatDisplaySettings | null>(null);
-  const [fiatError, setFiatError] = useState<string | null>(null);
-  const [fiatSaving, setFiatSaving] = useState(false);
+  // Fiat display context
+  const {
+    settings: fiatSettings,
+    error: fiatError,
+    loading: fiatSaving,
+    updateSettings: updateFiatSettings,
+  } = useFiatDisplayContext();
+
+  // Local UI state for privacy warning dialog
   const [showPrivacyWarning, setShowPrivacyWarning] = useState(false);
   const [pendingFiatEnabled, setPendingFiatEnabled] = useState(false);
 
@@ -54,26 +60,6 @@ export function Settings(props: {
     };
   }, []);
 
-  // Load fiat settings
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      const res = await getFiatSettings();
-      if (cancelled) return;
-      if ('err' in res) {
-        setFiatError(res.err.message);
-        return;
-      }
-      setFiatSettingsState(res.ok.settings);
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const handleFiatToggle = async (enabled: boolean) => {
     if (enabled && !fiatSettings?.privacy_acknowledged) {
       // Show privacy warning before enabling
@@ -82,66 +68,32 @@ export function Settings(props: {
       return;
     }
 
-    setFiatSaving(true);
-    setFiatError(null);
-
-    const res = await setFiatSettings({
+    await updateFiatSettings(
       enabled,
-      currency: fiatSettings?.currency ?? 'USD',
-      privacy_acknowledged: fiatSettings?.privacy_acknowledged ?? false,
-    });
-
-    setFiatSaving(false);
-
-    if ('err' in res) {
-      setFiatError(res.err.message);
-      return;
-    }
-
-    setFiatSettingsState(res.ok.settings);
+      fiatSettings?.currency ?? 'USD',
+      fiatSettings?.privacy_acknowledged ?? false
+    );
   };
 
   const handlePrivacyAcknowledge = async () => {
-    setFiatSaving(true);
-    setFiatError(null);
-
-    const res = await setFiatSettings({
-      enabled: pendingFiatEnabled,
-      currency: fiatSettings?.currency ?? 'USD',
-      privacy_acknowledged: true,
-    });
-
-    setFiatSaving(false);
-    setShowPrivacyWarning(false);
-
-    if ('err' in res) {
-      setFiatError(res.err.message);
-      return;
+    const success = await updateFiatSettings(
+      pendingFiatEnabled,
+      fiatSettings?.currency ?? 'USD',
+      true
+    );
+    if (success) {
+      setShowPrivacyWarning(false);
     }
-
-    setFiatSettingsState(res.ok.settings);
   };
 
   const handleCurrencyChange = async (currency: IPC.FiatCurrency) => {
     if (!fiatSettings) return;
 
-    setFiatSaving(true);
-    setFiatError(null);
-
-    const res = await setFiatSettings({
-      enabled: fiatSettings.enabled,
+    await updateFiatSettings(
+      fiatSettings.enabled,
       currency,
-      privacy_acknowledged: fiatSettings.privacy_acknowledged,
-    });
-
-    setFiatSaving(false);
-
-    if ('err' in res) {
-      setFiatError(res.err.message);
-      return;
-    }
-
-    setFiatSettingsState(res.ok.settings);
+      fiatSettings.privacy_acknowledged
+    );
   };
 
   const getTorStatusBadge = () => {
@@ -311,7 +263,7 @@ export function Settings(props: {
                     className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm"
                   >
                     {FIAT_CURRENCIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>{FIAT_CURRENCY_DISPLAY_NAMES[c]}</option>
                     ))}
                   </select>
                 </div>

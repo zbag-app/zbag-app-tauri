@@ -10,7 +10,7 @@ import { onBalanceChanged } from '../services/events';
 import { getBalance, getWalletStatus } from '../services/ipc';
 import { formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
 import { cn } from '../lib/utils';
-import { useFiatDisplay } from '../hooks/useFiatDisplay';
+import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
 export function Home(props: {
   wallet: IPC.WalletInfo;
@@ -22,7 +22,7 @@ export function Home(props: {
   const [balance, setBalance] = useState<IPC.Balance | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Use centralized fiat display hook
+  // Use centralized fiat display context
   const {
     settings: fiatSettings,
     rate: exchangeRate,
@@ -30,7 +30,7 @@ export function Home(props: {
     refreshCooldownSecs,
     refreshRate,
     loading: fiatLoading,
-  } = useFiatDisplay();
+  } = useFiatDisplayContext();
 
   const refreshBalance = async () => {
     if (activeAccountId === null) {
