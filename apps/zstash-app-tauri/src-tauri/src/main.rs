@@ -5,6 +5,48 @@ use std::sync::Arc;
 use tauri::Manager;
 
 fn main() {
+    // When test-bridge feature is enabled, run only the HTTP bridge server (no Tauri)
+    #[cfg(feature = "test-bridge")]
+    {
+        run_test_bridge_only();
+        return;
+    }
+
+    #[cfg(not(feature = "test-bridge"))]
+    run_tauri_app();
+}
+
+#[cfg(feature = "test-bridge")]
+fn run_test_bridge_only() {
+    println!("Starting zstash in test-bridge mode...");
+
+    let state = Arc::new(
+        zstash_app_tauri_lib::state::AppState::new()
+            .expect("failed to initialize application state"),
+    );
+
+    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+    rt.block_on(async {
+        if let Err(e) = zstash_app_tauri_lib::test_bridge::start_test_bridge(state).await {
+            eprintln!("Failed to start test bridge: {}", e);
+            std::process::exit(1);
+        }
+
+        println!(
+            "Test bridge server running on http://127.0.0.1:{}",
+            zstash_app_tauri_lib::test_bridge::TEST_BRIDGE_PORT
+        );
+        println!("Press Ctrl+C to stop");
+
+        // Keep running indefinitely - the server will shutdown when the process exits
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        }
+    });
+}
+
+#[cfg(not(feature = "test-bridge"))]
+fn run_tauri_app() {
     let state = zstash_app_tauri_lib::state::AppState::new()
         .expect("failed to initialize application state");
 

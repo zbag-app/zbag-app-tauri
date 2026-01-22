@@ -80,7 +80,7 @@ pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/invoke/{command}", post(invoke_command))
+        .route("/invoke/:command", post(invoke_command))
         .layer(cors)
         .with_state(bridge_state);
 
@@ -262,38 +262,9 @@ fn create_wallet_impl(
         return IpcResult::Err { err };
     }
 
-    // Resolve gRPC URL and fetch chain tip for birthday height
-    let (grpc_url, tor_manager) = {
-        let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let grpc_url =
-            zstash_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
-        (grpc_url, Some(state.tor_manager.clone()))
-    };
-
-    // Fetch birthday height near chain tip for new wallet
-    let birthday_height = match grpc_url {
-        Ok(url) => {
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(async {
-                let fetch_future =
-                    zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet(
-                        &url,
-                        tor_manager,
-                    );
-                match tokio::time::timeout(std::time::Duration::from_secs(10), fetch_future).await {
-                    Ok(result) => result,
-                    Err(_) => {
-                        warn!("birthday height fetch timed out, will use Sapling activation");
-                        None
-                    }
-                }
-            })
-        }
-        Err(err) => {
-            warn!(error = ?err, "failed to resolve gRPC URL for birthday fetch");
-            None
-        }
-    };
+    // In test-bridge mode, skip birthday height fetch to avoid nested runtime issues.
+    // Tests can use Sapling activation height (None) which is fine for testing.
+    let birthday_height: Option<u32> = None;
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
