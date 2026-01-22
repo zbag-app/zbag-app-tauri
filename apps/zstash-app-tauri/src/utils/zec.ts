@@ -59,6 +59,40 @@ export function zatoshisToFiat(zatoshis: string, rate: number): number {
   return zec * rate;
 }
 
+/**
+ * Convert zatoshis to ZEC as a number.
+ */
+export function zatoshisToZec(zatoshis: string): number {
+  const zats = BigInt(zatoshis);
+  return Number(zats) / Number(ZATOSHI_PER_ZEC);
+}
+
+/**
+ * Convert fiat amount to zatoshis string.
+ */
+export function fiatToZatoshis(fiatAmount: number, rate: number): string {
+  if (rate <= 0) return '0';
+  const zec = fiatAmount / rate;
+  const zatoshis = BigInt(Math.round(zec * Number(ZATOSHI_PER_ZEC)));
+  return zatoshis.toString(10);
+}
+
+/**
+ * Parse fiat input and convert to zatoshis.
+ */
+export function parseFiatToZatoshis(input: string, rate: number): ParseAmountResult {
+  const value = input.trim();
+  if (!value) return { err: 'Enter an amount.' };
+  if (value.startsWith('-')) return { err: 'Amount must be positive.' };
+
+  const num = parseFloat(value);
+  if (isNaN(num)) return { err: 'Invalid amount.' };
+  if (num <= 0) return { err: 'Amount must be greater than 0.' };
+  if (rate <= 0) return { err: 'Exchange rate unavailable.' };
+
+  return { ok: fiatToZatoshis(num, rate) };
+}
+
 export function formatRelativeTime(timestampMs: number): string {
   const now = Date.now();
   const diffMs = now - timestampMs;

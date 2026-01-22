@@ -1,13 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUp, AlertTriangle } from 'lucide-react';
+import { ArrowUp, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { buildSigningRequest, prepareSend } from '../services/ipc';
-import { parseZecToZatoshis, formatFiat, zatoshisToFiat } from '../utils/zec';
+import {
+  parseZecToZatoshis,
+  parseFiatToZatoshis,
+  formatZatoshisToZec,
+  zatoshisToFiat,
+} from '../utils/zec';
 import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
 export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
@@ -16,14 +21,21 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
 
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [fiatAmount, setFiatAmount] = useState('');
+  const [inputMode, setInputMode] = useState<'zec' | 'fiat'>('zec');
   const [memo, setMemo] = useState('');
   const [transparentAck, setTransparentAck] = useState(false);
   const [transparentRecipient, setTransparentRecipient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Track if we're in the middle of a sync to avoid circular updates
+  const syncingRef = useRef(false);
+
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
+
+  const fiatEnabled = fiatSettings?.enabled && exchangeRate;
 
   const parsedAmount = useMemo(() => parseZecToZatoshis(amount), [amount]);
   const amountZatoshis = 'ok' in parsedAmount ? parsedAmount.ok : null;
@@ -32,6 +44,35 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
     if ('err' in parsedAmount) return parsedAmount.err;
     return null;
   }, [amount, parsedAmount]);
+
+  // Sync fiat when ZEC changes (only when ZEC input is active)
+  useEffect(() => {
+    if (inputMode !== 'zec' || syncingRef.current) return;
+    if (!exchangeRate || !amountZatoshis) {
+      setFiatAmount('');
+      return;
+    }
+    syncingRef.current = true;
+    const fiat = zatoshisToFiat(amountZatoshis, exchangeRate.price);
+    setFiatAmount(fiat.toFixed(2));
+    syncingRef.current = false;
+  }, [amount, inputMode, exchangeRate, amountZatoshis]);
+
+  // Sync ZEC when fiat changes (only when fiat input is active)
+  useEffect(() => {
+    if (inputMode !== 'fiat' || syncingRef.current) return;
+    if (!exchangeRate || !fiatAmount.trim()) {
+      setAmount('');
+      return;
+    }
+    const result = parseFiatToZatoshis(fiatAmount, exchangeRate.price);
+    if ('ok' in result) {
+      syncingRef.current = true;
+      const zec = formatZatoshisToZec(result.ok);
+      setAmount(zec);
+      syncingRef.current = false;
+    }
+  }, [fiatAmount, inputMode, exchangeRate]);
 
   const canSubmit = useMemo(() => {
     if (activeAccount == null) return false;
@@ -169,30 +210,80 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount (ZEC)</Label>
-              <Input
-                id="amount"
-                value={amount}
-                onChange={(e) => {
-                  setAmount(e.currentTarget.value);
-                  setError(null);
-                }}
-                inputMode="decimal"
-                placeholder="0.12345678"
-              />
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Up to 8 decimal places</span>
-                {fiatSettings?.enabled && exchangeRate && amountZatoshis && (
-                  <span className={fiatIsStale ? "text-muted-foreground/60" : "text-muted-foreground"} title={fiatIsStale ? "Exchange rate may be outdated" : undefined}>
-                    {formatFiat(zatoshisToFiat(amountZatoshis, exchangeRate.price), exchangeRate.currency)}
+            {fiatEnabled ? (
+              <div className="space-y-2">
+                <Label>Amount</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-1">
+                    <div className="relative">
+                      <Input
+                        id="amount"
+                        value={amount}
+                        onChange={(e) => {
+                          setAmount(e.currentTarget.value);
+                          setError(null);
+                        }}
+                        onFocus={() => setInputMode('zec')}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="pr-12"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        ZEC
+                      </span>
+                    </div>
+                  </div>
+                  <span title={fiatIsStale ? 'Exchange rate may be outdated' : 'Values sync automatically'}>
+                    <ArrowLeftRight
+                      className={`h-4 w-4 shrink-0 ${fiatIsStale ? 'text-muted-foreground/40' : 'text-muted-foreground'}`}
+                    />
                   </span>
+                  <div className="flex-1 space-y-1">
+                    <div className="relative">
+                      <Input
+                        id="fiatAmount"
+                        value={fiatAmount}
+                        onChange={(e) => {
+                          setFiatAmount(e.currentTarget.value);
+                          setError(null);
+                        }}
+                        onFocus={() => setInputMode('fiat')}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        className="pr-12"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        {exchangeRate.currency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter amount in ZEC or {exchangeRate.currency}
+                </p>
+                {amountError && (
+                  <p className="text-xs text-destructive">{amountError}</p>
                 )}
               </div>
-              {amountError && (
-                <p className="text-xs text-destructive">{amountError}</p>
-              )}
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount (ZEC)</Label>
+                <Input
+                  id="amount"
+                  value={amount}
+                  onChange={(e) => {
+                    setAmount(e.currentTarget.value);
+                    setError(null);
+                  }}
+                  inputMode="decimal"
+                  placeholder="0.12345678"
+                />
+                <p className="text-xs text-muted-foreground">Up to 8 decimal places</p>
+                {amountError && (
+                  <p className="text-xs text-destructive">{amountError}</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="memo">Memo (optional)</Label>
