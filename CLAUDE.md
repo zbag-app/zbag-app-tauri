@@ -26,15 +26,13 @@ make dev            # Full Tauri development
 
 Override lightwalletd: `ZSTASH_GRPC_URL`. Run `make help` for all targets.
 
-## Version Control (jj)
+## Version Control
 
-Uses jj (Jujutsu) colocated on Git. Common commands:
-- `jj status` / `jj diff` - View changes
-- `jj new` - Create change
-- `jj describe -m "msg"` - Set message
-- `jj git push` - Push to remote
-
-Git commands remain functional.
+Standard git workflow. Common commands:
+- `git status` / `git diff` - View changes
+- `git add` / `git commit` - Stage and commit
+- `git push` - Push to remote
+- `git pull --rebase` - Update from remote
 
 ## Architecture
 

@@ -6,66 +6,41 @@ See [CLAUDE.md](./CLAUDE.md) for build instructions and architecture overview.
 
 ## Version Control
 
-This project uses **jj (Jujutsu)** colocated on Git for version control.
-
-### Why jj?
-- First-class undo/redo for all operations
-- Automatic rebasing and conflict resolution
-- Working copy as a commit (no staging area)
-- Git-compatible (existing remotes/CI work unchanged)
-
-### Getting Started with jj
-
-**Install jj:**
-```bash
-# macOS
-brew install jj
-
-# Linux
-cargo install --locked jj-cli
-
-# Other platforms: https://docs.jj-vcs.dev/latest/install-and-setup/
-```
-
-**Initialize (already done for this repo):**
-```bash
-jj git init --colocate
-```
+This project uses standard **git** for version control.
 
 ### Common Workflows
 
 **View status and changes:**
 ```bash
-jj status      # Working copy status
-jj log         # Commit history
-jj diff        # Uncommitted changes
+git status     # Working copy status
+git log        # Commit history
+git diff       # Uncommitted changes
 ```
 
 **Create commits:**
 ```bash
-jj new                      # Start new change
-jj describe -m "message"    # Set commit message
+git add <files>             # Stage changes
+git commit -m "message"     # Create commit
 ```
 
-**Work with bookmarks (branches):**
+**Work with branches:**
 ```bash
-jj bookmark create my-branch  # Create bookmark at current change
-jj git push                   # Push to remote
+git checkout -b my-branch   # Create and switch to branch
+git push -u origin my-branch # Push branch to remote
+```
+
+**Update from remote:**
+```bash
+git pull --rebase           # Update and rebase local changes
+git fetch                   # Fetch without merging
 ```
 
 **Undo mistakes:**
 ```bash
-jj undo                     # Undo last operation
-jj op log                   # View operation history
+git stash                   # Temporarily store changes
+git stash pop               # Restore stashed changes
+git reset HEAD~1            # Undo last commit (keep changes)
 ```
-
-**Modify previous changes:**
-```bash
-jj edit <change>            # Edit a previous change
-jj squash                   # Squash current change into parent
-```
-
-**Note:** Standard Git commands still work since jj colocates with `.git/`.
 
 ## Commit Messages
 
@@ -77,9 +52,9 @@ Follow existing patterns:
 
 ## Pull Requests
 
-1. Create a bookmark: `jj bookmark create fix/description`
-2. Make changes and describe: `jj describe -m "fix: description"`
-3. Push: `jj git push --bookmark fix/description`
+1. Create a branch: `git checkout -b fix/description`
+2. Make changes and commit: `git commit -m "fix: description"`
+3. Push: `git push -u origin fix/description`
 4. Open PR on GitHub linking relevant issue
 
 ## Code Quality

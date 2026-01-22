@@ -120,13 +120,6 @@ fn apply_v1(conn: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn apply_v2(_conn: &Connection) -> anyhow::Result<()> {
-    // No-op migration for forward compatibility.
-    // Databases may have been upgraded to v2 by experimental code that was
-    // never merged. The v2 migration made no schema changes.
-    Ok(())
-}
-
 fn seed_servers_v1(conn: &Connection) -> anyhow::Result<()> {
     let now_ms = chrono::Utc::now().timestamp_millis();
 

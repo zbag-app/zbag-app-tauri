@@ -48,25 +48,18 @@ Uses [git-cliff](https://git-cliff.org/) for automated changelog generation from
 3. `git tag vX.Y.Z`
 4. `git push && git push origin --tags`
 
-## Version Control (jj/Jujutsu)
+## Version Control
 
-This repository uses jj (Jujutsu) colocated on Git for version control workflow.
+Standard git workflow.
 
 **Quick reference:**
-- `jj status` - Show working copy status
-- `jj diff` - Show uncommitted changes
-- `jj new` - Create new change (commit)
-- `jj describe -m "message"` - Set commit message
-- `jj squash` - Squash into parent
-- `jj git push` - Push to remote (works with existing Git remotes)
-- `jj undo` - Undo last operation
-
-**Setup (one-time):**
-```bash
-jj git init --colocate  # Already done for this repo
-```
-
-Git commands still work - jj colocates with the existing `.git/` directory.
+- `git status` - Show working copy status
+- `git diff` - Show uncommitted changes
+- `git add <files>` - Stage changes
+- `git commit -m "message"` - Create commit
+- `git push` - Push to remote
+- `git pull --rebase` - Update from remote
+- `git stash` / `git stash pop` - Temporarily store changes
 
 ## Security & Configuration Tips
 
