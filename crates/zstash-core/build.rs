@@ -75,6 +75,23 @@ fn main() {
 
     println!("cargo:rustc-env=ZSTASH_GIT_COMMIT={git_commit}");
 
+    // Capture git describe output for version string
+    let git_describe = Command::new("git")
+        .args(["describe", "--tags", "--always"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
+    println!("cargo:rustc-env=ZSTASH_GIT_DESCRIBE={git_describe}");
+
     // Determine if this is a release build (HEAD is exactly on a version tag)
     // `git describe --exact-match --tags HEAD` succeeds only if HEAD is tagged
     let is_release = Command::new("git")

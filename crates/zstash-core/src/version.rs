@@ -15,6 +15,14 @@ pub const GIT_COMMIT: &str = match option_env!("ZSTASH_GIT_COMMIT") {
     None => "",
 };
 
+/// Git describe output captured at build time.
+/// Format: "vX.Y.Z" for exact releases, "vX.Y.Z-N-gHASH" for post-release builds.
+/// Empty string if not available.
+pub const GIT_DESCRIBE: &str = match option_env!("ZSTASH_GIT_DESCRIBE") {
+    Some(desc) => desc,
+    None => "",
+};
+
 /// Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC").
 pub const BUILD_TIMESTAMP: &str = match option_env!("ZSTASH_BUILD_TIMESTAMP") {
     Some(ts) => ts,
@@ -23,16 +31,21 @@ pub const BUILD_TIMESTAMP: &str = match option_env!("ZSTASH_BUILD_TIMESTAMP") {
 
 /// Whether this is a release build (HEAD is exactly on a version tag).
 pub fn is_release() -> bool {
-    option_env!("ZSTASH_is_release()") == Some("true")
+    option_env!("ZSTASH_IS_RELEASE") == Some("true")
 }
 
-/// Full version string including git commit when available.
-/// Format: "X.Y.Z" or "X.Y.Z (abc1234)"
+/// Full version string for display.
+/// For release builds: "X.Y.Z"
+/// For post-release builds: "X.Y.Z-N-gHASH" (from git describe, with 'v' prefix stripped)
 pub fn full_version() -> String {
-    if is_release() || GIT_COMMIT.is_empty() {
+    if is_release() || GIT_DESCRIBE.is_empty() {
         VERSION.to_string()
     } else {
-        format!("{VERSION} ({GIT_COMMIT})")
+        // Strip leading 'v' from git describe output if present
+        GIT_DESCRIBE
+            .strip_prefix('v')
+            .unwrap_or(GIT_DESCRIBE)
+            .to_string()
     }
 }
 
@@ -43,9 +56,11 @@ pub struct VersionInfo {
     pub version: String,
     /// Short git commit hash (e.g., "abc1234"), None for release builds
     pub git_commit: Option<String>,
+    /// Git describe output (e.g., "v0.1.0-3-gabc1234"), None if not available
+    pub git_describe: Option<String>,
     /// Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC")
     pub build_timestamp: String,
-    /// Full version string for display (e.g., "0.1.0 (abc1234)")
+    /// Full version string for display (e.g., "0.1.0" or "0.1.0-3-gabc1234")
     pub full_version: String,
 }
 
@@ -60,9 +75,16 @@ impl VersionInfo {
             Some(GIT_COMMIT.to_string())
         };
 
+        let git_describe = if GIT_DESCRIBE.is_empty() {
+            None
+        } else {
+            Some(GIT_DESCRIBE.to_string())
+        };
+
         Self {
             version: VERSION.to_string(),
             git_commit,
+            git_describe,
             build_timestamp: BUILD_TIMESTAMP.to_string(),
             full_version: full_version(),
         }
@@ -103,10 +125,13 @@ mod tests {
     #[test]
     fn full_version_format() {
         let full = full_version();
-        assert!(full.starts_with(VERSION));
-        // In non-release builds with a git commit, full version should contain the commit
-        if !is_release() && !GIT_COMMIT.is_empty() {
-            assert!(full.contains(GIT_COMMIT));
+        // Full version should either be exactly VERSION (release) or derived from git describe
+        if is_release() || GIT_DESCRIBE.is_empty() {
+            assert_eq!(full, VERSION);
+        } else {
+            // For non-release builds, full version is git describe with 'v' stripped
+            let expected = GIT_DESCRIBE.strip_prefix('v').unwrap_or(GIT_DESCRIBE);
+            assert_eq!(full, expected);
         }
     }
 

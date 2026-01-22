@@ -683,9 +683,11 @@ export interface VersionInfo {
   version: string;
   /** Short git commit hash (e.g., "abc1234"), null for release builds */
   git_commit: string | null;
+  /** Git describe output (e.g., "v0.1.0-3-gabc1234"), null if not available */
+  git_describe: string | null;
   /** Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC") */
   build_timestamp: string;
-  /** Full version string for display (e.g., "0.1.0 (abc1234)") */
+  /** Full version string for display (e.g., "0.1.0" or "0.1.0-3-gabc1234") */
   full_version: string;
 }
 

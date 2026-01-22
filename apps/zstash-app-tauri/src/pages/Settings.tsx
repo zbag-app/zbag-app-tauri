@@ -372,14 +372,8 @@ export function Settings(props: {
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Version</span>
-              <span className="font-mono">{versionInfo?.version ?? '-'}</span>
+              <span className="font-mono">{versionInfo?.full_version ?? '-'}</span>
             </div>
-            {versionInfo?.git_commit !== null && versionInfo?.git_commit !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Commit</span>
-                <span className="font-mono">{versionInfo.git_commit}</span>
-              </div>
-            )}
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Built</span>
               <span className="font-mono text-xs">{versionInfo?.build_timestamp ?? '-'}</span>
