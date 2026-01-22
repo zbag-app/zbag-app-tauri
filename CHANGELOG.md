@@ -2,16 +2,127 @@
 
 All notable changes to zSTASH will be documented in this file.
 
-## [0.1.3] - 2026-01-20
+## [0.1.7] - 2026-01-22
 
 ### Bug Fixes
 
-- Use ensure_schema_version in version command
+- Use single source of truth for fiat currency symbols
+
+- Address code review issues in fiat display
+
+- Address remaining PR #75 review items
+
+- Address additional PR review feedback
+
+- Remove tilde prefix from fiat value displays
+
+- Increase vite chunk size warning limit to 2000 kB
+
+- Add bidirectional ZEC/fiat input on Send page
+
+- Replace native fiat currency select with custom styled dropdown
+
+- Use saturating_sub in staleness check and clarify force_refresh docs
+
+## [0.1.6] - 2026-01-22
+
+### Bug Fixes
+
+- Add optional fiat value display with privacy warning (#35)
+
+## [0.1.5] - 2026-01-21
+
+### Bug Fixes
+
+- Add app/affiliate fee (50 bps) to swap quotes and display in UI (#71)
+
+
+### Documentation
+
+- Add Windows build guide and setup script (#99)
 
 
 ### Miscellaneous
 
-- Add versioning support with SemVer and surface version in app/logs
+- Add versioning support with SemVer and surface version in app/logs (#69)
+
+## [0.1.4] - 2026-01-20
+
+### Bug Fixes
+
+- Add serde default for ServerInfo and validate empty passwords (#120)
+
+- Remove example.com dependency from Tor health check (#50)
+
+- Add explicit offline mode handling with timeouts (#65)
+
+- Improve swap UX with formatted amounts, ZEC input, and upfront privacy warning
+
+- **pr-67**: Reduce code duplication and fix error clearing logic
+
+- **pr-67**: Address review feedback
+
+- **pr-67**: Add unit tests for swap utilities
+
+- Make tauri-build deterministic
+
+- **pr-67**: Enforce privacy ack on start
+
+- **pr-67**: Tighten swap error handling
+
+- **pr-67**: Harden swap start and quote timer
+
+- **pr-67**: Address latest Claude review
+
+- **pr-67**: Remove redundant privacy ack check
+
+- **pr-67**: Clarify swap form effects
+
+- **pr-67**: Address Claude review nits
+
+- **pr-67**: Polish swap-from-ZEC form state
+
+- **pr-67**: Normalize atomic amount formatting
+
+- **pr-67**: Quote invalidation + amount validation
+
+- **pr-67**: Swap invalidation cleanup
+
+- **pr-67**: Improve swap input handling
+
+- **pr-67**: Harden amount formatting
+
+- **pr-67**: Clarify raw min output
+
+- **pr-67**: Clarify FromZec invalidation
+
+- **pr-67**: Harden swap UI flows
+
+
+### Miscellaneous
+
+- Reduce tokio features from full to minimal set (#108)
+
+- **pr-67**: Tighten tests and build notes
+
+
+### Other
+
+- Merge pull request #67 from ZstashApp/fix/swap-ux
+
+fix: improve swap UX with formatted amounts, ZEC input, and upfront privacy warning
+
+
+### Performance
+
+- **pr-67**: Cache token lookups
+
+- **pr-67**: Stop quote timer after expiry
+
+
+### Refactoring
+
+- **pr-67**: Structured token amount formatting
 
 ## [0.1.2] - 2026-01-20
 
