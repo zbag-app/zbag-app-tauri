@@ -9,6 +9,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  claude-review:
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            IMPORTANT: Communication style requirements:
+            - Do not use emojis in your responses
+            - Maintain an objective, neutral tone. Avoid flattering language, subjective assessments, or statements like "high-quality PR" or "well-thought-out solutions"
+            - Focus on factual observations, technical issues, and concrete recommendations
+            - Be direct and professional without praise or criticism of the author's approach
+            - Since all code is AI-written, there is no need for flattering language
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+          claude_args: '--model claude-opus-4-5-20251101 --allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+
   telemetry-guard:
     name: Telemetry Guard
     runs-on: self-hosted
@@ -103,7 +143,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: bun test
         working-directory: apps/zstash-app-tauri
-        run: bun test
+        run: bun run test
       - name: bun test:a11y (if present)
         working-directory: apps/zstash-app-tauri
         run: |
@@ -111,4 +151,66 @@ jobs:
             bun run test:a11y
           else
             echo "No test:a11y script; skipping"
+          fi
+
+  playwright-e2e:
+    name: Playwright E2E
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set test home
+        run: echo "ZSTASH_TEST_HOME=${{ runner.temp }}/zstash-e2e" >> $GITHUB_ENV
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+      - name: Install dependencies
+        working-directory: apps/zstash-app-tauri
+        run: bun install --frozen-lockfile
+      - name: Install Playwright browsers
+        working-directory: apps/zstash-app-tauri
+        run: bunx playwright install chromium
+      - name: Build test bridge
+        run: cargo build -p zstash-app-tauri --features test-bridge
+      - name: Start test bridge
+        run: |
+          rm -rf "$ZSTASH_TEST_HOME"
+          mkdir -p "$ZSTASH_TEST_HOME"
+          BRIDGE_LOG="${RUNNER_TEMP}/zstash-test-bridge.log"
+          BRIDGE_PID="${RUNNER_TEMP}/zstash-test-bridge.pid"
+          cargo run -p zstash-app-tauri --features test-bridge > "$BRIDGE_LOG" 2>&1 &
+          echo $! > "$BRIDGE_PID"
+          for i in {1..30}; do
+            if ! kill -0 $(cat "$BRIDGE_PID") 2>/dev/null; then
+              echo "Test bridge process died unexpectedly"
+              cat "$BRIDGE_LOG" || true
+              exit 1
+            fi
+            if curl -sf http://127.0.0.1:19816/health > /dev/null; then
+              echo "Test bridge ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Test bridge failed to start within 30s"
+          cat "$BRIDGE_LOG" || true
+          exit 1
+      - name: Run Playwright tests
+        working-directory: apps/zstash-app-tauri
+        run: bun run test:e2e
+      - name: Upload test bridge log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-bridge-log
+          path: ${{ runner.temp }}/zstash-test-bridge.log
+          retention-days: 7
+      - name: Stop test bridge
+        if: always()
+        run: |
+          if [ -f "${RUNNER_TEMP}/zstash-test-bridge.pid" ]; then
+            kill $(cat "${RUNNER_TEMP}/zstash-test-bridge.pid") || true
           fi
