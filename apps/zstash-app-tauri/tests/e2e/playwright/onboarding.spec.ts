@@ -1,3 +1,20 @@
+/**
+ * Onboarding E2E Tests
+ *
+ * ## Test Bridge Limitations
+ *
+ * When running against the test bridge (not full Tauri):
+ *
+ * 1. **Sync Events**: The test bridge passes `None` for event handlers in `start_sync`.
+ *    Tests cannot receive real-time sync progress events. Use `get_sync_progress` polling
+ *    instead to check sync status.
+ *
+ * 2. **Birthday Height**: Newly created wallets use Sapling activation height as birthday,
+ *    not the current chain tip. This means initial sync may take longer than expected.
+ *
+ * 3. **Auto-sync Disabled**: Wallets do not auto-sync on load. Tests must explicitly call
+ *    `start_sync` and poll `get_sync_progress` to monitor progress.
+ */
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 const TEST_BRIDGE_BASE_URL = 'http://127.0.0.1:19816';
@@ -7,6 +24,18 @@ let createdWalletId: string | null = null;
 
 test.afterEach(async ({ request }) => {
   if (createdWalletId) {
+    try {
+      // Stop any running sync operations first to avoid race conditions
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_stop_sync`, {
+        data: {
+          request: {
+            schema_version: 1,
+          },
+        },
+      });
+    } catch {
+      // Ignore stop_sync errors (sync may not be running)
+    }
     try {
       // Logout the wallet to release resources (no delete command available)
       await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_logout_wallet`, {

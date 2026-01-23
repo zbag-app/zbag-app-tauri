@@ -4,6 +4,8 @@ import * as IPC from '../types/ipc';
 // Test bridge URL for E2E testing (Playwright/Chrome MCP)
 const TEST_BRIDGE_URL = 'http://127.0.0.1:19816';
 const USE_TEST_BRIDGE = import.meta.env.VITE_TEST_BRIDGE === 'true';
+// Timeout for test bridge requests (configurable for slow CI runners)
+const TEST_BRIDGE_TIMEOUT = parseInt(import.meta.env.VITE_TEST_BRIDGE_TIMEOUT || '10000', 10);
 
 /**
  * Invoke a Tauri command, using HTTP transport when VITE_TEST_BRIDGE is enabled.
@@ -15,7 +17,7 @@ const USE_TEST_BRIDGE = import.meta.env.VITE_TEST_BRIDGE === 'true';
 async function invoke<T>(cmd: string, args: { request: unknown }): Promise<T> {
   if (USE_TEST_BRIDGE) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), TEST_BRIDGE_TIMEOUT);
 
     try {
       const res = await fetch(`${TEST_BRIDGE_URL}/invoke/${cmd}`, {

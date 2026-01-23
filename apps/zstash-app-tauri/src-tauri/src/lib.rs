@@ -1,3 +1,8 @@
+// Compile-time guard: prevent test-bridge from being enabled in release builds.
+// This feature exposes HTTP endpoints that return sensitive data (seed phrases).
+#[cfg(all(feature = "test-bridge", not(debug_assertions)))]
+compile_error!("test-bridge feature must not be enabled in release builds");
+
 pub mod commands;
 pub mod events;
 pub mod state;
