@@ -73,7 +73,7 @@ fn run_tauri_app() {
 /// This mode is used for E2E testing with Playwright/Chrome MCP.
 /// The frontend is served by Vite and talks to this HTTP server.
 #[cfg(feature = "test-bridge")]
-fn run_test_bridge_only() {
+pub fn run_test_bridge_only() {
     use std::sync::Arc;
 
     println!("Starting zstash in test-bridge mode...");

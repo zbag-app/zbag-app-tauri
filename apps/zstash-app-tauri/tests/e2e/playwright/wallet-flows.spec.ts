@@ -27,6 +27,24 @@ async function invoke<T>(
   return response.json();
 }
 
+// Track created wallet IDs for cleanup
+let createdWalletId: string | null = null;
+
+test.afterEach(async ({ request }) => {
+  if (createdWalletId) {
+    try {
+      // Logout the wallet to release resources (no delete command available)
+      await invoke(request, 'zstash_logout_wallet', {
+        schema_version: 1,
+        wallet_id: createdWalletId,
+      });
+    } catch {
+      // Ignore cleanup errors
+    }
+    createdWalletId = null;
+  }
+});
+
 test.describe('Integration flows (test bridge)', () => {
   test('create wallet → backup verify → receive address', async ({ request }) => {
     const walletName = `Flow Wallet ${Date.now()}`;
@@ -44,6 +62,9 @@ test.describe('Integration flows (test bridge)', () => {
         remember_unlock: false,
       })
     );
+
+    // Track for cleanup
+    createdWalletId = create.wallet.id;
 
     expect(create.seed_phrase).toHaveLength(24);
 
@@ -104,6 +125,9 @@ test.describe('Integration flows (test bridge)', () => {
       })
     );
 
+    // Track for cleanup
+    createdWalletId = create.wallet.id;
+
     const locked = unwrapOk(
       await invoke<{ locked: boolean }>(request, 'zstash_lock_wallet', {
         schema_version: 1,
@@ -140,5 +164,90 @@ test.describe('Integration flows (test bridge)', () => {
 
     expect(balance.balance).toHaveProperty('total');
     expect(typeof balance.balance.total).toBe('string');
+  });
+});
+
+test.describe('Error handling (test bridge)', () => {
+  test('unlock with wrong password returns error', async ({ request }) => {
+    const walletName = `Error Test Wallet ${Date.now()}`;
+    const password = 'correctpassword123';
+    const wrongPassword = 'wrongpassword456';
+
+    // Create a wallet
+    const create = unwrapOk(
+      await invoke<{
+        wallet: { id: string };
+      }>(request, 'zstash_create_wallet', {
+        schema_version: 1,
+        name: walletName,
+        network: 'Testnet',
+        password,
+        remember_unlock: false,
+      })
+    );
+
+    // Track for cleanup
+    createdWalletId = create.wallet.id;
+
+    // Lock the wallet
+    const locked = unwrapOk(
+      await invoke<{ locked: boolean }>(request, 'zstash_lock_wallet', {
+        schema_version: 1,
+        wallet_id: create.wallet.id,
+      })
+    );
+    expect(locked.locked).toBe(true);
+
+    // Try to unlock with wrong password
+    const result = await invoke<{ unlocked: boolean }>(request, 'zstash_unlock_wallet', {
+      schema_version: 1,
+      wallet_id: create.wallet.id,
+      password: wrongPassword,
+      remember_unlock: false,
+    });
+
+    expect('err' in result).toBe(true);
+    if ('err' in result) {
+      expect(result.err.code).toBeTruthy();
+    }
+  });
+
+  test('get balance for non-existent account returns error', async ({ request }) => {
+    const walletName = `Balance Error Test ${Date.now()}`;
+    const password = 'testpassword123';
+
+    // Create a wallet
+    const create = unwrapOk(
+      await invoke<{
+        wallet: { id: string };
+      }>(request, 'zstash_create_wallet', {
+        schema_version: 1,
+        name: walletName,
+        network: 'Testnet',
+        password,
+        remember_unlock: false,
+      })
+    );
+
+    // Track for cleanup
+    createdWalletId = create.wallet.id;
+
+    // Try to get balance for non-existent account (high index)
+    const result = await invoke<{
+      balance: { total: string };
+    }>(request, 'zstash_get_balance', {
+      schema_version: 1,
+      account_id: 999,
+    });
+
+    expect('err' in result).toBe(true);
+  });
+
+  test('unknown command returns 404', async ({ request }) => {
+    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_nonexistent`, {
+      data: { request: { schema_version: 1 } },
+    });
+
+    expect(response.status()).toBe(404);
   });
 });

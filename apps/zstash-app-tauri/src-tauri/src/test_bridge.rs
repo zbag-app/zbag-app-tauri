@@ -32,7 +32,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::{error, info, warn};
 
 use zstash_core::domain::{FiatDisplaySettings, Network, SwapIntent};
@@ -113,7 +113,10 @@ pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
 
     // CORS layer to allow requests from Vite dev server (localhost:1420)
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::list([
+            "http://localhost:1420".parse().unwrap(),
+            "http://127.0.0.1:1420".parse().unwrap(),
+        ]))
         .allow_methods(Any)
         .allow_headers(Any);
 
@@ -480,8 +483,12 @@ fn create_wallet_impl(
         return IpcResult::Err { err };
     }
 
-    // In test-bridge mode, skip birthday height fetch to avoid nested runtime issues.
-    // Tests can use Sapling activation height (None) which is fine for testing.
+    // WARNING: Test bridge divergence from production behavior
+    // =========================================================
+    // In production, birthday height is fetched from lightwalletd to optimize
+    // initial sync. In test-bridge mode, we skip this to avoid nested runtime
+    // issues, using Sapling activation height instead. This means test-created
+    // wallets will scan from an earlier block height than production wallets.
     let birthday_height: Option<u32> = None;
 
     map_anyhow(|| {

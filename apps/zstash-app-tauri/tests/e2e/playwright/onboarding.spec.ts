@@ -1,6 +1,28 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 const TEST_BRIDGE_BASE_URL = 'http://127.0.0.1:19816';
+
+// Track created wallet IDs for cleanup
+let createdWalletId: string | null = null;
+
+test.afterEach(async ({ request }) => {
+  if (createdWalletId) {
+    try {
+      // Logout the wallet to release resources (no delete command available)
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_logout_wallet`, {
+        data: {
+          request: {
+            schema_version: 1,
+            wallet_id: createdWalletId,
+          },
+        },
+      });
+    } catch {
+      // Ignore cleanup errors
+    }
+    createdWalletId = null;
+  }
+});
 
 async function gotoCreateWallet(page: Page) {
   await page.goto('/#/create');
@@ -102,5 +124,8 @@ test.describe('Test Bridge API', () => {
     expect(body.ok.wallet.name).toBe(walletName);
     expect(body.ok.wallet.network).toBe('Testnet');
     expect(body.ok.seed_phrase).toHaveLength(24);
+
+    // Track for cleanup
+    createdWalletId = body.ok.wallet.id;
   });
 });
