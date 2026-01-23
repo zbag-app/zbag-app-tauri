@@ -20,7 +20,6 @@ concurrency:
 jobs:
   telemetry-guard:
     name: Telemetry Guard
-    needs: claude-review
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +27,6 @@ jobs:
 
   rust-audit:
     name: Rust Audit
-    needs: claude-review
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +40,6 @@ jobs:
 
   rust-clippy:
     name: Rust Clippy
-    needs: claude-review
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
@@ -56,7 +53,6 @@ jobs:
 
   rust-tests:
     name: Rust Tests
-    needs: claude-review
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
@@ -70,7 +66,6 @@ jobs:
 
   rust-migrations:
     name: Rust Migration Tests
-    needs: claude-review
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
@@ -97,7 +92,6 @@ jobs:
 
   bun-tests:
     name: Bun Tests
-    needs: claude-review
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +115,6 @@ jobs:
 
   playwright-e2e:
     name: Playwright E2E
-    needs: claude-review
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4

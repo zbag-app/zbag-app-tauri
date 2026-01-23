@@ -14,16 +14,24 @@ const USE_TEST_BRIDGE = import.meta.env.VITE_TEST_BRIDGE === 'true';
  */
 async function invoke<T>(cmd: string, args: { request: unknown }): Promise<T> {
   if (USE_TEST_BRIDGE) {
-    const res = await fetch(`${TEST_BRIDGE_URL}/invoke/${cmd}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(args),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Test bridge error: ${res.status} ${text}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const res = await fetch(`${TEST_BRIDGE_URL}/invoke/${cmd}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(args),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Test bridge error: ${res.status} ${text}`);
+      }
+      return res.json() as Promise<T>;
+    } finally {
+      clearTimeout(timeout);
     }
-    return res.json();
   }
   return tauriInvoke<T>(cmd, args);
 }
