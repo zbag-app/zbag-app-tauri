@@ -22,7 +22,13 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 APP_DIR="$PROJECT_ROOT/apps/zstash-app-tauri"
 
 # Use isolated test home directory to avoid polluting real data directory
-export ZSTASH_TEST_HOME="${ZSTASH_TEST_HOME:-$(mktemp -d /tmp/zstash-e2e.XXXXXX)}"
+# Track whether we created the directory (to avoid deleting user-provided directories)
+if [ -z "$ZSTASH_TEST_HOME" ]; then
+    export ZSTASH_TEST_HOME="$(mktemp -d /tmp/zstash-e2e.XXXXXX)"
+    TEST_HOME_CREATED="1"
+else
+    TEST_HOME_CREATED=""
+fi
 echo "Using test home: $ZSTASH_TEST_HOME"
 
 TEST_BRIDGE_PORT=19816
@@ -53,8 +59,8 @@ cleanup() {
         kill "$TEST_BRIDGE_PID" 2>/dev/null || true
         wait "$TEST_BRIDGE_PID" 2>/dev/null || true
     fi
-    # Clean up test home directory
-    if [ -n "$ZSTASH_TEST_HOME" ] && [ -d "$ZSTASH_TEST_HOME" ]; then
+    # Clean up test home directory (only if we created it)
+    if [ -n "$TEST_HOME_CREATED" ] && [ -n "$ZSTASH_TEST_HOME" ] && [ -d "$ZSTASH_TEST_HOME" ]; then
         log_info "Cleaning up test home: $ZSTASH_TEST_HOME"
         rm -rf "$ZSTASH_TEST_HOME"
     fi
