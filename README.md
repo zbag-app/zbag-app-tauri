@@ -87,6 +87,30 @@ Run `make help` for all available targets.
 
 See [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) for full setup instructions.
 
+## E2E Testing (Test Bridge)
+
+The test bridge exposes Tauri IPC commands over HTTP for Playwright. It is **feature-gated**
+and bound to localhost only; do not enable it in release builds.
+
+Quickstart:
+
+```bash
+# Terminal 1: start the Rust test bridge with an isolated data directory
+export ZSTASH_TEST_HOME="$(mktemp -d)"
+cargo run -p zstash-app-tauri --features test-bridge
+
+# Terminal 2: start the Vite dev server with the test bridge transport
+cd apps/zstash-app-tauri
+VITE_TEST_BRIDGE=true bun run dev
+
+# Terminal 3: install Playwright (first time) and run E2E tests
+cd apps/zstash-app-tauri
+bunx playwright install chromium
+bun run test:e2e
+```
+
+To reset test data between runs, remove the directory in `ZSTASH_TEST_HOME`.
+
 ## Requirements
 
 - Platform-specific dependencies (see [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md))

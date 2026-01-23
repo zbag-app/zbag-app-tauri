@@ -58,16 +58,30 @@ impl AppState {
 }
 
 fn default_app_db_path() -> anyhow::Result<PathBuf> {
-    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
-    Ok(PathBuf::from(home).join(".zstash").join("app.db"))
+    let root = zstash_data_root()?;
+    Ok(root.join("app.db"))
 }
 
 fn default_wallets_root() -> anyhow::Result<PathBuf> {
-    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
-    Ok(PathBuf::from(home).join(".zstash").join("wallets"))
+    let root = zstash_data_root()?;
+    Ok(root.join("wallets"))
 }
 
 fn default_tor_dir() -> anyhow::Result<PathBuf> {
+    let root = zstash_data_root()?;
+    Ok(root.join("tor"))
+}
+
+fn zstash_data_root() -> anyhow::Result<PathBuf> {
+    #[cfg(feature = "test-bridge")]
+    {
+        if let Ok(root) = std::env::var("ZSTASH_TEST_HOME") {
+            if !root.trim().is_empty() {
+                return Ok(PathBuf::from(root));
+            }
+        }
+    }
+
     let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
-    Ok(PathBuf::from(home).join(".zstash").join("tor"))
+    Ok(PathBuf::from(home).join(".zstash"))
 }
