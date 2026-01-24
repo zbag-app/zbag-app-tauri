@@ -6,15 +6,7 @@ name: CI
 
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'specs/**'
   push:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'specs/**'
 
 concurrency:
   group: ci-${{ github.ref }}
