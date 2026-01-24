@@ -85,11 +85,8 @@ The CI uses `self-hosted` runners, so specify an image:
 # Run the bun-tests job (fastest for frontend changes)
 act -j bun-tests -P self-hosted=catthehacker/ubuntu:act-22.04
 
-# Run rust-fast job (tests + clippy + audit - no external deps)
+# Run rust-fast job (tests + clippy + audit)
 act -j rust-fast -P self-hosted=catthehacker/ubuntu:rust-22.04
-
-# Run rust-server job (E2E tests - requires zec.pro)
-act -j rust-server -P self-hosted=catthehacker/ubuntu:rust-22.04 --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
 
 # Run rust-build job (release build)
 act -j rust-build -P self-hosted=catthehacker/ubuntu:rust-22.04
