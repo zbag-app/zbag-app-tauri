@@ -66,4 +66,44 @@ make test         # Run tests
 make tauri-build  # Full build verification
 ```
 
+## Testing CI Locally
+
+Use [act](https://github.com/nektos/act) to run GitHub Actions workflows locally before pushing.
+
+### Installation
+
+```bash
+brew install act    # macOS
+# See https://github.com/nektos/act#installation for other platforms
+```
+
+### Running Workflows
+
+The CI uses `self-hosted` runners, so specify an image:
+
+```bash
+# Run the bun-tests job (fastest for frontend changes)
+act -j bun-tests -P self-hosted=-self-hosted
+
+# Run the rust job (full Rust CI: audit, clippy, tests, e2e)
+act -j rust -P self-hosted=-self-hosted
+
+# Run with environment variables
+act -j rust -P self-hosted=-self-hosted --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
+
+# Dry run (validate workflow syntax without executing)
+act -n
+```
+
+### Requirements
+
+- Docker must be running
+- First run downloads container images (~2GB)
+
+### Limitations
+
+- Some GitHub-specific features (caching, artifacts) may not work identically
+- E2E tests require Playwright browsers installed in the container
+- For quick syntax validation, use `actionlint` instead: `brew install actionlint && actionlint`
+
 See [AGENTS.md](./AGENTS.md) for detailed guidelines.
