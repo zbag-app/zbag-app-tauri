@@ -24,33 +24,28 @@ let createdWalletId: string | null = null;
 
 test.afterEach(async ({ request }) => {
   if (createdWalletId) {
-    try {
-      // Stop any running sync operations first to avoid race conditions
-      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_stop_sync`, {
-        data: {
-          request: {
-            schema_version: 1,
-            wallet_id: createdWalletId,
-          },
-        },
-      });
-    } catch {
-      // Ignore stop_sync errors (sync may not be running)
-    }
-    try {
-      // Logout the wallet to release resources (no delete command available)
-      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_logout_wallet`, {
-        data: {
-          request: {
-            schema_version: 1,
-            wallet_id: createdWalletId,
-          },
-        },
-      });
-    } catch {
-      // Ignore cleanup errors
-    }
+    const walletIdToCleanup = createdWalletId;
     createdWalletId = null;
+
+    try {
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_stop_sync`, {
+        data: { request: { schema_version: 1, wallet_id: walletIdToCleanup } },
+      });
+    } catch (e) {
+      // Only warn on unexpected errors (sync not running is expected)
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.includes('SYNC_NOT_RUNNING')) {
+        console.warn(`[cleanup] stop_sync failed for ${walletIdToCleanup}: ${msg}`);
+      }
+    }
+
+    try {
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_logout_wallet`, {
+        data: { request: { schema_version: 1, wallet_id: walletIdToCleanup } },
+      });
+    } catch (e) {
+      console.warn(`[cleanup] logout_wallet failed for ${walletIdToCleanup}: ${e instanceof Error ? e.message : e}`);
+    }
   }
 });
 

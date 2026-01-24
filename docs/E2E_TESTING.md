@@ -8,6 +8,14 @@ The test bridge is a feature-gated HTTP server that exposes Tauri IPC commands o
 
 **Security note:** The test bridge is localhost-only (`127.0.0.1:19816`) and should **never** be enabled in release builds.
 
+## Security Considerations
+
+> **WARNING:** The test bridge is for development and CI testing only.
+> - **Never use production wallets or real seed phrases**
+> - Test data is ephemeral (stored in `ZSTASH_TEST_HOME`)
+> - All wallet operations including `view_seed_phrase` are exposed over HTTP
+> - Always use dedicated test/regtest seed phrases
+
 ## Architecture
 
 ```
@@ -75,7 +83,7 @@ bun run test:e2e
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets |
+| `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Empty string or whitespace-only values fall back to `~/.zstash`. |
 | `VITE_TEST_BRIDGE` | `false` | Enables HTTP transport in frontend |
 | `VITE_TEST_BRIDGE_TIMEOUT` | `10000` | Request timeout in ms (useful for slow CI runners) |
 

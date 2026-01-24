@@ -64,7 +64,7 @@ test-migrations: ## Run migration tests
 # E2E Testing
 # ============================================================================
 
-test-e2e: ## Run Playwright E2E tests (starts test bridge automatically)
+test-e2e: install ## Run Playwright E2E tests (starts test bridge automatically)
 	@./scripts/e2e-test.sh
 
 test-bridge-build: ## Build the test bridge server

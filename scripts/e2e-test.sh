@@ -95,13 +95,42 @@ wait_for_test_bridge() {
     return 1
 }
 
+# Validate health response is from our test bridge
+validate_test_bridge() {
+    local response
+    response=$(curl -s "http://127.0.0.1:$TEST_BRIDGE_PORT/health" 2>/dev/null) || return 1
+
+    # Check for expected fields in response
+    if echo "$response" | grep -q '"status":"ok"' && echo "$response" | grep -q '"version"'; then
+        return 0
+    fi
+    return 1
+}
+
+# Kill any process holding our port
+kill_port_holder() {
+    local pids
+    pids=$(lsof -ti :$TEST_BRIDGE_PORT 2>/dev/null) || true
+    if [ -n "$pids" ]; then
+        log_warn "Killing stale process(es) on port $TEST_BRIDGE_PORT: $pids"
+        echo "$pids" | xargs kill 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 main() {
     cd "$PROJECT_ROOT"
 
-    # Check if test bridge is already running
-    if curl -s "http://127.0.0.1:$TEST_BRIDGE_PORT/health" > /dev/null 2>&1; then
+    # Check if a valid test bridge is already running
+    if validate_test_bridge; then
         log_info "Test bridge already running on port $TEST_BRIDGE_PORT"
     else
+        # Check if port is occupied by something else
+        if curl -s "http://127.0.0.1:$TEST_BRIDGE_PORT" > /dev/null 2>&1; then
+            log_warn "Port $TEST_BRIDGE_PORT occupied by unknown process"
+            kill_port_holder
+        fi
+
         # Build the test bridge
         log_info "Building test bridge..."
         cargo build -p zstash-app-tauri --features test-bridge

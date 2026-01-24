@@ -93,6 +93,8 @@ See [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) for full setup i
 The test bridge exposes Tauri IPC commands over HTTP for Playwright. It is **feature-gated**
 and bound to localhost only; do not enable it in release builds.
 
+> **WARNING:** Never use production wallets or real seed phrases with the test bridge. Test data is ephemeral and all wallet operations are exposed over HTTP. Always use dedicated test seed phrases.
+
 Quickstart:
 
 ```bash

@@ -49,25 +49,30 @@ let createdWalletId: string | null = null;
 
 test.afterEach(async ({ request }) => {
   if (createdWalletId) {
+    const walletIdToCleanup = createdWalletId;
+    createdWalletId = null;
+
     try {
-      // Stop any running sync operations first to avoid race conditions
       await invoke(request, 'zstash_stop_sync', {
         schema_version: 1,
-        wallet_id: createdWalletId,
+        wallet_id: walletIdToCleanup,
       });
-    } catch {
-      // Ignore stop_sync errors (sync may not be running)
+    } catch (e) {
+      // Only warn on unexpected errors (sync not running is expected)
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.includes('SYNC_NOT_RUNNING')) {
+        console.warn(`[cleanup] stop_sync failed for ${walletIdToCleanup}: ${msg}`);
+      }
     }
+
     try {
-      // Logout the wallet to release resources (no delete command available)
       await invoke(request, 'zstash_logout_wallet', {
         schema_version: 1,
-        wallet_id: createdWalletId,
+        wallet_id: walletIdToCleanup,
       });
-    } catch {
-      // Ignore cleanup errors
+    } catch (e) {
+      console.warn(`[cleanup] logout_wallet failed for ${walletIdToCleanup}: ${e instanceof Error ? e.message : e}`);
     }
-    createdWalletId = null;
   }
 });
 
