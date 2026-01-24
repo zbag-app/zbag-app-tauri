@@ -85,11 +85,14 @@ The CI uses `self-hosted` runners, so specify an image:
 # Run the bun-tests job (fastest for frontend changes)
 act -j bun-tests -P self-hosted=catthehacker/ubuntu:act-22.04
 
-# Run the rust job (full Rust CI: audit, clippy, tests, e2e)
-act -j rust -P self-hosted=catthehacker/ubuntu:rust-22.04
+# Run rust-fast job (tests + clippy + audit - no external deps)
+act -j rust-fast -P self-hosted=catthehacker/ubuntu:rust-22.04
 
-# Run with environment variables
-act -j rust -P self-hosted=catthehacker/ubuntu:rust-22.04 --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
+# Run rust-server job (E2E tests - requires zec.pro)
+act -j rust-server -P self-hosted=catthehacker/ubuntu:rust-22.04 --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
+
+# Run rust-build job (release build)
+act -j rust-build -P self-hosted=catthehacker/ubuntu:rust-22.04
 
 # Dry run (validate workflow syntax without executing)
 act -n
@@ -107,6 +110,7 @@ act -n
 
 ### Limitations
 
+- **Memory**: Rust compilation requires significant memory (~8GB+). If `act` exits with code 137 (OOM killed), increase Docker memory limits or reduce parallelism with `--env CARGO_BUILD_JOBS=4`
 - Some GitHub-specific features (caching, artifacts) may not work identically
 - E2E tests require Playwright browsers installed in the container
 - For quick syntax validation, use `actionlint` instead: `brew install actionlint && actionlint`

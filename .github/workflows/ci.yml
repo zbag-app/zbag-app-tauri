@@ -1,7 +1,7 @@
-# CI optimized for current self-hosted runner setup:
+# CI optimized for self-hosted runner setup:
 # - 4 runners on single machine (8c/16t, 32GB RAM, NVMe)
-# - All Rust work runs sequentially to avoid resource contention
-# - TODO: Split into parallel jobs when more hardware available
+# - 3 parallel Rust jobs: rust-fast, rust-server, rust-build
+# - bun-tests runs independently
 name: CI
 
 on:
@@ -21,17 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rust:
-    name: Rust (audit + clippy + tests + e2e)
+  # Job 1: Fast checks - no external dependencies
+  rust-fast:
+    name: Rust Fast (tests + clippy + audit)
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      # Single endpoint; can use matrix strategy for multi-endpoint testing if needed
-      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
     steps:
       - uses: actions/checkout@v4
 
-      # Telemetry guard - no Rust needed
+      - name: Install ripgrep (for act compatibility)
+        run: command -v rg >/dev/null 2>&1 || (apt-get update && apt-get install -y ripgrep)
+
       - name: Telemetry guard
         run: ./scripts/check-no-telemetry.sh
 
@@ -44,10 +45,6 @@ jobs:
         with:
           cache-on-failure: true
           cache-bin: false
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.5
 
       - uses: taiki-e/install-action@v2
         with:
@@ -65,7 +62,30 @@ jobs:
       - name: cargo test (migrations)
         run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
-      # E2E tests
+  # Job 2: Server-dependent tests (E2E with zec.pro)
+  rust-server:
+    name: Rust Server (E2E)
+    runs-on: self-hosted
+    env:
+      CARGO_BUILD_JOBS: "16"
+      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          cache: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-bin: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+
       - name: Set test home
         run: echo "ZSTASH_TEST_HOME=${{ runner.temp }}/zstash-e2e" >> $GITHUB_ENV
 
@@ -123,25 +143,29 @@ jobs:
             kill $(cat "${RUNNER_TEMP}/zstash-test-bridge.pid") || true
           fi
 
+  # Job 3: Tauri build (runs on all PRs and main/dev pushes)
   rust-build:
     name: Rust Build (release)
     runs-on: self-hosted
-    needs: [rust]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       CARGO_BUILD_JOBS: "16"
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
           cache: false
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
           cache-bin: false
-      - run: cargo build --workspace --release --locked --exclude zstash-app-tauri
 
+      - name: cargo build (release)
+        run: cargo build --workspace --release --locked --exclude zstash-app-tauri
+
+  # Job 4: Bun tests (independent)
   bun-tests:
     name: Bun Tests
     runs-on: self-hosted
