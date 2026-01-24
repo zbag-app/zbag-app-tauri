@@ -78,7 +78,7 @@ jobs:
 
   rust-build:
     name: Rust Build (release)
-    needs: [rust-audit, rust-tests, rust-clippy, rust-migrations]
+    needs: [telemetry-guard, rust-audit, rust-tests, rust-clippy, rust-migrations]
     runs-on: self-hosted
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
