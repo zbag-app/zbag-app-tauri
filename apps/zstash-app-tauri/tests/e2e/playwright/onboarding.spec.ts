@@ -30,6 +30,7 @@ test.afterEach(async ({ request }) => {
         data: {
           request: {
             schema_version: 1,
+            wallet_id: createdWalletId,
           },
         },
       });

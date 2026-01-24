@@ -53,6 +53,7 @@ test.afterEach(async ({ request }) => {
       // Stop any running sync operations first to avoid race conditions
       await invoke(request, 'zstash_stop_sync', {
         schema_version: 1,
+        wallet_id: createdWalletId,
       });
     } catch {
       // Ignore stop_sync errors (sync may not be running)
