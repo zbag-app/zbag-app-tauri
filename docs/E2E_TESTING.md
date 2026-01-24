@@ -77,6 +77,7 @@ bun run test:e2e
 |----------|---------|-------------|
 | `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets |
 | `VITE_TEST_BRIDGE` | `false` | Enables HTTP transport in frontend |
+| `VITE_TEST_BRIDGE_TIMEOUT` | `10000` | Request timeout in ms (useful for slow CI runners) |
 
 ### Test Isolation with ZSTASH_TEST_HOME
 

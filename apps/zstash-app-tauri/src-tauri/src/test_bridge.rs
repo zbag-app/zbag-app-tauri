@@ -1780,7 +1780,7 @@ fn to_ipc_error(err: anyhow::Error) -> zstash_core::ipc::v1::common::IpcError {
 
     zstash_core::ipc::v1::common::IpcError {
         code: errors::INTERNAL_ERROR.to_string(),
-        message: "internal error".to_string(),
+        message: format!("{:#}", err),
         details: None,
     }
 }
