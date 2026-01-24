@@ -5,7 +5,11 @@ import * as IPC from '../types/ipc';
 const TEST_BRIDGE_URL = 'http://127.0.0.1:19816';
 const USE_TEST_BRIDGE = import.meta.env.VITE_TEST_BRIDGE === 'true';
 // Timeout for test bridge requests (configurable for slow CI runners)
-const TEST_BRIDGE_TIMEOUT = parseInt(import.meta.env.VITE_TEST_BRIDGE_TIMEOUT || '10000', 10);
+const DEFAULT_TEST_BRIDGE_TIMEOUT = 10000;
+const TEST_BRIDGE_TIMEOUT = (() => {
+  const parsed = parseInt(import.meta.env.VITE_TEST_BRIDGE_TIMEOUT ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TEST_BRIDGE_TIMEOUT;
+})();
 
 /**
  * Invoke a Tauri command, using HTTP transport when VITE_TEST_BRIDGE is enabled.
