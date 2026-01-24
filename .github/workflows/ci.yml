@@ -19,10 +19,13 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: /tmp/rust-${{ github.job }}/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.job }}/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}-fast/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.run_id }}-fast/.cargo
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clean stale rust dirs
+        run: rm -rf /tmp/rust-${{ github.run_id }}-fast
 
       - name: Install ripgrep (for act compatibility)
         run: command -v rg >/dev/null 2>&1 || (apt-get update && apt-get install -y ripgrep)
@@ -62,10 +65,13 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: /tmp/rust-${{ github.job }}/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.job }}/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}-build/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.run_id }}-build/.cargo
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clean stale rust dirs
+        run: rm -rf /tmp/rust-${{ github.run_id }}-build
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
