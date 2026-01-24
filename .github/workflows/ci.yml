@@ -92,6 +92,7 @@ jobs:
 
   bun-tests:
     name: Bun Tests
+    needs: [telemetry-guard]
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
