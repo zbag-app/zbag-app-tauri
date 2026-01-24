@@ -48,8 +48,7 @@ pub fn set_fiat_settings_impl(
             return Err(zstash_engine::error::ipc_err(
                 errors::EXCHANGE_RATE_PRIVACY_ACK_REQUIRED,
                 "Privacy acknowledgement required to enable fiat display",
-            )
-            .into());
+            ));
         }
 
         let settings = FiatDisplaySettings {
@@ -115,16 +114,16 @@ pub async fn get_exchange_rate_impl(
     if let Some(rate) = state
         .exchange_rate_service
         .get_cached_rate(settings.currency)
+        && !rate.is_stale()
+        && !request.force_refresh
     {
-        if !rate.is_stale() && !request.force_refresh {
-            return IpcResult::ok(GetExchangeRateResponse {
-                schema_version: SCHEMA_VERSION,
-                rate: Some(rate),
-                is_stale: false,
-                fiat_enabled: true,
-                refresh_cooldown_secs: cooldown,
-            });
-        }
+        return IpcResult::ok(GetExchangeRateResponse {
+            schema_version: SCHEMA_VERSION,
+            rate: Some(rate),
+            is_stale: false,
+            fiat_enabled: true,
+            refresh_cooldown_secs: cooldown,
+        });
     }
 
     match state

@@ -210,7 +210,7 @@ async fn invoke_command(
         "zstash_get_wallet_status" => dispatch::<GetWalletStatusRequest, GetWalletStatusResponse>(
             &state,
             body.request,
-            |s, req| get_wallet_status_impl(s, req),
+            get_wallet_status_impl,
         ),
         "zstash_unlock_wallet" => {
             dispatch::<UnlockWalletRequest, UnlockWalletResponse>(&state, body.request, |s, req| {
@@ -230,7 +230,7 @@ async fn invoke_command(
         "zstash_view_seed_phrase" => dispatch::<ViewSeedPhraseRequest, ViewSeedPhraseResponse>(
             &state,
             body.request,
-            |s, req| view_seed_phrase_impl(s, req),
+            view_seed_phrase_impl,
         ),
         "zstash_logout_wallet" => {
             dispatch::<LogoutWalletRequest, LogoutWalletResponse>(&state, body.request, |s, req| {
@@ -265,7 +265,7 @@ async fn invoke_command(
         "zstash_restore_wallet" => dispatch::<RestoreWalletRequest, RestoreWalletResponse>(
             &state,
             body.request,
-            |s, req| restore_wallet_impl(s, req),
+            restore_wallet_impl,
         ),
         // Transactions commands
         "zstash_prepare_send" => {
@@ -286,13 +286,13 @@ async fn invoke_command(
         "zstash_retry_broadcast" => dispatch::<RetryBroadcastRequest, RetryBroadcastResponse>(
             &state,
             body.request,
-            |s, req| retry_broadcast_impl(s, req),
+            retry_broadcast_impl,
         ),
         "zstash_list_transactions" => {
             dispatch::<ListTransactionsRequest, ListTransactionsResponse>(
                 &state,
                 body.request,
-                |s, req| list_transactions_impl(s, req),
+                list_transactions_impl,
             )
         }
         "zstash_shield_funds" => {
@@ -315,7 +315,7 @@ async fn invoke_command(
         "zstash_finalize_signing" => dispatch::<FinalizeSigningRequest, FinalizeSigningResponse>(
             &state,
             body.request,
-            |s, req| finalize_signing_impl(s, req),
+            finalize_signing_impl,
         ),
         "zstash_create_keystone_wallet" => dispatch::<
             CreateKeystoneWalletRequest,
@@ -328,7 +328,7 @@ async fn invoke_command(
             dispatch::<RequestSwapQuoteRequest, RequestSwapQuoteResponse>(
                 &state,
                 body.request,
-                |s, req| request_swap_quote_impl(s, req),
+                request_swap_quote_impl,
             )
         }
         "zstash_start_swap" => {
@@ -339,7 +339,7 @@ async fn invoke_command(
         "zstash_get_swap_status" => dispatch::<GetSwapStatusRequest, GetSwapStatusResponse>(
             &state,
             body.request,
-            |s, req| get_swap_status_impl(s, req),
+            get_swap_status_impl,
         ),
         "zstash_list_swaps" => {
             dispatch::<ListSwapsRequest, ListSwapsResponse>(&state, body.request, |s, req| {
@@ -350,7 +350,7 @@ async fn invoke_command(
         "zstash_set_tor_enabled" => dispatch::<SetTorEnabledRequest, SetTorEnabledResponse>(
             &state,
             body.request,
-            |s, req| set_tor_enabled_impl(s, req),
+            set_tor_enabled_impl,
         ),
         "zstash_get_tor_state" => {
             dispatch::<GetTorStateRequest, GetTorStateResponse>(&state, body.request, |s, req| {
@@ -367,7 +367,7 @@ async fn invoke_command(
             dispatch::<SetDefaultServerRequest, SetDefaultServerResponse>(
                 &state,
                 body.request,
-                |s, req| set_default_server_impl(s, req),
+                set_default_server_impl,
             )
         }
         "zstash_test_server" => {
@@ -384,7 +384,7 @@ async fn invoke_command(
         "zstash_get_log_location" => dispatch::<GetLogLocationRequest, GetLogLocationResponse>(
             &state,
             body.request,
-            |s, req| get_log_location_impl(s, req),
+            get_log_location_impl,
         ),
         // Version
         "zstash_get_version" => {
@@ -396,12 +396,12 @@ async fn invoke_command(
         "zstash_get_fiat_settings" => dispatch::<GetFiatSettingsRequest, GetFiatSettingsResponse>(
             &state,
             body.request,
-            |s, req| get_fiat_settings_impl(s, req),
+            get_fiat_settings_impl,
         ),
         "zstash_set_fiat_settings" => dispatch::<SetFiatSettingsRequest, SetFiatSettingsResponse>(
             &state,
             body.request,
-            |s, req| set_fiat_settings_impl(s, req),
+            set_fiat_settings_impl,
         ),
         // NOTE: get_exchange_rate_impl is async (fetches rates from external API),
         // so it cannot use the synchronous `dispatch` helper.
@@ -435,7 +435,7 @@ async fn invoke_command(
         "zstash_get_sync_progress" => dispatch::<GetSyncProgressRequest, GetSyncProgressResponse>(
             &state,
             body.request,
-            |s, req| get_sync_progress_impl(s, req),
+            get_sync_progress_impl,
         ),
         _ => {
             warn!(command = %command, "Test bridge: unknown command");

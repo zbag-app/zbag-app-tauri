@@ -16,7 +16,6 @@ pub fn run() {
     #[cfg(feature = "test-bridge")]
     {
         run_test_bridge_only();
-        return;
     }
 
     #[cfg(not(feature = "test-bridge"))]
