@@ -40,6 +40,11 @@ jobs:
           components: clippy, rustfmt
           cache: false
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-bin: false
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.5
@@ -131,6 +136,10 @@ jobs:
         with:
           components: clippy, rustfmt
           cache: false
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-bin: false
       - run: cargo build --workspace --release --locked --exclude zstash-app-tauri
 
   bun-tests:

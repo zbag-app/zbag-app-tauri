@@ -83,17 +83,22 @@ The CI uses `self-hosted` runners, so specify an image:
 
 ```bash
 # Run the bun-tests job (fastest for frontend changes)
-act -j bun-tests -P self-hosted=-self-hosted
+act -j bun-tests -P self-hosted=catthehacker/ubuntu:act-22.04
 
 # Run the rust job (full Rust CI: audit, clippy, tests, e2e)
-act -j rust -P self-hosted=-self-hosted
+act -j rust -P self-hosted=catthehacker/ubuntu:rust-22.04
 
 # Run with environment variables
-act -j rust -P self-hosted=-self-hosted --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
+act -j rust -P self-hosted=catthehacker/ubuntu:rust-22.04 --env ZSTASH_GRPC_URL=https://lwd.testnet.zec.pro
 
 # Dry run (validate workflow syntax without executing)
 act -n
 ```
+
+**Image notes:**
+- `rust-22.04`: Has Rust 1.x, clippy, rustfmt pre-installed (~2GB)
+- `act-22.04`: Base Ubuntu image (~1GB) - Bun 1.3.5 installed via workflow action
+- First run downloads container images; subsequent runs use cached images
 
 ### Requirements
 
