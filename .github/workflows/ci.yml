@@ -1,7 +1,7 @@
 # CI optimized for self-hosted runner setup:
 # - 4 runners on single machine (8c/16t, 32GB RAM, NVMe)
-# - 2 parallel Rust jobs + bun-tests
-# - Per-job RUSTUP_HOME/CARGO_HOME isolation to prevent race conditions
+# - Rust jobs run sequentially to share toolchain and avoid /tmp issues
+# - Bun tests run in parallel with Rust jobs
 name: CI
 
 on:
@@ -19,13 +19,15 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}-fast/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.run_id }}-fast/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clean stale rust dirs
-        run: rm -rf /tmp/rust-${{ github.run_id }}-fast
+      - name: Clean old rust dirs
+        run: |
+          # Remove rust dirs from previous runs (keep only current run_id)
+          find /tmp -maxdepth 1 -name 'rust-*' -type d ! -name 'rust-${{ github.run_id }}' -mmin +60 -exec rm -rf {} \; 2>/dev/null || true
 
       - name: Install ripgrep (for act compatibility)
         run: command -v rg >/dev/null 2>&1 || (apt-get update && apt-get install -y ripgrep)
@@ -59,19 +61,17 @@ jobs:
       - name: cargo test (migrations)
         run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
-  # Job 2: Release build
+  # Job 2: Release build (sequential after rust-fast to share toolchain)
   rust-build:
     name: Rust Build (release)
+    needs: rust-fast
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}-build/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.run_id }}-build/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
       - uses: actions/checkout@v4
-
-      - name: Clean stale rust dirs
-        run: rm -rf /tmp/rust-${{ github.run_id }}-build
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -86,7 +86,11 @@ jobs:
       - name: cargo build (release)
         run: cargo build --workspace --release --locked --exclude zstash-app-tauri
 
-  # Job 3: Bun tests (independent)
+      - name: Cleanup rust dir
+        if: always()
+        run: rm -rf /tmp/rust-${{ github.run_id }}
+
+  # Job 3: Bun tests (independent, runs in parallel with Rust jobs)
   bun-tests:
     name: Bun Tests
     runs-on: self-hosted
@@ -109,4 +113,3 @@ jobs:
           else
             echo "No test:a11y script; skipping"
           fi
-
