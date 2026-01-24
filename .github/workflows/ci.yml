@@ -19,6 +19,7 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
+      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
       RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
       CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
@@ -73,6 +74,7 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
+      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
       RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
       CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
