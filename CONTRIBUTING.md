@@ -85,11 +85,11 @@ The CI uses `self-hosted` runners, so specify an image:
 # Run the bun-tests job (fastest for frontend changes)
 act -j bun-tests -P self-hosted=catthehacker/ubuntu:act-22.04
 
-# Run rust-fast job (tests + clippy + audit)
-act -j rust-fast -P self-hosted=catthehacker/ubuntu:rust-22.04
-
-# Run rust-build job (release build)
-act -j rust-build -P self-hosted=catthehacker/ubuntu:rust-22.04
+# Run individual Rust jobs
+act -j rust-tests -P self-hosted=catthehacker/ubuntu:rust-22.04
+act -j rust-clippy -P self-hosted=catthehacker/ubuntu:rust-22.04
+act -j rust-audit -P self-hosted=catthehacker/ubuntu:rust-22.04
+act -j rust-migrations -P self-hosted=catthehacker/ubuntu:rust-22.04
 
 # Dry run (validate workflow syntax without executing)
 act -n
