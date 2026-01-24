@@ -109,7 +109,6 @@ act -n
 
 - **Memory**: Rust compilation requires significant memory (~8GB+). If `act` exits with code 137 (OOM killed), increase Docker memory limits or reduce parallelism with `--env CARGO_BUILD_JOBS=4`
 - Some GitHub-specific features (caching, artifacts) may not work identically
-- E2E tests require Playwright browsers installed in the container
 - For quick syntax validation, use `actionlint` instead: `brew install actionlint && actionlint`
 
 See [AGENTS.md](./AGENTS.md) for detailed guidelines.

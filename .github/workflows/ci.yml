@@ -1,103 +1,98 @@
-# CI optimized for self-hosted runner setup:
-# - 4 runners on single machine (8c/16t, 32GB RAM, NVMe)
-# - Rust jobs run sequentially to share toolchain and avoid /tmp issues
-# - Bun tests run in parallel with Rust jobs
 name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'specs/**'
   push:
+    branches: [main, dev]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'specs/**'
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Job 1: Fast checks - tests, clippy, audit
-  rust-fast:
-    name: Rust Fast (tests + clippy + audit)
+  telemetry-guard:
+    name: Telemetry Guard
     runs-on: self-hosted
-    env:
-      CARGO_BUILD_JOBS: "16"
-      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
-      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
       - uses: actions/checkout@v4
+      - run: ./scripts/check-no-telemetry.sh
 
-      - name: Clean old rust dirs
-        run: |
-          # Remove ALL rust dirs except current run_id
-          for d in /tmp/rust-*; do
-            [ "$d" = "/tmp/rust-${{ github.run_id }}" ] && continue
-            rm -rf "$d" 2>/dev/null || true
-          done
-          # Show /tmp usage
-          df -h /tmp || true
-
-      - name: Install ripgrep (for act compatibility)
-        run: command -v rg >/dev/null 2>&1 || (apt-get update && apt-get install -y ripgrep)
-
-      - name: Telemetry guard
-        run: ./scripts/check-no-telemetry.sh
-
+  rust-audit:
+    name: Rust Audit
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
           cache: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-bin: false
-
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
+      - run: cargo audit
 
-      - name: cargo audit
-        run: cargo audit
-
-      - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --exclude zstash-app-tauri -- -D warnings
-
-      - name: cargo test (workspace)
-        run: cargo test --workspace --exclude zstash-app-tauri
-
-      - name: cargo test (migrations)
-        run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
-
-  # Job 2: Release build (sequential after rust-fast to share toolchain)
-  rust-build:
-    name: Rust Build (release)
-    needs: rust-fast
+  rust-clippy:
+    name: Rust Clippy
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
-      RUSTUP_HOME: /tmp/rust-${{ github.run_id }}/.rustup
-      CARGO_HOME: /tmp/rust-${{ github.run_id }}/.cargo
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
           cache: false
+      - run: cargo clippy --workspace --all-targets --exclude zstash-app-tauri -- -D warnings
 
-      - uses: Swatinem/rust-cache@v2
+  rust-tests:
+    name: Rust Tests
+    runs-on: self-hosted
+    env:
+      CARGO_BUILD_JOBS: "16"
+      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          cache-on-failure: true
-          cache-bin: false
+          components: clippy, rustfmt
+          cache: false
+      - run: cargo test --workspace --exclude zstash-app-tauri
 
-      - name: cargo build (release)
-        run: cargo build --workspace --release --locked --exclude zstash-app-tauri
+  rust-migrations:
+    name: Rust Migration Tests
+    runs-on: self-hosted
+    env:
+      CARGO_BUILD_JOBS: "16"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          cache: false
+      - run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
-      - name: Cleanup rust dir
-        if: always()
-        run: rm -rf /tmp/rust-${{ github.run_id }}
+  rust-build:
+    name: Rust Build (release)
+    runs-on: self-hosted
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      CARGO_BUILD_JOBS: "16"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          cache: false
+      - run: cargo build --workspace --release --locked --exclude zstash-app-tauri
 
-  # Job 3: Bun tests (independent, runs in parallel with Rust jobs)
   bun-tests:
     name: Bun Tests
     runs-on: self-hosted
