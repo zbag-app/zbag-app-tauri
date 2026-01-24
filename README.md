@@ -60,6 +60,7 @@ Platform targets: macOS, Windows, Linux
 | [Data Model](specs/001-zstash-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
 | [Research](specs/001-zstash-desktop-wallet/research.md) | Technology decisions and rationale |
 | [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) | Developer setup guide |
+| [E2E Testing](docs/E2E_TESTING.md) | Test bridge architecture and Playwright setup |
 
 ## Core Dependencies
 
@@ -110,6 +111,8 @@ bun run test:e2e
 ```
 
 To reset test data between runs, remove the directory in `ZSTASH_TEST_HOME`.
+
+See [docs/E2E_TESTING.md](docs/E2E_TESTING.md) for architecture details, CI workflow, and troubleshooting.
 
 ## Requirements
 

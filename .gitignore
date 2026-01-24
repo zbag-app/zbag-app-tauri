@@ -30,7 +30,8 @@ target/
 !.env.development
 !.env.example
 
-docs
+docs/*
+!docs/*.md
 sessions
 
 keystone-qr
