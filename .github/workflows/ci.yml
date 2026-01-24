@@ -26,8 +26,13 @@ jobs:
 
       - name: Clean old rust dirs
         run: |
-          # Remove rust dirs from previous runs (keep only current run_id)
-          find /tmp -maxdepth 1 -name 'rust-*' -type d ! -name 'rust-${{ github.run_id }}' -mmin +60 -exec rm -rf {} \; 2>/dev/null || true
+          # Remove ALL rust dirs except current run_id
+          for d in /tmp/rust-*; do
+            [ "$d" = "/tmp/rust-${{ github.run_id }}" ] && continue
+            rm -rf "$d" 2>/dev/null || true
+          done
+          # Show /tmp usage
+          df -h /tmp || true
 
       - name: Install ripgrep (for act compatibility)
         run: command -v rg >/dev/null 2>&1 || (apt-get update && apt-get install -y ripgrep)
