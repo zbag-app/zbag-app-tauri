@@ -1,5 +1,6 @@
 //! Wallet-related command handlers.
 
+use tracing::warn;
 use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
@@ -251,6 +252,8 @@ pub fn view_seed_phrase_impl(
     request: ViewSeedPhraseRequest,
 ) -> IpcResult<ViewSeedPhraseResponse> {
     use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+
+    warn!("view_seed_phrase called - sensitive endpoint accessed");
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

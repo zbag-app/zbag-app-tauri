@@ -93,6 +93,8 @@ jobs:
   bun-tests:
     name: Bun Tests
     runs-on: self-hosted
+    needs: [telemetry-guard]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -116,6 +118,7 @@ jobs:
   playwright-e2e:
     name: Playwright E2E
     runs-on: self-hosted
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Set test home

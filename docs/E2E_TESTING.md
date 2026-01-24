@@ -196,6 +196,41 @@ test.describe('Feature Name', () => {
 | `onboarding.spec.ts` | Wallet creation, restore, and keystone setup flows |
 | `wallet-flows.spec.ts` | Wallet lifecycle (load, unlock, lock, logout) |
 
+## Debugging
+
+### Interactive Debugging
+
+Run tests with Playwright's built-in debugger:
+```bash
+bun run test:e2e:debug
+```
+
+This pauses before each action and opens Playwright Inspector.
+
+### UI Mode
+
+For visual test exploration and time-travel debugging:
+```bash
+bun run test:e2e:ui
+```
+
+### Viewing Test Bridge Logs
+
+When running manually, the test bridge outputs logs to stdout. For more verbose output:
+```bash
+RUST_LOG=debug cargo run -p zstash-app-tauri --features test-bridge
+```
+
+In CI, test bridge logs are uploaded as artifacts on failure.
+
+### Environment Variables for Debugging
+
+| Variable | Description |
+|----------|-------------|
+| `PWDEBUG=1` | Enable Playwright debugger |
+| `RUST_LOG=debug` | Verbose test bridge logging |
+| `DEBUG=pw:api` | Playwright API call logging |
+
 ## Troubleshooting
 
 ### Test bridge fails to start

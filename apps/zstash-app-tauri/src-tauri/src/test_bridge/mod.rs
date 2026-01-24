@@ -404,8 +404,7 @@ async fn invoke_command(
             |s, req| set_fiat_settings_impl(s, req),
         ),
         // NOTE: get_exchange_rate_impl is async (fetches rates from external API),
-        // so it cannot use the synchronous `dispatch` helper. We handle deserialization
-        // and response construction inline instead.
+        // so it cannot use the synchronous `dispatch` helper.
         "zstash_get_exchange_rate" => {
             let req: GetExchangeRateRequest = match serde_json::from_value(body.request) {
                 Ok(r) => r,
