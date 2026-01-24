@@ -26,6 +26,7 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
+      # Single endpoint; can use matrix strategy for multi-endpoint testing if needed
       ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
     steps:
       - uses: actions/checkout@v4
@@ -120,6 +121,7 @@ jobs:
   rust-build:
     name: Rust Build (release)
     runs-on: self-hosted
+    needs: [rust]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       CARGO_BUILD_JOBS: "16"
