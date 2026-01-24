@@ -19,8 +19,8 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: ${{ runner.temp }}/.rustup
-      CARGO_HOME: ${{ runner.temp }}/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.job }}/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.job }}/.cargo
     steps:
       - uses: actions/checkout@v4
 
@@ -62,8 +62,8 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      RUSTUP_HOME: ${{ runner.temp }}/.rustup
-      CARGO_HOME: ${{ runner.temp }}/.cargo
+      RUSTUP_HOME: /tmp/rust-${{ github.job }}/.rustup
+      CARGO_HOME: /tmp/rust-${{ github.job }}/.cargo
     steps:
       - uses: actions/checkout@v4
 
