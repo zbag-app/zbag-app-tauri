@@ -15,7 +15,7 @@
  * 3. **Auto-sync Disabled**: Wallets do not auto-sync on load. Tests must explicitly call
  *    `start_sync` and poll `get_sync_progress` to monitor progress.
  */
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 const TEST_BRIDGE_BASE_URL = 'http://127.0.0.1:19816';
 
