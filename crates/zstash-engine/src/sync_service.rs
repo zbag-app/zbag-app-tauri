@@ -947,92 +947,99 @@ impl SyncService {
                     });
 
                     // Get transactions needing memo enhancement
-                    if let Ok(txids_to_enhance) =
-                        get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek)
-                    {
-                        // Use concurrent enhancement with bounded parallelism.
-                        // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
-                        // configured, so moderate concurrency is safe.
-                        const ENHANCEMENT_CONCURRENCY: usize = 4;
-                        let mut join_set = tokio::task::JoinSet::new();
+                    match get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek) {
+                        Ok(txids_to_enhance) => {
+                            // Use concurrent enhancement with bounded parallelism.
+                            // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
+                            // configured, so moderate concurrency is safe.
+                            const ENHANCEMENT_CONCURRENCY: usize = 4;
+                            let mut join_set = tokio::task::JoinSet::new();
 
-                        for txid_bytes in txids_to_enhance {
-                            // Check cancellation before spawning new tasks
-                            if *cancel_rx.borrow() {
-                                break;
-                            }
+                            for txid_bytes in txids_to_enhance {
+                                // Check cancellation before spawning new tasks
+                                if *cancel_rx.borrow() {
+                                    break;
+                                }
 
-                            // Limit concurrency by draining completed tasks
-                            while join_set.len() >= ENHANCEMENT_CONCURRENCY {
-                                if let Some(result) = join_set.join_next().await {
-                                    match result {
-                                        Ok(Ok(())) => {}
-                                        Ok(Err((txid, err))) => {
-                                            tracing::warn!(
-                                                wallet_id = %wallet_id,
-                                                txid = hex::encode(txid),
-                                                error = ?err,
-                                                "failed to enhance transaction memo"
-                                            );
-                                        }
-                                        Err(join_err) => {
-                                            tracing::warn!(
-                                                wallet_id = %wallet_id,
-                                                error = ?join_err,
-                                                "enhancement task panicked"
-                                            );
+                                // Limit concurrency by draining completed tasks
+                                while join_set.len() >= ENHANCEMENT_CONCURRENCY {
+                                    if let Some(result) = join_set.join_next().await {
+                                        match result {
+                                            Ok(Ok(())) => {}
+                                            Ok(Err((txid, err))) => {
+                                                tracing::warn!(
+                                                    wallet_id = %wallet_id,
+                                                    txid = hex::encode(txid),
+                                                    error = ?err,
+                                                    "failed to enhance transaction memo"
+                                                );
+                                            }
+                                            Err(join_err) => {
+                                                tracing::warn!(
+                                                    wallet_id = %wallet_id,
+                                                    error = ?join_err,
+                                                    "enhancement task panicked"
+                                                );
+                                            }
                                         }
                                     }
                                 }
+
+                                // Clone values for the spawned task
+                                let client = client.clone();
+                                let wallet_db_path = wallet_db_path.clone();
+                                let wallet_dek = Arc::clone(&wallet_dek);
+
+                                join_set.spawn(async move {
+                                    match enhance_transaction_memo(
+                                        &client,
+                                        &wallet_db_path,
+                                        &wallet_dek,
+                                        &params,
+                                        txid_bytes,
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => {
+                                            tracing::debug!(
+                                                txid = hex::encode(txid_bytes),
+                                                "enhanced transaction memo"
+                                            );
+                                            Ok(())
+                                        }
+                                        Err(err) => Err((txid_bytes, err)),
+                                    }
+                                });
                             }
 
-                            // Clone values for the spawned task
-                            let client = client.clone();
-                            let wallet_db_path = wallet_db_path.clone();
-                            let wallet_dek = Arc::clone(&wallet_dek);
-
-                            join_set.spawn(async move {
-                                match enhance_transaction_memo(
-                                    &client,
-                                    &wallet_db_path,
-                                    &wallet_dek,
-                                    &params,
-                                    txid_bytes,
-                                )
-                                .await
-                                {
-                                    Ok(()) => {
-                                        tracing::debug!(
-                                            txid = hex::encode(txid_bytes),
-                                            "enhanced transaction memo"
+                            // Drain remaining tasks
+                            while let Some(result) = join_set.join_next().await {
+                                match result {
+                                    Ok(Ok(())) => {}
+                                    Ok(Err((txid, err))) => {
+                                        tracing::warn!(
+                                            wallet_id = %wallet_id,
+                                            txid = hex::encode(txid),
+                                            error = ?err,
+                                            "failed to enhance transaction memo"
                                         );
-                                        Ok(())
                                     }
-                                    Err(err) => Err((txid_bytes, err)),
-                                }
-                            });
-                        }
-
-                        // Drain remaining tasks
-                        while let Some(result) = join_set.join_next().await {
-                            match result {
-                                Ok(Ok(())) => {}
-                                Ok(Err((txid, err))) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        txid = hex::encode(txid),
-                                        error = ?err,
-                                        "failed to enhance transaction memo"
-                                    );
-                                }
-                                Err(join_err) => {
-                                    tracing::warn!(
-                                        wallet_id = %wallet_id,
-                                        error = ?join_err,
-                                        "enhancement task panicked"
-                                    );
+                                    Err(join_err) => {
+                                        tracing::warn!(
+                                            wallet_id = %wallet_id,
+                                            error = ?join_err,
+                                            "enhancement task panicked"
+                                        );
+                                    }
                                 }
                             }
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                wallet_id = %wallet_id,
+                                error = ?err,
+                                "failed to get transactions needing memo enhancement, skipping enhancement phase"
+                            );
                         }
                     }
 
