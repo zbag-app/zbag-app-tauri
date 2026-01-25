@@ -2,20 +2,172 @@
 
 All notable changes to zSTASH will be documented in this file.
 
-## [0.2.0] - 2026-01-25
+## [Unreleased]
+
+### Bug Fixes
+
+- Remove duplicate claude-review job from ci.yml
+
+- Test bridge integration issues
+
+- CI failures for bun tests and playwright timeout
+
+- Address PR #145 review feedback for test bridge
+
+- CI parallelization and CodeRabbit review items for PR #145
+
+- Prevent e2e-test.sh from deleting user-provided test directories
+
+- Address PR #145 review items for test bridge safety
+
+- Add missing wallet_id to stop_sync cleanup calls in E2E tests
+
+- Restore claude-code-review.yml workflow
+
+- Address PR review items for test bridge
+
+- Validate TEST_BRIDGE_TIMEOUT and fix package.json indentation
+
+- Address remaining PR review items for test bridge
+
+- Add logging, CI timeouts, and debugging docs for test bridge
+
+- Apply clippy auto-fixes to test bridge and related code
+
+- Remove unused APIRequestContext import from onboarding.spec.ts
+
+- Share wallet logic in test bridge
+
+- Harden test bridge handlers
+
+- Tighten test-bridge safety checks
+
+- Add async job model for long-running operations
+
+- Address async job review feedback
+
+- Validate proposals before async jobs
+
+- Align send job completion
+
+- Gate test-bridge data root fallback
+
+- Address PR review issues for async job service
+
+- Improve memo display with structured memos and byte validation
+
+- Address PR review feedback for memo display
+
+- Implement memo enhancement for received transactions
+
+
+### CI/CD
+
+- Add claude-review and playwright-e2e jobs (#146)
+
+- Reduce overhead by combining jobs and adding path filters
+
+- Add rust job dependency to rust-build and document matrix option
+
+- Add rust-cache and update act docs for local testing
+
+- Split into 3 parallel Rust jobs for faster CI
+
+- Fix parallel job race condition with isolated RUSTUP_HOME
+
+- Remove paths-ignore to test workflow trigger
+
+- Fix runner context - use github.job for isolation
+
+- Use run_id for unique isolation + cleanup step
+
+- Sequential Rust jobs + cleanup to fix /tmp space issues
+
+- Aggressive cleanup of /tmp/rust-* dirs
+
+- Add ZSTASH_GRPC_URL env var for lightwalletd tests
+
+- Revert to parallel jobs structure with path filters
+
+- Address review feedback
+
+- Keep playwright-e2e job commented out for future use
+
+- Add rust-audit to build deps, remove unused toolchain components
+
+- Add telemetry-guard to rust-build dependencies
+
+- Add telemetry-guard dependency to bun-tests
+
+- Require bun-tests before rust-build on main
+
+
+### Documentation
+
+- Add git worktree guidelines to CLAUDE.md
+
+- Add local CI testing with act and fix missing test script
+
+- Add E2E testing documentation
+
+- Add non-interactive rebase continue
+
+- Add force-with-lease rule to CLAUDE.md
+
 
 ### Features
 
-- Add async job model for long-running send and shield operations
-- Emit job progress and transaction change events for background jobs
-- Support cancellation and broadcast retry queueing for job flows
+- Add HTTP test bridge for E2E testing
+
+- Implement all remaining test bridge commands
+
+- Add E2E tests, CI workflow, and test isolation
+
+- Add zod runtime validation for test bridge IPC responses
+
+- Add concurrency limit to test bridge for runaway test protection
+
+
+### Miscellaneous
+
+- Trigger CI
+
+- Update bun.lock and ignore test-results
+
+- Move claude-review to ci.yml as first job
+
+- Organize job service imports
+
+
+### Refactoring
+
+- Centralize tauri app startup
+
+
+### Testing
+
+- Add shield_funds E2E test for test bridge coverage
+
+- Add sync polling workflow E2E test demonstrating documented pattern
 
 ## [0.1.10] - 2026-01-22
 
 ### Bug Fixes
 
-- Add jitter to retry backoff to prevent thundering herd
-- Reject scientific notation in fiat amount input
+- Add try/catch to IPC calls in useFiatDisplay to prevent stuck loading state
+
+- Add build timestamp and conditional commit display to About section
+
+- Use git describe format for version display
+
+- Handle thrown IPC errors in fetchRate and improve build timestamp test
+
+- Add retry jitter and reject scientific notation in fiat input
+
+
+### Miscellaneous
+
+- Revert jj adoption, return to pure git workflow
 
 ## [0.1.9] - 2026-01-22
 
@@ -27,55 +179,29 @@ All notable changes to zSTASH will be documented in this file.
 
 ### Bug Fixes
 
-- Remove unused FIAT_CURRENCY_DISPLAY_NAMES constant
+- Add no-op v2 migration stub for forward compatibility (#117)
 
-## [0.1.7] - 2026-01-22
+- Remove unused tauri_plugin_shell to reduce attack surface (#44)
 
-### Bug Fixes
+- Clear restore flow data immediately after seed is persisted
 
-- Use single source of truth for fiat currency symbols
+- Extend transaction signing TTL from 5 to 10 minutes (#51)
 
-- Address code review issues in fiat display
+- Clear restore flow data immediately after seed is persisted (#101)
 
-- Address remaining PR #75 review items
+- Consolidate block_on helpers into tokio_runtime module (#57)
 
-- Address additional PR review feedback
+- Use persisted KDF/AEAD parameters for DEK wrap/unwrap (#56)
 
-- Remove tilde prefix from fiat value displays
+- Configure SQLite busy_timeout for concurrent operations (#53)
 
-- Increase vite chunk size warning limit to 2000 kB
+- Validate gRPC URLs and enforce HTTPS by default (#49)
 
-- Add bidirectional ZEC/fiat input on Send page
+- Avoid DEK copy in hex::encode call (#111)
 
-- Replace native fiat currency select with custom styled dropdown
+- Disable keychain biometric auto-unlock due to security concerns (#66)
 
-- Use saturating_sub in staleness check and clarify force_refresh docs
-
-## [0.1.6] - 2026-01-22
-
-### Bug Fixes
-
-- Add optional fiat value display with privacy warning (#35)
-
-## [0.1.5] - 2026-01-21
-
-### Bug Fixes
-
-- Add app/affiliate fee (50 bps) to swap quotes and display in UI (#71)
-
-
-### Documentation
-
-- Add Windows build guide and setup script (#99)
-
-
-### Miscellaneous
-
-- Add versioning support with SemVer and surface version in app/logs (#69)
-
-## [0.1.4] - 2026-01-20
-
-### Bug Fixes
+- Zeroize decrypted mnemonic after view/verify operations (#52)
 
 - Add serde default for ServerInfo and validate empty passwords (#120)
 
@@ -125,19 +251,52 @@ All notable changes to zSTASH will be documented in this file.
 
 - **pr-67**: Harden swap UI flows
 
+- Add app/affiliate fee (50 bps) to swap quotes and display in UI (#71)
+
+- Add optional fiat value display with privacy warning (#35)
+
+- Use single source of truth for fiat currency symbols
+
+- Address code review issues in fiat display
+
+- Address remaining PR #75 review items
+
+- Address additional PR review feedback
+
+- Remove tilde prefix from fiat value displays
+
+- Increase vite chunk size warning limit to 2000 kB
+
+- Add bidirectional ZEC/fiat input on Send page
+
+- Replace native fiat currency select with custom styled dropdown
+
+- Use saturating_sub in staleness check and clarify force_refresh docs
+
+- Remove unused FIAT_CURRENCY_DISPLAY_NAMES constant
+
+
+### Documentation
+
+- Add Windows build guide and setup script (#99)
+
 
 ### Miscellaneous
+
+- Adopt jj (Jujutsu) for version control workflow (#96)
 
 - Reduce tokio features from full to minimal set (#108)
 
 - **pr-67**: Tighten tests and build notes
 
+- Add versioning support with SemVer and surface version in app/logs (#69)
+
 
 ### Other
 
-- Merge pull request #67 from ZstashApp/fix/swap-ux
+- Revert "fix: clear restore flow data immediately after seed is persisted"
 
-fix: improve swap UX with formatted amounts, ZEC input, and upfront privacy warning
+This reverts commit d884e812e775b43acfac82f7d6859746603f0f52.
 
 
 ### Performance
@@ -150,44 +309,6 @@ fix: improve swap UX with formatted amounts, ZEC input, and upfront privacy warn
 ### Refactoring
 
 - **pr-67**: Structured token amount formatting
-
-## [0.1.2] - 2026-01-20
-
-### Bug Fixes
-
-- Remove unused tauri_plugin_shell to reduce attack surface (#44)
-
-- Clear restore flow data immediately after seed is persisted
-
-- Extend transaction signing TTL from 5 to 10 minutes (#51)
-
-- Clear restore flow data immediately after seed is persisted (#101)
-
-- Consolidate block_on helpers into tokio_runtime module (#57)
-
-- Use persisted KDF/AEAD parameters for DEK wrap/unwrap (#56)
-
-- Configure SQLite busy_timeout for concurrent operations (#53)
-
-- Validate gRPC URLs and enforce HTTPS by default (#49)
-
-- Avoid DEK copy in hex::encode call (#111)
-
-- Disable keychain biometric auto-unlock due to security concerns (#66)
-
-- Zeroize decrypted mnemonic after view/verify operations (#52)
-
-
-### Miscellaneous
-
-- Adopt jj (Jujutsu) for version control workflow (#96)
-
-
-### Other
-
-- Revert "fix: clear restore flow data immediately after seed is persisted"
-
-This reverts commit d884e812e775b43acfac82f7d6859746603f0f52.
 
 ## [0.1.1] - 2026-01-18
 
@@ -650,3 +771,5 @@ Add Claude Code GitHub Workflow
 - Enhance IPC contract tests and logging security
 
 - Resolve pre-implement inconsistencies
+
+
