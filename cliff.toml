@@ -31,6 +31,25 @@ conventional_commits = true
 filter_unconventional = false
 split_commits = false
 commit_parsers = [
+    # Skip noise patterns (review iterations, PR-scoped fixes, merges, CI triggers)
+    { message = "(?i)address.*review", skip = true },
+    { message = "(?i)address.*PR", skip = true },
+    { message = "(?i)address.*feedback", skip = true },
+    { message = "^(fix|chore|refactor|perf)\\(pr-\\d+\\)", skip = true },
+    { message = "(?i)^Merge", skip = true },
+    { message = "(?i)trigger ci", skip = true },
+
+    # Skip CI/CD commits entirely
+    { message = "^ci", skip = true },
+
+    # Skip Claude-related commits
+    { message = "(?i)claude", skip = true },
+    { message = "(?i)CLAUDE\\.md", skip = true },
+
+    # Skip internal developer documentation
+    { message = "(?i)local CI testing", skip = true },
+    { message = "(?i)non-interactive rebase", skip = true },
+
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
     { message = "^doc", group = "Documentation" },
@@ -44,7 +63,6 @@ commit_parsers = [
     { message = "^chore:.*update changelog", skip = true },
     { message = "^chore\\(deps\\)", group = "Dependencies" },
     { message = "^chore", group = "Miscellaneous" },
-    { message = "^ci", group = "CI/CD" },
     { message = "^build", group = "Build" },
     { message = "^revert", group = "Reverted" },
     # User story commits (project-specific)
