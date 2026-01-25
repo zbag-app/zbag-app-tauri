@@ -20,6 +20,7 @@ use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::{JobProgressEvent, TransactionChangedEvent};
 
 use crate::encryption::Dek;
+use crate::tx_service::QueuedBroadcastMeta;
 
 /// Event handler for job progress updates.
 pub type JobEventHandler = Arc<dyn Fn(JobProgressEvent) + Send + Sync>;
@@ -53,6 +54,12 @@ struct JobEntry {
 }
 
 /// Context needed to execute a send job.
+///
+/// # Security Note
+/// The `spending_key` field contains sensitive key material. It is consumed by the
+/// background task and dropped after proving completes. Explicit zeroization is not
+/// possible as `UnifiedSpendingKey` is from an external crate without `Zeroize` support.
+/// The key lifetime is minimized by design - it exists only during the proving phase.
 pub struct SendJobContext {
     pub wallet_id: Uuid,
     pub network: Network,
@@ -67,6 +74,12 @@ pub struct SendJobContext {
 }
 
 /// Context needed to execute a shield job.
+///
+/// # Security Note
+/// The `spending_key` field contains sensitive key material. It is consumed by the
+/// background task and dropped after proving completes. Explicit zeroization is not
+/// possible as `UnifiedSpendingKey` is from an external crate without `Zeroize` support.
+/// The key lifetime is minimized by design - it exists only during the proving phase.
 pub struct ShieldJobContext {
     pub wallet_id: Uuid,
     pub network: Network,
@@ -75,6 +88,8 @@ pub struct ShieldJobContext {
     pub wallet_db_path: PathBuf,
     pub grpc_url: String,
     pub account_id: u32,
+    /// Reserved for future use. When true, will consolidate shielded notes
+    /// in addition to shielding transparent funds. Currently not implemented.
     pub consolidate: bool,
     pub spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
     pub tor_manager: Option<Arc<zstash_tor::TorManager>>,
@@ -129,13 +144,14 @@ impl JobService {
         }
 
         if let Some(entry) = state.jobs.remove(job_id) {
-            let _ = entry.cancel_tx.send(true);
-            entry.handle.abort();
-
-            // Update progress to cancelled
+            // Update progress to cancelled BEFORE signaling/aborting to prevent
+            // race where background task could overwrite progress after removal.
             if let Some(progress) = state.progress.get_mut(job_id) {
                 *progress = JobProgress::cancelled(job_id.to_string(), progress.job_type);
             }
+
+            let _ = entry.cancel_tx.send(true);
+            entry.handle.abort();
 
             true
         } else {
@@ -652,10 +668,12 @@ async fn run_shield_job(
     let runtime_handle = match tokio::runtime::Handle::try_current() {
         Ok(handle) => handle,
         Err(_) => {
+            // This should never happen - run_shield_job is always called from async context
+            error!(job_id = %job_id, "internal error: tokio runtime unavailable in async context");
             emit_progress(JobProgress::failed(
                 job_id.clone(),
                 job_type,
-                "tokio runtime unavailable".to_string(),
+                "internal error: tokio runtime unavailable".to_string(),
                 None,
             ));
             return;
@@ -1173,12 +1191,6 @@ fn queue_broadcast_for_retry(
     out.extend_from_slice(&nonce);
     out.extend_from_slice(&ciphertext);
     std::fs::write(&bin_path, out)?;
-
-    #[derive(serde::Serialize)]
-    struct QueuedBroadcastMeta {
-        created_at_ms: i64,
-        last_error: Option<String>,
-    }
 
     let now_ms = chrono::Utc::now().timestamp_millis();
     let meta = QueuedBroadcastMeta {

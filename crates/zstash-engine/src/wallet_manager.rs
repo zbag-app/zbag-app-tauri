@@ -900,6 +900,7 @@ impl WalletManager {
         self.last_emitted_status.remove(&wallet_id);
         self.backup_challenges.remove(&wallet_id);
         self.tx_service.clear_proposals_for_wallet(wallet_id);
+        self.job_service.clear_finished_jobs(wallet_id);
 
         // Deactivate the wallet
         self.active_wallet = None;

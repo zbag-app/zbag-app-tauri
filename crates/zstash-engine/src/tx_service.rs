@@ -77,10 +77,11 @@ struct QueuedBroadcastEntry {
     bin_path: PathBuf,
 }
 
+/// Metadata for a queued broadcast transaction awaiting retry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct QueuedBroadcastMeta {
-    created_at_ms: i64,
-    last_error: Option<String>,
+pub(crate) struct QueuedBroadcastMeta {
+    pub created_at_ms: i64,
+    pub last_error: Option<String>,
 }
 
 impl<C: Clock> TxService<C> {
