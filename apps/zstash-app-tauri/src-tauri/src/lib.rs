@@ -5,6 +5,8 @@ compile_error!("test-bridge feature must not be enabled in release builds");
 
 pub mod commands;
 pub mod events;
+pub mod exchange_logic;
+pub mod server_logic;
 pub mod state;
 #[cfg(feature = "test-bridge")]
 pub mod test_bridge;

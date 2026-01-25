@@ -126,8 +126,10 @@ Content-Type: application/json
 
 ```bash
 curl http://127.0.0.1:19816/health
-# {"status":"ok","version":"1"}
+# {"status":"ok","version":"1","test_bridge":true}
 ```
+
+The `test_bridge` flag confirms you're hitting the HTTP bridge.
 
 ### Example: List Wallets
 
@@ -137,9 +139,22 @@ curl -X POST http://127.0.0.1:19816/invoke/zstash_list_wallets \
   -d '{"request":{"schema_version":1}}'
 ```
 
+### Sensitive Endpoints
+
+`zstash_view_seed_phrase` requires an explicit confirmation header:
+
+```bash
+curl -X POST http://127.0.0.1:19816/invoke/zstash_view_seed_phrase \
+  -H "Content-Type: application/json" \
+  -H "X-Test-Bridge-Confirm: true" \
+  -d '{"request":{"schema_version":1,"wallet_id":"...","reauth_token":"..."}}'
+```
+
+Calls to the seed phrase endpoint are rate-limited (1 request every 2 seconds).
+
 ### Supported Commands
 
-All Tauri IPC commands are available via the test bridge. See `src-tauri/src/test_bridge.rs` for the complete list.
+All Tauri IPC commands are available via the test bridge. See `src-tauri/src/test_bridge/mod.rs` for the complete list.
 
 ## CI Workflow
 
@@ -251,6 +266,8 @@ The test bridge needs to compile on first run. Subsequent runs use cached builds
 # Pre-build to speed up tests
 make test-bridge-build
 ```
+
+If individual IPC calls time out, increase `VITE_TEST_BRIDGE_TIMEOUT`. This is separate from the Playwright web server timeout configured in `apps/zstash-app-tauri/playwright.config.ts`.
 
 ### Frontend can't connect to test bridge
 

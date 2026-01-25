@@ -19,12 +19,13 @@
 //! ```
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
     extract::{Path, State as AxumState},
-    http::{HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
@@ -105,10 +106,14 @@ const MAX_CONCURRENT_REQUESTS: usize = 50;
 const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024;
 
 const DEFAULT_ALLOWED_ORIGINS: [&str; 2] = ["http://localhost:1420", "http://127.0.0.1:1420"];
+const SENSITIVE_CONFIRM_HEADER: &str = "X-Test-Bridge-Confirm";
+const SENSITIVE_CONFIRM_VALUE: &str = "true";
+const SENSITIVE_MIN_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Shared state for the test bridge server
 pub struct TestBridgeState {
     pub app_state: Arc<AppState>,
+    sensitive_last_call: Mutex<Option<Instant>>,
 }
 
 /// Request body wrapper (matches Tauri's invoke format)
@@ -122,7 +127,10 @@ struct InvokeBody {
 /// This function spawns the HTTP server on a background task and returns immediately.
 /// The server will run until the application exits.
 pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
-    let bridge_state = Arc::new(TestBridgeState { app_state });
+    let bridge_state = Arc::new(TestBridgeState {
+        app_state,
+        sensitive_last_call: Mutex::new(None),
+    });
 
     // CORS layer to allow requests from Vite dev server (configurable).
     let cors = cors_layer();
@@ -193,8 +201,55 @@ fn allowed_origins() -> Vec<HeaderValue> {
 async fn health_check() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
-        "version": "1"
+        "version": "1",
+        "test_bridge": true
     }))
+}
+
+fn confirm_sensitive_access(
+    state: &TestBridgeState,
+    headers: &HeaderMap,
+) -> Result<(), axum::response::Response> {
+    let confirmed = headers
+        .get(SENSITIVE_CONFIRM_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.eq_ignore_ascii_case(SENSITIVE_CONFIRM_VALUE))
+        .unwrap_or(false);
+
+    if !confirmed {
+        warn!(
+            header = SENSITIVE_CONFIRM_HEADER,
+            "Test bridge: missing confirmation header for sensitive endpoint"
+        );
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": format!(
+                    "Missing confirmation header: {}: {}",
+                    SENSITIVE_CONFIRM_HEADER,
+                    SENSITIVE_CONFIRM_VALUE
+                )
+            })),
+        )
+            .into_response());
+    }
+
+    let mut last_call = state.sensitive_last_call.lock().expect("mutex poisoned");
+    let now = Instant::now();
+    if let Some(previous) = *last_call {
+        if now.duration_since(previous) < SENSITIVE_MIN_INTERVAL {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(serde_json::json!({
+                    "error": "Sensitive endpoint rate limit exceeded"
+                })),
+            )
+                .into_response());
+        }
+    }
+    *last_call = Some(now);
+
+    Ok(())
 }
 
 /// Generic dispatch helper that deserializes the request, calls the handler, and serializes the response
@@ -232,9 +287,16 @@ where
 async fn invoke_command(
     AxumState(state): AxumState<Arc<TestBridgeState>>,
     Path(command): Path<String>,
+    headers: HeaderMap,
     Json(body): Json<InvokeBody>,
 ) -> impl IntoResponse {
     info!(command = %command, "Test bridge: invoking command");
+
+    if command == "zstash_view_seed_phrase" {
+        if let Err(resp) = confirm_sensitive_access(state.as_ref(), &headers) {
+            return resp;
+        }
+    }
 
     match command.as_str() {
         // Wallet commands

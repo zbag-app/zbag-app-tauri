@@ -6,14 +6,13 @@ use std::time::Duration;
 
 use tracing::error;
 
-use zstash_core::domain::Network;
 use zstash_core::errors;
 use zstash_core::ipc::v1::common::IpcResult;
 
 /// Default timeout for server probe to avoid UI blocking when offline.
 const DEFAULT_SERVER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn server_probe_timeout() -> Duration {
+pub fn server_probe_timeout() -> Duration {
     let raw = match std::env::var("ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS") {
         Ok(value) => value,
         Err(_) => return DEFAULT_SERVER_PROBE_TIMEOUT,
@@ -77,34 +76,10 @@ pub fn fallback_runtime() -> &'static tokio::runtime::Runtime {
 pub fn block_on<F: Future>(future: F) -> F::Output {
     // In the normal test-bridge server, we're already on Tokio. The fallback
     // runtime is mainly for unit tests or utilities that call this helper
-    // outside an async runtime.
+    // outside an async runtime. Note: block_in_place will panic on a current-
+    // thread runtime, so avoid calling this from such contexts.
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
         Err(_) => fallback_runtime().block_on(future),
-    }
-}
-
-pub fn probe_chain_name_with_timeout(
-    client: &zstash_network::grpc_client::GrpcClient,
-) -> anyhow::Result<String> {
-    let info = block_on(async {
-        match tokio::time::timeout(server_probe_timeout(), client.probe_server()).await {
-            Ok(result) => result,
-            Err(_) => Err(anyhow::anyhow!("connection timed out")),
-        }
-    })?;
-
-    Ok(info.chain_name)
-}
-
-pub fn parse_network(chain_name: &str) -> anyhow::Result<Network> {
-    let name = chain_name.trim().to_lowercase();
-    match name.as_str() {
-        "main" | "mainnet" => Ok(Network::Mainnet),
-        "test" | "testnet" => Ok(Network::Testnet),
-        other => Err(zstash_engine::error::ipc_err(
-            errors::INVALID_REQUEST,
-            format!("unsupported chain_name: {other}"),
-        )),
     }
 }
