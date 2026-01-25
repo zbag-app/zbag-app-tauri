@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use uuid::Uuid;
 
@@ -645,4 +646,66 @@ fn resume_pending_swaps_skips_swaps_without_deposit_address() {
 
     // Swaps without a deposit_address cannot be polled and should not be counted.
     assert_eq!(res.resumed_count, 0);
+}
+
+#[test]
+fn resume_pending_swaps_stops_when_active_wallet_changes() {
+    let root = temp_root("us16_resume_stops_on_wallet_change");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet_a = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Wallet A", Network::Mainnet, "pw", false, None)
+        .expect("create wallet A")
+        .wallet;
+
+    let wallet_b = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Wallet B", Network::Mainnet, "pw", false, None)
+        .expect("create wallet B")
+        .wallet;
+
+    let swap_pending = create_test_swap(SwapState::Pending, true);
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet_a.id, &swap_pending).expect("insert pending swap");
+    drop(conn);
+
+    mgr.lock()
+        .expect("mutex poisoned")
+        .load_wallet(wallet_a.id)
+        .expect("load wallet A");
+
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let res = swap_service
+        .resume_pending_swaps(wallet_a.id, None)
+        .expect("resume pending swaps");
+    assert_eq!(res.resumed_count, 1);
+
+    mgr.lock()
+        .expect("mutex poisoned")
+        .load_wallet(wallet_b.id)
+        .expect("load wallet B");
+
+    // Allow the poller loop to observe the wallet change and exit (backoff is 5s).
+    thread::sleep(Duration::from_secs(6));
+
+    let res_after = swap_service
+        .resume_pending_swaps(wallet_a.id, None)
+        .expect("resume pending swaps after wallet change");
+    assert_eq!(res_after.resumed_count, 1);
 }
