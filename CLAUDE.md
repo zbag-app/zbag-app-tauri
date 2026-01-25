@@ -34,6 +34,8 @@ Standard git workflow. Common commands:
 - `git push` - Push to remote
 - `git pull --rebase` - Update from remote
 
+**Force pushing:** Always use `--force-with-lease` instead of `--force`. It's safer because it fails if the remote has new commits you haven't fetched, preventing accidental overwrites of others' work.
+
 ### Git Worktrees
 
 **Always create new worktrees one level up** in `/Users/bioharz/git/zstashapp/`:
