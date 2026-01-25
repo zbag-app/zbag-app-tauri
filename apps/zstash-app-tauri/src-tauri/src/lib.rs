@@ -13,6 +13,11 @@ pub mod test_bridge;
 pub mod wallet_logic;
 pub mod windows;
 
+#[cfg(not(feature = "test-bridge"))]
+use std::sync::Arc;
+#[cfg(not(feature = "test-bridge"))]
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // When test-bridge feature is enabled, run only the HTTP bridge server (no Tauri)
@@ -29,8 +34,51 @@ pub fn run() {
 fn run_tauri_app() {
     let state = state::AppState::new().expect("failed to initialize application state");
 
+    // Log version at startup
+    let version_info = zstash_core::version::VersionInfo::current();
+    tracing::info!(
+        version = %version_info.version,
+        git_commit = version_info.git_commit.as_deref().unwrap_or("release"),
+        build_timestamp = %version_info.build_timestamp,
+        "zSTASH Desktop starting"
+    );
+
     tauri::Builder::default()
         .manage(state)
+        .setup(|app| {
+            let state = app.state::<state::AppState>();
+
+            // Enter tokio runtime context so TorManager can spawn bootstrap task
+            let tauri::async_runtime::RuntimeHandle::Tokio(handle) = tauri::async_runtime::handle();
+            let _guard = handle.enter();
+
+            if let Err(err) = state.tor_manager.start_if_enabled() {
+                tracing::warn!(error = ?err, "failed to start Tor on app launch");
+            }
+
+            let app_handle = app.handle().clone();
+
+            {
+                let wallet_manager = Arc::clone(&state.wallet_manager);
+                let app_handle = app_handle.clone();
+                if let Ok(mut mgr) = wallet_manager.lock() {
+                    mgr.set_wallet_status_handler(Arc::new(move |event| {
+                        let _ = events::emit_wallet_status(&app_handle, event);
+                    }));
+                }
+            }
+
+            let mut rx = state.tor_manager.subscribe();
+
+            tauri::async_runtime::spawn(async move {
+                let _ = events::emit_tor_status(&app_handle, rx.borrow().clone());
+                while rx.changed().await.is_ok() {
+                    let _ = events::emit_tor_status(&app_handle, rx.borrow().clone());
+                }
+            });
+
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             // Wallet
