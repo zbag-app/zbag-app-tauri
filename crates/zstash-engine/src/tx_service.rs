@@ -1543,9 +1543,16 @@ impl<C: Clock> TxService<C> {
 
 /// Fetches all memos for a transaction from received and sent notes tables.
 /// Returns structured memo information for each memo found.
+///
+/// # Deduplication behavior
+/// Uses `UNION` (not `UNION ALL`) to deduplicate identical memo content. This is
+/// appropriate for the common self-send scenario where the same memo appears in both
+/// received and sent notes. However, it also deduplicates intentionally identical memos
+/// sent to multiple recipients in the same transaction. If preserving such duplicates
+/// becomes important, consider using `UNION ALL` with application-level deduplication
+/// based on output index and pool.
 fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Result<Vec<MemoInfo>> {
     // Query all memo sources using UNION to deduplicate (e.g., self-send scenarios)
-    // Include all memos (even empty ones) for accurate counting
     let mut stmt = conn.prepare(
         "SELECT memo FROM orchard_received_notes
          JOIN transactions ON transactions.id_tx = orchard_received_notes.transaction_id

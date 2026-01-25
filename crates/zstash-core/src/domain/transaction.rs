@@ -45,7 +45,13 @@ pub struct MemoInfo {
     /// For Binary memos, this is a description like "[binary: 512 bytes]".
     /// For Empty memos, this is None.
     pub content: Option<String>,
-    /// The size of the memo in bytes (0-512).
+    /// The logical content size in bytes (0-512).
+    ///
+    /// For Text/Binary memos, this is the actual byte length of the content.
+    /// For Empty memos, this is 0 (representing no logical content), even though
+    /// the wire format uses a single 0xF6 marker byte. This semantic distinction
+    /// is intentional: `size_bytes` represents displayable/usable content size,
+    /// not raw storage size.
     pub size_bytes: u32,
 }
 

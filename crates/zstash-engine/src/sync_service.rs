@@ -947,6 +947,10 @@ impl SyncService {
                     });
 
                     // Get transactions needing memo enhancement
+                    // Note: This fetches all txids upfront. For wallets with many historical
+                    // transactions (e.g., restored from an old seed), this could be a large list.
+                    // Concurrency is bounded, but the full txid list is held in memory.
+                    // If this becomes a problem, consider batching with LIMIT/OFFSET.
                     match get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek) {
                         Ok(txids_to_enhance) => {
                             // Use concurrent enhancement with bounded parallelism.
@@ -1695,7 +1699,8 @@ async fn enhance_transaction_memo(
 
     // 2. Determine branch ID from mined height
     // Handle sentinel values from lightwalletd protobuf:
-    // - 0 means mempool (unmined)
+    // - 0 means mempool (unmined) - this is a lightwalletd convention, not genesis block.
+    //   Zcash mainnet/testnet genesis is at height 1, so height 0 unambiguously means mempool.
     // - u64::MAX means transaction is on a fork
     let height_u32 = match raw_tx.height {
         0 => anyhow::bail!("cannot enhance mempool transaction (not yet mined)"),
@@ -1726,12 +1731,17 @@ async fn enhance_transaction_memo(
     // 6. Decrypt the transaction
     let decrypted = decrypt_transaction(params, Some(mined_height), None, &tx, &ufvks);
 
-    // 7. Update Sapling memos (only if NULL for idempotency)
+    // 7. Update memos in a transaction to ensure atomicity.
+    // Without this, a crash between updates could leave some outputs with memos
+    // while others remain NULL, and the transaction would be skipped on re-sync.
+    let db_tx = conn.transaction()?;
+
+    // 7a. Update Sapling memos (only if NULL for idempotency)
     for output in decrypted.sapling_outputs() {
         let memo_bytes: &[u8] = output.memo().as_slice();
         // output.index() is a usize from zcash_client_backend; Zcash transactions have at most
         // 2^16 outputs per pool, so this cast is safe.
-        conn.execute(
+        db_tx.execute(
             "UPDATE sapling_received_notes SET memo = ?1
              WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
              AND output_index = ?3
@@ -1740,12 +1750,12 @@ async fn enhance_transaction_memo(
         )?;
     }
 
-    // 8. Update Orchard memos (only if NULL for idempotency)
+    // 7b. Update Orchard memos (only if NULL for idempotency)
     for output in decrypted.orchard_outputs() {
         let memo_bytes: &[u8] = output.memo().as_slice();
         // output.index() is a usize from zcash_client_backend; Zcash transactions have at most
         // 2^16 actions per bundle, so this cast is safe.
-        conn.execute(
+        db_tx.execute(
             "UPDATE orchard_received_notes SET memo = ?1
              WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
              AND action_index = ?3
@@ -1753,6 +1763,8 @@ async fn enhance_transaction_memo(
             rusqlite::params![memo_bytes, &txid_bytes[..], output.index() as i64],
         )?;
     }
+
+    db_tx.commit()?;
 
     Ok(())
 }
@@ -1823,12 +1835,6 @@ async fn download_blocks_with_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use uuid::Uuid;
-
-    fn temp_wallet_path(prefix: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("zstash_test_{prefix}_{}.db", Uuid::new_v4()))
-    }
 
     /// Creates a minimal wallet database schema sufficient for memo enhancement queries.
     fn create_minimal_wallet_schema(conn: &Connection) {
@@ -1855,7 +1861,12 @@ mod tests {
 
     #[test]
     fn get_txids_needing_memo_enhancement_returns_null_memo_txids() {
-        let path = temp_wallet_path("memo_enhancement_null");
+        // Use tempfile for automatic cleanup even if test panics
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
         let dek = Dek([0u8; 32]);
 
         // Create and populate the database
@@ -1903,14 +1914,16 @@ mod tests {
 
         assert_eq!(txids.len(), 1, "should return only txid with NULL memo");
         assert_eq!(txids[0], [0x01u8; 32]);
-
-        // Cleanup
-        let _ = std::fs::remove_file(&path);
+        // temp_file dropped here, automatic cleanup
     }
 
     #[test]
     fn get_txids_needing_memo_enhancement_returns_empty_when_all_memos_populated() {
-        let path = temp_wallet_path("memo_enhancement_all_populated");
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
         let dek = Dek([0u8; 32]);
 
         // Create and populate the database with only populated memos
@@ -1941,14 +1954,16 @@ mod tests {
 
         let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
         assert!(txids.is_empty(), "no txids should need enhancement");
-
-        // Cleanup
-        let _ = std::fs::remove_file(&path);
+        // temp_file dropped here, automatic cleanup
     }
 
     #[test]
     fn get_txids_needing_memo_enhancement_deduplicates_across_pools() {
-        let path = temp_wallet_path("memo_enhancement_dedup");
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
         let dek = Dek([0u8; 32]);
 
         // Create transaction with NULL memos in both sapling and orchard tables
@@ -1989,8 +2004,6 @@ mod tests {
             1,
             "txid should appear only once despite multiple NULL memo notes"
         );
-
-        // Cleanup
-        let _ = std::fs::remove_file(&path);
+        // temp_file dropped here, automatic cleanup
     }
 }

@@ -84,3 +84,6 @@ keyring = "2"
 
 # URL parsing
 url = "2"
+
+# Test utilities
+tempfile = "3"

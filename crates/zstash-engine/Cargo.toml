@@ -42,3 +42,6 @@ zcash_protocol.workspace = true
 zcash_transparent.workspace = true
 pczt.workspace = true
 orchard.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

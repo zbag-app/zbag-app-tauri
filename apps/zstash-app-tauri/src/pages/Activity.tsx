@@ -273,7 +273,9 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       setCopiedMemo(txid);
       setCopyError(null);
       setTimeout(() => setCopiedMemo(null), 2000);
-    } catch {
+    } catch (err) {
+      // Log error for debugging (clipboard may be unavailable in sandboxed environments)
+      console.error("Failed to copy memo to clipboard:", err);
       setCopyError(txid);
       setTimeout(() => setCopyError(null), 2000);
     }
