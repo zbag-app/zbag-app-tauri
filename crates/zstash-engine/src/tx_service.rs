@@ -1427,7 +1427,7 @@ impl<C: Clock> TxService<C> {
         let chain_height = current_chain_height(wallet_db_conn, network);
 
         let mut stmt = wallet_db_conn.prepare(
-            "SELECT txid,\n                    mined_height,\n                    expiry_height,\n                    fee_paid,\n                    total_spent,\n                    total_received,\n                    memo_count,\n                    block_time,\n                    is_shielding,\n                    sent_note_count,\n                    received_note_count\n             FROM v_transactions\n             WHERE account_uuid = ?1\n             ORDER BY COALESCE(block_time, 0) DESC, txid DESC\n             LIMIT ?2 OFFSET ?3",
+            "SELECT txid,\n                    mined_height,\n                    expiry_height,\n                    fee_paid,\n                    total_spent,\n                    total_received,\n                    block_time,\n                    is_shielding,\n                    sent_note_count,\n                    received_note_count\n             FROM v_transactions\n             WHERE account_uuid = ?1\n             ORDER BY COALESCE(block_time, 0) DESC, txid DESC\n             LIMIT ?2 OFFSET ?3",
         )?;
 
         let mut rows = stmt.query(params![account_uuid_bytes, limit as i64, offset as i64])?;
@@ -1447,11 +1447,10 @@ impl<C: Clock> TxService<C> {
             let fee_paid: Option<i64> = row.get(3)?;
             let total_spent: i64 = row.get(4)?;
             let total_received: i64 = row.get(5)?;
-            let _memo_count: i64 = row.get(6)?;
-            let block_time: Option<i64> = row.get(7)?;
-            let is_shielding: bool = row.get(8)?;
-            let sent_note_count: i64 = row.get(9)?;
-            let received_note_count: i64 = row.get(10)?;
+            let block_time: Option<i64> = row.get(6)?;
+            let is_shielding: bool = row.get(7)?;
+            let sent_note_count: i64 = row.get(8)?;
+            let received_note_count: i64 = row.get(9)?;
 
             let tx_type = if is_shielding {
                 TransactionType::Shield
@@ -1545,17 +1544,17 @@ impl<C: Clock> TxService<C> {
 /// Fetches all memos for a transaction from received and sent notes tables.
 /// Returns structured memo information for each memo found.
 fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Result<Vec<MemoInfo>> {
-    // Query all memo sources using UNION - orchard, sapling received notes and sent notes
+    // Query all memo sources using UNION to deduplicate (e.g., self-send scenarios)
     // Include all memos (even empty ones) for accurate counting
     let mut stmt = conn.prepare(
         "SELECT memo FROM orchard_received_notes
          JOIN transactions ON transactions.id_tx = orchard_received_notes.transaction_id
          WHERE transactions.txid = ?1 AND memo IS NOT NULL
-         UNION ALL
+         UNION
          SELECT memo FROM sapling_received_notes
          JOIN transactions ON transactions.id_tx = sapling_received_notes.transaction_id
          WHERE transactions.txid = ?1 AND memo IS NOT NULL
-         UNION ALL
+         UNION
          SELECT memo FROM sent_notes
          JOIN transactions ON transactions.id_tx = sent_notes.transaction_id
          WHERE transactions.txid = ?1 AND memo IS NOT NULL",
@@ -1566,7 +1565,7 @@ fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Resu
 
     while let Some(row) = rows.next()? {
         let memo_bytes: Vec<u8> = row.get(0)?;
-        let size_bytes = memo_bytes.len();
+        let size_bytes = memo_bytes.len() as u32;
 
         // Try to parse as MemoBytes and convert to structured info
         if let Ok(memo_bytes_obj) = zcash_protocol::memo::MemoBytes::from_bytes(&memo_bytes)

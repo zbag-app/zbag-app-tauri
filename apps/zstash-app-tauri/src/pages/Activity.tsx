@@ -27,6 +27,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [retryError, setRetryError] = useState<string | null>(null);
   const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
   const [copiedMemo, setCopiedMemo] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
@@ -171,9 +172,11 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     try {
       await navigator.clipboard.writeText(content);
       setCopiedMemo(txid);
+      setCopyError(null);
       setTimeout(() => setCopiedMemo(null), 2000);
     } catch {
-      // Clipboard API not available
+      setCopyError(txid);
+      setTimeout(() => setCopyError(null), 2000);
     }
   };
 
@@ -184,7 +187,8 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
 
   const getMemoDisplayText = (memos: IPC.MemoInfo[]) => {
     const displayable = getDisplayableMemos(memos);
-    return displayable.map((m) => m.content).join('\n---\n');
+    // Content is guaranteed non-null by getDisplayableMemos filter
+    return displayable.map((m) => m.content!).join('\n---\n');
   };
 
   return (
@@ -326,10 +330,12 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                               size="sm"
                               className="h-7 w-7 p-0"
                               onClick={() => void copyMemo(tx.txid, fullText)}
-                              title="Copy memo"
+                              title={copyError === tx.txid ? 'Copy failed' : 'Copy memo'}
                             >
                               {copiedMemo === tx.txid ? (
                                 <Check className="h-3.5 w-3.5 text-green-500" />
+                              ) : copyError === tx.txid ? (
+                                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
                               ) : (
                                 <Copy className="h-3.5 w-3.5" />
                               )}

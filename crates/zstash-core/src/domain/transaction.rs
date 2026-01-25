@@ -46,7 +46,7 @@ pub struct MemoInfo {
     /// For Empty memos, this is None.
     pub content: Option<String>,
     /// The size of the memo in bytes (0-512).
-    pub size_bytes: usize,
+    pub size_bytes: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
