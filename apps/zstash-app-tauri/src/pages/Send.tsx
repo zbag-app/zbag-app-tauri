@@ -93,6 +93,10 @@ export function Send(props: { activeAccount: IPC.AccountInfo | null }) {
 
   const submit = async () => {
     if (activeAccount == null) return;
+    if (memoTooLong) {
+      setError('Memo exceeds 512 bytes. Please shorten your message.');
+      return;
+    }
     if (!amountZatoshis) {
       setError('Enter a valid amount.');
       return;

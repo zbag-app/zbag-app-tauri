@@ -309,62 +309,77 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                     <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
                   </div>
                   {(() => {
-                    const displayableMemos = getDisplayableMemos(tx.memos);
-                    if (displayableMemos.length === 0) return null;
+                    const totalMemos = tx.memo_count;
+                    if (totalMemos === 0) return null;
 
-                    const fullText = getMemoDisplayText(tx.memos);
+                    const displayableMemos = getDisplayableMemos(tx.memos);
+                    const fullText = displayableMemos.length > 0 ? getMemoDisplayText(tx.memos) : '';
                     const isLong = fullText.length > 100;
                     const isExpanded = expandedMemos.has(tx.txid);
                     const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
+                    const hiddenCount = totalMemos - displayableMemos.length;
 
                     return (
                       <div className="mt-2 rounded-md border border-border/50 bg-muted/30 p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                             <FileText className="h-4 w-4 shrink-0" />
-                            <span>Memo{displayableMemos.length > 1 ? `s (${displayableMemos.length})` : ''}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => void copyMemo(tx.txid, fullText)}
-                              title={copyError === tx.txid ? 'Copy failed' : 'Copy memo'}
-                            >
-                              {copiedMemo === tx.txid ? (
-                                <Check className="h-3.5 w-3.5 text-green-500" />
-                              ) : copyError === tx.txid ? (
-                                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                          {displayText}
-                          {isLong && !isExpanded && '...'}
-                        </div>
-                        {isLong && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2 h-7 px-2 text-xs"
-                            onClick={() => toggleMemoExpanded(tx.txid)}
-                          >
-                            {isExpanded ? (
-                              <>
-                                <ChevronUp className="h-3.5 w-3.5 mr-1" />
-                                Show less
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="h-3.5 w-3.5 mr-1" />
-                                Show more ({fullText.length} chars)
-                              </>
+                            <span>Memo{totalMemos !== 1 ? `s (${totalMemos})` : ''}</span>
+                            {hiddenCount > 0 && displayableMemos.length > 0 && (
+                              <span className="text-xs text-muted-foreground">({displayableMemos.length} shown)</span>
                             )}
-                          </Button>
+                          </div>
+                          {displayableMemos.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => void copyMemo(tx.txid, fullText)}
+                                title={copyError === tx.txid ? 'Copy failed' : 'Copy memo'}
+                              >
+                                {copiedMemo === tx.txid ? (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                ) : copyError === tx.txid ? (
+                                  <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {displayableMemos.length > 0 ? (
+                          <>
+                            <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                              {displayText}
+                              {isLong && !isExpanded && '...'}
+                            </div>
+                            {isLong && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2 h-7 px-2 text-xs"
+                                onClick={() => toggleMemoExpanded(tx.txid)}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                                    Show less
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                                    Show more ({fullText.length} chars)
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            Memos present but not displayable
+                          </div>
                         )}
                         {displayableMemos.some((m) => m.kind === 'Binary') && (
                           <div className="mt-2 text-xs text-muted-foreground/70">

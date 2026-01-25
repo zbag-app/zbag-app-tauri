@@ -105,6 +105,21 @@ export type TransactionType = 'Send' | 'Receive' | 'Shield' | 'Consolidate';
 export type TransactionStatus = 'Pending' | 'Confirmed' | 'Expired' | 'Failed';
 export type RecipientKind = 'Orchard' | 'Sapling' | 'Transparent';
 
+/** The kind of memo content */
+export type MemoKind = 'Text' | 'Binary' | 'Empty';
+
+/** Structured memo information for transaction display */
+export interface MemoInfo {
+  /** The kind of memo content */
+  kind: MemoKind;
+  /** The memo content as a string. For Text memos, this is the UTF-8 text.
+   * For Binary memos, this is a description like "[binary: 512 bytes]".
+   * For Empty memos, this is null. */
+  content: string | null;
+  /** The size of the memo in bytes (0-512) */
+  size_bytes: number;
+}
+
 export interface TransactionInfo {
   txid: string;
   /** Wallet-local account index (ZIP-32) */
@@ -112,8 +127,10 @@ export interface TransactionInfo {
   tx_type: TransactionType;
   value: Zatoshis;
   fee: Zatoshis;
-  memo_present: boolean;
-  memo: string | null;
+  /** Total number of memos attached to this transaction (including empty/binary) */
+  memo_count: number;
+  /** Structured memo information for display */
+  memos: MemoInfo[];
   status: TransactionStatus;
   /** Last error message for failed/queued broadcasts (user-safe, redacted) */
   last_error: string | null;

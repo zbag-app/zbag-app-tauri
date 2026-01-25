@@ -1595,6 +1595,13 @@ fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Resu
                     });
                 }
             }
+        } else {
+            // Unparseable memo - represent as Binary placeholder to avoid silent drops
+            memos.push(MemoInfo {
+                kind: MemoKind::Binary,
+                content: Some(format!("[binary: {} bytes]", size_bytes)),
+                size_bytes,
+            });
         }
     }
 
