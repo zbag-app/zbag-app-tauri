@@ -112,14 +112,20 @@ impl JobService {
     }
 
     /// Cancel a job if it's in a cancellable state.
+    /// Returns true if the job was cancelled or already terminal; false otherwise.
     pub fn cancel_job(&self, job_id: &str) -> bool {
         let mut state = self.state.lock().expect("mutex poisoned");
 
-        // Check if job can be cancelled
-        if let Some(progress) = state.progress.get(job_id)
-            && !progress.can_cancel
-        {
-            return false;
+        if let Some(progress) = state.progress.get(job_id) {
+            if matches!(
+                progress.state,
+                JobState::Completed | JobState::Failed | JobState::Cancelled
+            ) {
+                return true;
+            }
+            if !progress.can_cancel {
+                return false;
+            }
         }
 
         if let Some(entry) = state.jobs.remove(job_id) {
@@ -564,12 +570,21 @@ async fn run_send_job(
         });
     }
 
-    // Complete
-    emit_progress(JobProgress::completed(
-        job_id.clone(),
-        job_type,
-        primary_txid,
-    ));
+    // Complete (or fail) based on broadcast outcome
+    if let Some(error) = broadcast_error {
+        emit_progress(JobProgress::failed(
+            job_id.clone(),
+            job_type,
+            error,
+            Some(primary_txid),
+        ));
+    } else {
+        emit_progress(JobProgress::completed(
+            job_id.clone(),
+            job_type,
+            primary_txid,
+        ));
+    }
 
     info!(job_id = %job_id, "send job completed");
 }
