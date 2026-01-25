@@ -30,7 +30,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tower::ServiceBuilder;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{error, info, warn};
 
 use zstash_core::ipc::v1::commands::address::{
@@ -95,6 +97,13 @@ pub use helpers::*;
 /// development ports (1420, 3000, 8080, etc.). Not an IANA registered port.
 pub const TEST_BRIDGE_PORT: u16 = 19816;
 
+/// Maximum concurrent requests the test bridge will process.
+/// Prevents runaway tests from overwhelming the server.
+const MAX_CONCURRENT_REQUESTS: usize = 50;
+
+/// Maximum request body size (1MB).
+const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024;
+
 /// Shared state for the test bridge server
 pub struct TestBridgeState {
     pub app_state: Arc<AppState>,
@@ -122,10 +131,16 @@ pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Rate limiting to protect against runaway tests
+    let limits = ServiceBuilder::new()
+        .concurrency_limit(MAX_CONCURRENT_REQUESTS)
+        .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_SIZE));
+
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/invoke/{command}", post(invoke_command))
         .layer(cors)
+        .layer(limits)
         .with_state(bridge_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], TEST_BRIDGE_PORT));
