@@ -160,6 +160,15 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     };
   }, [wallet.network, activeAccountId]);
 
+  // Validate selected asset after tokens load (PR review: race condition fix)
+  useEffect(() => {
+    if (loadingTokens || availableTokens.length === 0) return;
+    const selectedExists = availableTokens.some((t) => t.asset_id === outputAsset);
+    if (!selectedExists) {
+      setOutputAsset(availableTokens[0].asset_id);
+    }
+  }, [loadingTokens, availableTokens, outputAsset]);
+
   // Clear errors when quote inputs change (clear on any keystroke, even if canonical values are unchanged).
   useEffect(() => {
     setError(null);

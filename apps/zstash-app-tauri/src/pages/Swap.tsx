@@ -124,6 +124,15 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
     };
   }, [wallet.network, activeAccountId]);
 
+  // Validate selected asset after tokens load (PR review: race condition fix)
+  useEffect(() => {
+    if (loadingTokens || availableTokens.length === 0) return;
+    const selectedExists = availableTokens.some((t) => t.asset_id === inputAsset);
+    if (!selectedExists) {
+      setInputAsset(availableTokens[0].asset_id);
+    }
+  }, [loadingTokens, availableTokens, inputAsset]);
+
   // Clear error when form inputs change
   useEffect(() => {
     setError(null);

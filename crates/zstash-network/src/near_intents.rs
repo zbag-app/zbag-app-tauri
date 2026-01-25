@@ -3,6 +3,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use zstash_core::domain::swap::SupportedToken;
+
 use crate::http_client::{HttpClient, HttpClientError};
 
 const DEFAULT_BASE_URL: &str = "https://1click.chaindefuser.com";
@@ -363,6 +365,19 @@ pub struct TokenInfo {
     pub usd_price: Option<f64>,
     /// Token icon URL (optional)
     pub icon: Option<String>,
+}
+
+impl From<TokenInfo> for SupportedToken {
+    fn from(t: TokenInfo) -> Self {
+        Self {
+            asset_id: t.asset_id,
+            symbol: t.symbol,
+            chain: t.chain,
+            decimals: t.decimals,
+            usd_price: t.usd_price,
+            icon: t.icon,
+        }
+    }
 }
 
 /// Parse the nested quote response from the 1Click API.

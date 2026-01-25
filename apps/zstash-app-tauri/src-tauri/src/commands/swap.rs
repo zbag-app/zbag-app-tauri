@@ -140,17 +140,8 @@ pub async fn zstash_get_supported_tokens(
 
     match result {
         Ok(tokens) => {
-            let supported_tokens: Vec<SupportedToken> = tokens
-                .into_iter()
-                .map(|t| SupportedToken {
-                    asset_id: t.asset_id,
-                    symbol: t.symbol,
-                    chain: t.chain,
-                    decimals: t.decimals,
-                    usd_price: t.usd_price,
-                    icon: t.icon,
-                })
-                .collect();
+            let supported_tokens: Vec<SupportedToken> =
+                tokens.into_iter().map(Into::into).collect();
 
             Ok(IpcResult::Ok {
                 ok: GetSupportedTokensResponse {

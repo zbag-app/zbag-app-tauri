@@ -162,3 +162,27 @@ export function getToZecTokens(): SupportedToken[] {
 export function getFromZecTokens(): SupportedToken[] {
   return filterSwapTokens(FALLBACK_TOKENS);
 }
+
+/** Token info for formatting display */
+export type TokenDisplayInfo = {
+  decimals: number;
+  label: string;
+};
+
+/** Static lookup map for fallback tokens */
+const fallbackTokensById = new Map<string, SupportedToken>(
+  FALLBACK_TOKENS.map((t) => [t.asset_id, t])
+);
+
+/**
+ * Look up a token by its asset ID and return display info.
+ * Falls back to static token list for offline/error scenarios.
+ */
+export function getTokenById(assetId: string): TokenDisplayInfo | undefined {
+  const token = fallbackTokensById.get(assetId);
+  if (!token) return undefined;
+  return {
+    decimals: token.decimals,
+    label: getTokenLabel(token),
+  };
+}
