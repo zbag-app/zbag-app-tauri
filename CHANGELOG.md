@@ -2,6 +2,14 @@
 
 All notable changes to zSTASH will be documented in this file.
 
+## [0.2.0] - 2026-01-25
+
+### Features
+
+- Add async job model for long-running send and shield operations
+- Emit job progress and transaction change events for background jobs
+- Support cancellation and broadcast retry queueing for job flows
+
 ## [0.1.10] - 2026-01-22
 
 ### Bug Fixes
@@ -642,5 +650,3 @@ Add Claude Code GitHub Workflow
 - Enhance IPC contract tests and logging security
 
 - Resolve pre-implement inconsistencies
-
-
