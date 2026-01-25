@@ -1719,24 +1719,30 @@ async fn enhance_transaction_memo(
     // 6. Decrypt the transaction
     let decrypted = decrypt_transaction(params, Some(mined_height), None, &tx, &ufvks);
 
-    // 7. Update Sapling memos
+    // 7. Update Sapling memos (only if NULL for idempotency)
     for output in decrypted.sapling_outputs() {
         let memo_bytes: &[u8] = output.memo().as_slice();
+        // output.index() is a usize from zcash_client_backend; Zcash transactions have at most
+        // 2^16 outputs per pool, so this cast is safe.
         conn.execute(
             "UPDATE sapling_received_notes SET memo = ?1
              WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
-             AND output_index = ?3",
+             AND output_index = ?3
+             AND memo IS NULL",
             rusqlite::params![memo_bytes, &txid_bytes[..], output.index() as i64],
         )?;
     }
 
-    // 8. Update Orchard memos
+    // 8. Update Orchard memos (only if NULL for idempotency)
     for output in decrypted.orchard_outputs() {
         let memo_bytes: &[u8] = output.memo().as_slice();
+        // output.index() is a usize from zcash_client_backend; Zcash transactions have at most
+        // 2^16 actions per bundle, so this cast is safe.
         conn.execute(
             "UPDATE orchard_received_notes SET memo = ?1
              WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
-             AND action_index = ?3",
+             AND action_index = ?3
+             AND memo IS NULL",
             rusqlite::params![memo_bytes, &txid_bytes[..], output.index() as i64],
         )?;
     }

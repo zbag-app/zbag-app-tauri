@@ -11,6 +11,105 @@ import { onSwapChanged, onTransactionChanged } from '../services/events';
 import { formatRelativeTime, formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
 import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 
+function getDisplayableMemos(memos: IPC.MemoInfo[]) {
+  return memos.filter((m) => m.kind !== 'Empty' && m.content);
+}
+
+function getMemoDisplayText(memos: IPC.MemoInfo[]) {
+  const displayable = getDisplayableMemos(memos);
+  return displayable.map((m) => m.content ?? '').join('\n---\n');
+}
+
+interface MemoDisplayProps {
+  tx: IPC.TransactionInfo;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+  copiedMemo: string | null;
+  copyError: string | null;
+  onCopyMemo: (txid: string, content: string) => void;
+}
+
+function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, onCopyMemo }: MemoDisplayProps) {
+  const totalMemos = tx.memo_count;
+  if (totalMemos === 0) return null;
+
+  const displayableMemos = getDisplayableMemos(tx.memos);
+  const fullText = displayableMemos.length > 0 ? getMemoDisplayText(tx.memos) : '';
+  const isLong = fullText.length > 100;
+  const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
+  const hiddenCount = totalMemos - displayableMemos.length;
+
+  return (
+    <div className="mt-2 rounded-md border border-border/50 bg-muted/30 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <FileText className="h-4 w-4 shrink-0" />
+          <span>Memo{totalMemos !== 1 ? `s (${totalMemos})` : ''}</span>
+          {hiddenCount > 0 && displayableMemos.length > 0 && (
+            <span className="text-xs text-muted-foreground">({displayableMemos.length} shown)</span>
+          )}
+        </div>
+        {displayableMemos.length > 0 && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => onCopyMemo(tx.txid, fullText)}
+              title={copyError === tx.txid ? 'Copy failed' : 'Copy memo'}
+            >
+              {copiedMemo === tx.txid ? (
+                <Check className="h-3.5 w-3.5 text-green-500" />
+              ) : copyError === tx.txid ? (
+                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+      {displayableMemos.length > 0 ? (
+        <>
+          <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+            {displayText}
+            {isLong && !isExpanded && '...'}
+          </div>
+          {isLong && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-7 px-2 text-xs"
+              onClick={onToggleExpanded}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                  Show more ({fullText.length} chars)
+                </>
+              )}
+            </Button>
+          )}
+        </>
+      ) : (
+        <div className="mt-2 text-sm text-muted-foreground">
+          Memos present but not displayable
+        </div>
+      )}
+      {displayableMemos.some((m) => m.kind === 'Binary') && (
+        <div className="mt-2 text-xs text-muted-foreground/70">
+          Contains binary data that cannot be displayed as text
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Activity(props: { walletId: string; activeAccountId: number | null }) {
   const { walletId, activeAccountId } = props;
 
@@ -180,17 +279,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     }
   };
 
-  const getDisplayableMemos = (memos: IPC.MemoInfo[]) => {
-    // Filter out empty memos for display
-    return memos.filter((m) => m.kind !== 'Empty' && m.content);
-  };
-
-  const getMemoDisplayText = (memos: IPC.MemoInfo[]) => {
-    const displayable = getDisplayableMemos(memos);
-    // Content is guaranteed non-null by getDisplayableMemos filter
-    return displayable.map((m) => m.content!).join('\n---\n');
-  };
-
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
       <div className="flex items-center justify-between">
@@ -308,87 +396,14 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
                     </span>
                     <span className="text-muted-foreground">Fee: {formatZatoshisToZec(tx.fee)} ZEC</span>
                   </div>
-                  {(() => {
-                    const totalMemos = tx.memo_count;
-                    if (totalMemos === 0) return null;
-
-                    const displayableMemos = getDisplayableMemos(tx.memos);
-                    const fullText = displayableMemos.length > 0 ? getMemoDisplayText(tx.memos) : '';
-                    const isLong = fullText.length > 100;
-                    const isExpanded = expandedMemos.has(tx.txid);
-                    const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
-                    const hiddenCount = totalMemos - displayableMemos.length;
-
-                    return (
-                      <div className="mt-2 rounded-md border border-border/50 bg-muted/30 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                            <FileText className="h-4 w-4 shrink-0" />
-                            <span>Memo{totalMemos !== 1 ? `s (${totalMemos})` : ''}</span>
-                            {hiddenCount > 0 && displayableMemos.length > 0 && (
-                              <span className="text-xs text-muted-foreground">({displayableMemos.length} shown)</span>
-                            )}
-                          </div>
-                          {displayableMemos.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={() => void copyMemo(tx.txid, fullText)}
-                                title={copyError === tx.txid ? 'Copy failed' : 'Copy memo'}
-                              >
-                                {copiedMemo === tx.txid ? (
-                                  <Check className="h-3.5 w-3.5 text-green-500" />
-                                ) : copyError === tx.txid ? (
-                                  <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                                ) : (
-                                  <Copy className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        {displayableMemos.length > 0 ? (
-                          <>
-                            <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
-                              {displayText}
-                              {isLong && !isExpanded && '...'}
-                            </div>
-                            {isLong && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="mt-2 h-7 px-2 text-xs"
-                                onClick={() => toggleMemoExpanded(tx.txid)}
-                              >
-                                {isExpanded ? (
-                                  <>
-                                    <ChevronUp className="h-3.5 w-3.5 mr-1" />
-                                    Show less
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronDown className="h-3.5 w-3.5 mr-1" />
-                                    Show more ({fullText.length} chars)
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </>
-                        ) : (
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            Memos present but not displayable
-                          </div>
-                        )}
-                        {displayableMemos.some((m) => m.kind === 'Binary') && (
-                          <div className="mt-2 text-xs text-muted-foreground/70">
-                            Contains binary data that cannot be displayed as text
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                  <MemoDisplay
+                    tx={tx}
+                    isExpanded={expandedMemos.has(tx.txid)}
+                    onToggleExpanded={() => toggleMemoExpanded(tx.txid)}
+                    copiedMemo={copiedMemo}
+                    copyError={copyError}
+                    onCopyMemo={(txid, content) => void copyMemo(txid, content)}
+                  />
                 </div>
                 <Badge variant={getStatusBadgeVariant(tx.status)}>
                   {tx.status}
