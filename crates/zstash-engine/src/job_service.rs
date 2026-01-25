@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use anyhow::Context as _;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, instrument};
@@ -1208,5 +1209,3 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
         Network::Testnet => zcash_protocol::consensus::Network::TestNetwork,
     }
 }
-
-use anyhow::Context as _;
