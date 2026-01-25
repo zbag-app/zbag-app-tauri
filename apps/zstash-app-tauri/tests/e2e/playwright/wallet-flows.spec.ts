@@ -241,6 +241,61 @@ test.describe('Integration flows (test bridge)', () => {
       expect(result.err.code).toBeTruthy();
     }
   });
+
+  test('sync polling workflow: start, poll progress, stop', async ({ request }) => {
+    const walletName = `Sync Poll Test ${Date.now()}`;
+    const password = 'testpassword123';
+
+    const create = unwrapOk(
+      await invoke<{ wallet: { id: string } }>(request, 'zstash_create_wallet', {
+        schema_version: 1,
+        name: walletName,
+        network: 'Testnet',
+        password,
+        remember_unlock: false,
+      })
+    );
+    createdWalletId = create.wallet.id;
+
+    // Start sync
+    const startResult = unwrapOk(
+      await invoke<{ started: boolean }>(request, 'zstash_start_sync', {
+        schema_version: 1,
+        wallet_id: create.wallet.id,
+      })
+    );
+    expect(startResult.started).toBe(true);
+
+    // Poll progress (demonstrates documented pattern)
+    const progress = unwrapOk(
+      await invoke<{
+        progress: { phase: string; progress_percent: number };
+      }>(request, 'zstash_get_sync_progress', {
+        schema_version: 1,
+        wallet_id: create.wallet.id,
+      })
+    );
+    expect(progress.progress).toHaveProperty('phase');
+    expect(typeof progress.progress.progress_percent).toBe('number');
+
+    // Stop sync
+    const stopResult = unwrapOk(
+      await invoke<{ stopped: boolean }>(request, 'zstash_stop_sync', {
+        schema_version: 1,
+        wallet_id: create.wallet.id,
+      })
+    );
+    expect(stopResult.stopped).toBe(true);
+
+    // Verify idle
+    const afterStop = unwrapOk(
+      await invoke<{ progress: { phase: string } }>(request, 'zstash_get_sync_progress', {
+        schema_version: 1,
+        wallet_id: create.wallet.id,
+      })
+    );
+    expect(afterStop.progress.phase).toBe('Idle');
+  });
 });
 
 test.describe('Error handling (test bridge)', () => {
