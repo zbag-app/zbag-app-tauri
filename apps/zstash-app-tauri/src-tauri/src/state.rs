@@ -93,6 +93,9 @@ fn zstash_data_root() -> anyhow::Result<PathBuf> {
         }
     }
 
-    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
-    Ok(PathBuf::from(home).join(".zstash"))
+    #[cfg(not(feature = "test-bridge"))]
+    {
+        let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+        Ok(PathBuf::from(home).join(".zstash"))
+    }
 }
