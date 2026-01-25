@@ -15,9 +15,8 @@ function getDisplayableMemos(memos: IPC.MemoInfo[]) {
   return memos.filter((m) => m.kind !== 'Empty' && m.content);
 }
 
-function getMemoDisplayText(memos: IPC.MemoInfo[]) {
-  const displayable = getDisplayableMemos(memos);
-  return displayable.map((m) => m.content ?? '').join('\n---\n');
+function getMemoDisplayText(displayableMemos: IPC.MemoInfo[]) {
+  return displayableMemos.map((m) => m.content ?? '').join('\n---\n');
 }
 
 interface MemoDisplayProps {
@@ -34,7 +33,8 @@ function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, 
   if (totalMemos === 0) return null;
 
   const displayableMemos = getDisplayableMemos(tx.memos);
-  const fullText = displayableMemos.length > 0 ? getMemoDisplayText(tx.memos) : '';
+  const fullText = displayableMemos.length > 0 ? getMemoDisplayText(displayableMemos) : '';
+  const fullTextBytes = new TextEncoder().encode(fullText).length;
   const isLong = fullText.length > 100;
   const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
   const hiddenCount = totalMemos - displayableMemos.length;
@@ -90,7 +90,7 @@ function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, 
               ) : (
                 <>
                   <ChevronDown className="h-3.5 w-3.5 mr-1" />
-                  Show more ({fullText.length} chars)
+                  Show more ({fullTextBytes} bytes)
                 </>
               )}
             </Button>
