@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import * as IPC from '../types/ipc';
+import { BaseIpcResultSchema } from './ipc-schemas';
 
 // Test bridge URL for E2E testing (Playwright/Chrome MCP)
 const TEST_BRIDGE_URL = 'http://127.0.0.1:19816';
@@ -34,7 +35,12 @@ async function invoke<T>(cmd: string, args: { request: unknown }): Promise<T> {
         const text = await res.text();
         throw new Error(`Test bridge error: ${res.status} ${text}`);
       }
-      return res.json() as Promise<T>;
+      const json = await res.json();
+      const parsed = BaseIpcResultSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new Error(`Malformed IPC response for ${cmd}: ${parsed.error.message}`);
+      }
+      return json as T;
     } finally {
       clearTimeout(timeout);
     }
