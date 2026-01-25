@@ -10923,6 +10923,7 @@ dependencies = [
  "tonic",
  "tracing",
  "zcash_client_backend",
+ "zcash_primitives",
  "zcash_protocol",
  "zstash-core",
  "zstash-tor",

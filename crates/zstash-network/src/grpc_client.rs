@@ -9,8 +9,9 @@ use tonic::transport::{Channel, Endpoint};
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_backend::proto::service::{
     BlockId, BlockRange, ChainSpec, Empty, GetSubtreeRootsArg, LightdInfo, RawTransaction,
-    SubtreeRoot, TreeState, compact_tx_streamer_client::CompactTxStreamerClient,
+    SubtreeRoot, TreeState, TxFilter, compact_tx_streamer_client::CompactTxStreamerClient,
 };
+use zcash_primitives::transaction::TxId;
 use zcash_protocol::consensus::BlockHeight;
 
 use tonic::Streaming;
@@ -360,5 +361,27 @@ impl GrpcClient {
         };
 
         Ok(client.get_subtree_roots(request).await?.into_inner())
+    }
+
+    /// Fetch a full transaction by txid.
+    ///
+    /// This is used for transaction enhancement to retrieve memo data
+    /// that is not included in compact blocks.
+    pub async fn get_transaction(&self, txid: &TxId) -> anyhow::Result<RawTransaction> {
+        let mut client = self.get_client().await.context("failed to connect")?;
+
+        let mut req = tonic::Request::new(TxFilter {
+            block: None,
+            index: 0,
+            hash: txid.as_ref().to_vec(),
+        });
+        req.set_timeout(Duration::from_secs(30));
+
+        Ok(client
+            .get_transaction(req)
+            .await
+            .map_err(|status| anyhow::anyhow!(status))
+            .context("GetTransaction RPC failed")?
+            .into_inner())
     }
 }

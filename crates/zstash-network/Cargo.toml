@@ -22,6 +22,7 @@ prost.workspace = true
 reqwest.workspace = true
 http-body-util = "0.1"
 zcash_client_backend.workspace = true
+zcash_primitives.workspace = true
 zcash_protocol.workspace = true
 zstash-core = { path = "../zstash-core" }
 zstash-tor = { path = "../zstash-tor" }

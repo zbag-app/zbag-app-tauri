@@ -18,12 +18,14 @@ use zcash_client_backend::data_api::chain::{
 use zcash_client_backend::data_api::scanning::ScanPriority;
 use zcash_client_backend::data_api::wallet::ConfirmationsPolicy;
 use zcash_client_backend::data_api::{WalletRead as _, WalletWrite as _};
+use zcash_client_backend::decrypt_transaction;
 use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_sqlite::FsBlockDb;
 use zcash_client_sqlite::chain::BlockMeta;
 use zcash_client_sqlite::chain::init::init_blockmeta_db;
 use zcash_primitives::block::BlockHash;
-use zcash_protocol::consensus::BlockHeight;
+use zcash_primitives::transaction::{Transaction, TxId};
+use zcash_protocol::consensus::{BlockHeight, BranchId};
 
 use zstash_core::domain::{Balance, Network, SyncPhase, SyncProgress};
 use zstash_core::errors;
@@ -926,6 +928,59 @@ impl SyncService {
                 }
 
                 if sync_complete {
+                    // === Phase: Enhancing ===
+                    // Fetch full transactions to extract memos for received notes.
+                    // Compact blocks don't contain memo data, so we need to fetch
+                    // the full transaction and decrypt it to get memos.
+                    update(SyncProgress {
+                        phase: SyncPhase::Enhancing,
+                        scan_frontier_height: u32::from(chain_tip),
+                        wallet_tip_height: u32::from(chain_tip),
+                        progress_percent: 99,
+                        eta_seconds: None,
+                        retry_in_seconds: None,
+                        error_message: None,
+                    });
+
+                    // Get transactions needing memo enhancement
+                    if let Ok(txids_to_enhance) =
+                        get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek)
+                    {
+                        for txid_bytes in txids_to_enhance {
+                            // Check cancellation
+                            if *cancel_rx.borrow() {
+                                break;
+                            }
+
+                            match enhance_transaction_memo(
+                                &client,
+                                &wallet_db_path,
+                                &wallet_dek,
+                                &params,
+                                txid_bytes,
+                            )
+                            .await
+                            {
+                                Ok(()) => {
+                                    tracing::debug!(
+                                        wallet_id = %wallet_id,
+                                        txid = hex::encode(txid_bytes),
+                                        "enhanced transaction memo"
+                                    );
+                                }
+                                Err(err) => {
+                                    // Log but don't fail the entire sync
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        txid = hex::encode(txid_bytes),
+                                        error = ?err,
+                                        "failed to enhance transaction memo"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     // Final update triggers balance emission via the update closure
                     update(SyncProgress {
                         phase: SyncPhase::CatchingUp,
@@ -1524,6 +1579,99 @@ fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, e
             tracing::trace!(path = ?path, error = ?e, "failed to delete block file");
         }
     }
+}
+
+/// Returns txids of transactions with received notes that have NULL memos.
+///
+/// These transactions need enhancement to fetch memo data from full transactions.
+fn get_txids_needing_memo_enhancement(
+    wallet_db_path: &Path,
+    wallet_dek: &Dek,
+) -> anyhow::Result<Vec<[u8; 32]>> {
+    let conn = open_wallet_db(wallet_db_path, wallet_dek)?;
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT transactions.txid FROM transactions
+         JOIN sapling_received_notes ON sapling_received_notes.transaction_id = transactions.id_tx
+         WHERE sapling_received_notes.memo IS NULL
+         UNION
+         SELECT DISTINCT transactions.txid FROM transactions
+         JOIN orchard_received_notes ON orchard_received_notes.transaction_id = transactions.id_tx
+         WHERE orchard_received_notes.memo IS NULL",
+    )?;
+
+    let txids = stmt
+        .query_map([], |row| row.get::<_, Vec<u8>>(0))?
+        .filter_map(|r| r.ok())
+        .filter_map(|bytes| bytes.try_into().ok())
+        .collect();
+
+    Ok(txids)
+}
+
+/// Fetch, decrypt, and store memos for a single transaction.
+///
+/// This is called during the Enhancing phase to populate memo data
+/// for received notes that were scanned from compact blocks.
+async fn enhance_transaction_memo(
+    client: &zstash_network::grpc_client::GrpcClient,
+    wallet_db_path: &Path,
+    wallet_dek: &Dek,
+    params: &zcash_protocol::consensus::Network,
+    txid_bytes: [u8; 32],
+) -> anyhow::Result<()> {
+    let txid = TxId::from_bytes(txid_bytes);
+
+    // 1. Fetch the raw transaction
+    let raw_tx = client.get_transaction(&txid).await?;
+
+    // 2. Determine branch ID from mined height
+    let mined_height = BlockHeight::from_u32(raw_tx.height as u32);
+    let branch_id = BranchId::for_height(params, mined_height);
+
+    // 3. Parse the transaction
+    let tx =
+        Transaction::read(&raw_tx.data[..], branch_id).context("failed to parse transaction")?;
+
+    // 4. Open a separate connection for enhancement to avoid borrow conflicts
+    let mut conn = open_wallet_db(wallet_db_path, wallet_dek)?;
+
+    // 5. Get UFVKs for decryption using the WalletRead trait
+    let ufvks = {
+        let wdb = zcash_client_sqlite::WalletDb::from_connection(
+            &mut conn,
+            *params,
+            zcash_client_sqlite::util::SystemClock,
+            rand::rngs::OsRng,
+        );
+        wdb.get_unified_full_viewing_keys()?
+    };
+
+    // 6. Decrypt the transaction
+    let decrypted = decrypt_transaction(params, Some(mined_height), None, &tx, &ufvks);
+
+    // 7. Update Sapling memos
+    for output in decrypted.sapling_outputs() {
+        let memo_bytes: &[u8] = output.memo().as_slice();
+        conn.execute(
+            "UPDATE sapling_received_notes SET memo = ?1
+             WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
+             AND output_index = ?3",
+            rusqlite::params![memo_bytes, &txid_bytes[..], output.index() as i64],
+        )?;
+    }
+
+    // 8. Update Orchard memos
+    for output in decrypted.orchard_outputs() {
+        let memo_bytes: &[u8] = output.memo().as_slice();
+        conn.execute(
+            "UPDATE orchard_received_notes SET memo = ?1
+             WHERE transaction_id = (SELECT id_tx FROM transactions WHERE txid = ?2)
+             AND action_index = ?3",
+            rusqlite::params![memo_bytes, &txid_bytes[..], output.index() as i64],
+        )?;
+    }
+
+    Ok(())
 }
 
 /// Download blocks with retry and exponential backoff.
