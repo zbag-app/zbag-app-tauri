@@ -302,7 +302,10 @@ impl GrpcClient {
             .context("GetLatestBlock RPC failed")?
             .into_inner();
 
-        Ok((BlockHeight::from_u32(response.height as u32), response.hash))
+        // Validate chain tip height fits in u32 (Zcash blocks are well within this range)
+        let height_u32 = u32::try_from(response.height)
+            .with_context(|| format!("chain tip height {} exceeds u32::MAX", response.height))?;
+        Ok((BlockHeight::from_u32(height_u32), response.hash))
     }
 
     /// Download compact blocks in a range.

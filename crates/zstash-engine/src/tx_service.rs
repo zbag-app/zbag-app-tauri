@@ -1966,6 +1966,7 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::str::FromStr;
     use std::time::{Duration, SystemTime};
 
     use rusqlite::Connection;
@@ -2253,5 +2254,217 @@ mod tests {
             !service.proposals.contains_key(&proposal_id),
             "expired proposal should be removed"
         );
+    }
+
+    /// Creates a minimal in-memory database schema for testing memo queries.
+    fn create_memo_test_schema(conn: &Connection) {
+        conn.execute_batch(
+            "
+            CREATE TABLE transactions (
+                id_tx INTEGER PRIMARY KEY,
+                txid BLOB NOT NULL
+            );
+            CREATE TABLE orchard_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            CREATE TABLE sapling_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            CREATE TABLE sent_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            ",
+        )
+        .expect("create memo test schema");
+    }
+
+    /// Creates a text memo (without null padding, as stored in the database).
+    /// MemoBytes::as_slice() excludes trailing nulls, matching real storage behavior.
+    fn make_text_memo(text: &str) -> Vec<u8> {
+        let memo = zcash_protocol::memo::Memo::from_str(text).expect("valid text memo");
+        let memo_bytes: zcash_protocol::memo::MemoBytes = memo.into();
+        memo_bytes.as_slice().to_vec()
+    }
+
+    /// Creates an empty memo (0xF6, excluding null padding).
+    fn make_empty_memo() -> Vec<u8> {
+        let memo = zcash_protocol::memo::Memo::Empty;
+        let memo_bytes: zcash_protocol::memo::MemoBytes = memo.into();
+        memo_bytes.as_slice().to_vec()
+    }
+
+    /// Creates arbitrary binary memo data (512 bytes starting with 0xFF).
+    fn make_binary_memo() -> Vec<u8> {
+        // Start with 0xFF to indicate arbitrary data (not text, not empty)
+        let mut bytes = vec![0xFF];
+        bytes.extend(vec![0xAB; 511]); // Fill rest with arbitrary pattern
+        bytes
+    }
+
+    #[test]
+    fn fetch_transaction_memos_parses_text_memo() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction and text memo
+        let txid = [0x01u8; 32];
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_text_memo("Hello, Zcash!")],
+        )
+        .expect("insert memo");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        assert_eq!(memos.len(), 1);
+        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
+        assert_eq!(memos[0].content.as_deref(), Some("Hello, Zcash!"));
+        // Size is the raw memo bytes length (without null padding per MemoBytes::as_slice)
+        assert_eq!(memos[0].size_bytes, 13);
+    }
+
+    #[test]
+    fn fetch_transaction_memos_parses_empty_memo() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction and empty memo
+        let txid = [0x02u8; 32];
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_empty_memo()],
+        )
+        .expect("insert memo");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        assert_eq!(memos.len(), 1);
+        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Empty);
+        assert!(memos[0].content.is_none());
+        assert_eq!(memos[0].size_bytes, 0);
+    }
+
+    #[test]
+    fn fetch_transaction_memos_parses_binary_memo() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction and binary memo
+        let txid = [0x03u8; 32];
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO sent_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_binary_memo()],
+        )
+        .expect("insert memo");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        assert_eq!(memos.len(), 1);
+        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Binary);
+        assert!(memos[0].content.as_ref().unwrap().contains("binary"));
+        assert_eq!(memos[0].size_bytes, 512);
+    }
+
+    #[test]
+    fn fetch_transaction_memos_deduplicates_across_tables() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction and identical memo in multiple tables (self-send scenario)
+        let txid = [0x04u8; 32];
+        let memo = make_text_memo("Self-send memo");
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [&memo],
+        )
+        .expect("insert received memo");
+        conn.execute(
+            "INSERT INTO sent_notes (transaction_id, memo) VALUES (1, ?1)",
+            [&memo],
+        )
+        .expect("insert sent memo");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        // UNION deduplicates identical memos
+        assert_eq!(memos.len(), 1, "identical memos should be deduplicated");
+        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
+    }
+
+    #[test]
+    fn fetch_transaction_memos_returns_multiple_distinct_memos() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction with different memos across tables
+        let txid = [0x05u8; 32];
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_text_memo("First memo")],
+        )
+        .expect("insert memo 1");
+        conn.execute(
+            "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_text_memo("Second memo")],
+        )
+        .expect("insert memo 2");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        assert_eq!(memos.len(), 2, "distinct memos should both be returned");
+    }
+
+    #[test]
+    fn fetch_transaction_memos_skips_null_memos() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        create_memo_test_schema(&conn);
+
+        // Insert transaction with one NULL memo and one text memo
+        let txid = [0x06u8; 32];
+        conn.execute(
+            "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+            [&txid[..]],
+        )
+        .expect("insert tx");
+        conn.execute(
+            "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, NULL)",
+            [],
+        )
+        .expect("insert null memo");
+        conn.execute(
+            "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, ?1)",
+            [make_text_memo("Valid memo")],
+        )
+        .expect("insert text memo");
+
+        let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
+        assert_eq!(memos.len(), 1, "NULL memos should be skipped");
+        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
     }
 }

@@ -205,6 +205,10 @@ impl SyncService {
         let handle = crate::tokio_runtime::spawn(async move {
             tracing::debug!(wallet_id = %wallet_id, grpc_url = %grpc_url, "sync task started");
 
+            // Wrap wallet_dek in Arc for sharing across concurrent enhancement tasks.
+            // The Dek is only read (never mutated) during sync operations.
+            let wallet_dek = Arc::new(wallet_dek);
+
             let client = match tor_manager {
                 Some(ref tor) => {
                     zstash_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
@@ -946,35 +950,86 @@ impl SyncService {
                     if let Ok(txids_to_enhance) =
                         get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek)
                     {
+                        // Use concurrent enhancement with bounded parallelism.
+                        // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
+                        // configured, so moderate concurrency is safe.
+                        const ENHANCEMENT_CONCURRENCY: usize = 4;
+                        let mut join_set = tokio::task::JoinSet::new();
+
                         for txid_bytes in txids_to_enhance {
-                            // Check cancellation
+                            // Check cancellation before spawning new tasks
                             if *cancel_rx.borrow() {
                                 break;
                             }
 
-                            match enhance_transaction_memo(
-                                &client,
-                                &wallet_db_path,
-                                &wallet_dek,
-                                &params,
-                                txid_bytes,
-                            )
-                            .await
-                            {
-                                Ok(()) => {
-                                    tracing::debug!(
-                                        wallet_id = %wallet_id,
-                                        txid = hex::encode(txid_bytes),
-                                        "enhanced transaction memo"
-                                    );
+                            // Limit concurrency by draining completed tasks
+                            while join_set.len() >= ENHANCEMENT_CONCURRENCY {
+                                if let Some(result) = join_set.join_next().await {
+                                    match result {
+                                        Ok(Ok(())) => {}
+                                        Ok(Err((txid, err))) => {
+                                            tracing::warn!(
+                                                wallet_id = %wallet_id,
+                                                txid = hex::encode(txid),
+                                                error = ?err,
+                                                "failed to enhance transaction memo"
+                                            );
+                                        }
+                                        Err(join_err) => {
+                                            tracing::warn!(
+                                                wallet_id = %wallet_id,
+                                                error = ?join_err,
+                                                "enhancement task panicked"
+                                            );
+                                        }
+                                    }
                                 }
-                                Err(err) => {
-                                    // Log but don't fail the entire sync
+                            }
+
+                            // Clone values for the spawned task
+                            let client = client.clone();
+                            let wallet_db_path = wallet_db_path.clone();
+                            let wallet_dek = Arc::clone(&wallet_dek);
+
+                            join_set.spawn(async move {
+                                match enhance_transaction_memo(
+                                    &client,
+                                    &wallet_db_path,
+                                    &wallet_dek,
+                                    &params,
+                                    txid_bytes,
+                                )
+                                .await
+                                {
+                                    Ok(()) => {
+                                        tracing::debug!(
+                                            txid = hex::encode(txid_bytes),
+                                            "enhanced transaction memo"
+                                        );
+                                        Ok(())
+                                    }
+                                    Err(err) => Err((txid_bytes, err)),
+                                }
+                            });
+                        }
+
+                        // Drain remaining tasks
+                        while let Some(result) = join_set.join_next().await {
+                            match result {
+                                Ok(Ok(())) => {}
+                                Ok(Err((txid, err))) => {
                                     tracing::warn!(
                                         wallet_id = %wallet_id,
-                                        txid = hex::encode(txid_bytes),
+                                        txid = hex::encode(txid),
                                         error = ?err,
                                         "failed to enhance transaction memo"
+                                    );
+                                }
+                                Err(join_err) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "enhancement task panicked"
                                     );
                                 }
                             }
@@ -1462,7 +1517,10 @@ fn write_block_to_cache(
     blocks_dir: &std::path::Path,
     block: &CompactBlock,
 ) -> anyhow::Result<BlockMeta> {
-    let height = BlockHeight::from_u32(block.height as u32);
+    // Validate block height fits in u32 (Zcash blocks are well within this range)
+    let height_u32 = u32::try_from(block.height)
+        .with_context(|| format!("block height {} exceeds u32::MAX", block.height))?;
+    let height = BlockHeight::from_u32(height_u32);
     let hash_bytes: [u8; 32] = match block.hash.as_slice().try_into() {
         Ok(h) => h,
         Err(_) => {
@@ -1584,6 +1642,10 @@ fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, e
 /// Returns txids of transactions with received notes that have NULL memos.
 ///
 /// These transactions need enhancement to fetch memo data from full transactions.
+///
+/// Note: This opens a separate connection from `enhance_transaction_memo`. A theoretical
+/// race exists if another process modifies the database between query and update, but this
+/// is benign in practice: the wallet is single-process, and the UPDATE is idempotent.
 fn get_txids_needing_memo_enhancement(
     wallet_db_path: &Path,
     wallet_dek: &Dek,
@@ -1625,7 +1687,15 @@ async fn enhance_transaction_memo(
     let raw_tx = client.get_transaction(&txid).await?;
 
     // 2. Determine branch ID from mined height
-    let mined_height = BlockHeight::from_u32(raw_tx.height as u32);
+    // Handle sentinel values from lightwalletd protobuf:
+    // - 0 means mempool (unmined)
+    // - u64::MAX means transaction is on a fork
+    let height_u32 = match raw_tx.height {
+        0 => anyhow::bail!("cannot enhance mempool transaction (not yet mined)"),
+        u64::MAX => anyhow::bail!("transaction is on a fork"),
+        h => u32::try_from(h).context("block height exceeds u32::MAX")?,
+    };
+    let mined_height = BlockHeight::from_u32(height_u32);
     let branch_id = BranchId::for_height(params, mined_height);
 
     // 3. Parse the transaction
@@ -1734,5 +1804,180 @@ async fn download_blocks_with_retry(
             }
         }
         attempt += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    fn temp_wallet_path(prefix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("zstash_test_{prefix}_{}.db", Uuid::new_v4()))
+    }
+
+    /// Creates a minimal wallet database schema sufficient for memo enhancement queries.
+    fn create_minimal_wallet_schema(conn: &Connection) {
+        conn.execute_batch(
+            "
+            CREATE TABLE transactions (
+                id_tx INTEGER PRIMARY KEY,
+                txid BLOB NOT NULL
+            );
+            CREATE TABLE sapling_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            CREATE TABLE orchard_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            ",
+        )
+        .expect("create minimal wallet schema");
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_returns_null_memo_txids() {
+        let path = temp_wallet_path("memo_enhancement_null");
+        let dek = Dek([0u8; 32]);
+
+        // Create and populate the database
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            // Insert transaction with NULL memo (needs enhancement)
+            let txid_null = [0x01u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid_null[..]],
+            )
+            .expect("insert tx 1");
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert note with null memo");
+
+            // Insert transaction with populated memo (does not need enhancement)
+            let txid_with_memo = [0x02u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (2, ?1)",
+                [&txid_with_memo[..]],
+            )
+            .expect("insert tx 2");
+            conn.execute(
+                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (2, X'F600000000')",
+                [],
+            )
+            .expect("insert note with memo");
+        }
+
+        // Query using the function under test
+        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+
+        assert_eq!(txids.len(), 1, "should return only txid with NULL memo");
+        assert_eq!(txids[0], [0x01u8; 32]);
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_returns_empty_when_all_memos_populated() {
+        let path = temp_wallet_path("memo_enhancement_all_populated");
+        let dek = Dek([0u8; 32]);
+
+        // Create and populate the database with only populated memos
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            let txid = [0x03u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid[..]],
+            )
+            .expect("insert tx");
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, X'F600000000')",
+                [],
+            )
+            .expect("insert note with memo");
+        }
+
+        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+        assert!(txids.is_empty(), "no txids should need enhancement");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_deduplicates_across_pools() {
+        let path = temp_wallet_path("memo_enhancement_dedup");
+        let dek = Dek([0u8; 32]);
+
+        // Create transaction with NULL memos in both sapling and orchard tables
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            let txid = [0x04u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid[..]],
+            )
+            .expect("insert tx");
+            // Same transaction has NULL memos in both pools
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert sapling note");
+            conn.execute(
+                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert orchard note");
+        }
+
+        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+        assert_eq!(
+            txids.len(),
+            1,
+            "txid should appear only once despite multiple NULL memo notes"
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
     }
 }
