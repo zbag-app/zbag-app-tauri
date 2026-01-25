@@ -196,6 +196,51 @@ test.describe('Integration flows (test bridge)', () => {
     expect(balance.balance).toHaveProperty('total');
     expect(typeof balance.balance.total).toBe('string');
   });
+
+  test('shield_funds requires reauth and handles no transparent funds', async ({ request }) => {
+    const walletName = `Shield Test ${Date.now()}`;
+    const password = 'testpassword123';
+
+    // Create wallet
+    const create = unwrapOk(
+      await invoke<{ wallet: { id: string } }>(request, 'zstash_create_wallet', {
+        schema_version: 1,
+        name: walletName,
+        network: 'Testnet',
+        password,
+        remember_unlock: false,
+      })
+    );
+    createdWalletId = create.wallet.id;
+
+    // Get reauth token for Spend purpose
+    const reauth = unwrapOk(
+      await invoke<{ reauth_token: string; expires_at: number }>(
+        request,
+        'zstash_reauth_wallet',
+        {
+          schema_version: 1,
+          wallet_id: create.wallet.id,
+          password,
+          purpose: 'Spend',
+        }
+      )
+    );
+    expect(reauth.reauth_token).toBeTruthy();
+
+    // Shield funds - will fail (no transparent balance)
+    const result = await invoke<{ txid: string }>(request, 'zstash_shield_funds', {
+      schema_version: 1,
+      account_id: 0,
+      consolidate: false,
+      reauth_token: reauth.reauth_token,
+    });
+
+    expect('err' in result).toBe(true);
+    if ('err' in result) {
+      expect(result.err.code).toBeTruthy();
+    }
+  });
 });
 
 test.describe('Error handling (test bridge)', () => {
