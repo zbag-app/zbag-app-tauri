@@ -28,11 +28,78 @@ pub fn run() {
     }
 
     #[cfg(not(feature = "test-bridge"))]
-    run_tauri_app();
+    run_with_invoke_handler(tauri::generate_handler![
+        // Wallet
+        commands::wallet::zstash_create_wallet,
+        commands::wallet::zstash_load_wallet,
+        commands::wallet::zstash_list_wallets,
+        commands::wallet::zstash_get_wallet_status,
+        commands::wallet::zstash_unlock_wallet,
+        commands::wallet::zstash_lock_wallet,
+        commands::wallet::zstash_reauth_wallet,
+        commands::wallet::zstash_view_seed_phrase,
+        commands::wallet::zstash_logout_wallet,
+        // Address
+        commands::address::zstash_get_receive_address,
+        // Sync
+        commands::sync::zstash_start_sync,
+        commands::sync::zstash_stop_sync,
+        commands::sync::zstash_get_sync_progress,
+        // Balance
+        commands::balance::zstash_get_balance,
+        // Transactions
+        commands::transaction::zstash_list_transactions,
+        commands::transaction::zstash_prepare_send,
+        commands::transaction::zstash_confirm_send,
+        commands::transaction::zstash_cancel_send,
+        commands::transaction::zstash_retry_broadcast,
+        commands::transaction::zstash_shield_funds,
+        // Jobs (async operations)
+        commands::job::zstash_start_send_job,
+        commands::job::zstash_start_shield_job,
+        commands::job::zstash_cancel_job,
+        commands::job::zstash_get_job_status,
+        commands::job::zstash_list_jobs,
+        // Backup
+        commands::backup::zstash_get_backup_challenge,
+        commands::backup::zstash_verify_backup,
+        commands::backup::zstash_restore_wallet,
+        // Keystone
+        commands::keystone::zstash_import_ufvk,
+        commands::keystone::zstash_build_signing_request,
+        commands::keystone::zstash_finalize_signing,
+        commands::keystone::zstash_create_keystone_wallet,
+        // Swaps
+        commands::swap::zstash_request_swap_quote,
+        commands::swap::zstash_start_swap,
+        commands::swap::zstash_get_swap_status,
+        commands::swap::zstash_list_swaps,
+        commands::swap::zstash_refresh_swap_status,
+        commands::swap::zstash_resume_pending_swaps,
+        // Tor
+        commands::tor::zstash_set_tor_enabled,
+        commands::tor::zstash_get_tor_state,
+        // Logs
+        commands::logs::zstash_get_log_location,
+        // Servers
+        commands::server::zstash_add_server,
+        commands::server::zstash_set_default_server,
+        commands::server::zstash_test_server,
+        commands::server::zstash_list_servers,
+        // Version
+        commands::version::zstash_get_version,
+        // Exchange Rate
+        commands::exchange_rate::zstash_get_fiat_settings,
+        commands::exchange_rate::zstash_set_fiat_settings,
+        commands::exchange_rate::zstash_get_exchange_rate,
+    ]);
 }
 
 #[cfg(not(feature = "test-bridge"))]
-fn run_tauri_app() {
+pub fn run_with_invoke_handler<F>(invoke_handler: F)
+where
+    F: Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+{
     let state = state::AppState::new().expect("failed to initialize application state");
 
     // Log version at startup
@@ -81,72 +148,7 @@ fn run_tauri_app() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![
-            // Wallet
-            commands::wallet::zstash_create_wallet,
-            commands::wallet::zstash_load_wallet,
-            commands::wallet::zstash_list_wallets,
-            commands::wallet::zstash_get_wallet_status,
-            commands::wallet::zstash_unlock_wallet,
-            commands::wallet::zstash_lock_wallet,
-            commands::wallet::zstash_reauth_wallet,
-            commands::wallet::zstash_view_seed_phrase,
-            commands::wallet::zstash_logout_wallet,
-            // Address
-            commands::address::zstash_get_receive_address,
-            // Sync
-            commands::sync::zstash_start_sync,
-            commands::sync::zstash_stop_sync,
-            commands::sync::zstash_get_sync_progress,
-            // Balance
-            commands::balance::zstash_get_balance,
-            // Transactions
-            commands::transaction::zstash_list_transactions,
-            commands::transaction::zstash_prepare_send,
-            commands::transaction::zstash_confirm_send,
-            commands::transaction::zstash_cancel_send,
-            commands::transaction::zstash_retry_broadcast,
-            commands::transaction::zstash_shield_funds,
-            // Jobs (async operations)
-            commands::job::zstash_start_send_job,
-            commands::job::zstash_start_shield_job,
-            commands::job::zstash_cancel_job,
-            commands::job::zstash_get_job_status,
-            commands::job::zstash_list_jobs,
-            // Backup
-            commands::backup::zstash_get_backup_challenge,
-            commands::backup::zstash_verify_backup,
-            commands::backup::zstash_restore_wallet,
-            // Keystone
-            commands::keystone::zstash_import_ufvk,
-            commands::keystone::zstash_build_signing_request,
-            commands::keystone::zstash_finalize_signing,
-            commands::keystone::zstash_create_keystone_wallet,
-            // Swaps
-            commands::swap::zstash_request_swap_quote,
-            commands::swap::zstash_start_swap,
-            commands::swap::zstash_get_swap_status,
-            commands::swap::zstash_list_swaps,
-            commands::swap::zstash_get_supported_tokens,
-            commands::swap::zstash_refresh_swap_status,
-            commands::swap::zstash_resume_pending_swaps,
-            // Tor
-            commands::tor::zstash_set_tor_enabled,
-            commands::tor::zstash_get_tor_state,
-            // Logs
-            commands::logs::zstash_get_log_location,
-            // Servers
-            commands::server::zstash_add_server,
-            commands::server::zstash_set_default_server,
-            commands::server::zstash_test_server,
-            commands::server::zstash_list_servers,
-            // Version
-            commands::version::zstash_get_version,
-            // Exchange Rate
-            commands::exchange_rate::zstash_get_fiat_settings,
-            commands::exchange_rate::zstash_set_fiat_settings,
-            commands::exchange_rate::zstash_get_exchange_rate,
-        ])
+        .invoke_handler(invoke_handler)
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

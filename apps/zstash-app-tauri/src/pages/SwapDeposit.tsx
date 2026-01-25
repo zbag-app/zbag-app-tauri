@@ -29,6 +29,13 @@ export function SwapDeposit() {
   const [refreshingSwapId, setRefreshingSwapId] = useState<string | null>(null);
   const [swapEventsUnavailable, setSwapEventsUnavailable] = useState(false);
   const currentSwapIdRef = useRef<string | null>(loadedSwapId);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Clear location state after reading it
   useEffect(() => {
@@ -302,7 +309,7 @@ export function SwapDeposit() {
                 setRefreshingSwapId(requestedSwapId);
                 try {
                   const res = await refreshSwapStatus({ swap_id: requestedSwapId });
-                  if (currentSwapIdRef.current !== requestedSwapId) {
+                  if (!isMountedRef.current || currentSwapIdRef.current !== requestedSwapId) {
                     return;
                   }
                   if ('err' in res) {
@@ -311,12 +318,14 @@ export function SwapDeposit() {
                   }
                   setSwap(res.ok.swap);
                 } catch (e) {
-                  if (currentSwapIdRef.current !== requestedSwapId) {
+                  if (!isMountedRef.current || currentSwapIdRef.current !== requestedSwapId) {
                     return;
                   }
                   setError(e instanceof Error ? e.message : String(e));
                 } finally {
-                  setRefreshingSwapId((current) => (current === requestedSwapId ? null : current));
+                  if (isMountedRef.current) {
+                    setRefreshingSwapId((current) => (current === requestedSwapId ? null : current));
+                  }
                 }
               }}
             >
