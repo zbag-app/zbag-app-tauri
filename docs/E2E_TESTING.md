@@ -86,6 +86,8 @@ bun run test:e2e
 | `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Empty string or whitespace-only values fall back to `~/.zstash`. |
 | `VITE_TEST_BRIDGE` | `false` | Enables HTTP transport in frontend |
 | `VITE_TEST_BRIDGE_TIMEOUT` | `10000` | Request timeout in ms (useful for slow CI runners) |
+| `ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS` | `http://localhost:1420,http://127.0.0.1:1420` | Comma-separated list of allowed browser origins for the test bridge CORS policy. |
+| `ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS` | `15000` | Timeout in ms for the test bridge server probe to lightwalletd. |
 
 ### Test Isolation with ZSTASH_TEST_HOME
 
@@ -261,7 +263,7 @@ Ensure `VITE_TEST_BRIDGE=true` is set when starting the Vite dev server.
 
 ### CORS errors in browser console
 
-The test bridge includes CORS headers for `localhost:1420` and `127.0.0.1:1420`. If using a different port, update the CORS configuration in `src-tauri/src/test_bridge.rs`.
+The test bridge defaults to allowing `http://localhost:1420` and `http://127.0.0.1:1420`. If your Vite dev server uses a different origin, set `ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS` to a comma-separated list of allowed origins.
 
 ### Tests fail with "wallet not found"
 

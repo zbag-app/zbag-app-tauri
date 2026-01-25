@@ -24,7 +24,7 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{Path, State as AxumState},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
@@ -104,6 +104,8 @@ const MAX_CONCURRENT_REQUESTS: usize = 50;
 /// Maximum request body size (1MB).
 const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024;
 
+const DEFAULT_ALLOWED_ORIGINS: [&str; 2] = ["http://localhost:1420", "http://127.0.0.1:1420"];
+
 /// Shared state for the test bridge server
 pub struct TestBridgeState {
     pub app_state: Arc<AppState>,
@@ -122,14 +124,8 @@ struct InvokeBody {
 pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
     let bridge_state = Arc::new(TestBridgeState { app_state });
 
-    // CORS layer to allow requests from Vite dev server (localhost:1420)
-    let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::list([
-            "http://localhost:1420".parse().unwrap(),
-            "http://127.0.0.1:1420".parse().unwrap(),
-        ]))
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // CORS layer to allow requests from Vite dev server (configurable).
+    let cors = cors_layer();
 
     // Rate limiting to protect against runaway tests
     let limits = ServiceBuilder::new()
@@ -156,6 +152,41 @@ pub async fn start_test_bridge(app_state: Arc<AppState>) -> anyhow::Result<()> {
 
     info!("Test bridge server started on http://{}", addr);
     Ok(())
+}
+
+fn cors_layer() -> CorsLayer {
+    let origins = allowed_origins();
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods(Any)
+        .allow_headers(Any)
+}
+
+fn allowed_origins() -> Vec<HeaderValue> {
+    let mut parsed = Vec::new();
+
+    if let Ok(raw) = std::env::var("ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS") {
+        for origin in raw.split(',') {
+            let trimmed = origin.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            match trimmed.parse::<HeaderValue>() {
+                Ok(value) => parsed.push(value),
+                Err(err) => {
+                    warn!(origin = trimmed, error = %err, "invalid test-bridge origin");
+                }
+            }
+        }
+    }
+
+    if parsed.is_empty() {
+        for origin in DEFAULT_ALLOWED_ORIGINS {
+            parsed.push(origin.parse().expect("default origin must parse"));
+        }
+    }
+
+    parsed
 }
 
 /// Health check endpoint

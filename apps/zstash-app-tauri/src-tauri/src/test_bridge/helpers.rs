@@ -10,8 +10,26 @@ use zstash_core::domain::Network;
 use zstash_core::errors;
 use zstash_core::ipc::v1::common::IpcResult;
 
-/// Timeout for server probe to avoid UI blocking when offline.
-pub const SERVER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+/// Default timeout for server probe to avoid UI blocking when offline.
+const DEFAULT_SERVER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+
+fn server_probe_timeout() -> Duration {
+    let raw = match std::env::var("ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS") {
+        Ok(value) => value,
+        Err(_) => return DEFAULT_SERVER_PROBE_TIMEOUT,
+    };
+
+    match raw.trim().parse::<u64>() {
+        Ok(ms) if ms > 0 => Duration::from_millis(ms),
+        _ => {
+            error!(
+                value = raw.as_str(),
+                "invalid ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS; using default"
+            );
+            DEFAULT_SERVER_PROBE_TIMEOUT
+        }
+    }
+}
 
 /// Helper to map anyhow errors to IpcResult
 pub fn map_anyhow<T, F>(f: F) -> IpcResult<T>
@@ -50,12 +68,16 @@ pub fn system_time_to_unix_ms(time: std::time::SystemTime) -> anyhow::Result<i64
     Ok(i64::try_from(duration.as_millis())?)
 }
 
+/// Fallback runtime for synchronous callers outside a Tokio context (e.g. tests).
 pub fn fallback_runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("create tokio runtime"))
 }
 
 pub fn block_on<F: Future>(future: F) -> F::Output {
+    // In the normal test-bridge server, we're already on Tokio. The fallback
+    // runtime is mainly for unit tests or utilities that call this helper
+    // outside an async runtime.
     match tokio::runtime::Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
         Err(_) => fallback_runtime().block_on(future),
@@ -66,7 +88,7 @@ pub fn probe_chain_name_with_timeout(
     client: &zstash_network::grpc_client::GrpcClient,
 ) -> anyhow::Result<String> {
     let info = block_on(async {
-        match tokio::time::timeout(SERVER_PROBE_TIMEOUT, client.probe_server()).await {
+        match tokio::time::timeout(server_probe_timeout(), client.probe_server()).await {
             Ok(result) => result,
             Err(_) => Err(anyhow::anyhow!("connection timed out")),
         }
@@ -85,43 +107,4 @@ pub fn parse_network(chain_name: &str) -> anyhow::Result<Network> {
             format!("unsupported chain_name: {other}"),
         )),
     }
-}
-
-/// Load accounts for a wallet (helper extracted from wallet.rs)
-pub fn load_accounts_for_wallet(
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
-    wallet_id: uuid::Uuid,
-) -> anyhow::Result<Vec<zstash_core::domain::AccountInfo>> {
-    use std::collections::HashMap;
-    use tracing::warn;
-    use zstash_core::domain::{AccountInfo, AccountType};
-
-    let wallet_db_accounts = mgr.list_wallet_db_account_ids(wallet_id)?;
-    let meta_accounts =
-        zstash_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-    let meta_by_id: HashMap<u32, AccountInfo> =
-        meta_accounts.into_iter().map(|a| (a.id, a)).collect();
-
-    let mut out = Vec::with_capacity(wallet_db_accounts.len());
-    for account_id in wallet_db_accounts {
-        if let Some(meta) = meta_by_id.get(&account_id) {
-            out.push(meta.clone());
-            continue;
-        }
-
-        warn!(account_id, "Account metadata missing; applying defaults");
-        out.push(AccountInfo {
-            id: account_id,
-            name: format!("Account {}", account_id + 1),
-            account_type: if account_id == 0 {
-                AccountType::Software
-            } else {
-                AccountType::HardwareSigner
-            },
-        });
-    }
-
-    Ok(out)
 }

@@ -8,6 +8,7 @@ pub mod events;
 pub mod state;
 #[cfg(feature = "test-bridge")]
 pub mod test_bridge;
+pub mod wallet_logic;
 pub mod windows;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
