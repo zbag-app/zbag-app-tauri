@@ -102,6 +102,29 @@ impl<C: Clock> TxService<C> {
         self.proposals.get(proposal_id).map(|r| r.account_id)
     }
 
+    pub fn validate_proposal_for_wallet(
+        &mut self,
+        proposal_id: &str,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<u32> {
+        let now = self.clock.now();
+        let (proposal_wallet_id, proposal_expires_at, account_id) = self
+            .proposals
+            .get(proposal_id)
+            .map(|r| (r.wallet_id, r.expires_at, r.account_id))
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        if proposal_wallet_id != wallet_id {
+            return Err(ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"));
+        }
+        if now > proposal_expires_at {
+            self.proposals.remove(proposal_id);
+            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "proposal expired"));
+        }
+
+        Ok(account_id)
+    }
+
     pub fn scan_queued_broadcasts(
         &mut self,
         wallet_id: Uuid,
@@ -809,20 +832,7 @@ impl<C: Clock> TxService<C> {
         spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ConfirmSendResponse> {
-        let now = self.clock.now();
-        let (proposal_wallet_id, proposal_expires_at) = self
-            .proposals
-            .get(proposal_id)
-            .map(|r| (r.wallet_id, r.expires_at))
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
-
-        if proposal_wallet_id != wallet_id {
-            return Err(ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"));
-        }
-        if now > proposal_expires_at {
-            self.proposals.remove(proposal_id);
-            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "proposal expired"));
-        }
+        self.validate_proposal_for_wallet(proposal_id, wallet_id)?;
 
         let record = self
             .proposals

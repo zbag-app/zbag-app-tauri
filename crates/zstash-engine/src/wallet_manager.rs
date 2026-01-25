@@ -1801,8 +1801,7 @@ impl WalletManager {
 
         let proposal_account_id = self
             .tx_service
-            .proposal_account_id(proposal_id)
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+            .validate_proposal_for_wallet(proposal_id, wallet_id)?;
 
         let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
 

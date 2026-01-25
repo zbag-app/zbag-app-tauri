@@ -668,8 +668,8 @@ async fn run_shield_job(
     })
     .await;
 
-    let (primary_txid, _conn) = match result {
-        Ok(Ok((txid, conn))) => (txid, conn),
+    let (primary_txid, _conn, broadcast_error) = match result {
+        Ok(Ok((txid, conn, broadcast_error))) => (txid, conn, broadcast_error),
         Ok(Err(e)) => {
             if e == "cancelled" {
                 emit_progress(JobProgress::cancelled(job_id.clone(), job_type));
@@ -693,6 +693,11 @@ async fn run_shield_job(
     if let Some(handler) = on_tx_changed.as_ref() {
         use zstash_core::domain::{TransactionInfo, TransactionStatus, TransactionType};
         let now_ms = chrono::Utc::now().timestamp_millis();
+        let status = if broadcast_error.is_some() {
+            TransactionStatus::Failed
+        } else {
+            TransactionStatus::Pending
+        };
 
         handler(TransactionChangedEvent {
             schema_version: SCHEMA_VERSION,
@@ -705,9 +710,9 @@ async fn run_shield_job(
                 fee: "0".to_string(),
                 memo_present: false,
                 memo: None,
-                status: TransactionStatus::Pending,
-                last_error: None,
-                can_retry_broadcast: false,
+                status,
+                last_error: broadcast_error.clone(),
+                can_retry_broadcast: broadcast_error.is_some(),
                 mined_height: None,
                 created_at: now_ms,
                 confirmed_at: None,
@@ -715,12 +720,21 @@ async fn run_shield_job(
         });
     }
 
-    // Complete
-    emit_progress(JobProgress::completed(
-        job_id.clone(),
-        job_type,
-        primary_txid,
-    ));
+    // Complete (or fail) based on broadcast outcome
+    if let Some(error) = broadcast_error {
+        emit_progress(JobProgress::failed(
+            job_id.clone(),
+            job_type,
+            error,
+            Some(primary_txid),
+        ));
+    } else {
+        emit_progress(JobProgress::completed(
+            job_id.clone(),
+            job_type,
+            primary_txid,
+        ));
+    }
 
     info!(job_id = %job_id, "shield job completed");
 }
@@ -734,7 +748,7 @@ fn shield_funds_blocking(
     state: Arc<Mutex<JobServiceState>>,
     on_progress: Option<JobEventHandler>,
     runtime_handle: tokio::runtime::Handle,
-) -> Result<(String, rusqlite::Connection), String> {
+) -> Result<(String, rusqlite::Connection, Option<String>), String> {
     use std::collections::{BTreeMap, BTreeSet};
     use zcash_client_backend::data_api::{InputSource as _, WalletRead as _};
     use zcash_client_backend::fees::ChangeStrategy as _;
@@ -854,6 +868,7 @@ fn shield_funds_blocking(
         .collect();
 
     let mut primary_txid: Option<String> = None;
+    let mut broadcast_error: Option<String> = None;
 
     for batch in batches {
         // Check cancellation
@@ -1033,6 +1048,7 @@ fn shield_funds_blocking(
             });
 
             if let Err(e) = result {
+                let error = format!("{e:#}");
                 debug!(job_id = %job_id, txid = %txid_str, error = ?e, "broadcast failed, queuing for retry");
                 if let Err(queue_err) = queue_broadcast_for_retry(
                     &ctx.wallet_id,
@@ -1040,9 +1056,12 @@ fn shield_funds_blocking(
                     &ctx.wallet_dek,
                     &txid_str,
                     &tx_bytes,
-                    Some(format!("{e:#}")),
+                    Some(error.clone()),
                 ) {
                     error!(job_id = %job_id, error = ?queue_err, "failed to queue broadcast for retry");
+                }
+                if broadcast_error.is_none() {
+                    broadcast_error = Some(error);
                 }
             }
         }
@@ -1052,7 +1071,7 @@ fn shield_funds_blocking(
         return Err("no transparent funds to shield".to_string());
     };
 
-    Ok((primary_txid, conn))
+    Ok((primary_txid, conn, broadcast_error))
 }
 
 fn open_wallet_db_for_job(
