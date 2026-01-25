@@ -99,23 +99,33 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
 
     async function loadTokens() {
       setLoadingTokens(true);
-      const res = await getSupportedTokens();
-      if (cancelled) return;
-      setLoadingTokens(false);
+      try {
+        const res = await getSupportedTokens();
+        if (cancelled) return;
 
-      if ('err' in res) {
-        // Fall back to static list on error
-        setTokens(FALLBACK_TOKENS);
-        return;
+        if ('err' in res) {
+          // Fall back to static list on error
+          setTokens(FALLBACK_TOKENS);
+          return;
+        }
+
+        if (res.ok.tokens.length === 0) {
+          // Fall back if API returns empty
+          setTokens(FALLBACK_TOKENS);
+          return;
+        }
+
+        setTokens(res.ok.tokens);
+      } catch {
+        // Fall back to static list on thrown error
+        if (!cancelled) {
+          setTokens(FALLBACK_TOKENS);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTokens(false);
+        }
       }
-
-      if (res.ok.tokens.length === 0) {
-        // Fall back if API returns empty
-        setTokens(FALLBACK_TOKENS);
-        return;
-      }
-
-      setTokens(res.ok.tokens);
     }
 
     loadTokens();

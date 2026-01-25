@@ -1,11 +1,13 @@
 use serde_json::json;
 
 use zstash_core::domain::{
-    BackupAction, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletLockStatus, WalletStatus,
+    BackupAction, ShieldAction, SupportedToken, SyncPhase, SyncProgress, SyncStatus,
+    WalletLockStatus, WalletStatus,
 };
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
 use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
+use zstash_core::ipc::v1::commands::swap::{GetSupportedTokensRequest, GetSupportedTokensResponse};
 use zstash_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
 use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
@@ -223,4 +225,98 @@ fn version_response_json_shape() {
     assert!(response_json["version_info"].get("version").is_some());
     assert!(response_json["version_info"].get("git_commit").is_some());
     assert!(response_json["version_info"].get("full_version").is_some());
+}
+
+#[test]
+fn get_supported_tokens_request_json_shape() {
+    // Test serialization
+    let request = GetSupportedTokensRequest {
+        schema_version: SCHEMA_VERSION,
+    };
+    let request_json = serde_json::to_value(&request).unwrap();
+    assert_eq!(request_json["schema_version"], json!(SCHEMA_VERSION));
+
+    // Test round-trip
+    let decoded: GetSupportedTokensRequest = serde_json::from_value(request_json).unwrap();
+    assert_eq!(decoded.schema_version, SCHEMA_VERSION);
+}
+
+#[test]
+fn get_supported_tokens_request_denies_unknown_fields() {
+    let request = json!({
+        "schema_version": SCHEMA_VERSION,
+        "extra_field": "should_fail"
+    });
+    let decoded: Result<GetSupportedTokensRequest, _> = serde_json::from_value(request);
+    assert!(decoded.is_err(), "unknown fields must be rejected");
+}
+
+#[test]
+fn get_supported_tokens_response_empty_list() {
+    // Test with empty token list
+    let response = GetSupportedTokensResponse {
+        schema_version: SCHEMA_VERSION,
+        tokens: vec![],
+    };
+    let response_json = serde_json::to_value(&response).unwrap();
+    assert_eq!(response_json["schema_version"], json!(SCHEMA_VERSION));
+    assert_eq!(response_json["tokens"], json!([]));
+
+    // Test round-trip
+    let decoded: GetSupportedTokensResponse = serde_json::from_value(response_json).unwrap();
+    assert_eq!(decoded.schema_version, SCHEMA_VERSION);
+    assert!(decoded.tokens.is_empty());
+}
+
+#[test]
+fn get_supported_tokens_response_populated_list() {
+    // Test with populated token list
+    let tokens = vec![
+        SupportedToken {
+            asset_id: "nep141:wrap.near".to_string(),
+            symbol: "NEAR".to_string(),
+            chain: "near".to_string(),
+            decimals: 24,
+            usd_price: Some(3.45),
+            icon: Some("https://example.com/near.png".to_string()),
+        },
+        SupportedToken {
+            asset_id: "eth".to_string(),
+            symbol: "ETH".to_string(),
+            chain: "eth".to_string(),
+            decimals: 18,
+            usd_price: None,
+            icon: None,
+        },
+    ];
+
+    let response = GetSupportedTokensResponse {
+        schema_version: SCHEMA_VERSION,
+        tokens: tokens.clone(),
+    };
+    let response_json = serde_json::to_value(&response).unwrap();
+    assert_eq!(response_json["schema_version"], json!(SCHEMA_VERSION));
+    assert_eq!(response_json["tokens"].as_array().unwrap().len(), 2);
+
+    // Verify first token structure
+    let first_token = &response_json["tokens"][0];
+    assert_eq!(first_token["asset_id"], json!("nep141:wrap.near"));
+    assert_eq!(first_token["symbol"], json!("NEAR"));
+    assert_eq!(first_token["chain"], json!("near"));
+    assert_eq!(first_token["decimals"], json!(24));
+    assert_eq!(first_token["usd_price"], json!(3.45));
+    assert_eq!(first_token["icon"], json!("https://example.com/near.png"));
+
+    // Verify second token with null optional fields
+    let second_token = &response_json["tokens"][1];
+    assert_eq!(second_token["asset_id"], json!("eth"));
+    assert!(second_token["usd_price"].is_null());
+    assert!(second_token["icon"].is_null());
+
+    // Test round-trip
+    let decoded: GetSupportedTokensResponse = serde_json::from_value(response_json).unwrap();
+    assert_eq!(decoded.schema_version, SCHEMA_VERSION);
+    assert_eq!(decoded.tokens.len(), 2);
+    assert_eq!(decoded.tokens[0].asset_id, "nep141:wrap.near");
+    assert_eq!(decoded.tokens[1].symbol, "ETH");
 }
