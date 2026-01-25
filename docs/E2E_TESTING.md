@@ -83,7 +83,7 @@ bun run test:e2e
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Empty string or whitespace-only values fall back to `~/.zstash`. |
+| `ZSTASH_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Required in test-bridge mode; empty or whitespace-only values are rejected. |
 | `VITE_TEST_BRIDGE` | `false` | Enables HTTP transport in frontend |
 | `VITE_TEST_BRIDGE_TIMEOUT` | `10000` | Request timeout in ms (useful for slow CI runners) |
 | `ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS` | `http://localhost:1420,http://127.0.0.1:1420` | Comma-separated list of allowed browser origins for the test bridge CORS policy. |
@@ -91,7 +91,7 @@ bun run test:e2e
 
 ### Test Isolation with ZSTASH_TEST_HOME
 
-The `ZSTASH_TEST_HOME` environment variable redirects all wallet data to an isolated directory, preventing tests from polluting real user data. When set:
+The `ZSTASH_TEST_HOME` environment variable redirects all wallet data to an isolated directory, preventing tests from polluting real user data. In test-bridge mode, it must be set to a non-empty path. When set:
 
 - App database is created at `$ZSTASH_TEST_HOME/zstash.sqlite`
 - Wallet databases are stored under `$ZSTASH_TEST_HOME/wallets/`
@@ -100,6 +100,8 @@ The `ZSTASH_TEST_HOME` environment variable redirects all wallet data to an isol
 The `scripts/e2e-test.sh` script automatically:
 1. Creates a temporary directory for `ZSTASH_TEST_HOME`
 2. Cleans it up after tests complete
+
+If `ZSTASH_TEST_HOME` is present but empty/whitespace, the script exits with an error. When `VITE_TEST_BRIDGE=true` is set, a non-empty `ZSTASH_TEST_HOME` is required.
 
 To reset test data between manual runs:
 ```bash
@@ -141,7 +143,12 @@ curl -X POST http://127.0.0.1:19816/invoke/zstash_list_wallets \
 
 ### Sensitive Endpoints
 
-`zstash_view_seed_phrase` requires an explicit confirmation header:
+The following endpoints require an explicit confirmation header:
+- `zstash_view_seed_phrase`
+- `zstash_restore_wallet`
+- `zstash_confirm_send`
+
+Example:
 
 ```bash
 curl -X POST http://127.0.0.1:19816/invoke/zstash_view_seed_phrase \

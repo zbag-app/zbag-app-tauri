@@ -21,16 +21,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 APP_DIR="$PROJECT_ROOT/apps/zstash-app-tauri"
 
-# Use isolated test home directory to avoid polluting real data directory
-# Track whether we created the directory (to avoid deleting user-provided directories)
-if [ -z "$ZSTASH_TEST_HOME" ]; then
-    export ZSTASH_TEST_HOME="$(mktemp -d /tmp/zstash-e2e.XXXXXX)"
-    TEST_HOME_CREATED="1"
-else
-    TEST_HOME_CREATED=""
-fi
-echo "Using test home: $ZSTASH_TEST_HOME"
-
 TEST_BRIDGE_PORT=19816
 TEST_BRIDGE_PID=""
 PLAYWRIGHT_ARGS=("$@")
@@ -52,6 +42,30 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
+
+is_blank() {
+    [[ -z "${1//[[:space:]]/}" ]]
+}
+
+# Use isolated test home directory to avoid polluting real data directory
+# Track whether we created the directory (to avoid deleting user-provided directories)
+if [ -n "${ZSTASH_TEST_HOME+x}" ] && is_blank "$ZSTASH_TEST_HOME"; then
+    log_error "ZSTASH_TEST_HOME is set but empty or whitespace; please unset it or provide a valid path."
+    exit 1
+fi
+
+if [ "${VITE_TEST_BRIDGE:-}" = "true" ] && is_blank "${ZSTASH_TEST_HOME:-}"; then
+    log_error "VITE_TEST_BRIDGE=true requires ZSTASH_TEST_HOME to be set to a non-empty path."
+    exit 1
+fi
+
+if is_blank "${ZSTASH_TEST_HOME:-}"; then
+    export ZSTASH_TEST_HOME="$(mktemp -d /tmp/zstash-e2e.XXXXXX)"
+    TEST_HOME_CREATED="1"
+else
+    TEST_HOME_CREATED=""
+fi
+echo "Using test home: $ZSTASH_TEST_HOME"
 
 cleanup() {
     if [ -n "$TEST_BRIDGE_PID" ]; then

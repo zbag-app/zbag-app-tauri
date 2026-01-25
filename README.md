@@ -112,7 +112,7 @@ bunx playwright install chromium
 bun run test:e2e
 ```
 
-To reset test data between runs, remove the directory in `ZSTASH_TEST_HOME`. If `ZSTASH_TEST_HOME` is empty or whitespace, zSTASH falls back to `~/.zstash`.
+To reset test data between runs, remove the directory in `ZSTASH_TEST_HOME`. In test-bridge mode, `ZSTASH_TEST_HOME` must be set to a non-empty path; empty or whitespace-only values are rejected.
 
 See [docs/E2E_TESTING.md](docs/E2E_TESTING.md) for architecture details, CI workflow, and troubleshooting.
 

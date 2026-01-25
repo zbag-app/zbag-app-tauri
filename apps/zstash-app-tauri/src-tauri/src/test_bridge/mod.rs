@@ -19,7 +19,7 @@
 //! ```
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use axum::{
@@ -109,6 +109,12 @@ const DEFAULT_ALLOWED_ORIGINS: [&str; 2] = ["http://localhost:1420", "http://127
 const SENSITIVE_CONFIRM_HEADER: &str = "X-Test-Bridge-Confirm";
 const SENSITIVE_CONFIRM_VALUE: &str = "true";
 const SENSITIVE_MIN_INTERVAL: Duration = Duration::from_secs(2);
+const SENSITIVE_COMMANDS: [&str; 3] = [
+    "zstash_view_seed_phrase",
+    "zstash_restore_wallet",
+    "zstash_confirm_send",
+];
+const RATE_LIMITED_SENSITIVE_COMMANDS: [&str; 1] = ["zstash_view_seed_phrase"];
 
 /// Shared state for the test bridge server
 pub struct TestBridgeState {
@@ -171,6 +177,11 @@ fn cors_layer() -> CorsLayer {
 }
 
 fn allowed_origins() -> Vec<HeaderValue> {
+    static ORIGINS: OnceLock<Vec<HeaderValue>> = OnceLock::new();
+    ORIGINS.get_or_init(parse_allowed_origins).clone()
+}
+
+fn parse_allowed_origins() -> Vec<HeaderValue> {
     let mut parsed = Vec::new();
 
     if let Ok(raw) = std::env::var("ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS") {
@@ -209,6 +220,7 @@ async fn health_check() -> impl IntoResponse {
 fn confirm_sensitive_access(
     state: &TestBridgeState,
     headers: &HeaderMap,
+    rate_limit: bool,
 ) -> Result<(), axum::response::Response> {
     let confirmed = headers
         .get(SENSITIVE_CONFIRM_HEADER)
@@ -234,20 +246,22 @@ fn confirm_sensitive_access(
             .into_response());
     }
 
-    let mut last_call = state.sensitive_last_call.lock().expect("mutex poisoned");
-    let now = Instant::now();
-    if let Some(previous) = *last_call {
-        if now.duration_since(previous) < SENSITIVE_MIN_INTERVAL {
-            return Err((
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(serde_json::json!({
-                    "error": "Sensitive endpoint rate limit exceeded"
-                })),
-            )
-                .into_response());
+    if rate_limit {
+        let mut last_call = state.sensitive_last_call.lock().expect("mutex poisoned");
+        let now = Instant::now();
+        if let Some(previous) = *last_call {
+            if now.duration_since(previous) < SENSITIVE_MIN_INTERVAL {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(serde_json::json!({
+                        "error": "Sensitive endpoint rate limit exceeded"
+                    })),
+                )
+                    .into_response());
+            }
         }
+        *last_call = Some(now);
     }
-    *last_call = Some(now);
 
     Ok(())
 }
@@ -292,8 +306,9 @@ async fn invoke_command(
 ) -> impl IntoResponse {
     info!(command = %command, "Test bridge: invoking command");
 
-    if command == "zstash_view_seed_phrase" {
-        if let Err(resp) = confirm_sensitive_access(state.as_ref(), &headers) {
+    if SENSITIVE_COMMANDS.contains(&command.as_str()) {
+        let rate_limit = RATE_LIMITED_SENSITIVE_COMMANDS.contains(&command.as_str());
+        if let Err(resp) = confirm_sensitive_access(state.as_ref(), &headers, rate_limit) {
             return resp;
         }
     }

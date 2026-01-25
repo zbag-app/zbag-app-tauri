@@ -75,10 +75,21 @@ fn default_tor_dir() -> anyhow::Result<PathBuf> {
 fn zstash_data_root() -> anyhow::Result<PathBuf> {
     #[cfg(feature = "test-bridge")]
     {
-        if let Ok(root) = std::env::var("ZSTASH_TEST_HOME")
-            && !root.trim().is_empty()
-        {
-            return Ok(PathBuf::from(root));
+        match std::env::var("ZSTASH_TEST_HOME") {
+            Ok(root) => {
+                let trimmed = root.trim();
+                if trimmed.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "ZSTASH_TEST_HOME is set but empty or whitespace; test-bridge requires a non-empty path"
+                    ));
+                }
+                return Ok(PathBuf::from(trimmed));
+            }
+            Err(_) => {
+                return Err(anyhow::anyhow!(
+                    "ZSTASH_TEST_HOME must be set to a non-empty path when test-bridge is enabled"
+                ));
+            }
         }
     }
 

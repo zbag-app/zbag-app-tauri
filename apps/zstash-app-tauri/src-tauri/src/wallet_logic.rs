@@ -13,6 +13,7 @@ use zstash_core::ipc::v1::commands::wallet::{
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 
 use crate::state::AppState;
+use crate::time_utils::system_time_to_unix_ms;
 
 fn idle_sync_progress() -> SyncProgress {
     SyncProgress {
@@ -197,11 +198,6 @@ fn load_accounts_for_wallet(
     }
 
     Ok(out)
-}
-
-fn system_time_to_unix_ms(time: std::time::SystemTime) -> anyhow::Result<i64> {
-    let duration = time.duration_since(std::time::UNIX_EPOCH)?;
-    Ok(i64::try_from(duration.as_millis())?)
 }
 
 fn build_load_wallet_response(

@@ -10,6 +10,7 @@ pub mod server_logic;
 pub mod state;
 #[cfg(feature = "test-bridge")]
 pub mod test_bridge;
+pub mod time_utils;
 pub mod wallet_logic;
 pub mod windows;
 

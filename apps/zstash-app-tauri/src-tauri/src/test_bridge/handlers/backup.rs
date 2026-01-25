@@ -1,5 +1,6 @@
 //! Backup and restore command handlers.
 
+use tracing::warn;
 use zstash_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
@@ -75,6 +76,8 @@ pub fn restore_wallet_impl(
     if let Err(err) = ensure_schema_version(schema_version) {
         return IpcResult::Err { err };
     }
+
+    warn!("Test bridge: restore_wallet invoked");
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");

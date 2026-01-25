@@ -14,6 +14,7 @@ use zstash_engine::error::{find_engine_ipc_error, ipc_err};
 use zstash_engine::grpc_url::validate_grpc_url;
 
 use crate::state::AppState;
+use crate::time_utils::system_time_to_unix_ms;
 
 pub async fn add_server(
     state: &AppState,
@@ -217,9 +218,4 @@ fn parse_network(chain_name: &str) -> anyhow::Result<Network> {
             format!("unsupported chain_name: {other}"),
         )),
     }
-}
-
-fn system_time_to_unix_ms(time: std::time::SystemTime) -> anyhow::Result<i64> {
-    let duration = time.duration_since(std::time::UNIX_EPOCH)?;
-    Ok(i64::try_from(duration.as_millis())?)
 }

@@ -1,5 +1,6 @@
 //! Transaction command handlers.
 
+use tracing::warn;
 use zstash_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
@@ -41,6 +42,8 @@ pub fn confirm_send_impl(
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
     }
+
+    warn!("Test bridge: confirm_send invoked");
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");

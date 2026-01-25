@@ -9,6 +9,7 @@ use zstash_engine::db::fiat_meta;
 use zstash_engine::error::ipc_err;
 
 use crate::state::AppState;
+use crate::time_utils::system_time_to_unix_ms;
 
 pub fn get_fiat_settings(state: &AppState) -> anyhow::Result<GetFiatSettingsResponse> {
     let mgr = state.wallet_manager.lock().expect("mutex poisoned");
@@ -143,9 +144,4 @@ pub async fn get_exchange_rate(
             )
         }
     }
-}
-
-fn system_time_to_unix_ms(time: std::time::SystemTime) -> anyhow::Result<i64> {
-    let duration = time.duration_since(std::time::UNIX_EPOCH)?;
-    Ok(i64::try_from(duration.as_millis())?)
 }

@@ -8,7 +8,8 @@ use zstash_core::ipc::v1::commands::tor::{
 use zstash_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
-use crate::test_bridge::helpers::{map_anyhow, system_time_to_unix_ms};
+use crate::test_bridge::helpers::map_anyhow;
+use crate::time_utils::system_time_to_unix_ms;
 
 use super::sync::start_sync_impl;
 

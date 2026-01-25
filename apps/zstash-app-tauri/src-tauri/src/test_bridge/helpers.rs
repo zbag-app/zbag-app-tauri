@@ -62,11 +62,6 @@ pub fn to_ipc_error(err: anyhow::Error) -> zstash_core::ipc::v1::common::IpcErro
     }
 }
 
-pub fn system_time_to_unix_ms(time: std::time::SystemTime) -> anyhow::Result<i64> {
-    let duration = time.duration_since(std::time::UNIX_EPOCH)?;
-    Ok(i64::try_from(duration.as_millis())?)
-}
-
 /// Fallback runtime for synchronous callers outside a Tokio context (e.g. tests).
 pub fn fallback_runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -76,10 +71,14 @@ pub fn fallback_runtime() -> &'static tokio::runtime::Runtime {
 pub fn block_on<F: Future>(future: F) -> F::Output {
     // In the normal test-bridge server, we're already on Tokio. The fallback
     // runtime is mainly for unit tests or utilities that call this helper
-    // outside an async runtime. Note: block_in_place will panic on a current-
-    // thread runtime, so avoid calling this from such contexts.
+    // outside an async runtime. Avoid block_in_place on current-thread runtimes.
     match tokio::runtime::Handle::try_current() {
-        Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
+        Ok(handle) => {
+            if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::CurrentThread {
+                return fallback_runtime().block_on(future);
+            }
+            tokio::task::block_in_place(|| handle.block_on(future))
+        }
         Err(_) => fallback_runtime().block_on(future),
     }
 }

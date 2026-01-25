@@ -41,6 +41,14 @@ async function invoke<T>(cmd: string, args: { request: unknown }): Promise<T> {
         throw new Error(`Malformed IPC response for ${cmd}: ${parsed.error.message}`);
       }
       return json as T;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(
+          `Test bridge request timed out after ${TEST_BRIDGE_TIMEOUT}ms for ${cmd}. ` +
+            'Consider increasing VITE_TEST_BRIDGE_TIMEOUT.'
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }
