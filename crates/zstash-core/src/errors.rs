@@ -31,6 +31,7 @@ pub const QUEUED_BROADCAST_NOT_FOUND: &str = "E3008";
 pub const QUEUED_BROADCAST_EXPIRED: &str = "E3009";
 pub const PRIVACY_ACK_REQUIRED: &str = "E3010";
 pub const MEMO_NOT_ALLOWED: &str = "E3011";
+pub const JOB_NOT_FOUND: &str = "E3012";
 
 // Sync errors
 pub const SYNC_IN_PROGRESS: &str = "E4001";

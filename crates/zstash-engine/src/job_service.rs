@@ -319,9 +319,16 @@ async fn run_send_job(
     let job_type = JobType::Send;
 
     let emit_progress = |progress: JobProgress| {
+        let is_terminal = matches!(
+            progress.state,
+            JobState::Completed | JobState::Failed | JobState::Cancelled
+        );
         {
             let mut s = state.lock().expect("mutex poisoned");
             s.progress.insert(job_id.clone(), progress.clone());
+            if is_terminal {
+                s.jobs.remove(&job_id);
+            }
         }
         if let Some(handler) = on_progress.as_ref() {
             handler(JobProgressEvent {
@@ -447,7 +454,6 @@ async fn run_send_job(
             } else {
                 emit_progress(JobProgress::failed(job_id.clone(), job_type, e, None));
             }
-            cleanup_job(&state, &job_id);
             return;
         }
         Err(e) => {
@@ -457,7 +463,6 @@ async fn run_send_job(
                 format!("task panicked: {e}"),
                 None,
             ));
-            cleanup_job(&state, &job_id);
             return;
         }
     };
@@ -566,7 +571,6 @@ async fn run_send_job(
         primary_txid,
     ));
 
-    cleanup_job(&state, &job_id);
     info!(job_id = %job_id, "send job completed");
 }
 
@@ -582,9 +586,16 @@ async fn run_shield_job(
     let job_type = JobType::Shield;
 
     let emit_progress = |progress: JobProgress| {
+        let is_terminal = matches!(
+            progress.state,
+            JobState::Completed | JobState::Failed | JobState::Cancelled
+        );
         {
             let mut s = state.lock().expect("mutex poisoned");
             s.progress.insert(job_id.clone(), progress.clone());
+            if is_terminal {
+                s.jobs.remove(&job_id);
+            }
         }
         if let Some(handler) = on_progress.as_ref() {
             handler(JobProgressEvent {
@@ -623,13 +634,37 @@ async fn run_shield_job(
     };
 
     // Run the shielding in a blocking task
+    let runtime_handle = match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle,
+        Err(_) => {
+            emit_progress(JobProgress::failed(
+                job_id.clone(),
+                job_type,
+                "tokio runtime unavailable".to_string(),
+                None,
+            ));
+            return;
+        }
+    };
+
     let result = tokio::task::spawn_blocking({
         let job_id = job_id.clone();
         let cancel_rx = cancel_rx.clone();
         let state = Arc::clone(&state);
         let on_progress = on_progress.clone();
+        let runtime_handle = runtime_handle.clone();
 
-        move || shield_funds_blocking(job_id, ctx, wallet_db_conn, cancel_rx, state, on_progress)
+        move || {
+            shield_funds_blocking(
+                job_id,
+                ctx,
+                wallet_db_conn,
+                cancel_rx,
+                state,
+                on_progress,
+                runtime_handle,
+            )
+        }
     })
     .await;
 
@@ -641,7 +676,6 @@ async fn run_shield_job(
             } else {
                 emit_progress(JobProgress::failed(job_id.clone(), job_type, e, None));
             }
-            cleanup_job(&state, &job_id);
             return;
         }
         Err(e) => {
@@ -651,7 +685,6 @@ async fn run_shield_job(
                 format!("task panicked: {e}"),
                 None,
             ));
-            cleanup_job(&state, &job_id);
             return;
         }
     };
@@ -689,7 +722,6 @@ async fn run_shield_job(
         primary_txid,
     ));
 
-    cleanup_job(&state, &job_id);
     info!(job_id = %job_id, "shield job completed");
 }
 
@@ -701,6 +733,7 @@ fn shield_funds_blocking(
     cancel_rx: watch::Receiver<bool>,
     state: Arc<Mutex<JobServiceState>>,
     on_progress: Option<JobEventHandler>,
+    runtime_handle: tokio::runtime::Handle,
 ) -> Result<(String, rusqlite::Connection), String> {
     use std::collections::{BTreeMap, BTreeSet};
     use zcash_client_backend::data_api::{InputSource as _, WalletRead as _};
@@ -991,35 +1024,25 @@ fn shield_funds_blocking(
             }
 
             // Broadcast synchronously (we're already in a blocking context)
-            let rt = tokio::runtime::Handle::try_current().ok().or_else(|| {
-                tokio::runtime::Runtime::new()
-                    .ok()
-                    .map(|rt| rt.handle().clone())
+            let grpc_url = ctx.grpc_url.clone();
+            let tor = ctx.tor_manager.clone();
+            let tx_bytes_clone = tx_bytes.clone();
+
+            let result = runtime_handle.block_on(async {
+                broadcast_transaction(&grpc_url, &tx_bytes_clone, tor.as_ref()).await
             });
 
-            if let Some(handle) = rt {
-                let grpc_url = ctx.grpc_url.clone();
-                let tor = ctx.tor_manager.clone();
-                let tx_bytes_clone = tx_bytes.clone();
-
-                let result = tokio::task::block_in_place(|| {
-                    handle.block_on(async {
-                        broadcast_transaction(&grpc_url, &tx_bytes_clone, tor.as_ref()).await
-                    })
-                });
-
-                if let Err(e) = result {
-                    debug!(job_id = %job_id, txid = %txid_str, error = ?e, "broadcast failed, queuing for retry");
-                    if let Err(queue_err) = queue_broadcast_for_retry(
-                        &ctx.wallet_id,
-                        &ctx.wallet_dir,
-                        &ctx.wallet_dek,
-                        &txid_str,
-                        &tx_bytes,
-                        Some(format!("{e:#}")),
-                    ) {
-                        error!(job_id = %job_id, error = ?queue_err, "failed to queue broadcast for retry");
-                    }
+            if let Err(e) = result {
+                debug!(job_id = %job_id, txid = %txid_str, error = ?e, "broadcast failed, queuing for retry");
+                if let Err(queue_err) = queue_broadcast_for_retry(
+                    &ctx.wallet_id,
+                    &ctx.wallet_dir,
+                    &ctx.wallet_dek,
+                    &txid_str,
+                    &tx_bytes,
+                    Some(format!("{e:#}")),
+                ) {
+                    error!(job_id = %job_id, error = ?queue_err, "failed to queue broadcast for retry");
                 }
             }
         }
@@ -1030,11 +1053,6 @@ fn shield_funds_blocking(
     };
 
     Ok((primary_txid, conn))
-}
-
-fn cleanup_job(state: &Arc<Mutex<JobServiceState>>, job_id: &str) {
-    let mut s = state.lock().expect("mutex poisoned");
-    s.jobs.remove(job_id);
 }
 
 fn open_wallet_db_for_job(

@@ -2175,7 +2175,7 @@ impl WalletManager {
         let progress = self
             .job_service
             .get_progress(job_id)
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "job not found"))?;
+            .ok_or_else(|| ipc_err(errors::JOB_NOT_FOUND, "job not found"))?;
 
         Ok(GetJobStatusResponse {
             schema_version: SCHEMA_VERSION,
