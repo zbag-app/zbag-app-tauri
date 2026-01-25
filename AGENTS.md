@@ -59,6 +59,7 @@ Standard git workflow.
 - `git commit -m "message"` - Create commit
 - `git push` - Push to remote
 - `git pull --rebase` - Update from remote
+- `GIT_EDITOR=true git rebase --continue` - Continue a rebase without opening an editor
 - `git stash` / `git stash pop` - Temporarily store changes
 
 ## Security & Configuration Tips
