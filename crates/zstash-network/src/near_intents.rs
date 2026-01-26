@@ -593,7 +593,11 @@ fn parse_tokens_response(body: &serde_json::Value) -> Result<Vec<TokenInfo>, Nea
             .unwrap_or_default()
             .to_string();
 
-        let decimals = item.get("decimals").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
+        let decimals = item
+            .get("decimals")
+            .and_then(|v| v.as_u64())
+            .and_then(|d| u8::try_from(d).ok())
+            .unwrap_or(0);
 
         let usd_price = item.get("usdPrice").and_then(|v| v.as_f64());
 
