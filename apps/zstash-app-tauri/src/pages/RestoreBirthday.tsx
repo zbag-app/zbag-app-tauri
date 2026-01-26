@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, RotateCcw, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
@@ -25,13 +25,18 @@ export function RestoreBirthday(props: {
   });
 
   // Clear navigation state from the history entry after reading it.
+  const clearedRef = useRef(false);
+
   useEffect(() => {
-    if (location.state != null) {
+    if (location.state != null && !clearedRef.current) {
+      clearedRef.current = true;
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
 
-  // Clear flow data on unmount to minimize memory lifetime
+  // Defense-in-depth: explicitly clear sensitive flow data (contains mnemonic)
+  // on unmount to minimize memory retention window. While React will GC the
+  // component state, this ensures no closures retain references to the mnemonic.
   useEffect(() => {
     return () => {
       setFlow(null);
