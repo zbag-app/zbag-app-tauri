@@ -62,7 +62,9 @@ pub struct TransactionInfo {
     pub tx_type: TransactionType,
     pub value: Zatoshis,
     pub fee: Zatoshis,
-    /// Total number of memos attached to this transaction (including empty/binary).
+    /// Number of unique memos for this transaction (deduplicated across sent/received notes).
+    /// Includes empty and binary memos. Self-send transactions with identical memos in both
+    /// sent and received notes will have a count of 1.
     pub memo_count: u32,
     /// Structured memo information for display.
     pub memos: Vec<MemoInfo>,

@@ -128,7 +128,7 @@ export interface TransactionInfo {
   tx_type: TransactionType;
   value: Zatoshis;
   fee: Zatoshis;
-  /** Total number of memos attached to this transaction (including empty/binary) */
+  /** Number of unique memos for this transaction (deduplicated across sent/received notes) */
   memo_count: number;
   /** Structured memo information for display */
   memos: MemoInfo[];

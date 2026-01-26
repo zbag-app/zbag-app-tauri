@@ -135,7 +135,9 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Install Playwright browsers
         working-directory: apps/zstash-app-tauri
-        run: bunx playwright install chromium
+        run: |
+          sleep 1
+          bunx playwright install chromium
       - name: Build test bridge
         run: cargo build -p zstash-app-tauri --features test-bridge
       - name: Start test bridge
