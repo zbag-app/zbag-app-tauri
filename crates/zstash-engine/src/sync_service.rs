@@ -936,38 +936,110 @@ impl SyncService {
                     // Fetch full transactions to extract memos for received notes.
                     // Compact blocks don't contain memo data, so we need to fetch
                     // the full transaction and decrypt it to get memos.
+
+                    // Get total count for progress tracking
+                    let total_to_enhance = match count_txids_needing_memo_enhancement(
+                        &wallet_db_path,
+                        &wallet_dek,
+                    ) {
+                        Ok(count) => count,
+                        Err(err) => {
+                            tracing::warn!(
+                                wallet_id = %wallet_id,
+                                error = ?err,
+                                "failed to count transactions needing memo enhancement, skipping enhancement phase"
+                            );
+                            0
+                        }
+                    };
+
+                    // Emit initial enhancing progress
+                    let enhancement_progress = |enhanced: u32, total: u32| -> u8 {
+                        if total == 0 {
+                            return 100;
+                        }
+                        // Map enhancement progress to 99-100 range
+                        let ratio = enhanced as f64 / total as f64;
+                        (99.0 + ratio).min(100.0) as u8
+                    };
+
                     update(SyncProgress {
                         phase: SyncPhase::Enhancing,
                         scan_frontier_height: u32::from(chain_tip),
                         wallet_tip_height: u32::from(chain_tip),
-                        progress_percent: 99,
+                        progress_percent: enhancement_progress(0, total_to_enhance),
                         eta_seconds: None,
                         retry_in_seconds: None,
                         error_message: None,
                     });
 
-                    // Get transactions needing memo enhancement
-                    // Note: This fetches all txids upfront. For wallets with many historical
-                    // transactions (e.g., restored from an old seed), this could be a large list.
-                    // Concurrency is bounded, but the full txid list is held in memory.
-                    // If this becomes a problem, consider batching with LIMIT/OFFSET.
-                    match get_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek) {
-                        Ok(txids_to_enhance) => {
-                            // Use concurrent enhancement with bounded parallelism.
-                            // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
-                            // configured, so moderate concurrency is safe.
-                            const ENHANCEMENT_CONCURRENCY: usize = 4;
-                            let mut join_set = tokio::task::JoinSet::new();
+                    if total_to_enhance > 0 {
+                        // Use concurrent enhancement with bounded parallelism.
+                        // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
+                        // configured, so moderate concurrency is safe.
+                        const ENHANCEMENT_CONCURRENCY: usize = 4;
+                        let mut join_set = tokio::task::JoinSet::new();
+                        let mut enhanced_count: u32 = 0;
+                        let mut batch_offset: u32 = 0;
 
-                            for txid_bytes in txids_to_enhance {
+                        // Process transactions in batches to limit memory usage
+                        'enhancement: loop {
+                            // Check cancellation before fetching next batch
+                            if *cancel_rx.borrow() {
+                                break 'enhancement;
+                            }
+
+                            // Fetch next batch of txids
+                            let txids_batch = match get_txids_needing_memo_enhancement_batch(
+                                &wallet_db_path,
+                                &wallet_dek,
+                                batch_offset,
+                                ENHANCEMENT_BATCH_SIZE,
+                            ) {
+                                Ok(batch) => batch,
+                                Err(err) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        batch_offset,
+                                        error = ?err,
+                                        "failed to get memo enhancement batch"
+                                    );
+                                    break 'enhancement;
+                                }
+                            };
+
+                            // If batch is empty, we're done
+                            if txids_batch.is_empty() {
+                                break 'enhancement;
+                            }
+
+                            let batch_size = txids_batch.len() as u32;
+                            batch_offset += batch_size;
+
+                            // Emit progress at start of each batch
+                            update(SyncProgress {
+                                phase: SyncPhase::Enhancing,
+                                scan_frontier_height: u32::from(chain_tip),
+                                wallet_tip_height: u32::from(chain_tip),
+                                progress_percent: enhancement_progress(
+                                    enhanced_count,
+                                    total_to_enhance,
+                                ),
+                                eta_seconds: None,
+                                retry_in_seconds: None,
+                                error_message: None,
+                            });
+
+                            for txid_bytes in txids_batch {
                                 // Check cancellation before spawning new tasks
                                 if *cancel_rx.borrow() {
-                                    break;
+                                    break 'enhancement;
                                 }
 
                                 // Limit concurrency by draining completed tasks
                                 while join_set.len() >= ENHANCEMENT_CONCURRENCY {
                                     if let Some(result) = join_set.join_next().await {
+                                        enhanced_count += 1;
                                         match result {
                                             Ok(Ok(())) => {}
                                             Ok(Err((txid, err))) => {
@@ -1015,36 +1087,37 @@ impl SyncService {
                                     }
                                 });
                             }
+                        }
 
-                            // Drain remaining tasks
-                            while let Some(result) = join_set.join_next().await {
-                                match result {
-                                    Ok(Ok(())) => {}
-                                    Ok(Err((txid, err))) => {
-                                        tracing::warn!(
-                                            wallet_id = %wallet_id,
-                                            txid = hex::encode(txid),
-                                            error = ?err,
-                                            "failed to enhance transaction memo"
-                                        );
-                                    }
-                                    Err(join_err) => {
-                                        tracing::warn!(
-                                            wallet_id = %wallet_id,
-                                            error = ?join_err,
-                                            "enhancement task panicked"
-                                        );
-                                    }
+                        // Drain remaining tasks
+                        while let Some(result) = join_set.join_next().await {
+                            enhanced_count += 1;
+                            match result {
+                                Ok(Ok(())) => {}
+                                Ok(Err((txid, err))) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        txid = hex::encode(txid),
+                                        error = ?err,
+                                        "failed to enhance transaction memo"
+                                    );
+                                }
+                                Err(join_err) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "enhancement task panicked"
+                                    );
                                 }
                             }
                         }
-                        Err(err) => {
-                            tracing::warn!(
-                                wallet_id = %wallet_id,
-                                error = ?err,
-                                "failed to get transactions needing memo enhancement, skipping enhancement phase"
-                            );
-                        }
+
+                        tracing::debug!(
+                            wallet_id = %wallet_id,
+                            enhanced_count,
+                            total_to_enhance,
+                            "memo enhancement phase complete"
+                        );
                     }
 
                     // Final update triggers balance emission via the update closure
@@ -1650,33 +1723,96 @@ fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, e
     }
 }
 
-/// Returns txids of transactions with received notes that have NULL memos.
+/// Batch size for memo enhancement queries.
+/// This limits memory usage when enhancing wallets with many historical transactions.
+const ENHANCEMENT_BATCH_SIZE: u32 = 100;
+
+/// Counts transactions with received notes that have NULL memos.
+///
+/// Used for progress tracking during the enhancement phase.
+#[doc(hidden)]
+pub fn count_txids_needing_memo_enhancement(
+    wallet_db_path: &Path,
+    wallet_dek: &Dek,
+) -> anyhow::Result<u32> {
+    let conn = open_wallet_db(wallet_db_path, wallet_dek)?;
+    let count: u32 = conn.query_row(
+        "SELECT COUNT(*) FROM (
+            SELECT DISTINCT transactions.txid FROM transactions
+            JOIN sapling_received_notes ON sapling_received_notes.transaction_id = transactions.id_tx
+            WHERE sapling_received_notes.memo IS NULL
+            UNION
+            SELECT DISTINCT transactions.txid FROM transactions
+            JOIN orchard_received_notes ON orchard_received_notes.transaction_id = transactions.id_tx
+            WHERE orchard_received_notes.memo IS NULL
+        )",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/// Returns a batch of txids for transactions with received notes that have NULL memos.
 ///
 /// These transactions need enhancement to fetch memo data from full transactions.
+/// Uses LIMIT/OFFSET pagination to avoid loading all txids into memory at once.
 ///
 /// Note: This opens a separate connection from `enhance_transaction_memo`. A theoretical
 /// race exists if another process modifies the database between query and update, but this
 /// is benign in practice: the wallet is single-process, and the UPDATE is idempotent.
-fn get_txids_needing_memo_enhancement(
+#[doc(hidden)]
+pub fn get_txids_needing_memo_enhancement_batch(
     wallet_db_path: &Path,
     wallet_dek: &Dek,
+    offset: u32,
+    limit: u32,
 ) -> anyhow::Result<Vec<[u8; 32]>> {
     let conn = open_wallet_db(wallet_db_path, wallet_dek)?;
     let mut stmt = conn.prepare(
-        "SELECT DISTINCT transactions.txid FROM transactions
-         JOIN sapling_received_notes ON sapling_received_notes.transaction_id = transactions.id_tx
-         WHERE sapling_received_notes.memo IS NULL
-         UNION
-         SELECT DISTINCT transactions.txid FROM transactions
-         JOIN orchard_received_notes ON orchard_received_notes.transaction_id = transactions.id_tx
-         WHERE orchard_received_notes.memo IS NULL",
+        "SELECT txid FROM (
+            SELECT DISTINCT transactions.txid FROM transactions
+            JOIN sapling_received_notes ON sapling_received_notes.transaction_id = transactions.id_tx
+            WHERE sapling_received_notes.memo IS NULL
+            UNION
+            SELECT DISTINCT transactions.txid FROM transactions
+            JOIN orchard_received_notes ON orchard_received_notes.transaction_id = transactions.id_tx
+            WHERE orchard_received_notes.memo IS NULL
+        ) LIMIT ?1 OFFSET ?2",
     )?;
 
-    let txids = stmt
-        .query_map([], |row| row.get::<_, Vec<u8>>(0))?
-        .filter_map(|r| r.ok())
-        .filter_map(|bytes| bytes.try_into().ok())
-        .collect();
+    let mut txids = Vec::new();
+    let mut skipped_rows = 0u32;
+    let mut malformed_txids = 0u32;
+
+    let rows = stmt.query_map([limit, offset], |row| row.get::<_, Vec<u8>>(0))?;
+
+    for result in rows {
+        match result {
+            Ok(bytes) => {
+                if let Ok(txid_array) = bytes.try_into() {
+                    txids.push(txid_array);
+                } else {
+                    malformed_txids += 1;
+                    tracing::warn!("malformed txid in database: expected 32 bytes");
+                }
+            }
+            Err(err) => {
+                skipped_rows += 1;
+                tracing::warn!(
+                    error = ?err,
+                    "failed to read txid row from database"
+                );
+            }
+        }
+    }
+
+    if skipped_rows > 0 || malformed_txids > 0 {
+        tracing::warn!(
+            skipped_rows,
+            malformed_txids,
+            "memo enhancement query skipped some rows"
+        );
+    }
 
     Ok(txids)
 }
@@ -1909,8 +2045,9 @@ mod tests {
             .expect("insert note with memo");
         }
 
-        // Query using the function under test
-        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+        // Query using the batch function (offset=0, limit=1000 to get all)
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
 
         assert_eq!(txids.len(), 1, "should return only txid with NULL memo");
         assert_eq!(txids[0], [0x01u8; 32]);
@@ -1952,7 +2089,8 @@ mod tests {
             .expect("insert note with memo");
         }
 
-        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
         assert!(txids.is_empty(), "no txids should need enhancement");
         // temp_file dropped here, automatic cleanup
     }
@@ -1998,7 +2136,8 @@ mod tests {
             .expect("insert orchard note");
         }
 
-        let txids = get_txids_needing_memo_enhancement(&path, &dek).expect("query txids");
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
         assert_eq!(
             txids.len(),
             1,

@@ -37,21 +37,34 @@ pub enum MemoKind {
 }
 
 /// Structured memo information for transaction display.
+///
+/// This struct represents memo data in a display-friendly format. The `content` field
+/// contains human-readable strings, not raw binary data. For Binary memos, the actual
+/// payload is not exposed; only a placeholder description is provided. Use `size_bytes`
+/// to determine the true payload size for all memo kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoInfo {
     /// The kind of memo content.
     pub kind: MemoKind,
-    /// The memo content as a string. For Text memos, this is the UTF-8 text.
-    /// For Binary memos, this is a description like "[binary: 512 bytes]".
-    /// For Empty memos, this is None.
-    pub content: Option<String>,
-    /// The logical content size in bytes (0-512).
+    /// The memo content as a displayable string.
     ///
-    /// For Text/Binary memos, this is the actual byte length of the content.
-    /// For Empty memos, this is 0 (representing no logical content), even though
-    /// the wire format uses a single 0xF6 marker byte. This semantic distinction
-    /// is intentional: `size_bytes` represents displayable/usable content size,
-    /// not raw storage size.
+    /// - **Text memos:** The actual UTF-8 text content, ready for display.
+    /// - **Binary memos:** A placeholder description (e.g., `"[binary: 512 bytes]"`),
+    ///   NOT the raw binary payload. The actual binary data is not exposed through
+    ///   this field to avoid display issues and potential security concerns.
+    /// - **Empty memos:** `None` (no displayable content).
+    pub content: Option<String>,
+    /// The true payload size in bytes (0-512).
+    ///
+    /// This represents the actual byte length of the memo payload, regardless of
+    /// what `content` displays:
+    ///
+    /// - **Text memos:** The UTF-8 byte length of the text.
+    /// - **Binary memos:** The actual binary payload size (not the length of the
+    ///   placeholder string in `content`).
+    /// - **Empty memos:** 0 (representing no logical content), even though the wire
+    ///   format uses a single 0xF6 marker byte. This semantic distinction is
+    ///   intentional: `size_bytes` represents usable content size, not raw storage size.
     pub size_bytes: u32,
 }
 

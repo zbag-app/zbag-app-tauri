@@ -8,6 +8,15 @@ All notable changes to zSTASH will be documented in this file.
 
 - Test bridge integration issues
 
+### Changed
+
+- **Memo deduplication:** The `memo_count` field in transaction history now uses SQL UNION
+  to deduplicate identical memos. This means:
+  - Self-send transactions show a memo count of 1 (not 2) when the same memo appears in both
+    sent and received notes
+  - Transactions with identical memos to multiple recipients are deduplicated in the count
+  - The underlying memo data is preserved in the database; only the display count is affected
+
 - CI failures for bun tests and playwright timeout
 
 - Prevent e2e-test.sh from deleting user-provided test directories

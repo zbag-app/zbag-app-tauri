@@ -10,14 +10,7 @@ import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../se
 import { onSwapChanged, onTransactionChanged } from '../services/events';
 import { formatRelativeTime, formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
 import { useFiatDisplayContext } from '../context/FiatDisplayContext';
-
-function getDisplayableMemos(memos: IPC.MemoInfo[]) {
-  return memos.filter((m) => m.kind !== 'Empty' && m.content);
-}
-
-function getMemoDisplayText(displayableMemos: IPC.MemoInfo[]) {
-  return displayableMemos.map((m) => m.content ?? '').join('\n---\n');
-}
+import { getDisplayableMemos, getMemoDisplayText } from '../utils/memo';
 
 interface MemoDisplayProps {
   tx: IPC.TransactionInfo;
@@ -30,14 +23,19 @@ interface MemoDisplayProps {
 
 function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, onCopyMemo }: MemoDisplayProps) {
   const totalMemos = tx.memo_count;
+
+  const { displayableMemos, fullText, fullTextBytes, hiddenCount } = useMemo(() => {
+    const displayable = getDisplayableMemos(tx.memos);
+    const text = displayable.length > 0 ? getMemoDisplayText(displayable) : '';
+    const textBytes = new TextEncoder().encode(text).length;
+    const hidden = totalMemos - displayable.length;
+    return { displayableMemos: displayable, fullText: text, fullTextBytes: textBytes, hiddenCount: hidden };
+  }, [tx.memos, totalMemos]);
+
   if (totalMemos === 0) return null;
 
-  const displayableMemos = getDisplayableMemos(tx.memos);
-  const fullText = displayableMemos.length > 0 ? getMemoDisplayText(displayableMemos) : '';
-  const fullTextBytes = new TextEncoder().encode(fullText).length;
   const isLong = fullText.length > 100;
   const displayText = isExpanded || !isLong ? fullText : fullText.slice(0, 100);
-  const hiddenCount = totalMemos - displayableMemos.length;
 
   return (
     <div className="mt-2 rounded-md border border-border/50 bg-muted/30 p-3">

@@ -136,7 +136,7 @@ jobs:
       - name: Install Playwright browsers
         working-directory: apps/zstash-app-tauri
         run: |
-          sleep 1
+          bun --version
           bunx playwright install chromium
       - name: Build test bridge
         run: cargo build -p zstash-app-tauri --features test-bridge
