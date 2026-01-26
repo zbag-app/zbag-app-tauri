@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowLeft } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { ErrorCodes } from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { TokenPicker } from '../components/ui/TokenPicker';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
 import {
   ZEC_ASSET_ID,
@@ -14,7 +15,6 @@ import {
   FALLBACK_TOKENS,
   filterSwapTokens,
   sortTokensByPrice,
-  getTokenLabel,
   type SupportedToken,
 } from '../data/supportedTokens';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap, getSupportedTokens } from '../services/ipc';
@@ -273,26 +273,15 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="outputAsset">Target asset</Label>
-            {loadingTokens ? (
-              <div className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading tokens...
-              </div>
-            ) : (
-              <select
-                id="outputAsset"
-                value={outputAsset}
-                onChange={(e) => setOutputAsset(e.currentTarget.value)}
-                disabled={submittingQuote || starting}
-                className="flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {availableTokens.map((t) => (
-                  <option key={t.asset_id} value={t.asset_id}>
-                    {getTokenLabel(t)}
-                  </option>
-                ))}
-              </select>
-            )}
+            <TokenPicker
+              id="outputAsset"
+              value={outputAsset}
+              onChange={setOutputAsset}
+              tokens={availableTokens}
+              disabled={submittingQuote || starting}
+              loading={loadingTokens}
+              placeholder="Select token"
+            />
           </div>
 
           <div className="space-y-2">
