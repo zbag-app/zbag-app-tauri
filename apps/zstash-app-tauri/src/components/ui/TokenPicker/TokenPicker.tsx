@@ -136,8 +136,22 @@ export function TokenPicker({
     if (disabled || loading) return;
 
     switch (event.key) {
-      case 'Enter':
       case ' ':
+        // Allow space to be typed in the search input
+        if (event.target === searchInputRef.current) {
+          return;
+        }
+        event.preventDefault();
+        if (open && highlightedIndex >= 0 && flatTokens[highlightedIndex]) {
+          onChange(flatTokens[highlightedIndex].asset_id);
+          setOpen(false);
+          setSearchQuery('');
+        } else if (!open) {
+          setOpen(true);
+          setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+        }
+        break;
+      case 'Enter':
         event.preventDefault();
         if (open && highlightedIndex >= 0 && flatTokens[highlightedIndex]) {
           onChange(flatTokens[highlightedIndex].asset_id);
