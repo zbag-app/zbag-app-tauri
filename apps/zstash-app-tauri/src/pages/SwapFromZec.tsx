@@ -98,7 +98,7 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
     refundAddressTrimmed,
   ]);
 
-const quoteExpired = useMemo(() => {
+  const quoteExpired = useMemo(() => {
     if (!quote) return false;
     if (quote.deadline === 0) return false;
     return nowMs + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline;
@@ -408,7 +408,7 @@ const quoteExpired = useMemo(() => {
                   Expires in
                 </span>
                 <div className={`font-mono font-semibold ${quoteExpired ? 'text-destructive' : ''}`}>
-                  {quote.deadline === 0 ? '-' : quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
+                  {quote.deadline === 0 ? '—' : quoteExpired ? 'Expired' : formatCountdown(quote.deadline, nowMs)}
                 </div>
               </div>
             </div>

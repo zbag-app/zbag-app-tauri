@@ -7,11 +7,12 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, supportedTokens } from '../data/supportedTokens';
+import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, FALLBACK_TOKENS, getTokenLabel } from '../data/supportedTokens';
 import { useNowMs } from '../hooks/useNowMs';
 import { validateDecimalAmount } from '../lib/amount';
 import { formatCountdown } from '../lib/time';
 import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
+import { formatAtomicAmountForToken } from '../utils/amounts';
 
 const QUOTE_EXPIRY_BUFFER_MS = 10_000;
 
@@ -46,7 +47,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
 
   // Get the selected token info for display
   const selectedToken = useMemo(() => {
-    return supportedTokens.find((t) => t.id === outputAsset);
+    return FALLBACK_TOKENS.find((t) => t.asset_id === outputAsset);
   }, [outputAsset]);
 
   const outputAmountValidationError = useMemo(() => {
@@ -86,19 +87,25 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
       if (activeAccountId == null) return;
 
       setLoadingRefundAddress(true);
-      const res = await getReceiveAddress({
-        account_id: activeAccountId,
-        address_type: 'ShieldedOnly',
-      });
-      if (cancelled) return;
-      setLoadingRefundAddress(false);
+      try {
+        const res = await getReceiveAddress({
+          account_id: activeAccountId,
+          address_type: 'ShieldedOnly',
+        });
+        if (cancelled) return;
 
-      if ('err' in res) {
-        setError(res.err.message);
-        return;
+        if ('err' in res) {
+          setError(res.err.message);
+          return;
+        }
+
+        setRefundAddress(res.ok.address.encoded);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Failed to load refund address');
+      } finally {
+        if (!cancelled) setLoadingRefundAddress(false);
       }
-
-      setRefundAddress(res.ok.address.encoded);
     }
 
     loadRefundAddress();
@@ -112,6 +119,13 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     if (quote.deadline === 0) return false;
     return nowMs + QUOTE_EXPIRY_BUFFER_MS >= quote.deadline;
   }, [quote, nowMs]);
+
+  // Format min output amount with token symbol
+  const formattedMinOutput = useMemo(() => {
+    if (!quote) return null;
+    return formatAtomicAmountForToken(quote.min_output_amount, quote.output_asset);
+  }, [quote]);
+  const minOutputIsRaw = formattedMinOutput?.isRaw ?? false;
 
   if (wallet.network !== 'Mainnet') {
     return (
@@ -176,8 +190,8 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {getFromZecTokens().map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
+                <option key={t.asset_id} value={t.asset_id}>
+                  {getTokenLabel(t)}
                 </option>
               ))}
             </select>
@@ -200,7 +214,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 className="pr-16"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                {selectedToken?.label ?? outputAsset}
+                {selectedToken ? getTokenLabel(selectedToken) : outputAsset}
               </span>
             </div>
             {outputAmountValidationError && <div className="text-sm text-destructive">{outputAmountValidationError}</div>}
@@ -218,7 +232,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 setQuoteId(null);
                 setError(null);
               }}
-              placeholder={`Paste the recipient's ${selectedToken?.blockchain?.toUpperCase() ?? 'destination'} address`}
+              placeholder={`Paste the recipient's ${selectedToken?.chain?.toUpperCase() ?? 'destination'} address`}
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
             />
           </div>
@@ -299,15 +313,15 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 </div>
                 <div className="text-sm text-muted-foreground mt-2">Recipient will receive</div>
                 <div className="text-lg font-semibold">
-                  {quote.output_amount_formatted} {selectedToken?.label ?? ''}
+                  {quote.output_amount_formatted} {selectedToken ? getTokenLabel(selectedToken) : ''}
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
-                <span className="text-muted-foreground">Min. output</span>
-                <div className="font-semibold">{quote.min_output_amount}</div>
+                <span className="text-muted-foreground">{minOutputIsRaw ? 'Min. output (raw)' : 'Min. output'}</span>
+                <div className="font-semibold">{formattedMinOutput?.value}</div>
               </div>
               <div className="space-y-1">
                 <span className="text-muted-foreground">Est. time</span>
@@ -339,7 +353,10 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.currentTarget.value)}
+                onChange={(e) => {
+                  setPassword(e.currentTarget.value);
+                  setError(null);
+                }}
                 disabled={starting}
                 placeholder="Enter your password"
               />
