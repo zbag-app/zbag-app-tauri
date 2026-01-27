@@ -48,3 +48,10 @@ test('clears view-seed dialog state when closed', async () => {
   expect(file).toContain("setPassword('')");
   expect(file).toContain('setSeedWords(null)');
 });
+
+test('clears sensitive inputs before navigating in restore flow', async () => {
+  const file = await read('pages/RestoreWallet.tsx');
+  expect(file).toContain("setSeedPhrase('')");
+  expect(file).toContain("setPassword('')");
+  expect(file).toContain("setPasswordConfirm('')");
+});
