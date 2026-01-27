@@ -82,12 +82,15 @@ export function RestoreBirthday(props: {
         return;
       }
 
-      setFlow(null);
       onRestored({ wallet: load.ok.wallet, accounts: load.ok.accounts });
 
       await startSync({ wallet_id: walletId });
       navigate('/');
     } finally {
+      // Security: Always clear sensitive flow data (contains mnemonic) on all
+      // exit paths - success, error, or exception. User must re-enter credentials
+      // to retry after failure, which minimizes the memory retention window.
+      setFlow(null);
       setSubmitting(false);
     }
   };
