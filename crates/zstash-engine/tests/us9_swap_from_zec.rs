@@ -9,6 +9,7 @@ use uuid::Uuid;
 use zstash_core::domain::{Network, SwapIntent, SwapType};
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::db::backup_meta;
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
 use zstash_engine::swap_service::SwapService;
@@ -133,6 +134,71 @@ fn spawn_mock_1click_server(
                 )
             } else if path.starts_with("/v0/deposit/submit") {
                 // New API just acknowledges the deposit
+                r#"{"success": true}"#.to_string()
+            } else {
+                r#"{"status":"FAILED","message":"unexpected path"}"#.to_string()
+            };
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+        }
+    });
+
+    (base_url, handle)
+}
+
+fn spawn_mock_1click_server_decimal_amount(
+    deposit_address: &'static str,
+    expected_requests: usize,
+) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
+    let addr = listener.local_addr().expect("server addr");
+    let base_url = format!("http://{addr}");
+
+    let handle = thread::spawn(move || {
+        for _ in 0..expected_requests {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 16 * 1024];
+            let n = stream.read(&mut buf).expect("read request");
+            let req = String::from_utf8_lossy(&buf[..n]);
+            let first = req.lines().next().unwrap_or_default();
+            let path = first.split_whitespace().nth(1).unwrap_or("/");
+
+            let deadline_iso = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+
+            let body = if path.starts_with("/v0/quote") {
+                // Ensure amountInFormatted includes a decimal point. Wallet send APIs expect zatoshis
+                // (integer smallest-units), so using the formatted value would cause "invalid amount".
+                format!(
+                    r#"{{
+                        "quote": {{
+                            "amountIn": "10000000",
+                            "amountInFormatted": "0.1",
+                            "amountInUsd": "25.00",
+                            "minAmountIn": "10000000",
+                            "amountOut": "1000000",
+                            "amountOutFormatted": "1",
+                            "amountOutUsd": "25.00",
+                            "minAmountOut": "990000",
+                            "deadline": "{deadline_iso}",
+                            "timeWhenInactive": "{deadline_iso}",
+                            "timeEstimate": 120,
+                            "depositAddress": "{deposit_address}",
+                            "depositMemo": null
+                        }},
+                        "quoteRequest": {{}},
+                        "signature": "mock",
+                        "timestamp": "{deadline_iso}",
+                        "correlationId": "test-correlation-id"
+                    }}"#
+                )
+            } else if path.starts_with("/v0/deposit/submit") {
                 r#"{"success": true}"#.to_string()
             } else {
                 r#"{"status":"FAILED","message":"unexpected path"}"#.to_string()
@@ -352,6 +418,79 @@ fn start_swap_from_zec_is_blocked_until_backup_complete() {
         .unwrap_err();
     let ipc = find_engine_ipc_error(&err).expect("ipc error");
     assert_eq!(ipc.code, errors::BACKUP_REQUIRED);
+
+    server.join().expect("server joined");
+}
+
+#[test]
+fn start_swap_from_zec_uses_zatoshis_amount_for_wallet_send() {
+    let root = temp_root("us9_from_zec_zatoshis_send");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    {
+        let mgr = mgr.lock().expect("mutex poisoned");
+        backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+            .expect("disable backup gate");
+    }
+
+    let (reauth_token, _expires_at) = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
+        .expect("reauth");
+
+    // Use a quote response with amountInFormatted = "0.1" to ensure we don't pass formatted
+    // amounts into send APIs that require zatoshis (integer).
+    let (base_url, server) = spawn_mock_1click_server_decimal_amount("t1fake", 1);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: Default::default(),
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: "0.1".to_string(),
+        output_asset: "nep141:base.omft.near".to_string(),
+        output_amount: None,
+        destination_address: Some("0x3350Fe9Fc38cBa6518471693d748f3f3073C8fdB".to_string()),
+        refund_address: Some("t1ZMK188cmsdQxYPQi7Y917332HwvsKCdjM".to_string()),
+    };
+
+    let quote_id = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .expect("quote")
+        .quote_id;
+
+    let err = swap
+        .start_swap(
+            wallet.id,
+            wallet.network,
+            &quote_id,
+            true,
+            Some(&reauth_token),
+            None,
+        )
+        .expect_err("start swap should fail with invalid recipient (t1fake)");
+    let ipc = find_engine_ipc_error(&err).expect("ipc error");
+    assert_eq!(ipc.code, errors::INVALID_RECIPIENT);
 
     server.join().expect("server joined");
 }

@@ -426,7 +426,9 @@ impl SwapService {
             let proposal = mgr.prepare_send(
                 account_id,
                 &deposit_address,
-                &swap.input_amount,
+                // Wallet send APIs expect zatoshis. The quote contains both formatted and
+                // raw values; use the raw (smallest unit) amount here.
+                &record.quote.input_amount,
                 swap.deposit_memo.as_deref(),
                 allow_transparent_interaction,
             )?;
