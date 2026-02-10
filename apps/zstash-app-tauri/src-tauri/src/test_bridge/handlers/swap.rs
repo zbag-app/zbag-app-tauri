@@ -31,9 +31,11 @@ pub fn request_swap_quote_impl(
 
         let intent = SwapIntent {
             swap_type: request.swap_type,
+            swap_mode: request.swap_mode,
             input_asset: request.input_asset,
             input_amount: request.input_amount,
             output_asset: request.output_asset,
+            output_amount: request.output_amount,
             destination_address: request.destination_address,
             refund_address: request.refund_address,
         };
