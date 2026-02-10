@@ -4,10 +4,13 @@ use std::thread;
 
 use zstash_network::near_intents::{NearIntentsClient, QuoteRequest};
 
-fn spawn_mock_1click_quote_retry_server() -> (String, thread::JoinHandle<()>) {
+fn spawn_mock_1click_quote_retry_server(
+    first_message: &'static str,
+) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
     let addr = listener.local_addr().expect("server addr");
     let base_url = format!("http://{addr}");
+    let first_message = first_message.to_string();
 
     let handle = thread::spawn(move || {
         // First request: 400 Failed to get quote
@@ -28,7 +31,10 @@ fn spawn_mock_1click_quote_retry_server() -> (String, thread::JoinHandle<()>) {
                 "initial quoteWaitingTimeMs should be 3000"
             );
 
-            let err_body = r#"{"message":"Failed to get quote","correlationId":"test-correlation-id-1","timestamp":"2026-01-09T15:00:00.000Z","path":"/v0/quote"}"#;
+            let err_body = format!(
+                "{{\"message\":\"{}\",\"correlationId\":\"test-correlation-id-1\",\"timestamp\":\"2026-01-09T15:00:00.000Z\",\"path\":\"/v0/quote\"}}",
+                first_message
+            );
             let response = format!(
                 "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
                 err_body.len(),
@@ -95,7 +101,38 @@ fn spawn_mock_1click_quote_retry_server() -> (String, thread::JoinHandle<()>) {
 
 #[tokio::test]
 async fn get_quote_retries_failed_to_get_quote_with_longer_wait() {
-    let (base_url, server) = spawn_mock_1click_quote_retry_server();
+    let (base_url, server) = spawn_mock_1click_quote_retry_server("Failed to get quote");
+
+    let client = NearIntentsClient::with_base_url(base_url).expect("client");
+    let req = QuoteRequest {
+        origin_asset: "nep141:eth.omft.near".to_string(),
+        destination_asset: "nep141:zec.omft.near".to_string(),
+        amount: "1000000000000000".to_string(),
+        swap_type: "EXACT_INPUT".to_string(),
+        slippage_tolerance: 100,
+        quote_waiting_time_ms: Some(3000),
+        referral: Some("zstash".to_string()),
+        app_fees: None,
+        deposit_type: "ORIGIN_CHAIN".to_string(),
+        refund_to: "0x3350Fe9Fc38cBa6518471693d748f3f3073C8fdB".to_string(),
+        refund_type: "ORIGIN_CHAIN".to_string(),
+        recipient: "t1ZMK188cmsdQxYPQi7Y917332HwvsKCdjM".to_string(),
+        recipient_type: "DESTINATION_CHAIN".to_string(),
+        deadline: "2026-01-09T17:00:00Z".to_string(),
+        dry: false,
+    };
+
+    let quote = client.get_quote(req).await.expect("quote");
+    assert_eq!(quote.amount_in, "1000000000000000");
+    assert_eq!(quote.amount_out, "672703");
+    assert_eq!(quote.correlation_id, "test-correlation-id-2");
+
+    server.join().expect("server joined");
+}
+
+#[tokio::test]
+async fn get_quote_retries_no_liquidity_available_with_longer_wait() {
+    let (base_url, server) = spawn_mock_1click_quote_retry_server("No liquidity available");
 
     let client = NearIntentsClient::with_base_url(base_url).expect("client");
     let req = QuoteRequest {

@@ -67,16 +67,19 @@ impl NearIntentsClient {
         Self::handle_rate_limit(res.status, res.retry_after)?;
 
         if !(200..300).contains(&res.status) {
-            // The 1Click API sometimes returns a 400 "Failed to get quote" when the quote
-            // cannot be produced within the requested `quoteWaitingTimeMs`. Retry once
-            // with a more forgiving waiting time to reduce flakiness for otherwise-valid
-            // requests.
+            // The 1Click API sometimes returns a 400 with messages like "Failed to get quote" or
+            // "No liquidity available" when the quote cannot be produced within the requested
+            // `quoteWaitingTimeMs`. Retry once with a more forgiving waiting time to reduce
+            // flakiness for otherwise-valid requests.
             if res.status == 400
                 && res
                     .body
                     .get("message")
                     .and_then(|v| v.as_str())
-                    .is_some_and(|m| m == "Failed to get quote")
+                    .is_some_and(|m| {
+                        m.eq_ignore_ascii_case("Failed to get quote")
+                            || m.eq_ignore_ascii_case("No liquidity available")
+                    })
                 && req.quote_waiting_time_ms.unwrap_or(0) < 10_000
             {
                 req.quote_waiting_time_ms = Some(10_000);
@@ -551,14 +554,12 @@ fn parse_status_response(body: &serde_json::Value) -> Result<StatusResponse, Nea
 /// ```json
 /// [
 ///   {
-///     "defuseAssetId": "nep141:wrap.near",
+///     "assetId": "nep141:wrap.near",
 ///     "symbol": "NEAR",
 ///     "blockchain": "near",
-///     "chainName": "NEAR",
 ///     "decimals": 24,
-///     "assetName": "NEAR",
-///     "usdPrice": 4.5,
-///     "icon": "https://..."
+///     "price": 4.5,
+///     "contractAddress": "wrap.near"
 ///   },
 ///   ...
 /// ]
@@ -571,7 +572,9 @@ fn parse_tokens_response(body: &serde_json::Value) -> Result<Vec<TokenInfo>, Nea
     let mut tokens = Vec::with_capacity(arr.len());
     for item in arr {
         let asset_id = item
-            .get("defuseAssetId")
+            .get("assetId")
+            // Backwards-compat for older responses.
+            .or_else(|| item.get("defuseAssetId"))
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string();
@@ -589,6 +592,8 @@ fn parse_tokens_response(body: &serde_json::Value) -> Result<Vec<TokenInfo>, Nea
 
         let chain = item
             .get("blockchain")
+            // Backwards-compat (older docs used `chain`).
+            .or_else(|| item.get("chain"))
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string();
@@ -599,7 +604,11 @@ fn parse_tokens_response(body: &serde_json::Value) -> Result<Vec<TokenInfo>, Nea
             .and_then(|d| u8::try_from(d).ok())
             .unwrap_or(0);
 
-        let usd_price = item.get("usdPrice").and_then(|v| v.as_f64());
+        let usd_price = item
+            .get("price")
+            .and_then(|v| v.as_f64())
+            // Backwards-compat for older responses.
+            .or_else(|| item.get("usdPrice").and_then(|v| v.as_f64()));
 
         let icon = item
             .get("icon")

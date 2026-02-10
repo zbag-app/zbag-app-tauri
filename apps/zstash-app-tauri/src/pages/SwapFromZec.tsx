@@ -157,7 +157,10 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
       try {
         const res = await getReceiveAddress({
           account_id: activeAccountId,
-          address_type: 'ShieldedOnly',
+          // 1Click requires an ORIGIN_CHAIN refund address for FromZec swaps.
+          // For ZEC, the API currently rejects shielded/unified addresses, so we
+          // generate a wallet-controlled transparent refund address.
+          address_type: 'Transparent',
         });
         if (cancelled) return;
 
@@ -327,10 +330,13 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
               id="refundAddress"
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.currentTarget.value)}
-              placeholder="Your ZEC address for refunds"
+              placeholder="Your transparent (t-) ZEC address for refunds"
               disabled={loadingRefundAddress || submittingQuote || starting}
               className="font-mono"
             />
+            <div className="text-xs text-muted-foreground">
+              Refunds use a transparent ZEC address (required by the swap provider).
+            </div>
           </div>
 
           <PrivacyWarning
@@ -355,7 +361,8 @@ export function SwapFromZec(props: { wallet: IPC.WalletInfo; activeAccountId: nu
                   swap_type: 'FromZec',
                   swap_mode: 'ExactInput',
                   input_asset: ZEC_ASSET_ID,
-                  input_amount: inputAmountZatoshis,
+                  // IPC expects asset-denominated amounts; the Rust backend converts to smallest units.
+                  input_amount: inputAmountZecTrimmed,
                   output_asset: outputAssetTrimmed,
                   destination_address: destinationAddressTrimmed ? destinationAddressTrimmed : null,
                   refund_address: refundAddressTrimmed ? refundAddressTrimmed : null,

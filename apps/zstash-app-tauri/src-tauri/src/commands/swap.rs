@@ -9,7 +9,7 @@ use zstash_core::ipc::v1::commands::swap::{
     GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse, RequestSwapQuoteRequest,
     RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
@@ -17,37 +17,63 @@ use crate::state::AppState;
 use super::util::map_anyhow;
 
 #[tauri::command(rename = "zstash_request_swap_quote")]
-pub fn zstash_request_swap_quote(
+pub async fn zstash_request_swap_quote(
     state: State<'_, AppState>,
     request: RequestSwapQuoteRequest,
-) -> IpcResult<RequestSwapQuoteResponse> {
+) -> Result<IpcResult<RequestSwapQuoteResponse>, ()> {
     if let Err(err) = ensure_schema_version(request.schema_version) {
-        return IpcResult::Err { err };
+        return Ok(IpcResult::Err { err });
     }
 
-    map_anyhow(|| {
-        let wallet = {
-            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
-            })?
-        };
+    let wallet_manager = Arc::clone(&state.wallet_manager);
+    let swap_service = state.swap_service.clone();
 
-        let intent = SwapIntent {
-            swap_type: request.swap_type,
-            swap_mode: request.swap_mode,
-            input_asset: request.input_asset,
-            input_amount: request.input_amount,
-            output_asset: request.output_asset,
-            output_amount: request.output_amount,
-            destination_address: request.destination_address,
-            refund_address: request.refund_address,
-        };
+    let RequestSwapQuoteRequest {
+        swap_type,
+        swap_mode,
+        input_asset,
+        input_amount,
+        output_asset,
+        output_amount,
+        destination_address,
+        refund_address,
+        ..
+    } = request;
 
-        state
-            .swap_service
-            .request_swap_quote(wallet.id, wallet.network, intent)
-    })
+    let join = tauri::async_runtime::spawn_blocking(move || {
+        map_anyhow(|| {
+            let wallet = {
+                let mgr = wallet_manager.lock().expect("mutex poisoned");
+                mgr.active_wallet_info().ok_or_else(|| {
+                    zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                })?
+            };
+
+            let intent = SwapIntent {
+                swap_type,
+                swap_mode,
+                input_asset,
+                input_amount,
+                output_asset,
+                output_amount,
+                destination_address,
+                refund_address,
+            };
+
+            swap_service.request_swap_quote(wallet.id, wallet.network, intent)
+        })
+    });
+
+    match join.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(IpcResult::Err {
+            err: IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: "internal error".to_string(),
+                details: None,
+            },
+        }),
+    }
 }
 
 #[tauri::command(rename = "zstash_start_swap")]

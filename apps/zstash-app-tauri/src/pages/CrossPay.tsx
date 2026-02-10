@@ -78,7 +78,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     refundAddress,
   ]);
 
-  // Auto-populate refund address from wallet's shielded address
+  // Auto-populate refund address from wallet (transparent required by provider for ZEC-origin refunds)
   useEffect(() => {
     let cancelled = false;
 
@@ -90,7 +90,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
       try {
         const res = await getReceiveAddress({
           account_id: activeAccountId,
-          address_type: 'ShieldedOnly',
+          address_type: 'Transparent',
         });
         if (cancelled) return;
 
@@ -253,6 +253,9 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               disabled={loadingRefundAddress}
               className="flex w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
             />
+            <div className="text-xs text-muted-foreground">
+              Refunds use a transparent ZEC address (required by the swap provider).
+            </div>
           </div>
 
           <Button
