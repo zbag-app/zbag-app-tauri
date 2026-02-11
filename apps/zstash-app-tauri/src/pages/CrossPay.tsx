@@ -8,12 +8,21 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PrivacyWarning } from '../components/swap/PrivacyWarning';
-import { getFromZecTokens, ZEC_ASSET_ID, DEFAULT_NON_ZEC_ASSET_ID, FALLBACK_TOKENS, getTokenLabel } from '../data/supportedTokens';
+import {
+  ZEC_ASSET_ID,
+  DEFAULT_NON_ZEC_ASSET_ID,
+  FALLBACK_TOKENS,
+  filterSwapTokens,
+  sortTokensByPrice,
+  getTokenLabel,
+  type SupportedToken,
+} from '../data/supportedTokens';
 import { useNowMs } from '../hooks/useNowMs';
 import { validateDecimalAmount } from '../lib/amount';
 import { formatCountdown } from '../lib/time';
-import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap } from '../services/ipc';
+import { getReceiveAddress, reauthWallet, requestSwapQuote, startSwap, getSupportedTokens } from '../services/ipc';
 import { formatAtomicAmountForToken } from '../utils/amounts';
+import { parseSwapError } from '../utils/swap';
 
 const QUOTE_EXPIRY_BUFFER_MS = 10_000;
 
@@ -33,6 +42,9 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
   const [refundAddress, setRefundAddress] = useState('');
   const [loadingRefundAddress, setLoadingRefundAddress] = useState(false);
 
+  const [tokens, setTokens] = useState<SupportedToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(true);
+
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [quote, setQuote] = useState<IPC.SwapQuote | null>(null);
   const nowMs = useNowMs(quote != null);
@@ -46,10 +58,17 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const outputAssetTrimmed = outputAsset.trim();
+
+  const availableTokens = useMemo(() => {
+    const filtered = filterSwapTokens(tokens);
+    return sortTokensByPrice(filtered);
+  }, [tokens]);
+
   // Get the selected token info for display
   const selectedToken = useMemo(() => {
-    return FALLBACK_TOKENS.find((t) => t.asset_id === outputAsset);
-  }, [outputAsset]);
+    return availableTokens.find((t) => t.asset_id === outputAsset);
+  }, [availableTokens, outputAsset]);
 
   const outputAmountValidationError = useMemo(() => {
     const trimmed = outputAmount.trim();
@@ -62,7 +81,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     if (wallet.network !== 'Mainnet') return false;
     if (activeAccountId == null) return false;
     if (!selectedToken) return false;
-    if (!outputAsset.trim()) return false;
+    if (!outputAssetTrimmed) return false;
     if (!outputAmount.trim()) return false;
     if (outputAmountValidationError) return false;
     if (!destinationAddress.trim()) return false;
@@ -72,12 +91,45 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
     wallet.network,
     activeAccountId,
     selectedToken,
-    outputAsset,
+    outputAssetTrimmed,
     outputAmount,
     outputAmountValidationError,
     destinationAddress,
     refundAddress,
   ]);
+
+  // Load supported tokens from API
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTokens() {
+      setLoadingTokens(true);
+      try {
+        const res = await getSupportedTokens();
+        if (cancelled) return;
+
+        if ('err' in res || res.ok.tokens.length === 0) {
+          setTokens(FALLBACK_TOKENS);
+          return;
+        }
+
+        setTokens(res.ok.tokens);
+      } catch {
+        if (!cancelled) {
+          setTokens(FALLBACK_TOKENS);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTokens(false);
+        }
+      }
+    }
+
+    loadTokens();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Auto-populate refund address from wallet (transparent required by provider for ZEC-origin refunds)
   useEffect(() => {
@@ -114,6 +166,15 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
       cancelled = true;
     };
   }, [wallet.network, activeAccountId]);
+
+  // Keep output selection valid once token data is loaded/refreshed.
+  useEffect(() => {
+    if (loadingTokens || availableTokens.length === 0) return;
+    const selectedExists = availableTokens.some((t) => t.asset_id === outputAsset);
+    if (!selectedExists) {
+      setOutputAsset(availableTokens[0].asset_id);
+    }
+  }, [loadingTokens, availableTokens, outputAsset]);
 
   const quoteExpired = useMemo(() => {
     if (!quote) return false;
@@ -190,7 +251,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
               }}
               className="flex h-9 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {getFromZecTokens().map((t) => (
+              {availableTokens.map((t) => (
                 <option key={t.asset_id} value={t.asset_id}>
                   {getTokenLabel(t)}
                 </option>
@@ -284,14 +345,14 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                 });
 
                 if ('err' in res) {
-                  setError(res.err.message);
+                  setError(parseSwapError(res.err.message));
                   return;
                 }
 
                 setQuoteId(res.ok.quote_id);
                 setQuote(res.ok.quote);
               } catch (e) {
-                setError(e instanceof Error ? e.message : 'Failed to get quote');
+                setError(parseSwapError(e instanceof Error ? e.message : 'Failed to get quote'));
               } finally {
                 setSubmittingQuote(false);
               }
@@ -429,7 +490,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                       ) {
                         setReauthToken(null);
                       }
-                      setError(startRes.err.message);
+                      setError(parseSwapError(startRes.err.message));
                       setStarting(false);
                       return;
                     }
@@ -443,7 +504,7 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                   } catch (e) {
                     setPassword('');
                     setReauthToken(null);
-                    setError(e instanceof Error ? e.message : 'Failed to start payment');
+                    setError(parseSwapError(e instanceof Error ? e.message : 'Failed to start payment'));
                     setStarting(false);
                   }
                 }}

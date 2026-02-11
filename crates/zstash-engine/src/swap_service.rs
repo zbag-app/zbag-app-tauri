@@ -264,11 +264,25 @@ impl SwapService {
         let deadline = deadline_dt.to_rfc3339();
         let deadline_ms_fallback = deadline_dt.timestamp_millis();
 
-        // App fee: 50 basis points (0.50%) to match Zashi
-        // Affiliate recipient for zSTASH swap fees
-        const APP_FEE_BPS: u32 = 50;
-        const _: () = assert!(APP_FEE_BPS <= 500, "App fee should not exceed 5%");
+        // Development phase: disable app fees until quote reliability is stable.
+        // Set APP_FEE_BPS > 0 to re-enable affiliate fee collection.
+        const APP_FEE_BPS: u32 = 0;
         const AFFILIATE_RECIPIENT: &str = "zstash.near";
+        if APP_FEE_BPS > 500 {
+            return Err(ipc_err(
+                errors::INVALID_REQUEST,
+                "app fee should not exceed 5%",
+            ));
+        }
+
+        let app_fees = if APP_FEE_BPS == 0 {
+            None
+        } else {
+            Some(vec![AppFee {
+                recipient: AFFILIATE_RECIPIENT.to_string(),
+                fee: APP_FEE_BPS,
+            }])
+        };
 
         tracing::debug!(
             swap_mode = ?intent.swap_mode,
@@ -287,10 +301,7 @@ impl SwapService {
             slippage_tolerance: 100, // 1%
             quote_waiting_time_ms: Some(3000),
             referral: Some("zstash".to_string()),
-            app_fees: Some(vec![AppFee {
-                recipient: AFFILIATE_RECIPIENT.to_string(),
-                fee: APP_FEE_BPS,
-            }]),
+            app_fees,
             deposit_type: "ORIGIN_CHAIN".to_string(),
             refund_to,
             refund_type: "ORIGIN_CHAIN".to_string(),
@@ -300,13 +311,20 @@ impl SwapService {
             dry: false, // Get deposit address directly
         };
 
+        let map_quote_error = |e| match e {
+            zstash_network::near_intents::NearIntentsError::TorNotReady => {
+                ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+            }
+            _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
+        };
+
+        let app_fee_bps = if APP_FEE_BPS == 0 {
+            None
+        } else {
+            Some(APP_FEE_BPS)
+        };
         let quote_res =
-            block_on(async { self.near.get_quote(req).await }).map_err(|e| match e {
-                zstash_network::near_intents::NearIntentsError::TorNotReady => {
-                    ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
-                }
-                _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
-            })?;
+            block_on(async { self.near.get_quote(req).await }).map_err(map_quote_error)?;
 
         let quote = SwapQuote {
             input_asset: intent.input_asset.clone(),
@@ -324,7 +342,7 @@ impl SwapService {
             deposit_address: quote_res.deposit_address.clone(),
             deposit_memo: quote_res.deposit_memo.clone(),
             correlation_id: quote_res.correlation_id.clone(),
-            app_fee_bps: Some(APP_FEE_BPS),
+            app_fee_bps,
         };
 
         // Use correlation_id as the quote_id for tracking

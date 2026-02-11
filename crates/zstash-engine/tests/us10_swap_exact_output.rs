@@ -24,6 +24,7 @@ struct TestKeyStore {
 struct CapturedQuoteRequest {
     swap_type: Option<String>,
     amount: Option<String>,
+    has_app_fees: Option<bool>,
     quote_requests: usize,
     token_requests: usize,
 }
@@ -139,6 +140,11 @@ fn spawn_mock_1click_server_capturing_quote_request(
                         .get("amount")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
+                    captured.has_app_fees = Some(
+                        json.get("appFees")
+                            .and_then(|v| v.as_array())
+                            .is_some_and(|fees| !fees.is_empty()),
+                    );
                 }
             }
 
@@ -226,6 +232,11 @@ fn spawn_mock_1click_server_tokens_and_quote(
                             .get("amount")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string());
+                        captured.has_app_fees = Some(
+                            json.get("appFees")
+                                .and_then(|v| v.as_array())
+                                .is_some_and(|fees| !fees.is_empty()),
+                        );
                     }
                 }
 
@@ -731,5 +742,62 @@ fn request_swap_quote_exact_output_rejects_unknown_asset_missing_from_tokens() {
     assert_eq!(
         captured.quote_requests, 0,
         "quote request should not be made when asset decimals cannot be resolved"
+    );
+}
+
+#[test]
+fn request_swap_quote_exact_output_omits_app_fees_in_development_mode() {
+    let root = temp_root("us10_exact_output_app_fees_disabled");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let (base_url, captured, server) = spawn_mock_1click_server_capturing_quote_request(1);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: SwapMode::ExactOutput,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: String::new(),
+        output_asset: "nep141:wrap.near".to_string(),
+        output_amount: Some("1".to_string()),
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let res = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .expect("quote should succeed");
+
+    server.join().expect("server joined");
+
+    let captured = captured.lock().expect("mutex poisoned").clone();
+    assert_eq!(captured.quote_requests, 1);
+    assert_eq!(
+        captured.has_app_fees,
+        Some(false),
+        "appFees should be omitted while development-mode fees are disabled"
+    );
+    assert_eq!(
+        res.quote.app_fee_bps, None,
+        "quote should not advertise app fee when appFees are disabled"
     );
 }
