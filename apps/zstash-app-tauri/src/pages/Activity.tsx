@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { History, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, Copy, ChevronDown, ChevronUp, Check, FileText } from 'lucide-react';
+import { History, ChevronLeft, ChevronRight, AlertCircle, Copy, ChevronDown, ChevronUp, Check, FileText } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -281,25 +281,13 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
 
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
             <History className="h-5 w-5 text-primary" />
           </div>
           <h1 className="text-2xl font-bold">Activity</h1>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void load(offset);
-            void loadSwaps();
-          }}
-          disabled={loading || activeAccountId == null}
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </div>
 
       {activeAccountId == null && (
