@@ -22,6 +22,17 @@ where
     }
 }
 
+/// Block on a future, safely handling both inside and outside Tokio runtime contexts.
+///
+/// - If called from within a Tokio runtime, uses `block_in_place` and the current handle.
+/// - If called from outside any runtime, uses a shared fallback runtime.
+pub(crate) fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    match Handle::try_current() {
+        Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),
+        Err(_) => fallback_runtime().block_on(future),
+    }
+}
+
 /// Spawn a blocking task on the Tokio blocking thread pool.
 ///
 /// Use this for CPU-intensive or blocking I/O operations (filesystem, SQLite)

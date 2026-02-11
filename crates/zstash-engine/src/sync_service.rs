@@ -36,7 +36,7 @@ use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
-use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
+use zstash_core::permissions::secure_open_options;
 
 /// Default batch size for downloading blocks.
 /// Matches Zashi's SYNC_BATCH_SIZE for optimal performance.
@@ -399,6 +399,7 @@ impl SyncService {
                             get_progress_blocking(sync_wallet_conn, params).await;
                         sync_wallet_conn = conn;
                         let wallet_tip_height = chain_height.map(u32::from).unwrap_or(0);
+                        let retry_in_seconds = poll_backoff.as_secs();
                         update(SyncProgress {
                             phase: SyncPhase::Offline,
                             scan_frontier_height: fully_scanned,
@@ -437,6 +438,7 @@ impl SyncService {
                     let (conn, progress_percent, fully_scanned, _) =
                         get_progress_blocking(sync_wallet_conn, params).await;
                     sync_wallet_conn = conn;
+                    let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
                         phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
@@ -737,6 +739,8 @@ impl SyncService {
                                                 wallet_tip_height: u32::from(wallet_tip),
                                                 progress_percent: scan_result.progress_percent,
                                                 eta_seconds: None,
+                                                retry_in_seconds: None,
+                                                error_message: None,
                                             });
 
                                             // Emit balance updates on blocking thread
@@ -821,6 +825,7 @@ impl SyncService {
                     let (conn, progress_percent, fully_scanned, _) =
                         get_progress_blocking(sync_wallet_conn, params).await;
                     sync_wallet_conn = conn;
+                    let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
                         phase: SyncPhase::Error,
                         scan_frontier_height: fully_scanned,
