@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CreditCard, ArrowLeft, Info, Clock } from 'lucide-react';
 import type * as IPC from '../types/ipc';
+import { ErrorCodes } from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -416,15 +417,15 @@ export function CrossPay(props: { wallet: IPC.WalletInfo; activeAccountId: numbe
                     });
 
                     if ('err' in startRes) {
-                      if (startRes.err.code === 'PRIVACY_ACK_REQUIRED') {
+                      if (startRes.err.code === ErrorCodes.PRIVACY_ACK_REQUIRED) {
                         setPrivacyAckRequired(true);
                         setStarting(false);
                         return;
                       }
                       setPassword('');
                       if (
-                        startRes.err.code === 'REAUTH_TOKEN_INVALID' ||
-                        startRes.err.code === 'REAUTH_TOKEN_EXPIRED'
+                        startRes.err.code === ErrorCodes.REAUTH_TOKEN_INVALID ||
+                        startRes.err.code === ErrorCodes.REAUTH_TOKEN_EXPIRED
                       ) {
                         setReauthToken(null);
                       }
