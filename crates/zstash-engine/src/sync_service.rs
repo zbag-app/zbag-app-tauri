@@ -760,7 +760,12 @@ impl SyncService {
                                                 );
                                             }
                                         }
-                                        ScanOutcome::ReorgDetected { rewind_height: _ } => {
+                                        ScanOutcome::ReorgDetected { rewind_height } => {
+                                            tracing::debug!(
+                                                wallet_id = %wallet_id,
+                                                rewind_height = %u32::from(rewind_height),
+                                                "reorg recovery complete, refetching scan ranges"
+                                            );
                                             // Break to re-fetch scan ranges with the rewound state.
                                             // Don't set range_error - this is a recoverable situation.
                                             break;
@@ -2083,50 +2088,17 @@ async fn write_blocks_to_cache_async(
 
         // Register block metadata
         let fsblock_db = fsblock_db;
-        if !block_metas.is_empty() {
-            if let Err(err) = fsblock_db.write_block_metadata(&block_metas) {
-                tracing::error!(
-                    wallet_id = %wallet_id,
-                    error = ?err,
-                    "failed to write block metadata"
-                );
-            }
+        if !block_metas.is_empty()
+            && let Err(err) = fsblock_db.write_block_metadata(&block_metas)
+        {
+            tracing::error!(
+                wallet_id = %wallet_id,
+                error = ?err,
+                "failed to write block metadata"
+            );
         }
 
         (fsblock_db, block_metas)
-    })
-    .await
-    .expect("spawn_blocking panicked")
-}
-
-/// Delete cached block files on a blocking thread.
-async fn delete_cached_block_files_async(
-    blocks_dir: PathBuf,
-    start: BlockHeight,
-    end: BlockHeight,
-) {
-    let _ = crate::tokio_runtime::spawn_blocking(move || {
-        delete_cached_block_files(&blocks_dir, start, end);
-    })
-    .await;
-}
-
-/// Truncate FsBlockDb on a blocking thread.
-async fn truncate_fsblock_db_async(
-    fsblock_db: FsBlockDb,
-    height: BlockHeight,
-    wallet_id: uuid::Uuid,
-) -> FsBlockDb {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let db = fsblock_db;
-        if let Err(err) = db.truncate_to_height(height) {
-            tracing::debug!(
-                wallet_id = %wallet_id,
-                error = ?err,
-                "failed to truncate block cache metadata"
-            );
-        }
-        db
     })
     .await
     .expect("spawn_blocking panicked")
@@ -2259,9 +2231,6 @@ async fn scan_batch_blocking(
         // Calculate progress while we still have wdb
         let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
 
-        // Drop wdb to release borrow on conn
-        drop(wdb);
-
         ScanBatchResult {
             conn,
             fsblock_db,
@@ -2290,7 +2259,6 @@ async fn update_chain_tip_blocking(
 
         let result = wdb.update_chain_tip(chain_tip).map_err(|e| format!("{e}"));
 
-        drop(wdb);
         (conn, result)
     })
     .await
@@ -2315,7 +2283,6 @@ async fn suggest_scan_ranges_blocking(
 
         let result = wdb.suggest_scan_ranges().map_err(|e| format!("{e}"));
 
-        drop(wdb);
         (conn, result)
     })
     .await
@@ -2338,22 +2305,7 @@ async fn get_progress_blocking(
         let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
         let chain_height = wdb.chain_height().ok().flatten();
 
-        drop(wdb);
         (conn, progress_percent, fully_scanned, chain_height)
-    })
-    .await
-    .expect("spawn_blocking panicked")
-}
-
-/// Get balance on a blocking thread.
-async fn get_balance_blocking(
-    mut conn: Connection,
-    network: Network,
-    account_id: u32,
-) -> (Connection, anyhow::Result<Balance>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let result = crate::balance::get_balance(&mut conn, network, account_id);
-        (conn, result)
     })
     .await
     .expect("spawn_blocking panicked")
