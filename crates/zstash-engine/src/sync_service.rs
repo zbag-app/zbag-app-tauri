@@ -264,7 +264,7 @@ impl SyncService {
 
             let mut balance_db = if on_balance_task.as_ref().is_some() {
                 // Copy DEK bytes for the balance connection (original stays with sync)
-                match open_wallet_db_async(wallet_db_path.clone(), Dek(wallet_dek.0)).await {
+                match open_wallet_db_async(wallet_db_path.clone(), wallet_dek.copy()).await {
                     Ok(db) => Some(db),
                     Err(err) => {
                         tracing::debug!(
@@ -326,7 +326,7 @@ impl SyncService {
             }
 
             // Initialize FsBlockDb (on blocking thread)
-            let mut fsblock_db = match init_fsblock_db_async(cache_dir.clone()).await {
+            let mut fsblock_db = match init_fsblock_db_async(cache_dir.clone(), wallet_id).await {
                 Ok(db) => db,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
@@ -341,7 +341,7 @@ impl SyncService {
             // Open wallet DB for sync operations (on blocking thread)
             let mut sync_wallet_conn = match open_wallet_db_async(
                 wallet_db_path.clone(),
-                Dek(wallet_dek.0),
+                wallet_dek.copy(),
             )
             .await
             {
@@ -665,7 +665,7 @@ impl SyncService {
 
                         while let Some(result) = batch_rx.recv().await {
                             match result {
-                                DownloadResult::Batch(batch) => {
+                                DownloadResult::Batch(mut batch) => {
                                     // Check cancellation
                                     if *cancel_rx.borrow() {
                                         tracing::debug!(
@@ -679,7 +679,7 @@ impl SyncService {
                                     // Write blocks to cache on blocking thread
                                     let (db, block_metas) = write_blocks_to_cache_async(
                                         blocks_dir.clone(),
-                                        batch.blocks.clone(),
+                                        std::mem::take(&mut batch.blocks),
                                         fsblock_db,
                                         wallet_id,
                                     )
@@ -858,7 +858,7 @@ impl SyncService {
                     // Get total count for progress tracking.
                     let total_to_enhance = match count_txids_needing_memo_enhancement_blocking(
                         wallet_db_path.clone(),
-                        Dek(wallet_dek.0),
+                        wallet_dek.copy(),
                     )
                     .await
                     {
@@ -913,7 +913,7 @@ impl SyncService {
                             let txids_batch =
                                 match get_txids_needing_memo_enhancement_batch_blocking(
                                     wallet_db_path.clone(),
-                                    Dek(wallet_dek.0),
+                                    wallet_dek.copy(),
                                     batch_offset,
                                     ENHANCEMENT_BATCH_SIZE,
                                 )
@@ -1835,7 +1835,7 @@ async fn enhance_transaction_memo(
     let raw_tx = client.get_transaction(&txid).await?;
 
     let wallet_db_path = wallet_db_path.to_path_buf();
-    let wallet_dek = Dek(wallet_dek.0);
+    let wallet_dek = wallet_dek.copy();
     let params = *params;
 
     crate::tokio_runtime::spawn_blocking(move || {
@@ -2029,12 +2029,17 @@ async fn get_txids_needing_memo_enhancement_batch_blocking(
 /// Initialize FsBlockDb on a blocking thread.
 async fn init_fsblock_db_async(
     cache_dir: PathBuf,
+    wallet_id: uuid::Uuid,
 ) -> Result<FsBlockDb, zcash_client_sqlite::FsBlockDbError> {
     crate::tokio_runtime::spawn_blocking(move || {
         let mut db = FsBlockDb::for_path(&cache_dir)?;
         // Initialize the block metadata database schema
         if let Err(err) = init_blockmeta_db(&mut db) {
-            tracing::warn!(error = ?err, "failed to init blockmeta db schema");
+            tracing::warn!(
+                wallet_id = %wallet_id,
+                error = ?err,
+                "failed to init blockmeta db schema"
+            );
         }
         Ok(db)
     })
@@ -2390,4 +2395,183 @@ async fn emit_balances_blocking(
     })
     .await
     .expect("spawn_blocking panicked")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Creates a minimal wallet database schema sufficient for memo enhancement queries.
+    fn create_minimal_wallet_schema(conn: &Connection) {
+        conn.execute_batch(
+            "
+            CREATE TABLE transactions (
+                id_tx INTEGER PRIMARY KEY,
+                txid BLOB NOT NULL
+            );
+            CREATE TABLE sapling_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            CREATE TABLE orchard_received_notes (
+                id INTEGER PRIMARY KEY,
+                transaction_id INTEGER NOT NULL,
+                memo BLOB
+            );
+            ",
+        )
+        .expect("create minimal wallet schema");
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_returns_null_memo_txids() {
+        // Use tempfile for automatic cleanup even if test panics
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
+        let dek = Dek([0u8; 32]);
+
+        // Create and populate the database
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            // Insert transaction with NULL memo (needs enhancement)
+            let txid_null = [0x01u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid_null[..]],
+            )
+            .expect("insert tx 1");
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert note with null memo");
+
+            // Insert transaction with populated memo (does not need enhancement)
+            let txid_with_memo = [0x02u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (2, ?1)",
+                [&txid_with_memo[..]],
+            )
+            .expect("insert tx 2");
+            conn.execute(
+                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (2, X'F600000000')",
+                [],
+            )
+            .expect("insert note with memo");
+        }
+
+        // Query using the batch function (offset=0, limit=1000 to get all)
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
+
+        assert_eq!(txids.len(), 1, "should return only txid with NULL memo");
+        assert_eq!(txids[0], [0x01u8; 32]);
+        // temp_file dropped here, automatic cleanup
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_returns_empty_when_all_memos_populated() {
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
+        let dek = Dek([0u8; 32]);
+
+        // Create and populate the database with only populated memos
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            let txid = [0x03u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid[..]],
+            )
+            .expect("insert tx");
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, X'F600000000')",
+                [],
+            )
+            .expect("insert note with memo");
+        }
+
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
+        assert!(txids.is_empty(), "no txids should need enhancement");
+        // temp_file dropped here, automatic cleanup
+    }
+
+    #[test]
+    fn get_txids_needing_memo_enhancement_deduplicates_across_pools() {
+        let temp_file = tempfile::Builder::new()
+            .suffix(".db")
+            .tempfile()
+            .expect("create temp file");
+        let path = temp_file.path().to_path_buf();
+        let dek = Dek([0u8; 32]);
+
+        // Create transaction with NULL memos in both sapling and orchard tables
+        {
+            let conn = open_sqlcipher_db(
+                &path,
+                &dek,
+                OpenSqlcipherOptions {
+                    create_if_missing: true,
+                    load_array_module: false,
+                },
+            )
+            .expect("create wallet db");
+            create_minimal_wallet_schema(&conn);
+
+            let txid = [0x04u8; 32];
+            conn.execute(
+                "INSERT INTO transactions (id_tx, txid) VALUES (1, ?1)",
+                [&txid[..]],
+            )
+            .expect("insert tx");
+            // Same transaction has NULL memos in both pools
+            conn.execute(
+                "INSERT INTO sapling_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert sapling note");
+            conn.execute(
+                "INSERT INTO orchard_received_notes (transaction_id, memo) VALUES (1, NULL)",
+                [],
+            )
+            .expect("insert orchard note");
+        }
+
+        let txids =
+            get_txids_needing_memo_enhancement_batch(&path, &dek, 0, 1000).expect("query txids");
+        assert_eq!(
+            txids.len(),
+            1,
+            "txid should appear only once despite multiple NULL memo notes"
+        );
+        // temp_file dropped here, automatic cleanup
+    }
 }
