@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, AlertCircle, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeftRight, AlertCircle, ArrowRight, Check, CreditCard } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -177,7 +177,7 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
         <h1 className="text-2xl font-bold">Swap</h1>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="h-full border-primary bg-primary/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center justify-between gap-2">
@@ -198,6 +198,18 @@ export function Swap(props: { wallet: IPC.WalletInfo; activeAccountId: number | 
                 <ArrowRight className="h-4 w-4" />
               </CardTitle>
               <CardDescription>Convert ZEC into other assets</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link to="/swap/crosspay" className="block">
+          <Card className="h-full hover:border-primary/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                CrossPay
+                <ArrowRight className="h-4 w-4" />
+              </CardTitle>
+              <CardDescription>Pay exact output amounts in other assets using ZEC</CardDescription>
             </CardHeader>
           </Card>
         </Link>

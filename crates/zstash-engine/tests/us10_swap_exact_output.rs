@@ -24,6 +24,8 @@ struct TestKeyStore {
 struct CapturedQuoteRequest {
     swap_type: Option<String>,
     amount: Option<String>,
+    quote_requests: usize,
+    token_requests: usize,
 }
 
 impl KeyStore for TestKeyStore {
@@ -117,13 +119,18 @@ fn spawn_mock_1click_server_capturing_quote_request(
             let mut buf = [0u8; 16 * 1024];
             let n = stream.read(&mut buf).expect("read request");
             let req = String::from_utf8_lossy(&buf[..n]);
+            let first = req.lines().next().unwrap_or_default();
+            let path = first.split_whitespace().nth(1).unwrap_or("/");
 
             // Extract relevant fields from JSON body
-            if let Some(body_start) = req.find("\r\n\r\n") {
+            if path.starts_with("/v0/quote")
+                && let Some(body_start) = req.find("\r\n\r\n")
+            {
                 let body = &req[body_start + 4..];
 
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
                     let mut captured = captured_clone.lock().expect("mutex poisoned");
+                    captured.quote_requests += 1;
                     captured.swap_type = json
                         .get("swapType")
                         .and_then(|v| v.as_str())
@@ -165,6 +172,94 @@ fn spawn_mock_1click_server_capturing_quote_request(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
                 body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+        }
+    });
+
+    (base_url, captured, handle)
+}
+
+fn spawn_mock_1click_server_tokens_and_quote(
+    tokens_body: String,
+    expected_requests: usize,
+) -> (
+    String,
+    Arc<Mutex<CapturedQuoteRequest>>,
+    thread::JoinHandle<()>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
+    let addr = listener.local_addr().expect("server addr");
+    let base_url = format!("http://{addr}");
+    let captured: Arc<Mutex<CapturedQuoteRequest>> =
+        Arc::new(Mutex::new(CapturedQuoteRequest::default()));
+    let captured_clone = Arc::clone(&captured);
+
+    let handle = thread::spawn(move || {
+        for _ in 0..expected_requests {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 16 * 1024];
+            let n = stream.read(&mut buf).expect("read request");
+            let req = String::from_utf8_lossy(&buf[..n]);
+            let first = req.lines().next().unwrap_or_default();
+            let path = first.split_whitespace().nth(1).unwrap_or("/");
+
+            let deadline_iso = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+
+            let response_body = if path.starts_with("/v0/tokens") {
+                let mut captured = captured_clone.lock().expect("mutex poisoned");
+                captured.token_requests += 1;
+                tokens_body.clone()
+            } else if path.starts_with("/v0/quote") {
+                if let Some(body_start) = req.find("\r\n\r\n") {
+                    let body = &req[body_start + 4..];
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+                        let mut captured = captured_clone.lock().expect("mutex poisoned");
+                        captured.quote_requests += 1;
+                        captured.swap_type = json
+                            .get("swapType")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        captured.amount = json
+                            .get("amount")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                    }
+                }
+
+                format!(
+                    r#"{{
+                        "quote": {{
+                            "amountIn": "100000000",
+                            "amountInFormatted": "1",
+                            "amountInUsd": "50.00",
+                            "minAmountIn": "100000000",
+                            "amountOut": "1000000000000000000000000",
+                            "amountOutFormatted": "1",
+                            "amountOutUsd": "50.00",
+                            "minAmountOut": "990000000000000000000000",
+                            "deadline": "{deadline_iso}",
+                            "timeWhenInactive": "{deadline_iso}",
+                            "timeEstimate": 120,
+                            "depositAddress": "t1fake",
+                            "depositMemo": null
+                        }},
+                        "quoteRequest": {{}},
+                        "signature": "mock",
+                        "timestamp": "{deadline_iso}",
+                        "correlationId": "test-correlation-id"
+                    }}"#
+                )
+            } else {
+                r#"{"status":"FAILED","message":"unexpected path"}"#.to_string()
+            };
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                response_body.len(),
+                response_body
             );
             stream
                 .write_all(response.as_bytes())
@@ -490,5 +585,151 @@ fn request_swap_quote_exact_output_rejects_zero_output_amount() {
         ipc.message.contains("greater than zero"),
         "Error message should indicate amount must be > 0: {}",
         ipc.message
+    );
+}
+
+#[test]
+fn request_swap_quote_exact_output_resolves_decimals_from_tokens_for_unknown_asset() {
+    let root = temp_root("us10_exact_output_decimals_from_tokens");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let output_asset = "nep245:v2_1.omni.hot.tg:137_mockasset";
+    let tokens_body = format!(
+        r#"
+        [
+          {{
+            "assetId": "{output_asset}",
+            "symbol": "MOCK",
+            "blockchain": "pol",
+            "decimals": 6,
+            "price": 1.0
+          }}
+        ]
+        "#
+    );
+
+    let (base_url, captured_request, server) =
+        spawn_mock_1click_server_tokens_and_quote(tokens_body, 2);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: SwapMode::ExactOutput,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: String::new(),
+        output_asset: output_asset.to_string(),
+        output_amount: Some("1.234567".to_string()),
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let _res = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .expect("quote should succeed");
+
+    server.join().expect("server joined");
+
+    let captured = captured_request.lock().expect("mutex poisoned").clone();
+    assert_eq!(
+        captured.token_requests, 1,
+        "expected one /v0/tokens request"
+    );
+    assert_eq!(captured.quote_requests, 1, "expected one /v0/quote request");
+    assert_eq!(captured.swap_type, Some("EXACT_OUTPUT".to_string()));
+    assert_eq!(
+        captured.amount,
+        Some("1234567".to_string()),
+        "1.234567 with 6 decimals should convert to smallest units correctly"
+    );
+}
+
+#[test]
+fn request_swap_quote_exact_output_rejects_unknown_asset_missing_from_tokens() {
+    let root = temp_root("us10_exact_output_unknown_asset_rejected");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let tokens_body = r#"
+    [
+      {
+        "assetId": "nep141:wrap.near",
+        "symbol": "NEAR",
+        "blockchain": "near",
+        "decimals": 24,
+        "price": 5.0
+      }
+    ]
+    "#
+    .to_string();
+
+    let (base_url, captured_request, server) =
+        spawn_mock_1click_server_tokens_and_quote(tokens_body, 1);
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let intent = SwapIntent {
+        swap_type: SwapType::FromZec,
+        swap_mode: SwapMode::ExactOutput,
+        input_asset: "nep141:zec.omft.near".to_string(),
+        input_amount: String::new(),
+        output_asset: "nep245:v2_1.omni.hot.tg:137_unknown_asset".to_string(),
+        output_amount: Some("1".to_string()),
+        destination_address: Some("near_destination.near".to_string()),
+        refund_address: Some("u1refundaddress".to_string()),
+    };
+
+    let err = swap
+        .request_swap_quote(wallet.id, wallet.network, intent)
+        .unwrap_err();
+    let ipc = find_engine_ipc_error(&err).expect("ipc error");
+    assert_eq!(ipc.code, errors::INVALID_ASSET);
+    assert!(ipc.message.contains("unsupported asset"));
+
+    server.join().expect("server joined");
+
+    let captured = captured_request.lock().expect("mutex poisoned").clone();
+    assert_eq!(
+        captured.token_requests, 1,
+        "expected one /v0/tokens request"
+    );
+    assert_eq!(
+        captured.quote_requests, 0,
+        "quote request should not be made when asset decimals cannot be resolved"
     );
 }

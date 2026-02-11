@@ -25,6 +25,7 @@ use crate::tokio_runtime::block_on;
 use crate::wallet_manager::WalletManager;
 
 pub type SwapEventHandler = Arc<dyn Fn(SwapChangedEvent) + Send + Sync>;
+const TOKEN_DECIMALS_CACHE_TTL_MS: i64 = 5 * 60 * 1000;
 
 #[derive(Clone)]
 pub struct SwapService {
@@ -38,6 +39,8 @@ pub struct SwapService {
 struct State {
     quotes: HashMap<String, QuoteRecord>,
     jobs: HashMap<Uuid, SwapJob>,
+    token_decimals: HashMap<String, u8>,
+    token_decimals_updated_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,9 +80,111 @@ impl SwapService {
             state: Arc::new(Mutex::new(State {
                 quotes: HashMap::new(),
                 jobs: HashMap::new(),
+                token_decimals: HashMap::new(),
+                token_decimals_updated_ms: None,
             })),
             wallet_manager,
         })
+    }
+
+    fn resolve_asset_decimals(&self, asset_id: &str) -> anyhow::Result<u8> {
+        let asset_id = asset_id.trim();
+        if asset_id.is_empty() {
+            return Err(ipc_err(errors::INVALID_ASSET, "invalid asset"));
+        }
+        if let Some(decimals) = get_static_decimals_for_asset(asset_id) {
+            return Ok(decimals);
+        }
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let (cached_decimals, cache_is_fresh) = {
+            let state = self.state.lock().expect("mutex poisoned");
+            let cached = state.token_decimals.get(asset_id).copied();
+            let fresh = state.token_decimals_updated_ms.is_some_and(|updated_ms| {
+                now_ms.saturating_sub(updated_ms) <= TOKEN_DECIMALS_CACHE_TTL_MS
+            });
+            (cached, fresh)
+        };
+
+        if cache_is_fresh {
+            if let Some(decimals) = cached_decimals {
+                return Ok(decimals);
+            }
+            if let Some(decimals) = get_static_decimals_for_asset(asset_id) {
+                tracing::warn!(
+                    asset_id,
+                    decimals,
+                    "asset missing in fresh token cache; using static decimals fallback"
+                );
+                return Ok(decimals);
+            }
+            return Err(ipc_err(
+                errors::INVALID_ASSET,
+                format!("unsupported asset: {asset_id}"),
+            ));
+        }
+
+        let tokens = match block_on(async { self.near.get_supported_tokens().await }) {
+            Ok(tokens) => tokens,
+            Err(err) => {
+                if let Some(decimals) = cached_decimals {
+                    tracing::warn!(
+                        asset_id,
+                        decimals,
+                        error = ?err,
+                        "failed to refresh token decimals; using stale cached value"
+                    );
+                    return Ok(decimals);
+                }
+                if let Some(decimals) = get_static_decimals_for_asset(asset_id) {
+                    tracing::warn!(
+                        asset_id,
+                        decimals,
+                        error = ?err,
+                        "failed to refresh token decimals; using static decimals fallback"
+                    );
+                    return Ok(decimals);
+                }
+                return Err(match err {
+                    zstash_network::near_intents::NearIntentsError::TorNotReady => {
+                        ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
+                    }
+                    _ => ipc_err(
+                        errors::SWAP_FAILED,
+                        format!("failed to fetch supported tokens: {err}"),
+                    ),
+                });
+            }
+        };
+
+        let mut refreshed_decimals = HashMap::with_capacity(tokens.len());
+        for token in tokens {
+            refreshed_decimals.insert(token.asset_id, token.decimals);
+        }
+
+        let resolved = refreshed_decimals.get(asset_id).copied();
+        {
+            let mut state = self.state.lock().expect("mutex poisoned");
+            state.token_decimals = refreshed_decimals;
+            state.token_decimals_updated_ms = Some(now_ms);
+        }
+
+        if let Some(decimals) = resolved {
+            return Ok(decimals);
+        }
+        if let Some(decimals) = get_static_decimals_for_asset(asset_id) {
+            tracing::warn!(
+                asset_id,
+                decimals,
+                "asset missing from provider token list; using static decimals fallback"
+            );
+            return Ok(decimals);
+        }
+
+        Err(ipc_err(
+            errors::INVALID_ASSET,
+            format!("unsupported asset: {asset_id}"),
+        ))
     }
 
     pub fn request_swap_quote(
@@ -108,7 +213,7 @@ impl SwapService {
                         "missing input_amount for ExactInput mode",
                     ));
                 }
-                let decimals = get_decimals_for_asset(&intent.input_asset);
+                let decimals = self.resolve_asset_decimals(&intent.input_asset)?;
                 let amount =
                     convert_to_smallest_units(&intent.input_amount, decimals).map_err(|e| {
                         ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}"))
@@ -127,7 +232,7 @@ impl SwapService {
                             "missing output_amount for ExactOutput/CrossPay mode",
                         )
                     })?;
-                let decimals = get_decimals_for_asset(&intent.output_asset);
+                let decimals = self.resolve_asset_decimals(&intent.output_asset)?;
                 let amount = convert_to_smallest_units(output_amount, decimals).map_err(|e| {
                     ipc_err(errors::INVALID_REQUEST, format!("invalid amount: {e}"))
                 })?;
@@ -933,28 +1038,29 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
     }
 }
 
-/// Get decimals for a given asset ID.
+/// Get static decimals for a known asset ID.
 ///
 /// Asset IDs use the new 1Click API format (e.g., `nep141:zec.omft.near`).
-fn get_decimals_for_asset(asset_id: &str) -> u8 {
+fn get_static_decimals_for_asset(asset_id: &str) -> Option<u8> {
     match asset_id {
         // ZEC (8 decimals)
-        "nep141:zec.omft.near" => 8,
+        "nep141:zec.omft.near" => Some(8),
         // ETH and ETH variants (18 decimals)
-        "nep141:eth.omft.near" | "nep141:base.omft.near" => 18,
+        "nep141:eth.omft.near" | "nep141:base.omft.near" => Some(18),
         // SOL (9 decimals)
-        "nep141:sol.omft.near" => 9,
+        "nep141:sol.omft.near" => Some(9),
         // NEAR (24 decimals)
-        "nep141:wrap.near" => 24,
+        "nep141:wrap.near" => Some(24),
         // USDC/USDT variants (6 decimals)
-        s if s.contains("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") => 6, // ETH USDC
-        s if s.contains("0xdac17f958d2ee523a2206206994597c13d831ec7") => 6, // ETH USDT
-        s if s.contains("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913") => 6, // Base USDC
-        s if s.contains("5ce3bf3a31af18be40ba30f721101b4341690186") => 6,   // SOL USDC
-        s if s.contains("c800a4bd850783ccb82c2b2c7e84175443606352") => 6,   // SOL USDT
-        s if s.contains("17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1") => 6, // NEAR USDC
-        // Default to 8 (ZEC-like) for unknown assets
-        _ => 8,
+        s if s.contains("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") => Some(6), // ETH USDC
+        s if s.contains("0xdac17f958d2ee523a2206206994597c13d831ec7") => Some(6), // ETH USDT
+        s if s.contains("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913") => Some(6), // Base USDC
+        s if s.contains("5ce3bf3a31af18be40ba30f721101b4341690186") => Some(6),   // SOL USDC
+        s if s.contains("c800a4bd850783ccb82c2b2c7e84175443606352") => Some(6),   // SOL USDT
+        s if s.contains("17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1") => {
+            Some(6) // NEAR USDC
+        }
+        _ => None,
     }
 }
 
