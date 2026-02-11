@@ -74,6 +74,7 @@ pub fn run() {
         commands::swap::zstash_start_swap,
         commands::swap::zstash_get_swap_status,
         commands::swap::zstash_list_swaps,
+        commands::swap::zstash_get_supported_tokens,
         commands::swap::zstash_refresh_swap_status,
         commands::swap::zstash_resume_pending_swaps,
         // Tor
