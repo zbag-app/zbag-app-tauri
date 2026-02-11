@@ -89,6 +89,7 @@ pub struct SyncService {
 #[derive(Debug)]
 struct State {
     jobs: HashMap<Uuid, SyncJob>,
+    blocking_scans: HashMap<Uuid, usize>,
     progress: HashMap<Uuid, SyncProgress>,
     balances: HashMap<(Uuid, u32), Balance>,
     started_at: HashMap<Uuid, Instant>,
@@ -113,11 +114,42 @@ struct SyncJob {
     handle: JoinHandle<()>,
 }
 
+#[derive(Debug)]
+struct BlockingScanInFlightGuard {
+    state: Arc<Mutex<State>>,
+    wallet_id: Uuid,
+}
+
+impl BlockingScanInFlightGuard {
+    fn acquire(state: Arc<Mutex<State>>, wallet_id: Uuid) -> Self {
+        let mut locked = state.lock().expect("mutex poisoned");
+        *locked.blocking_scans.entry(wallet_id).or_insert(0) += 1;
+        drop(locked);
+
+        Self { state, wallet_id }
+    }
+}
+
+impl Drop for BlockingScanInFlightGuard {
+    fn drop(&mut self) {
+        let mut state = self.state.lock().expect("mutex poisoned");
+        let Some(count) = state.blocking_scans.get_mut(&self.wallet_id) else {
+            return;
+        };
+
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            state.blocking_scans.remove(&self.wallet_id);
+        }
+    }
+}
+
 impl SyncService {
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(State {
                 jobs: HashMap::new(),
+                blocking_scans: HashMap::new(),
                 progress: HashMap::new(),
                 balances: HashMap::new(),
                 started_at: HashMap::new(),
@@ -165,7 +197,8 @@ impl SyncService {
 
         {
             let mut state = self.state.lock().expect("mutex poisoned");
-            if state.jobs.contains_key(&wallet_id) {
+            if state.jobs.contains_key(&wallet_id) || state.blocking_scans.contains_key(&wallet_id)
+            {
                 return Err(ipc_err(
                     errors::SYNC_IN_PROGRESS,
                     "sync already in progress",
@@ -738,6 +771,7 @@ impl SyncService {
                                         limit,
                                         blocks_dir.clone(),
                                         batch.range_end,
+                                        Arc::clone(&state),
                                         wallet_id,
                                     )
                                     .await;
@@ -2141,9 +2175,16 @@ async fn scan_batch_blocking(
     limit: usize,
     blocks_dir: PathBuf,
     batch_range_end: BlockHeight,
+    state: Arc<Mutex<State>>,
     wallet_id: uuid::Uuid,
 ) -> ScanBatchResult {
+    let in_flight = BlockingScanInFlightGuard::acquire(state, wallet_id);
+
     crate::tokio_runtime::spawn_blocking(move || {
+        #[cfg(test)]
+        let _finish_guard = blocking_scan_test_hook::enter_blocking_scan();
+        let _in_flight = in_flight;
+
         let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
             &mut conn,
             params,
@@ -2344,8 +2385,98 @@ async fn fetch_balances_blocking(
 }
 
 #[cfg(test)]
+mod blocking_scan_test_hook {
+    use std::sync::mpsc;
+    use std::sync::{Mutex, OnceLock};
+
+    #[derive(Debug)]
+    struct BlockingScanHook {
+        started_tx: mpsc::Sender<()>,
+        release_rx: mpsc::Receiver<()>,
+        finished_tx: mpsc::Sender<()>,
+    }
+
+    #[derive(Debug)]
+    pub(super) struct BlockingScanGate {
+        started_rx: mpsc::Receiver<()>,
+        release_tx: mpsc::Sender<()>,
+        finished_rx: mpsc::Receiver<()>,
+    }
+
+    impl BlockingScanGate {
+        pub(super) fn wait_until_started(&self) {
+            self.started_rx.recv().expect("scan start signal dropped");
+        }
+
+        pub(super) fn release(&self) {
+            self.release_tx.send(()).expect("release signal dropped");
+        }
+
+        pub(super) fn wait_until_finished(&self) {
+            self.finished_rx.recv().expect("scan finish signal dropped");
+        }
+    }
+
+    #[derive(Debug)]
+    pub(super) struct FinishSignalGuard(Option<mpsc::Sender<()>>);
+
+    impl Drop for FinishSignalGuard {
+        fn drop(&mut self) {
+            if let Some(tx) = self.0.take() {
+                let _ = tx.send(());
+            }
+        }
+    }
+
+    static HOOK: OnceLock<Mutex<Option<BlockingScanHook>>> = OnceLock::new();
+
+    pub(super) fn install() -> BlockingScanGate {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+
+        let hook = BlockingScanHook {
+            started_tx,
+            release_rx,
+            finished_tx,
+        };
+
+        let mut slot = HOOK
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .expect("mutex poisoned");
+        assert!(slot.is_none(), "blocking scan test hook already installed");
+        *slot = Some(hook);
+
+        BlockingScanGate {
+            started_rx,
+            release_tx,
+            finished_rx,
+        }
+    }
+
+    pub(super) fn enter_blocking_scan() -> FinishSignalGuard {
+        let hook = HOOK
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .expect("mutex poisoned")
+            .take();
+        let Some(hook) = hook else {
+            return FinishSignalGuard(None);
+        };
+
+        let _ = hook.started_tx.send(());
+        let _ = hook.release_rx.recv();
+        FinishSignalGuard(Some(hook.finished_tx))
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static BLOCKING_SCAN_TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     /// Creates a minimal wallet database schema sufficient for memo enhancement queries.
     fn create_minimal_wallet_schema(conn: &Connection) {
@@ -2368,6 +2499,190 @@ mod tests {
             ",
         )
         .expect("create minimal wallet schema");
+    }
+
+    fn progress_for_test(phase: SyncPhase) -> SyncProgress {
+        SyncProgress {
+            phase,
+            scan_frontier_height: 0,
+            wallet_tip_height: 0,
+            progress_percent: 0,
+            eta_seconds: None,
+            retry_in_seconds: None,
+            error_message: None,
+        }
+    }
+
+    fn open_test_app_db() -> (tempfile::TempDir, AppDb) {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let app_db =
+            AppDb::open(temp_dir.path().join("app.db")).expect("open temporary app metadata db");
+        (temp_dir, app_db)
+    }
+
+    fn spawn_blocked_scan_job(
+        service: &SyncService,
+        wallet_id: Uuid,
+        on_progress_after_scan: Option<SyncEventHandler>,
+    ) -> blocking_scan_test_hook::BlockingScanGate {
+        let gate = blocking_scan_test_hook::install();
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let blocks_dir = temp_dir.path().join("blocks");
+        std::fs::create_dir_all(&blocks_dir).expect("create blocks dir");
+        let conn = Connection::open_in_memory().expect("open in-memory wallet db");
+        let fsblock_db = FsBlockDb::for_path(temp_dir.path()).expect("init fs block db");
+
+        let state_for_task = Arc::clone(&service.state);
+        let handle = crate::tokio_runtime::spawn(async move {
+            let _temp_dir_guard = temp_dir;
+            let scan_result = scan_batch_blocking(
+                conn,
+                fsblock_db,
+                zcash_consensus_network(Network::Testnet),
+                BlockHeight::from_u32(1),
+                empty_chain_state(BlockHeight::from_u32(0)),
+                0,
+                blocks_dir,
+                BlockHeight::from_u32(2),
+                Arc::clone(&state_for_task),
+                wallet_id,
+            )
+            .await;
+
+            if let Some(handler) = on_progress_after_scan {
+                let progress = SyncProgress {
+                    phase: SyncPhase::Scanning,
+                    scan_frontier_height: scan_result.fully_scanned,
+                    wallet_tip_height: 0,
+                    progress_percent: scan_result.progress_percent,
+                    eta_seconds: None,
+                    retry_in_seconds: None,
+                    error_message: None,
+                };
+                let mut state = state_for_task.lock().expect("mutex poisoned");
+                state.progress.insert(wallet_id, progress.clone());
+                drop(state);
+
+                handler(SyncProgressEvent {
+                    schema_version: SCHEMA_VERSION,
+                    event: "sync.progress".to_string(),
+                    progress,
+                });
+            }
+        });
+
+        let (cancel_tx, _) = watch::channel(false);
+        let mut state = service.state.lock().expect("mutex poisoned");
+        state.jobs.insert(
+            wallet_id,
+            SyncJob {
+                cancel: cancel_tx,
+                handle,
+            },
+        );
+        state
+            .progress
+            .insert(wallet_id, progress_for_test(SyncPhase::Scanning));
+        state.started_at.insert(wallet_id, Instant::now());
+        drop(state);
+
+        gate
+    }
+
+    #[test]
+    fn stop_sync_while_blocking_scan_is_in_flight_resets_idle_and_stops_progress_events() {
+        let _serial = BLOCKING_SCAN_TEST_MUTEX.lock().expect("mutex poisoned");
+        let service = SyncService::new();
+        let wallet_id = Uuid::new_v4();
+        let emitted_phases = Arc::new(Mutex::new(Vec::new()));
+        let emitted_phases_for_handler = Arc::clone(&emitted_phases);
+        let on_progress: SyncEventHandler = Arc::new(move |event| {
+            emitted_phases_for_handler
+                .lock()
+                .expect("mutex poisoned")
+                .push(event.progress.phase);
+        });
+
+        let gate = spawn_blocked_scan_job(&service, wallet_id, Some(Arc::clone(&on_progress)));
+        gate.wait_until_started();
+
+        assert!(service.running_wallet_ids().contains(&wallet_id));
+
+        service
+            .stop_sync(wallet_id, Some(Arc::clone(&on_progress)))
+            .expect("stop sync while blocked");
+
+        assert_eq!(service.get_progress(wallet_id).phase, SyncPhase::Idle);
+        assert!(!service.running_wallet_ids().contains(&wallet_id));
+
+        let phases_after_stop = emitted_phases.lock().expect("mutex poisoned").clone();
+        assert_eq!(
+            phases_after_stop,
+            vec![SyncPhase::Idle],
+            "stop_sync should emit a single Idle progress update"
+        );
+
+        gate.release();
+        gate.wait_until_finished();
+
+        let phases_after_release = emitted_phases.lock().expect("mutex poisoned").clone();
+        assert_eq!(
+            phases_after_release,
+            vec![SyncPhase::Idle],
+            "no additional progress updates should be emitted after stop_sync"
+        );
+    }
+
+    #[test]
+    fn start_sync_is_blocked_until_in_flight_blocking_scan_unwinds() {
+        let _serial = BLOCKING_SCAN_TEST_MUTEX.lock().expect("mutex poisoned");
+        let service = SyncService::new();
+        let wallet_id = Uuid::new_v4();
+        let (temp_dir, app_db) = open_test_app_db();
+        let wallet_db_path = temp_dir.path().join("wallet.db");
+
+        let gate = spawn_blocked_scan_job(&service, wallet_id, None);
+        gate.wait_until_started();
+
+        service
+            .stop_sync(wallet_id, None)
+            .expect("stop blocked sync job");
+
+        let err = service
+            .start_sync(
+                &app_db,
+                wallet_id,
+                Network::Testnet,
+                wallet_db_path.clone(),
+                Dek([0u8; 32]),
+                vec![],
+                None,
+                None,
+                None,
+            )
+            .expect_err("restart should be blocked while prior blocking scan is still unwinding");
+        let ipc_err = crate::error::find_engine_ipc_error(&err).expect("expected engine IPC error");
+        assert_eq!(ipc_err.code, errors::SYNC_IN_PROGRESS);
+
+        gate.release();
+        gate.wait_until_finished();
+
+        service
+            .start_sync(
+                &app_db,
+                wallet_id,
+                Network::Testnet,
+                wallet_db_path,
+                Dek([0u8; 32]),
+                vec![],
+                None,
+                None,
+                None,
+            )
+            .expect("restart should succeed after blocking scan unwind finishes");
+        service
+            .stop_sync(wallet_id, None)
+            .expect("stop restarted sync");
     }
 
     #[test]
