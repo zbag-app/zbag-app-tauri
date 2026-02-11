@@ -76,7 +76,7 @@ export function RestoreBirthday(props: {
 
       // Clear flow data immediately after seed is persisted.
       // If loadWallet fails, the seed phrase no longer needs to remain in state.
-      onClearFlow();
+      setFlow(null);
 
       const walletId = restored.ok.wallet.id;
 
