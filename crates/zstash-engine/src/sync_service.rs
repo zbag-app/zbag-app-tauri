@@ -1834,6 +1834,24 @@ async fn enhance_transaction_memo(
     // 1. Fetch the raw transaction
     let raw_tx = client.get_transaction(&txid).await?;
 
+    let wallet_db_path = wallet_db_path.to_path_buf();
+    let wallet_dek = Dek(wallet_dek.0);
+    let params = *params;
+
+    crate::tokio_runtime::spawn_blocking(move || {
+        enhance_transaction_memo_blocking(&wallet_db_path, &wallet_dek, params, txid_bytes, raw_tx)
+    })
+    .await
+    .context("spawn_blocking panicked")?
+}
+
+fn enhance_transaction_memo_blocking(
+    wallet_db_path: &Path,
+    wallet_dek: &Dek,
+    params: zcash_protocol::consensus::Network,
+    txid_bytes: [u8; 32],
+    raw_tx: zcash_client_backend::proto::service::RawTransaction,
+) -> anyhow::Result<()> {
     // 2. Determine branch ID from mined height
     // Handle sentinel values from lightwalletd protobuf:
     // - 0 means mempool (unmined) - this is a lightwalletd convention, not genesis block.
@@ -1845,7 +1863,7 @@ async fn enhance_transaction_memo(
         h => u32::try_from(h).context("block height exceeds u32::MAX")?,
     };
     let mined_height = BlockHeight::from_u32(height_u32);
-    let branch_id = BranchId::for_height(params, mined_height);
+    let branch_id = BranchId::for_height(&params, mined_height);
 
     // 3. Parse the transaction
     let tx =
@@ -1858,7 +1876,7 @@ async fn enhance_transaction_memo(
     let ufvks = {
         let wdb = zcash_client_sqlite::WalletDb::from_connection(
             &mut conn,
-            *params,
+            params,
             zcash_client_sqlite::util::SystemClock,
             rand::rngs::OsRng,
         );
@@ -1866,7 +1884,7 @@ async fn enhance_transaction_memo(
     };
 
     // 6. Decrypt the transaction
-    let decrypted = decrypt_transaction(params, Some(mined_height), None, &tx, &ufvks);
+    let decrypted = decrypt_transaction(&params, Some(mined_height), None, &tx, &ufvks);
 
     // 7. Update memos in a transaction to ensure atomicity.
     // Without this, a crash between updates could leave some outputs with memos
