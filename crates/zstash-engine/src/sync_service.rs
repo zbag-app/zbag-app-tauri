@@ -36,7 +36,7 @@ use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
-use zstash_core::permissions::secure_open_options;
+use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
 
 /// Default batch size for downloading blocks.
 /// Matches Zashi's SYNC_BATCH_SIZE for optimal performance.
@@ -460,7 +460,7 @@ impl SyncService {
                 // === Main sync loop (one pass to tip) ===
                 let mut sync_complete = false;
                 let mut sync_error = false;
-                let mut sync_error_message: Option<&'static str> = None;
+                let mut sync_error_message: Option<String> = None;
                 'sync_loop: loop {
                     // Check cancellation at start of each iteration
                     if *cancel_rx.borrow() {
@@ -481,7 +481,8 @@ impl SyncService {
                                 error = %err,
                                 "failed to get scan ranges"
                             );
-                            sync_error_message = Some("Failed to determine scan ranges");
+                            sync_error_message =
+                                Some("Failed to determine scan ranges".to_string());
                             sync_error = true;
                             break 'sync_loop;
                         }
@@ -649,7 +650,8 @@ impl SyncService {
                                         error = ?err,
                                         "tree state fetch failed, aborting sync"
                                     );
-                                    sync_error_message = Some("Failed to fetch chain state");
+                                    sync_error_message =
+                                        Some("Failed to fetch chain state".to_string());
                                     sync_error = true;
                                     break 'sync_loop;
                                 }
@@ -704,7 +706,7 @@ impl SyncService {
                                                     "tree state fetch failed for batch, aborting range"
                                                 );
                                                 sync_error_message =
-                                                    Some("Failed to fetch chain state");
+                                                    Some("Failed to fetch chain state".to_string());
                                                 range_error = true;
                                                 break;
                                             }
@@ -763,7 +765,9 @@ impl SyncService {
                                             // Don't set range_error - this is a recoverable situation.
                                             break;
                                         }
-                                        ScanOutcome::Error(_) => {
+                                        ScanOutcome::Error(err) => {
+                                            sync_error_message =
+                                                Some(format!("Failed to scan blocks: {err}"));
                                             range_error = true;
                                             break;
                                         }
@@ -777,7 +781,8 @@ impl SyncService {
                                     break;
                                 }
                                 DownloadResult::Error(_err) => {
-                                    sync_error_message = Some("Failed to download blocks");
+                                    sync_error_message =
+                                        Some("Failed to download blocks".to_string());
                                     range_error = true;
                                     break;
                                 }
@@ -833,7 +838,7 @@ impl SyncService {
                         progress_percent,
                         eta_seconds: None,
                         retry_in_seconds: Some(retry_in_seconds),
-                        error_message: sync_error_message.map(str::to_string),
+                        error_message: sync_error_message,
                     });
 
                     tokio::time::sleep(poll_backoff).await;
@@ -845,6 +850,199 @@ impl SyncService {
                 }
 
                 if sync_complete {
+                    // === Phase: Enhancing ===
+                    // Fetch full transactions to extract memos for received notes.
+                    // Compact blocks don't contain memo data, so we need to fetch
+                    // the full transaction and decrypt it to get memos.
+
+                    // Get total count for progress tracking.
+                    let total_to_enhance = match count_txids_needing_memo_enhancement_blocking(
+                        wallet_db_path.clone(),
+                        Dek(wallet_dek.0),
+                    )
+                    .await
+                    {
+                        Ok(count) => count,
+                        Err(err) => {
+                            tracing::warn!(
+                                wallet_id = %wallet_id,
+                                error = ?err,
+                                "failed to count transactions needing memo enhancement, skipping enhancement phase"
+                            );
+                            0
+                        }
+                    };
+
+                    // Emit initial enhancing progress.
+                    let enhancement_progress = |enhanced: u32, total: u32| -> u8 {
+                        if total == 0 {
+                            return 100;
+                        }
+                        // Map enhancement progress to 99-100 range.
+                        let ratio = enhanced as f64 / total as f64;
+                        (99.0 + ratio).min(100.0) as u8
+                    };
+
+                    update(SyncProgress {
+                        phase: SyncPhase::Enhancing,
+                        scan_frontier_height: u32::from(chain_tip),
+                        wallet_tip_height: u32::from(chain_tip),
+                        progress_percent: enhancement_progress(0, total_to_enhance),
+                        eta_seconds: None,
+                        retry_in_seconds: None,
+                        error_message: None,
+                    });
+
+                    if total_to_enhance > 0 {
+                        // Use concurrent enhancement with bounded parallelism.
+                        // GrpcClient uses HTTP/2 multiplexing, and SQLite has busy_timeout
+                        // configured, so moderate concurrency is safe.
+                        const ENHANCEMENT_CONCURRENCY: usize = 4;
+                        let mut join_set = tokio::task::JoinSet::new();
+                        let mut enhanced_count: u32 = 0;
+                        let mut batch_offset: u32 = 0;
+
+                        // Process transactions in batches to limit memory usage.
+                        'enhancement: loop {
+                            // Check cancellation before fetching next batch.
+                            if *cancel_rx.borrow() {
+                                break 'enhancement;
+                            }
+
+                            // Fetch next batch of txids.
+                            let txids_batch =
+                                match get_txids_needing_memo_enhancement_batch_blocking(
+                                    wallet_db_path.clone(),
+                                    Dek(wallet_dek.0),
+                                    batch_offset,
+                                    ENHANCEMENT_BATCH_SIZE,
+                                )
+                                .await
+                                {
+                                    Ok(batch) => batch,
+                                    Err(err) => {
+                                        tracing::warn!(
+                                            wallet_id = %wallet_id,
+                                            batch_offset,
+                                            error = ?err,
+                                            "failed to get memo enhancement batch"
+                                        );
+                                        break 'enhancement;
+                                    }
+                                };
+
+                            // If batch is empty, we're done.
+                            if txids_batch.is_empty() {
+                                break 'enhancement;
+                            }
+
+                            let batch_size = txids_batch.len() as u32;
+                            batch_offset += batch_size;
+
+                            // Emit progress at start of each batch.
+                            update(SyncProgress {
+                                phase: SyncPhase::Enhancing,
+                                scan_frontier_height: u32::from(chain_tip),
+                                wallet_tip_height: u32::from(chain_tip),
+                                progress_percent: enhancement_progress(
+                                    enhanced_count,
+                                    total_to_enhance,
+                                ),
+                                eta_seconds: None,
+                                retry_in_seconds: None,
+                                error_message: None,
+                            });
+
+                            for txid_bytes in txids_batch {
+                                // Check cancellation before spawning new tasks.
+                                if *cancel_rx.borrow() {
+                                    break 'enhancement;
+                                }
+
+                                // Limit concurrency by draining completed tasks.
+                                while join_set.len() >= ENHANCEMENT_CONCURRENCY {
+                                    if let Some(result) = join_set.join_next().await {
+                                        enhanced_count += 1;
+                                        match result {
+                                            Ok(Ok(())) => {}
+                                            Ok(Err((txid, err))) => {
+                                                tracing::warn!(
+                                                    wallet_id = %wallet_id,
+                                                    txid = hex::encode(txid),
+                                                    error = ?err,
+                                                    "failed to enhance transaction memo"
+                                                );
+                                            }
+                                            Err(join_err) => {
+                                                tracing::warn!(
+                                                    wallet_id = %wallet_id,
+                                                    error = ?join_err,
+                                                    "enhancement task panicked"
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Clone values for the spawned task.
+                                let client = client.clone();
+                                let wallet_db_path = wallet_db_path.clone();
+                                let wallet_dek = Arc::clone(&wallet_dek);
+
+                                join_set.spawn(async move {
+                                    match enhance_transaction_memo(
+                                        &client,
+                                        &wallet_db_path,
+                                        &wallet_dek,
+                                        &params,
+                                        txid_bytes,
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => {
+                                            tracing::debug!(
+                                                txid = hex::encode(txid_bytes),
+                                                "enhanced transaction memo"
+                                            );
+                                            Ok(())
+                                        }
+                                        Err(err) => Err((txid_bytes, err)),
+                                    }
+                                });
+                            }
+                        }
+
+                        // Drain remaining tasks.
+                        while let Some(result) = join_set.join_next().await {
+                            enhanced_count += 1;
+                            match result {
+                                Ok(Ok(())) => {}
+                                Ok(Err((txid, err))) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        txid = hex::encode(txid),
+                                        error = ?err,
+                                        "failed to enhance transaction memo"
+                                    );
+                                }
+                                Err(join_err) => {
+                                    tracing::warn!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "enhancement task panicked"
+                                    );
+                                }
+                            }
+                        }
+
+                        tracing::debug!(
+                            wallet_id = %wallet_id,
+                            enhanced_count,
+                            total_to_enhance,
+                            "memo enhancement phase complete"
+                        );
+                    }
+
                     // Final progress update
                     update(SyncProgress {
                         phase: SyncPhase::CatchingUp,
@@ -1779,9 +1977,35 @@ async fn download_blocks_with_retry(
 
 /// Initialize block cache directory on a blocking thread.
 async fn create_cache_dir_async(cache_dir: PathBuf) -> std::io::Result<()> {
-    crate::tokio_runtime::spawn_blocking(move || std::fs::create_dir_all(&cache_dir))
+    crate::tokio_runtime::spawn_blocking(move || create_dir_all_secure(&cache_dir))
         .await
         .expect("spawn_blocking panicked")
+}
+
+/// Count memo enhancement candidates on a blocking thread.
+async fn count_txids_needing_memo_enhancement_blocking(
+    wallet_db_path: PathBuf,
+    wallet_dek: Dek,
+) -> anyhow::Result<u32> {
+    crate::tokio_runtime::spawn_blocking(move || {
+        count_txids_needing_memo_enhancement(&wallet_db_path, &wallet_dek)
+    })
+    .await
+    .context("spawn_blocking panicked")?
+}
+
+/// Fetch a memo enhancement txid batch on a blocking thread.
+async fn get_txids_needing_memo_enhancement_batch_blocking(
+    wallet_db_path: PathBuf,
+    wallet_dek: Dek,
+    offset: u32,
+    limit: u32,
+) -> anyhow::Result<Vec<[u8; 32]>> {
+    crate::tokio_runtime::spawn_blocking(move || {
+        get_txids_needing_memo_enhancement_batch(&wallet_db_path, &wallet_dek, offset, limit)
+    })
+    .await
+    .context("spawn_blocking panicked")?
 }
 
 /// Initialize FsBlockDb on a blocking thread.
