@@ -287,6 +287,20 @@ impl SyncService {
                 emit(progress);
             };
 
+            let emit_balance_events =
+                |handler: &BalanceEventHandler, balances: Vec<(u32, Balance)>| {
+                    for (account_id, balance) in balances {
+                        if record_balance(&state, wallet_id, account_id, &balance) {
+                            handler(BalanceChangedEvent {
+                                schema_version: SCHEMA_VERSION,
+                                event: "balance.changed".to_string(),
+                                account_id,
+                                balance,
+                            });
+                        }
+                    }
+                };
+
             // === Phase: Preparing ===
             update(SyncProgress {
                 phase: SyncPhase::Preparing,
@@ -745,19 +759,18 @@ impl SyncService {
                                                 error_message: None,
                                             });
 
-                                            // Emit balance updates on blocking thread
-                                            if let Some(db) = balance_db.take() {
-                                                balance_db = Some(
-                                                    emit_balances_blocking(
-                                                        db,
-                                                        network,
-                                                        account_ids.clone(),
-                                                        Arc::clone(&state),
-                                                        wallet_id,
-                                                        on_balance_task.clone(),
-                                                    )
-                                                    .await,
-                                                );
+                                            // Read balances on blocking thread, emit callbacks on async thread.
+                                            if let Some(handler) = on_balance_task.as_ref()
+                                                && let Some(db) = balance_db.take()
+                                            {
+                                                let (db, balances) = fetch_balances_blocking(
+                                                    db,
+                                                    network,
+                                                    account_ids.clone(),
+                                                )
+                                                .await;
+                                                balance_db = Some(db);
+                                                emit_balance_events(handler, balances);
                                             }
                                         }
                                         ScanOutcome::ReorgDetected { rewind_height } => {
@@ -1059,19 +1072,14 @@ impl SyncService {
                         error_message: None,
                     });
 
-                    // Emit final balance updates on blocking thread
-                    if let Some(db) = balance_db.take() {
-                        balance_db = Some(
-                            emit_balances_blocking(
-                                db,
-                                network,
-                                account_ids.clone(),
-                                Arc::clone(&state),
-                                wallet_id,
-                                on_balance_task.clone(),
-                            )
-                            .await,
-                        );
+                    // Read balances on blocking thread, emit callbacks on async thread.
+                    if let Some(handler) = on_balance_task.as_ref()
+                        && let Some(db) = balance_db.take()
+                    {
+                        let (db, balances) =
+                            fetch_balances_blocking(db, network, account_ids.clone()).await;
+                        balance_db = Some(db);
+                        emit_balance_events(handler, balances);
                     }
                 }
 
@@ -2311,39 +2319,25 @@ async fn get_progress_blocking(
     .expect("spawn_blocking panicked")
 }
 
-/// Emit balance changed events for all accounts on a blocking thread.
+/// Fetch balances for all accounts on a blocking thread.
 ///
-/// Returns the connection and a vector of (account_id, balance) pairs for accounts
-/// whose balance has changed since the last emission.
-async fn emit_balances_blocking(
+/// Returns the connection and a vector of `(account_id, balance)` pairs for
+/// accounts whose balance query succeeded.
+async fn fetch_balances_blocking(
     conn: Connection,
     network: Network,
     account_ids: Vec<u32>,
-    state: Arc<Mutex<State>>,
-    wallet_id: uuid::Uuid,
-    handler: Option<BalanceEventHandler>,
-) -> Connection {
-    let Some(handler) = handler else {
-        return conn;
-    };
-
+) -> (Connection, Vec<(u32, Balance)>) {
     crate::tokio_runtime::spawn_blocking(move || {
         let mut conn = conn;
+        let mut balances = Vec::with_capacity(account_ids.len());
         for account_id in account_ids {
             let Ok(balance) = crate::balance::get_balance(&mut conn, network, account_id) else {
                 continue;
             };
-
-            if record_balance(&state, wallet_id, account_id, &balance) {
-                handler(BalanceChangedEvent {
-                    schema_version: SCHEMA_VERSION,
-                    event: "balance.changed".to_string(),
-                    account_id,
-                    balance,
-                });
-            }
+            balances.push((account_id, balance));
         }
-        conn
+        (conn, balances)
     })
     .await
     .expect("spawn_blocking panicked")
