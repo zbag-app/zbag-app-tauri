@@ -2,4 +2,7 @@
 # `rsa` is pulled in via Arti/Tor (`tor-llcrypto`) for public-key operations in the Tor client.
 # The Marvin attack advisory targets RSA *decryption* timing side-channels; zSTASH does not
 # perform RSA private-key operations via this dependency.
-ignore = ["RUSTSEC-2023-0071"]
+# `time` is transitive via `zcash_client_backend` and currently pinned through `time-core = 0.1.2`.
+# `RUSTSEC-2026-0009` is fixed in `time >= 0.3.47`, but that requires `time-core = 0.1.8`,
+# which cannot be selected until upstream Zcash deps relax their exact `time-core` pin.
+ignore = ["RUSTSEC-2023-0071", "RUSTSEC-2026-0009"]

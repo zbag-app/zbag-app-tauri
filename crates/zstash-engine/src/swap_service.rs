@@ -268,12 +268,6 @@ impl SwapService {
         // Set APP_FEE_BPS > 0 to re-enable affiliate fee collection.
         const APP_FEE_BPS: u32 = 0;
         const AFFILIATE_RECIPIENT: &str = "zstash.near";
-        if APP_FEE_BPS > 500 {
-            return Err(ipc_err(
-                errors::INVALID_REQUEST,
-                "app fee should not exceed 5%",
-            ));
-        }
 
         let app_fees = if APP_FEE_BPS == 0 {
             None
