@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use rusqlite::Connection;
@@ -39,8 +39,8 @@ use crate::server_resolver;
 use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
 
 /// Default batch size for downloading blocks.
-/// Matches Zashi's SYNC_BATCH_SIZE for optimal performance.
-const BATCH_SIZE: u32 = 1000;
+/// Reduced to improve mid-sync UI balance refresh cadence.
+const BATCH_SIZE: u32 = 250;
 
 /// Smaller batch size for sandblasting periods where blocks are much larger.
 /// Matches Zashi's SYNC_BATCH_SMALL_SIZE.
@@ -51,7 +51,13 @@ const BATCH_SIZE_SANDBLASTING: u32 = 100;
 const SANDBLASTING_RANGE: std::ops::RangeInclusive<u32> = 1_710_000..=2_050_000;
 
 /// Number of batches to buffer ahead for download/scan pipelining.
-const LOOKAHEAD_BATCHES: usize = 2;
+const LOOKAHEAD_BATCHES: usize = 4;
+
+/// Time-based throttle for `balance.changed` emission opportunities.
+const BALANCE_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(1500);
+
+/// Scan-progress-based throttle for `balance.changed` emission opportunities.
+const BALANCE_EMIT_BLOCK_THRESHOLD: u32 = 250;
 
 /// Poll interval once the wallet is caught up to tip.
 pub(crate) const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
@@ -106,6 +112,59 @@ struct SyncProgressEstimate {
     ewma_blocks_per_sec: Option<f64>,
     last_percent: Option<u8>,
     last_eta_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BalanceEmitTrigger {
+    SuccessfulScanBatch { scanned_blocks: u32 },
+    ForcedMilestone,
+}
+
+#[derive(Debug, Default, Clone)]
+struct BalanceEmitThrottle {
+    last_emit_at: Option<Instant>,
+    scanned_blocks_since_emit: u32,
+    saw_successful_scan_batch: bool,
+}
+
+impl BalanceEmitThrottle {
+    fn should_emit(&mut self, trigger: BalanceEmitTrigger, now: Instant) -> bool {
+        match trigger {
+            BalanceEmitTrigger::ForcedMilestone => true,
+            BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks } => {
+                self.should_emit_after_successful_scan_batch(scanned_blocks, now)
+            }
+        }
+    }
+
+    fn should_emit_after_successful_scan_batch(
+        &mut self,
+        scanned_blocks: u32,
+        now: Instant,
+    ) -> bool {
+        self.scanned_blocks_since_emit = self
+            .scanned_blocks_since_emit
+            .saturating_add(scanned_blocks);
+
+        // Force an emit opportunity on the first successfully scanned batch in this run.
+        if !self.saw_successful_scan_batch {
+            self.saw_successful_scan_batch = true;
+            return true;
+        }
+
+        let time_gate = self
+            .last_emit_at
+            .map(|last| now.saturating_duration_since(last) >= BALANCE_EMIT_MIN_INTERVAL)
+            .unwrap_or(true);
+        let block_gate = self.scanned_blocks_since_emit >= BALANCE_EMIT_BLOCK_THRESHOLD;
+
+        time_gate || block_gate
+    }
+
+    fn record_emit(&mut self, now: Instant) {
+        self.last_emit_at = Some(now);
+        self.scanned_blocks_since_emit = 0;
+    }
 }
 
 #[derive(Debug)]
@@ -249,12 +308,40 @@ impl SyncService {
                 }
                 None => zstash_network::grpc_client::GrpcClient::new(grpc_url),
             };
+            let mut balance_db = if on_balance_task.as_ref().is_some() {
+                // Copy DEK bytes for the balance connection (original stays with sync)
+                match open_wallet_db_async(wallet_db_path.clone(), wallet_dek.copy()).await {
+                    Ok(db) => Some(db),
+                    Err(err) => {
+                        tracing::debug!(
+                            wallet_id = %wallet_id,
+                            error = ?err,
+                            "failed to open wallet db for balance updates"
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let mut balance_emit_throttle = BalanceEmitThrottle::default();
 
             // Wait for Tor to be ready if enabled but not connected
             if let Some(ref tor) = tor_manager {
                 loop {
                     if *cancel_rx.borrow() {
                         tracing::debug!(wallet_id = %wallet_id, "sync cancelled while waiting for Tor");
+                        maybe_emit_balances(
+                            &state,
+                            wallet_id,
+                            on_balance_task.as_ref(),
+                            &mut balance_db,
+                            network,
+                            &account_ids,
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                         let mut state = state.lock().expect("mutex poisoned");
                         state.jobs.remove(&wallet_id);
                         return;
@@ -295,23 +382,6 @@ impl SyncService {
                 }
             };
 
-            let mut balance_db = if on_balance_task.as_ref().is_some() {
-                // Copy DEK bytes for the balance connection (original stays with sync)
-                match open_wallet_db_async(wallet_db_path.clone(), wallet_dek.copy()).await {
-                    Ok(db) => Some(db),
-                    Err(err) => {
-                        tracing::debug!(
-                            wallet_id = %wallet_id,
-                            error = ?err,
-                            "failed to open wallet db for balance updates"
-                        );
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
             let update = |progress: SyncProgress| {
                 let mut state = state.lock().expect("mutex poisoned");
                 let progress = with_eta(&mut state, wallet_id, progress);
@@ -319,20 +389,6 @@ impl SyncService {
                 drop(state);
                 emit(progress);
             };
-
-            let emit_balance_events =
-                |handler: &BalanceEventHandler, balances: Vec<(u32, Balance)>| {
-                    for (account_id, balance) in balances {
-                        if record_balance(&state, wallet_id, account_id, &balance) {
-                            handler(BalanceChangedEvent {
-                                schema_version: SCHEMA_VERSION,
-                                event: "balance.changed".to_string(),
-                                account_id,
-                                balance,
-                            });
-                        }
-                    }
-                };
 
             // === Phase: Preparing ===
             update(SyncProgress {
@@ -347,6 +403,17 @@ impl SyncService {
 
             // Check cancellation
             if *cancel_rx.borrow() {
+                maybe_emit_balances(
+                    &state,
+                    wallet_id,
+                    on_balance_task.as_ref(),
+                    &mut balance_db,
+                    network,
+                    &account_ids,
+                    &mut balance_emit_throttle,
+                    BalanceEmitTrigger::ForcedMilestone,
+                )
+                .await;
                 update(default_progress());
                 // Clear job and return early
                 let mut state = state.lock().expect("mutex poisoned");
@@ -365,6 +432,17 @@ impl SyncService {
                 .join("block_cache");
             if let Err(err) = create_cache_dir_async(cache_dir.clone()).await {
                 tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
+                maybe_emit_balances(
+                    &state,
+                    wallet_id,
+                    on_balance_task.as_ref(),
+                    &mut balance_db,
+                    network,
+                    &account_ids,
+                    &mut balance_emit_throttle,
+                    BalanceEmitTrigger::ForcedMilestone,
+                )
+                .await;
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
                 state.jobs.remove(&wallet_id);
@@ -377,6 +455,17 @@ impl SyncService {
                 Ok(db) => db,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -395,6 +484,17 @@ impl SyncService {
                 Ok(conn) => conn,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to open wallet db for sync");
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -429,6 +529,17 @@ impl SyncService {
                 // Check cancellation at start of each iteration
                 if *cancel_rx.borrow() {
                     tracing::debug!(wallet_id = %wallet_id, "sync cancelled");
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                     update(default_progress());
                     break 'auto_sync;
                 }
@@ -512,6 +623,17 @@ impl SyncService {
                     // Check cancellation at start of each iteration
                     if *cancel_rx.borrow() {
                         tracing::debug!(wallet_id = %wallet_id, "sync cancelled");
+                        maybe_emit_balances(
+                            &state,
+                            wallet_id,
+                            on_balance_task.as_ref(),
+                            &mut balance_db,
+                            network,
+                            &account_ids,
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                         update(default_progress());
                         break 'auto_sync;
                     }
@@ -551,6 +673,17 @@ impl SyncService {
                                 wallet_id = %wallet_id,
                                 "sync cancelled during range processing"
                             );
+                            maybe_emit_balances(
+                                &state,
+                                wallet_id,
+                                on_balance_task.as_ref(),
+                                &mut balance_db,
+                                network,
+                                &account_ids,
+                                &mut balance_emit_throttle,
+                                BalanceEmitTrigger::ForcedMilestone,
+                            )
+                            .await;
                             update(default_progress());
                             break 'auto_sync;
                         }
@@ -793,19 +926,20 @@ impl SyncService {
                                                 error_message: None,
                                             });
 
-                                            // Read balances on blocking thread, emit callbacks on async thread.
-                                            if let Some(handler) = on_balance_task.as_ref()
-                                                && let Some(db) = balance_db.take()
-                                            {
-                                                let (db, balances) = fetch_balances_blocking(
-                                                    db,
-                                                    network,
-                                                    account_ids.clone(),
-                                                )
-                                                .await;
-                                                balance_db = Some(db);
-                                                emit_balance_events(handler, balances);
-                                            }
+                                            maybe_emit_balances(
+                                                &state,
+                                                wallet_id,
+                                                on_balance_task.as_ref(),
+                                                &mut balance_db,
+                                                network,
+                                                &account_ids,
+                                                &mut balance_emit_throttle,
+                                                BalanceEmitTrigger::SuccessfulScanBatch {
+                                                    scanned_blocks: u32::try_from(limit)
+                                                        .unwrap_or(u32::MAX),
+                                                },
+                                            )
+                                            .await;
                                         }
                                         ScanOutcome::ReorgDetected { rewind_height } => {
                                             tracing::debug!(
@@ -853,6 +987,17 @@ impl SyncService {
                         }
 
                         if range_cancelled {
+                            maybe_emit_balances(
+                                &state,
+                                wallet_id,
+                                on_balance_task.as_ref(),
+                                &mut balance_db,
+                                network,
+                                &account_ids,
+                                &mut balance_emit_throttle,
+                                BalanceEmitTrigger::ForcedMilestone,
+                            )
+                            .await;
                             update(default_progress());
                             break 'auto_sync;
                         }
@@ -892,6 +1037,17 @@ impl SyncService {
                         retry_in_seconds: Some(retry_in_seconds),
                         error_message: sync_error_message,
                     });
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
 
                     tokio::time::sleep(poll_backoff).await;
                     poll_backoff = poll_backoff
@@ -934,6 +1090,17 @@ impl SyncService {
                         let ratio = enhanced as f64 / total as f64;
                         (99.0 + ratio).min(100.0) as u8
                     };
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
 
                     update(SyncProgress {
                         phase: SyncPhase::Enhancing,
@@ -1105,16 +1272,17 @@ impl SyncService {
                         retry_in_seconds: None,
                         error_message: None,
                     });
-
-                    // Read balances on blocking thread, emit callbacks on async thread.
-                    if let Some(handler) = on_balance_task.as_ref()
-                        && let Some(db) = balance_db.take()
-                    {
-                        let (db, balances) =
-                            fetch_balances_blocking(db, network, account_ids.clone()).await;
-                        balance_db = Some(db);
-                        emit_balance_events(handler, balances);
-                    }
+                    maybe_emit_balances(
+                        &state,
+                        wallet_id,
+                        on_balance_task.as_ref(),
+                        &mut balance_db,
+                        network,
+                        &account_ids,
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                 }
 
                 tokio::time::sleep(POLL_INTERVAL).await;
@@ -1235,6 +1403,54 @@ fn record_balance(
             true
         }
     }
+}
+
+fn emit_balance_events(
+    state: &Arc<Mutex<State>>,
+    wallet_id: Uuid,
+    handler: &BalanceEventHandler,
+    balances: Vec<(u32, Balance)>,
+) {
+    for (account_id, balance) in balances {
+        if record_balance(state, wallet_id, account_id, &balance) {
+            handler(BalanceChangedEvent {
+                schema_version: SCHEMA_VERSION,
+                event: "balance.changed".to_string(),
+                account_id,
+                balance,
+            });
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn maybe_emit_balances(
+    state: &Arc<Mutex<State>>,
+    wallet_id: Uuid,
+    on_balance_task: Option<&BalanceEventHandler>,
+    balance_db: &mut Option<Connection>,
+    network: Network,
+    account_ids: &[u32],
+    throttle: &mut BalanceEmitThrottle,
+    trigger: BalanceEmitTrigger,
+) {
+    let Some(handler) = on_balance_task else {
+        return;
+    };
+    let now = Instant::now();
+    if !throttle.should_emit(trigger, now) {
+        return;
+    }
+
+    let Some(db) = balance_db.take() else {
+        return;
+    };
+
+    // Read balances on blocking thread, emit callbacks on async thread.
+    let (db, balances) = fetch_balances_blocking(db, network, account_ids.to_vec()).await;
+    *balance_db = Some(db);
+    emit_balance_events(state, wallet_id, handler, balances);
+    throttle.record_emit(Instant::now());
 }
 
 fn open_wallet_db(wallet_db_path: &Path, dek: &Dek) -> anyhow::Result<Connection> {
@@ -2531,6 +2747,102 @@ mod tests {
             retry_in_seconds: None,
             error_message: None,
         }
+    }
+
+    #[test]
+    fn balance_emit_throttle_emits_on_first_batch_and_dual_thresholds() {
+        let mut throttle = BalanceEmitThrottle::default();
+        let start = Instant::now();
+
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch {
+                scanned_blocks: 100
+            },
+            start
+        ));
+        throttle.record_emit(start);
+
+        assert!(!throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch {
+                scanned_blocks: 100
+            },
+            start + std::time::Duration::from_millis(500)
+        ));
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch {
+                scanned_blocks: 150
+            },
+            start + std::time::Duration::from_millis(800)
+        ));
+        throttle.record_emit(start + std::time::Duration::from_millis(800));
+
+        assert!(!throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 10 },
+            start + std::time::Duration::from_millis(2000)
+        ));
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 10 },
+            start + std::time::Duration::from_millis(2400)
+        ));
+    }
+
+    #[test]
+    fn balance_emit_throttle_forced_milestone_bypasses_thresholds() {
+        let mut throttle = BalanceEmitThrottle::default();
+        let start = Instant::now();
+
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 1 },
+            start
+        ));
+        throttle.record_emit(start);
+
+        assert!(!throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 1 },
+            start + std::time::Duration::from_millis(100)
+        ));
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::ForcedMilestone,
+            start + std::time::Duration::from_millis(100)
+        ));
+        throttle.record_emit(start + std::time::Duration::from_millis(100));
+
+        assert!(!throttle.should_emit(
+            BalanceEmitTrigger::SuccessfulScanBatch {
+                scanned_blocks: 100
+            },
+            start + std::time::Duration::from_millis(200)
+        ));
+    }
+
+    #[test]
+    fn balance_emit_throttle_long_scans_emit_periodically_before_final_milestone() {
+        let mut throttle = BalanceEmitThrottle::default();
+        let start = Instant::now();
+        let mut periodic_emit_batches = Vec::new();
+
+        for batch_idx in 0..20u32 {
+            let now = start + std::time::Duration::from_millis(u64::from(batch_idx) * 100);
+            if throttle.should_emit(
+                BalanceEmitTrigger::SuccessfulScanBatch {
+                    scanned_blocks: 100,
+                },
+                now,
+            ) {
+                periodic_emit_batches.push(batch_idx);
+                throttle.record_emit(now);
+            }
+        }
+
+        assert_eq!(periodic_emit_batches, vec![0, 3, 6, 9, 12, 15, 18]);
+        assert!(
+            periodic_emit_batches.len() > 1,
+            "long scans should emit periodically before final completion"
+        );
+        assert!(throttle.should_emit(
+            BalanceEmitTrigger::ForcedMilestone,
+            start + std::time::Duration::from_secs(10)
+        ));
     }
 
     fn open_test_app_db() -> (tempfile::TempDir, AppDb) {
