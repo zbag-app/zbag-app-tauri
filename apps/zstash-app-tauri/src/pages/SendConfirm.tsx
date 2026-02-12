@@ -46,27 +46,30 @@ export function SendConfirm(props: { walletId: string }) {
 
     setSubmitting(true);
     setError(null);
+    try {
+      const reauth = await reauthWallet({ wallet_id: walletId, password, purpose: 'Spend' });
+      if ('err' in reauth) {
+        setError(reauth.err.message);
+        return;
+      }
 
-    const reauth = await reauthWallet({ wallet_id: walletId, password, purpose: 'Spend' });
-    if ('err' in reauth) {
+      const res = await confirmSend({
+        proposal_id: proposal.proposal_id,
+        reauth_token: reauth.ok.reauth_token,
+      });
+
+      if ('err' in res) {
+        setError(res.err.message);
+        return;
+      }
+
+      setPassword('');
+      navigate('/activity');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send transaction');
+    } finally {
       setSubmitting(false);
-      setError(reauth.err.message);
-      return;
     }
-
-    const res = await confirmSend({
-      proposal_id: proposal.proposal_id,
-      reauth_token: reauth.ok.reauth_token,
-    });
-    setSubmitting(false);
-
-    if ('err' in res) {
-      setError(res.err.message);
-      return;
-    }
-
-    setPassword('');
-    navigate('/activity');
   };
 
   const cancel = async () => {
