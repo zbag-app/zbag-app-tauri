@@ -53,6 +53,10 @@ zeroize = { workspace = true }
 # Encoding
 base64 = { workspace = true }
 
+# Protocol helpers
+prost = { workspace = true }
+zcash_protocol = { workspace = true }
+
 # Logging
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
