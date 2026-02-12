@@ -19,35 +19,6 @@ use zstash_engine::key_store::KeyStore;
 use zstash_engine::sync_service::SyncService;
 use zstash_engine::wallet_manager::WalletManager;
 
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-    ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-struct GrpcUrlOverrideGuard {
-    prev: Option<String>,
-}
-
-impl GrpcUrlOverrideGuard {
-    fn set(url: &str) -> Self {
-        let prev = std::env::var("ZSTASH_GRPC_URL").ok();
-        unsafe {
-            std::env::set_var("ZSTASH_GRPC_URL", url);
-        }
-        Self { prev }
-    }
-}
-
-impl Drop for GrpcUrlOverrideGuard {
-    fn drop(&mut self) {
-        match self.prev.take() {
-            Some(value) => unsafe { std::env::set_var("ZSTASH_GRPC_URL", value) },
-            None => unsafe { std::env::remove_var("ZSTASH_GRPC_URL") },
-        }
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
     encrypted_mnemonics: Arc<Mutex<Vec<u8>>>,
@@ -155,10 +126,8 @@ fn wait_for_scan_phase(service: &SyncService, wallet_id: Uuid, timeout: Duration
 #[test]
 #[ignore = "manual long-running test; requires ZSTASH_GRPC_URL testnet endpoint and network access"]
 fn stop_sync_during_real_scan_workload_stops_progress_and_allows_restart() {
-    let _env = env_lock();
-    let endpoint = std::env::var("ZSTASH_GRPC_URL")
+    let _endpoint = std::env::var("ZSTASH_GRPC_URL")
         .expect("set ZSTASH_GRPC_URL to a reachable testnet lightwalletd endpoint");
-    let _grpc_override = GrpcUrlOverrideGuard::set(&endpoint);
 
     let root = temp_root("sync_real_scan_cancellation");
     let app_db_path = root.join("app.db");
