@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
-import { cancelSend, confirmSend, reauthWallet } from '../services/ipc';
+import { cancelSend, reauthWallet, startSendJob } from '../services/ipc';
 import { formatZatoshisToZec } from '../utils/zec';
 
 type LocationState = {
@@ -53,7 +53,7 @@ export function SendConfirm(props: { walletId: string }) {
         return;
       }
 
-      const res = await confirmSend({
+      const res = await startSendJob({
         proposal_id: proposal.proposal_id,
         reauth_token: reauth.ok.reauth_token,
       });

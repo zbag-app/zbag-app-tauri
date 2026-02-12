@@ -32,7 +32,7 @@ use crate::encryption::{
 use crate::error::{find_engine_ipc_error, ipc_err};
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
-use crate::tx_service::{TxEventHandler, TxService};
+use crate::tx_service::{ServerFailoverEventHandler, TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
 use zstash_core::ipc::v1::commands::job::{
@@ -2019,6 +2019,7 @@ impl WalletManager {
         txid: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<String> {
         let Some(active_wallet_id) = self.active_wallet.as_ref().map(|w| w.wallet.id) else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
@@ -2071,7 +2072,95 @@ impl WalletManager {
             &grpc_url,
             txid,
             on_tx_changed,
+            on_failover,
         )
+    }
+
+    pub fn process_queued_broadcast_retries(
+        &mut self,
+        on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
+    ) -> anyhow::Result<usize> {
+        let (wallet_id, wallet_network, wallet_dir) = {
+            let Some(active) = self.active_wallet.as_ref() else {
+                return Ok(0);
+            };
+            if active.lock_status != WalletLockStatus::Unlocked {
+                return Ok(0);
+            }
+            (
+                active.wallet.id,
+                active.wallet.network,
+                active.wallet_dir.clone(),
+            )
+        };
+
+        let wallet_dek = match self.unlocked_wallet_dek(wallet_id) {
+            Ok(dek) => dek,
+            Err(_) => return Ok(0),
+        };
+
+        let WalletManager {
+            app_db,
+            tx_service,
+            active_wallet,
+            ..
+        } = self;
+
+        let Some(active) = active_wallet.as_mut() else {
+            return Ok(0);
+        };
+        if active.lock_status != WalletLockStatus::Unlocked || active.wallet.id != wallet_id {
+            return Ok(0);
+        }
+        let Some(conn) = active.wallet_db.as_mut() else {
+            return Ok(0);
+        };
+
+        let due_txids = tx_service.list_due_retry_txids(wallet_id, &wallet_dir)?;
+        let mut processed = 0usize;
+
+        for txid in due_txids {
+            let grpc_url = match crate::server_resolver::resolve_grpc_url(app_db, wallet_network) {
+                Ok(url) => url,
+                Err(err) => {
+                    tracing::warn!(
+                        wallet_id = %wallet_id,
+                        network = ?wallet_network,
+                        error = ?err,
+                        "auto retry skipped: failed to resolve active lightwalletd endpoint"
+                    );
+                    break;
+                }
+            };
+
+            match tx_service.retry_broadcast(
+                app_db,
+                wallet_id,
+                wallet_network,
+                &wallet_dir,
+                &wallet_dek,
+                conn,
+                &grpc_url,
+                &txid,
+                on_tx_changed.clone(),
+                on_failover.clone(),
+            ) {
+                Ok(_) => {
+                    processed = processed.saturating_add(1);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        wallet_id = %wallet_id,
+                        txid = %txid,
+                        error = ?err,
+                        "auto retry attempt failed"
+                    );
+                }
+            }
+        }
+
+        Ok(processed)
     }
 
     pub fn list_transactions(

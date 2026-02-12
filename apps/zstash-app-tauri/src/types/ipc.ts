@@ -1196,6 +1196,19 @@ export interface JobProgressEvent extends VersionedPayload {
   progress: JobProgress;
 }
 
+/** Server failover occurred during send/broadcast retries */
+export interface ServerFailoverEvent extends VersionedPayload {
+  event: 'server.failover';
+  network: Network;
+  from_server_id: string;
+  from_server_name: string;
+  from_grpc_url: string;
+  to_server_id: string;
+  to_server_name: string;
+  to_grpc_url: string;
+  reason: string;
+}
+
 export type IpcEvent =
   | SyncProgressEvent
   | BalanceChangedEvent
@@ -1203,7 +1216,8 @@ export type IpcEvent =
   | SwapChangedEvent
   | TorStatusEvent
   | WalletStatusEvent
-  | JobProgressEvent;
+  | JobProgressEvent
+  | ServerFailoverEvent;
 
 // ============================================================================
 // Error Codes
@@ -1374,4 +1388,5 @@ export const EventChannels = {
   TOR: 'zstash://tor',
   WALLET_STATUS: 'zstash://wallet-status',
   JOB: 'zstash://job',
+  SERVER_FAILOVER: 'zstash://server-failover',
 } as const;

@@ -48,3 +48,11 @@ export function onWalletStatus(
     callback(event.payload as IPC.WalletStatusEvent);
   });
 }
+
+export function onServerFailover(
+  callback: (event: IPC.ServerFailoverEvent) => void
+): Promise<UnlistenFn> {
+  return listen(IPC.EventChannels.SERVER_FAILOVER, (event) => {
+    callback(event.payload as IPC.ServerFailoverEvent);
+  });
+}

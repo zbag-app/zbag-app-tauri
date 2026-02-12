@@ -17,6 +17,8 @@ pub mod windows;
 #[cfg(not(feature = "test-bridge"))]
 use std::sync::Arc;
 #[cfg(not(feature = "test-bridge"))]
+use std::time::Duration;
+#[cfg(not(feature = "test-bridge"))]
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -138,13 +140,45 @@ where
             }
 
             let mut rx = state.tor_manager.subscribe();
+            let tor_app = app_handle.clone();
 
             tauri::async_runtime::spawn(async move {
-                let _ = events::emit_tor_status(&app_handle, rx.borrow().clone());
+                let _ = events::emit_tor_status(&tor_app, rx.borrow().clone());
                 while rx.changed().await.is_ok() {
-                    let _ = events::emit_tor_status(&app_handle, rx.borrow().clone());
+                    let _ = events::emit_tor_status(&tor_app, rx.borrow().clone());
                 }
             });
+
+            {
+                let wallet_manager = Arc::clone(&state.wallet_manager);
+                let tx_app = app_handle.clone();
+                let failover_app = app_handle.clone();
+                let tx_handler: zstash_engine::tx_service::TxEventHandler =
+                    Arc::new(move |event| {
+                        let _ = events::emit_transaction_changed(&tx_app, event);
+                    });
+                let failover_handler: zstash_engine::tx_service::ServerFailoverEventHandler =
+                    Arc::new(move |event| {
+                        let _ = events::emit_server_failover(&failover_app, event);
+                    });
+
+                tauri::async_runtime::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(5));
+                    loop {
+                        interval.tick().await;
+                        let Ok(mut mgr) = wallet_manager.try_lock() else {
+                            continue;
+                        };
+
+                        if let Err(err) = mgr.process_queued_broadcast_retries(
+                            Some(Arc::clone(&tx_handler)),
+                            Some(Arc::clone(&failover_handler)),
+                        ) {
+                            tracing::warn!(error = ?err, "auto retry worker iteration failed");
+                        }
+                    }
+                });
+            }
 
             Ok(())
         })

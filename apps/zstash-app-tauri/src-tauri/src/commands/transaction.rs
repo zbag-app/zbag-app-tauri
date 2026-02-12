@@ -205,13 +205,23 @@ pub fn zstash_retry_broadcast(
         return IpcResult::Err { err };
     }
 
+    let tx_app = app.clone();
+    let failover_app = app.clone();
     let handler = Arc::new(move |event| {
-        let _ = events::emit_transaction_changed(&app, event);
+        let _ = events::emit_transaction_changed(&tx_app, event);
+    });
+    let failover_handler = Arc::new(move |event| {
+        let _ = events::emit_server_failover(&failover_app, event);
     });
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let txid = mgr.retry_broadcast(&request.txid, &request.reauth_token, Some(handler))?;
+        let txid = mgr.retry_broadcast(
+            &request.txid,
+            &request.reauth_token,
+            Some(handler),
+            Some(failover_handler),
+        )?;
         Ok(RetryBroadcastResponse {
             schema_version: SCHEMA_VERSION,
             txid,

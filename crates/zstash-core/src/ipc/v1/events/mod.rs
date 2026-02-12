@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{Balance, JobProgress, SyncProgress, TransactionInfo, WalletStatus};
+use crate::domain::{Balance, JobProgress, Network, SyncProgress, TransactionInfo, WalletStatus};
 
 pub mod swap;
 pub use swap::SwapChangedEvent;
@@ -43,4 +43,19 @@ pub struct JobProgressEvent {
     pub schema_version: u32,
     pub event: String,
     pub progress: JobProgress,
+}
+
+/// Event emitted when send/broadcast transport failures trigger server failover.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerFailoverEvent {
+    pub schema_version: u32,
+    pub event: String,
+    pub network: Network,
+    pub from_server_id: String,
+    pub from_server_name: String,
+    pub from_grpc_url: String,
+    pub to_server_id: String,
+    pub to_server_name: String,
+    pub to_grpc_url: String,
+    pub reason: String,
 }

@@ -82,7 +82,7 @@ pub fn retry_broadcast_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let txid = mgr.retry_broadcast(&request.txid, &request.reauth_token, None)?;
+        let txid = mgr.retry_broadcast(&request.txid, &request.reauth_token, None, None)?;
         Ok(RetryBroadcastResponse {
             schema_version: SCHEMA_VERSION,
             txid,

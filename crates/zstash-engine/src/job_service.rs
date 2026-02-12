@@ -19,7 +19,12 @@ use zcash_client_backend::data_api::Account as _;
 use zstash_core::domain::{JobId, JobProgress, JobState, JobType, Network};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::{JobProgressEvent, TransactionChangedEvent};
+use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
 
+use crate::broadcast::{
+    classify_broadcast_error_message, is_retryable_broadcast_error_class,
+    retry_backoff_with_jitter, send_with_timeout,
+};
 use crate::encryption::Dek;
 use crate::tx_service::QueuedBroadcastMeta;
 
@@ -512,6 +517,7 @@ async fn run_send_job(
     use zcash_client_backend::data_api::WalletRead as _;
 
     let mut broadcast_error: Option<String> = None;
+    let mut can_retry_broadcast = false;
 
     for txid in txids.iter() {
         let tx = match wdb.get_transaction(*txid) {
@@ -538,20 +544,36 @@ async fn run_send_job(
                 debug!(job_id = %job_id, txid = %txid, "broadcast successful");
             }
             Err(e) => {
-                // Queue for retry but don't fail the job entirely
-                debug!(job_id = %job_id, txid = %txid, error = ?e, "broadcast failed, queuing for retry");
+                let err_msg = format!("{e:#}");
+                let err_class = classify_broadcast_error_message(&err_msg);
+                let retryable = is_retryable_broadcast_error_class(err_class);
+                debug!(
+                    job_id = %job_id,
+                    txid = %txid,
+                    error = ?e,
+                    class = ?err_class,
+                    retryable,
+                    "broadcast failed in send job"
+                );
                 let dek = Dek(ctx_wallet_dek_bytes);
                 if let Err(queue_err) = queue_broadcast_for_retry(
                     &ctx_wallet_id,
                     &ctx_wallet_dir,
                     &dek,
                     &txid.to_string(),
+                    Some(err_msg.clone()),
+                    Some(err_class),
+                    retryable,
                     &tx_bytes,
-                    Some(format!("{e:#}")),
                 ) {
-                    error!(job_id = %job_id, error = ?queue_err, "failed to queue broadcast for retry");
+                    error!(
+                        job_id = %job_id,
+                        error = ?queue_err,
+                        "failed to persist queued broadcast metadata"
+                    );
                 }
-                broadcast_error = Some(format!("{e:#}"));
+                can_retry_broadcast = retryable;
+                broadcast_error = Some(err_msg);
             }
         }
     }
@@ -579,7 +601,7 @@ async fn run_send_job(
                 memos: vec![],
                 status,
                 last_error: broadcast_error.clone(),
-                can_retry_broadcast: broadcast_error.is_some(),
+                can_retry_broadcast,
                 mined_height: None,
                 created_at: now_ms,
                 confirmed_at: None,
@@ -702,8 +724,10 @@ async fn run_shield_job(
     })
     .await;
 
-    let (primary_txid, _conn, broadcast_error) = match result {
-        Ok(Ok((txid, conn, broadcast_error))) => (txid, conn, broadcast_error),
+    let (primary_txid, _conn, broadcast_error, can_retry_broadcast) = match result {
+        Ok(Ok((txid, conn, broadcast_error, can_retry_broadcast))) => {
+            (txid, conn, broadcast_error, can_retry_broadcast)
+        }
         Ok(Err(e)) => {
             if e == "cancelled" {
                 emit_progress(JobProgress::cancelled(job_id.clone(), job_type));
@@ -746,7 +770,7 @@ async fn run_shield_job(
                 memos: vec![],
                 status,
                 last_error: broadcast_error.clone(),
-                can_retry_broadcast: broadcast_error.is_some(),
+                can_retry_broadcast,
                 mined_height: None,
                 created_at: now_ms,
                 confirmed_at: None,
@@ -782,7 +806,7 @@ fn shield_funds_blocking(
     state: Arc<Mutex<JobServiceState>>,
     on_progress: Option<JobEventHandler>,
     runtime_handle: tokio::runtime::Handle,
-) -> Result<(String, rusqlite::Connection, Option<String>), String> {
+) -> Result<(String, rusqlite::Connection, Option<String>, bool), String> {
     use std::collections::{BTreeMap, BTreeSet};
     use zcash_client_backend::data_api::{InputSource as _, WalletRead as _};
     use zcash_client_backend::fees::ChangeStrategy as _;
@@ -903,6 +927,7 @@ fn shield_funds_blocking(
 
     let mut primary_txid: Option<String> = None;
     let mut broadcast_error: Option<String> = None;
+    let mut can_retry_broadcast = false;
 
     for batch in batches {
         // Check cancellation
@@ -1083,17 +1108,33 @@ fn shield_funds_blocking(
 
             if let Err(e) = result {
                 let error = format!("{e:#}");
-                debug!(job_id = %job_id, txid = %txid_str, error = ?e, "broadcast failed, queuing for retry");
+                let err_class = classify_broadcast_error_message(&error);
+                let retryable = is_retryable_broadcast_error_class(err_class);
+                debug!(
+                    job_id = %job_id,
+                    txid = %txid_str,
+                    error = ?e,
+                    class = ?err_class,
+                    retryable,
+                    "broadcast failed in shield job"
+                );
                 if let Err(queue_err) = queue_broadcast_for_retry(
                     &ctx.wallet_id,
                     &ctx.wallet_dir,
                     &ctx.wallet_dek,
                     &txid_str,
-                    &tx_bytes,
                     Some(error.clone()),
+                    Some(err_class),
+                    retryable,
+                    &tx_bytes,
                 ) {
-                    error!(job_id = %job_id, error = ?queue_err, "failed to queue broadcast for retry");
+                    error!(
+                        job_id = %job_id,
+                        error = ?queue_err,
+                        "failed to persist queued broadcast metadata"
+                    );
                 }
+                can_retry_broadcast = retryable;
                 if broadcast_error.is_none() {
                     broadcast_error = Some(error);
                 }
@@ -1105,7 +1146,7 @@ fn shield_funds_blocking(
         return Err("no transparent funds to shield".to_string());
     };
 
-    Ok((primary_txid, conn, broadcast_error))
+    Ok((primary_txid, conn, broadcast_error, can_retry_broadcast))
 }
 
 fn open_wallet_db_for_job(
@@ -1150,7 +1191,7 @@ async fn broadcast_transaction(
         None => zstash_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
     };
 
-    client.send_transaction(tx_bytes.to_vec()).await
+    send_with_timeout(client.send_transaction(tx_bytes.to_vec())).await
 }
 
 fn queue_broadcast_for_retry(
@@ -1158,15 +1199,17 @@ fn queue_broadcast_for_retry(
     wallet_dir: &std::path::Path,
     wallet_dek: &Dek,
     txid: &str,
-    tx_bytes: &[u8],
     last_error: Option<String>,
+    last_error_class: Option<crate::broadcast::BroadcastErrorClass>,
+    retryable: bool,
+    tx_bytes: &[u8],
 ) -> anyhow::Result<()> {
     use chacha20poly1305::aead::{Aead, Payload};
     use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
     use rand::RngCore as _;
 
     let queue_dir = wallet_dir.join("queued_broadcasts");
-    std::fs::create_dir_all(&queue_dir)?;
+    create_dir_all_secure(&queue_dir)?;
 
     let mut nonce = [0u8; 24];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
@@ -1191,14 +1234,27 @@ fn queue_broadcast_for_retry(
     let mut out = Vec::with_capacity(24 + ciphertext.len());
     out.extend_from_slice(&nonce);
     out.extend_from_slice(&ciphertext);
-    std::fs::write(&bin_path, out)?;
+    write_file_secure(&bin_path, &out)?;
 
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let next_attempt_at_ms = if retryable {
+        let mut rng = rand::thread_rng();
+        let delay = retry_backoff_with_jitter(0, &mut rng);
+        Some(now_ms.saturating_add(i64::try_from(delay.as_millis()).unwrap_or(i64::MAX)))
+    } else {
+        None
+    };
     let meta = QueuedBroadcastMeta {
         created_at_ms: now_ms,
+        attempt_count: 0,
+        next_attempt_at_ms,
+        last_attempt_at_ms: Some(now_ms),
+        transport_failure_streak: 0,
+        retryable,
+        last_error_class,
         last_error,
     };
-    std::fs::write(&meta_path, serde_json::to_vec_pretty(&meta)?)?;
+    write_file_secure(&meta_path, &serde_json::to_vec_pretty(&meta)?)?;
 
     Ok(())
 }
