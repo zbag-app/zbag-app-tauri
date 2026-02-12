@@ -63,6 +63,10 @@ function getDisplayPhase(phase: Exclude<IPC.SyncPhase, 'Offline' | 'Error'>): st
   }
 }
 
+function isEffectivelyAtTip(progress: IPC.SyncProgress): boolean {
+  return progress.wallet_tip_height > 0 && progress.scan_frontier_height >= progress.wallet_tip_height;
+}
+
 function InterruptedSyncProgress(props: {
   label: 'Offline' | 'Error';
   labelColor: string;
@@ -94,6 +98,7 @@ function InterruptedSyncProgress(props: {
 export function SyncProgressWidget(props: { progress: IPC.SyncProgress }) {
   const { progress } = props;
   const retryInSeconds = useRetryCountdown(progress.phase, progress.retry_in_seconds);
+  const atTip = isEffectivelyAtTip(progress);
 
   // Offline state: show retry countdown, preserve last known progress
   if (progress.phase === 'Offline') {
@@ -128,16 +133,22 @@ export function SyncProgressWidget(props: { progress: IPC.SyncProgress }) {
     );
   }
 
-  // Cap at 99% unless Idle to avoid "100% but still syncing" confusion
+  const showSyncedTerminal = progress.phase === 'CatchingUp' && atTip;
+
+  // Cap at 99% for non-terminal phases to avoid "100% but still syncing" confusion.
   const displayPercent =
-    progress.phase === 'Idle' || progress.phase === 'CatchingUp'
-      ? progress.progress_percent
+    progress.phase === 'Idle' || showSyncedTerminal
+      ? showSyncedTerminal
+        ? 100
+        : progress.progress_percent
       : Math.min(progress.progress_percent, 99);
+
+  const displayPhase = showSyncedTerminal ? 'Synced' : getDisplayPhase(progress.phase);
 
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
-        <strong>{getDisplayPhase(progress.phase)}</strong>
+        <strong>{displayPhase}</strong>
         <span style={{ fontSize: 12, opacity: 0.8 }}>{displayPercent}%</span>
         {progress.eta_seconds !== null ? (
           <span style={{ fontSize: 12, opacity: 0.8 }}>ETA {formatEta(progress.eta_seconds)}</span>

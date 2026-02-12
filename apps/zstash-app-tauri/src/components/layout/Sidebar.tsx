@@ -33,13 +33,17 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
+function isEffectivelyAtTip(progress: SyncProgress): boolean {
+  return progress.wallet_tip_height > 0 && progress.scan_frontier_height >= progress.wallet_tip_height;
+}
+
 function getSyncLabel(progress: SyncProgress): string {
   switch (progress.phase) {
     case "Downloading":
     case "Scanning":
       return "Syncing";
     case "CatchingUp":
-      return "Catching up";
+      return isEffectivelyAtTip(progress) ? "Synced" : "Catching up";
     case "Idle":
       return "Synced";
     case "Offline": {
@@ -97,10 +101,13 @@ export function Sidebar({
     }
   };
 
-  // Cap at 99% unless Idle to avoid "100% but still syncing" confusion
+  // Cap at 99% for non-terminal phases to avoid "100% but still syncing" confusion.
   const displayPercent = syncProgress
-    ? syncProgress.phase === "Idle" || syncProgress.phase === "CatchingUp"
-      ? syncProgress.progress_percent
+    ? syncProgress.phase === "Idle" ||
+      (syncProgress.phase === "CatchingUp" && isEffectivelyAtTip(syncProgress))
+      ? syncProgress.phase === "CatchingUp"
+        ? 100
+        : syncProgress.progress_percent
       : Math.min(syncProgress.progress_percent, 99)
     : 0;
 
