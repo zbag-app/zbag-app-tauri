@@ -65,11 +65,140 @@ pub(crate) const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_
 /// Maximum backoff after repeated sync failures.
 const MAX_POLL_BACKOFF: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
+/// Adaptive download batch sizing limits and tuning.
+const ADAPTIVE_BATCH_MIN_SIZE: u32 = 125;
+const ADAPTIVE_BATCH_MAX_SIZE: u32 = 2_000;
+const ADAPTIVE_BATCH_FAST_SCAN_SECS: f64 = 0.80;
+const ADAPTIVE_BATCH_SLOW_SCAN_SECS: f64 = 2.00;
+const ADAPTIVE_BATCH_GROWTH_NUMERATOR: u32 = 3;
+const ADAPTIVE_BATCH_GROWTH_DENOMINATOR: u32 = 2;
+const ADAPTIVE_BATCH_SHRINK_NUMERATOR: u32 = 3;
+const ADAPTIVE_BATCH_SHRINK_DENOMINATOR: u32 = 4;
+
 /// A downloaded batch of blocks ready for scanning.
 struct DownloadedBatch {
     range_start: BlockHeight,
     range_end: BlockHeight,
     blocks: Vec<CompactBlock>,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct ScanBatchActivity {
+    scanned_blocks: u32,
+    spent_sapling: u32,
+    spent_orchard: u32,
+    received_sapling: u32,
+    received_orchard: u32,
+}
+
+impl ScanBatchActivity {
+    fn touched_notes(self) -> u32 {
+        self.spent_sapling
+            .saturating_add(self.spent_orchard)
+            .saturating_add(self.received_sapling)
+            .saturating_add(self.received_orchard)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdaptiveBatchDecision {
+    Grew,
+    Shrunk,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AdaptiveBatchAdjustment {
+    previous: u32,
+    current: u32,
+    decision: AdaptiveBatchDecision,
+}
+
+#[derive(Debug)]
+struct AdaptiveBatchController {
+    min_size: u32,
+    max_size: u32,
+    current_size: u32,
+}
+
+impl AdaptiveBatchController {
+    fn new(range_start: BlockHeight) -> Self {
+        let base = effective_batch_size(range_start);
+        if base == BATCH_SIZE_SANDBLASTING {
+            return Self {
+                min_size: base,
+                max_size: base,
+                current_size: base,
+            };
+        }
+
+        Self {
+            min_size: ADAPTIVE_BATCH_MIN_SIZE.min(BATCH_SIZE),
+            max_size: ADAPTIVE_BATCH_MAX_SIZE.max(BATCH_SIZE),
+            current_size: base,
+        }
+    }
+
+    fn next_download_size(&self, height: BlockHeight) -> u32 {
+        let base = effective_batch_size(height);
+        if base == BATCH_SIZE_SANDBLASTING {
+            BATCH_SIZE_SANDBLASTING
+        } else {
+            self.current_size.clamp(self.min_size, self.max_size)
+        }
+    }
+
+    fn record_scan_result(
+        &mut self,
+        batch_start: BlockHeight,
+        scan_duration: Duration,
+        activity: ScanBatchActivity,
+    ) -> Option<AdaptiveBatchAdjustment> {
+        if activity.scanned_blocks == 0 {
+            return None;
+        }
+
+        if effective_batch_size(batch_start) == BATCH_SIZE_SANDBLASTING {
+            return None;
+        }
+
+        let elapsed_secs = scan_duration.as_secs_f64();
+        if elapsed_secs <= 0.0 {
+            return None;
+        }
+
+        let previous = self.current_size;
+        let touched_notes = activity.touched_notes();
+
+        if elapsed_secs >= ADAPTIVE_BATCH_SLOW_SCAN_SECS {
+            self.current_size = self
+                .current_size
+                .saturating_mul(ADAPTIVE_BATCH_SHRINK_NUMERATOR)
+                / ADAPTIVE_BATCH_SHRINK_DENOMINATOR;
+        } else if elapsed_secs <= ADAPTIVE_BATCH_FAST_SCAN_SECS && touched_notes == 0 {
+            self.current_size = self
+                .current_size
+                .saturating_mul(ADAPTIVE_BATCH_GROWTH_NUMERATOR)
+                / ADAPTIVE_BATCH_GROWTH_DENOMINATOR;
+        }
+
+        self.current_size = self.current_size.clamp(self.min_size, self.max_size);
+
+        if self.current_size == previous {
+            return None;
+        }
+
+        let decision = if self.current_size > previous {
+            AdaptiveBatchDecision::Grew
+        } else {
+            AdaptiveBatchDecision::Shrunk
+        };
+
+        Some(AdaptiveBatchAdjustment {
+            previous,
+            current: self.current_size,
+            decision,
+        })
+    }
 }
 
 /// Result type for the download task.
@@ -718,11 +847,14 @@ impl SyncService {
                         // Create channel for downloaded batches
                         let (batch_tx, mut batch_rx) =
                             mpsc::channel::<DownloadResult>(LOOKAHEAD_BATCHES);
+                        let batch_controller =
+                            Arc::new(Mutex::new(AdaptiveBatchController::new(range_start)));
 
                         // Clone what the download task needs
                         let download_client = client.clone();
                         let download_cancel_rx = cancel_rx.clone();
                         let download_wallet_id = wallet_id;
+                        let download_batch_controller = Arc::clone(&batch_controller);
 
                         // Spawn download task
                         let download_handle = crate::tokio_runtime::spawn(async move {
@@ -738,7 +870,10 @@ impl SyncService {
                                     return;
                                 }
 
-                                let batch_size = effective_batch_size(current);
+                                let batch_size = download_batch_controller
+                                    .lock()
+                                    .expect("mutex poisoned")
+                                    .next_download_size(current);
                                 let batch_end = std::cmp::min(current + batch_size, range_end);
 
                                 // Download compact blocks with retry
@@ -892,35 +1027,69 @@ impl SyncService {
                                             }
                                         }
                                     };
-                                    let limit = block_metas.len();
-
                                     // Scan blocks on blocking thread
+                                    let scan_started_at = Instant::now();
                                     let scan_result = scan_batch_blocking(
                                         sync_wallet_conn,
                                         fsblock_db,
                                         params,
                                         batch.range_start,
                                         chain_state,
-                                        limit,
+                                        block_metas,
                                         blocks_dir.clone(),
                                         batch.range_end,
                                         Arc::clone(&state),
                                         wallet_id,
                                     )
                                     .await;
+                                    let scan_elapsed = scan_started_at.elapsed();
+
+                                    let ScanBatchResult {
+                                        conn: updated_conn,
+                                        fsblock_db: updated_fsblock_db,
+                                        scan_outcome,
+                                        scan_activity,
+                                        progress_percent,
+                                        fully_scanned,
+                                    } = scan_result;
 
                                     // Restore ownership
-                                    sync_wallet_conn = scan_result.conn;
-                                    fsblock_db = scan_result.fsblock_db;
+                                    sync_wallet_conn = updated_conn;
+                                    fsblock_db = updated_fsblock_db;
 
-                                    match scan_result.scan_outcome {
+                                    match scan_outcome {
                                         ScanOutcome::Success => {
+                                            if let Some(adjustment) = batch_controller
+                                                .lock()
+                                                .expect("mutex poisoned")
+                                                .record_scan_result(
+                                                    batch.range_start,
+                                                    scan_elapsed,
+                                                    scan_activity,
+                                                )
+                                            {
+                                                let decision = match adjustment.decision {
+                                                    AdaptiveBatchDecision::Grew => "grew",
+                                                    AdaptiveBatchDecision::Shrunk => "shrunk",
+                                                };
+                                                tracing::debug!(
+                                                    wallet_id = %wallet_id,
+                                                    range_start = %u32::from(batch.range_start),
+                                                    previous_batch_size = adjustment.previous,
+                                                    new_batch_size = adjustment.current,
+                                                    decision,
+                                                    scan_elapsed_ms = scan_elapsed.as_millis(),
+                                                    touched_notes = scan_activity.touched_notes(),
+                                                    "adaptive sync batch size updated"
+                                                );
+                                            }
+
                                             // Update progress after scan
                                             update(SyncProgress {
                                                 phase: SyncPhase::Scanning,
-                                                scan_frontier_height: scan_result.fully_scanned,
+                                                scan_frontier_height: fully_scanned,
                                                 wallet_tip_height: u32::from(wallet_tip),
-                                                progress_percent: scan_result.progress_percent,
+                                                progress_percent,
                                                 eta_seconds: None,
                                                 retry_in_seconds: None,
                                                 error_message: None,
@@ -935,8 +1104,7 @@ impl SyncService {
                                                 &account_ids,
                                                 &mut balance_emit_throttle,
                                                 BalanceEmitTrigger::SuccessfulScanBatch {
-                                                    scanned_blocks: u32::try_from(limit)
-                                                        .unwrap_or(u32::MAX),
+                                                    scanned_blocks: scan_activity.scanned_blocks,
                                                 },
                                             )
                                             .await;
@@ -1955,6 +2123,23 @@ fn effective_batch_size(height: BlockHeight) -> u32 {
     }
 }
 
+/// Delete cached block files that were scanned in the current batch.
+fn delete_cached_block_files_for_batch(blocks_dir: &std::path::Path, block_metas: &[BlockMeta]) {
+    if block_metas.is_empty() {
+        return;
+    }
+
+    let blocks_dir_buf = blocks_dir.to_path_buf();
+    for block_meta in block_metas {
+        let path = block_meta.block_file_path(&blocks_dir_buf);
+        if let Err(e) = std::fs::remove_file(&path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::trace!(path = ?path, error = ?e, "failed to delete block file");
+        }
+    }
+}
+
 /// Delete cached block files for a range of heights.
 /// Called after scanning to prevent file accumulation.
 fn delete_cached_block_files(blocks_dir: &std::path::Path, start: BlockHeight, end: BlockHeight) {
@@ -2367,6 +2552,7 @@ struct ScanBatchResult {
     conn: Connection,
     fsblock_db: FsBlockDb,
     scan_outcome: ScanOutcome,
+    scan_activity: ScanBatchActivity,
     progress_percent: u8,
     fully_scanned: u32,
 }
@@ -2388,7 +2574,7 @@ async fn scan_batch_blocking(
     params: zcash_protocol::consensus::Network,
     batch_range_start: BlockHeight,
     chain_state: ChainState,
-    limit: usize,
+    batch_block_metas: Vec<BlockMeta>,
     blocks_dir: PathBuf,
     batch_range_end: BlockHeight,
     state: Arc<Mutex<State>>,
@@ -2408,6 +2594,12 @@ async fn scan_batch_blocking(
             rand::rngs::OsRng,
         );
 
+        let limit = batch_block_metas.len();
+        let mut scan_activity = ScanBatchActivity {
+            scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
+            ..Default::default()
+        };
+
         let scan_outcome = if limit > 0 {
             #[cfg(test)]
             let _scan_call_guard = blocking_scan_test_hook::enter_scan_call();
@@ -2421,6 +2613,17 @@ async fn scan_batch_blocking(
                 limit,
             ) {
                 Ok(scan_result) => {
+                    scan_activity = ScanBatchActivity {
+                        scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
+                        spent_sapling: u32::try_from(scan_result.spent_sapling_note_count())
+                            .unwrap_or(u32::MAX),
+                        spent_orchard: u32::try_from(scan_result.spent_orchard_note_count())
+                            .unwrap_or(u32::MAX),
+                        received_sapling: u32::try_from(scan_result.received_sapling_note_count())
+                            .unwrap_or(u32::MAX),
+                        received_orchard: u32::try_from(scan_result.received_orchard_note_count())
+                            .unwrap_or(u32::MAX),
+                    };
                     tracing::debug!(
                         wallet_id = %wallet_id,
                         scanned_range = ?scan_result.scanned_range(),
@@ -2493,7 +2696,7 @@ async fn scan_batch_blocking(
             }
 
             // Delete the actual block files to prevent accumulation
-            delete_cached_block_files(&blocks_dir, batch_range_start, batch_range_end);
+            delete_cached_block_files_for_batch(&blocks_dir, &batch_block_metas);
         }
 
         // Calculate progress while we still have wdb
@@ -2503,6 +2706,7 @@ async fn scan_batch_blocking(
             conn,
             fsblock_db,
             scan_outcome,
+            scan_activity,
             progress_percent,
             fully_scanned,
         }
@@ -2845,6 +3049,80 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn adaptive_batch_controller_grows_on_fast_quiet_scans() {
+        let mut controller = AdaptiveBatchController::new(BlockHeight::from_u32(3_100_000));
+        let initial = controller.next_download_size(BlockHeight::from_u32(3_100_000));
+        assert_eq!(initial, BATCH_SIZE);
+
+        let adjustment = controller.record_scan_result(
+            BlockHeight::from_u32(3_100_000),
+            Duration::from_millis(500),
+            ScanBatchActivity {
+                scanned_blocks: BATCH_SIZE,
+                ..Default::default()
+            },
+        );
+        let adjustment = adjustment.expect("expected growth for fast empty batch");
+        assert_eq!(adjustment.decision, AdaptiveBatchDecision::Grew);
+        assert!(adjustment.current > adjustment.previous);
+        assert!(
+            controller.next_download_size(BlockHeight::from_u32(3_100_010)) > initial,
+            "controller should increase batch size on fast quiet scans"
+        );
+    }
+
+    #[test]
+    fn adaptive_batch_controller_shrinks_on_slow_scans() {
+        let mut controller = AdaptiveBatchController::new(BlockHeight::from_u32(3_100_000));
+        let grow = controller
+            .record_scan_result(
+                BlockHeight::from_u32(3_100_000),
+                Duration::from_millis(500),
+                ScanBatchActivity {
+                    scanned_blocks: BATCH_SIZE,
+                    ..Default::default()
+                },
+            )
+            .expect("expected growth before shrink test");
+        assert_eq!(grow.decision, AdaptiveBatchDecision::Grew);
+
+        let shrink = controller
+            .record_scan_result(
+                BlockHeight::from_u32(3_100_250),
+                Duration::from_secs(3),
+                ScanBatchActivity {
+                    scanned_blocks: grow.current,
+                    ..Default::default()
+                },
+            )
+            .expect("expected shrink for slow scan");
+        assert_eq!(shrink.decision, AdaptiveBatchDecision::Shrunk);
+        assert!(shrink.current < shrink.previous);
+    }
+
+    #[test]
+    fn adaptive_batch_controller_stays_fixed_in_sandblasting_range() {
+        let mut controller = AdaptiveBatchController::new(BlockHeight::from_u32(1_900_000));
+        assert_eq!(
+            controller.next_download_size(BlockHeight::from_u32(1_900_000)),
+            BATCH_SIZE_SANDBLASTING
+        );
+
+        let adjustment = controller.record_scan_result(
+            BlockHeight::from_u32(1_900_000),
+            Duration::from_millis(300),
+            ScanBatchActivity {
+                scanned_blocks: BATCH_SIZE_SANDBLASTING,
+                ..Default::default()
+            },
+        );
+        assert!(
+            adjustment.is_none(),
+            "sandblasting period should keep fixed conservative batch size"
+        );
+    }
+
     fn open_test_app_db() -> (tempfile::TempDir, AppDb) {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let app_db =
@@ -2897,7 +3175,7 @@ mod tests {
                 zcash_consensus_network(Network::Testnet),
                 BlockHeight::from_u32(1),
                 empty_chain_state(BlockHeight::from_u32(0)),
-                0,
+                Vec::new(),
                 blocks_dir,
                 BlockHeight::from_u32(2),
                 Arc::clone(&state_for_task),
@@ -2966,7 +3244,13 @@ mod tests {
                 zcash_consensus_network(Network::Testnet),
                 BlockHeight::from_u32(1),
                 empty_chain_state(BlockHeight::from_u32(0)),
-                1,
+                vec![BlockMeta {
+                    height: BlockHeight::from_u32(1),
+                    block_hash: BlockHash([0; 32]),
+                    block_time: 0,
+                    sapling_outputs_count: 0,
+                    orchard_actions_count: 0,
+                }],
                 blocks_dir,
                 BlockHeight::from_u32(2),
                 Arc::clone(&state_for_task),
