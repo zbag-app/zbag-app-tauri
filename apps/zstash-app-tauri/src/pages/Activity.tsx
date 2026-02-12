@@ -71,7 +71,7 @@ function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, 
           </div>
         )}
       </div>
-      {displayableMemos.length > 0 ? (
+      {displayableMemos.length > 0 && (
         <>
           <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
             {displayText}
@@ -98,10 +98,6 @@ function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, 
             </Button>
           )}
         </>
-      ) : (
-        <div className="mt-2 text-sm text-muted-foreground">
-          Memos present but not displayable
-        </div>
       )}
       {displayableMemos.some((m) => m.kind === 'Binary') && (
         <div className="mt-2 text-xs text-muted-foreground/70">
