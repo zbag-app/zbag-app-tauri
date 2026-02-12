@@ -88,6 +88,16 @@ Run `make help` for all available targets.
 
 See [Quickstart](specs/001-zstash-desktop-wallet/quickstart.md) for full setup instructions.
 
+### Temporary Send Debugging
+
+For deeper send/broadcast diagnostics (including terminal output), set:
+
+```bash
+export ZSTASH_TEMP_DEBUG=1
+```
+
+This is disabled by default. When enabled, zSTASH adds extra timed send/broadcast debug events and mirrors logs to stderr.
+
 ## E2E Testing (Test Bridge)
 
 The test bridge exposes Tauri IPC commands over HTTP for Playwright. It is **feature-gated**

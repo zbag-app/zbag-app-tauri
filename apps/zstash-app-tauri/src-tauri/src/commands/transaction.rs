@@ -41,7 +41,15 @@ pub fn zstash_prepare_send(
     );
 
     let result = (|| {
+        let lock_wait_started = Instant::now();
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        if zstash_engine::logging::temporary_debug_enabled() {
+            tracing::debug!(
+                phase = "tauri.zstash_prepare_send.wallet_manager_lock_acquired",
+                elapsed_ms = lock_wait_started.elapsed().as_millis(),
+                "temporary send debug"
+            );
+        }
         mgr.prepare_send(
             request.account_id,
             &request.recipient,
@@ -118,7 +126,16 @@ pub fn zstash_confirm_send(
     );
 
     let result = (|| {
+        let lock_wait_started = Instant::now();
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        if zstash_engine::logging::temporary_debug_enabled() {
+            tracing::debug!(
+                proposal_id = %proposal_id,
+                phase = "tauri.zstash_confirm_send.wallet_manager_lock_acquired",
+                elapsed_ms = lock_wait_started.elapsed().as_millis(),
+                "temporary send debug"
+            );
+        }
         mgr.confirm_send(&request.proposal_id, &request.reauth_token, Some(handler))
     })();
 

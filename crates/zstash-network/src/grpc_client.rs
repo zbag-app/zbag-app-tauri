@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use tokio::sync::RwLock;
@@ -262,7 +262,23 @@ impl GrpcClient {
     }
 
     pub async fn send_transaction(&self, tx_bytes: Vec<u8>) -> anyhow::Result<()> {
+        let started_at = Instant::now();
+        tracing::debug!(
+            endpoint = %self.endpoint,
+            tx_bytes_len = tx_bytes.len(),
+            phase = "grpc.send_transaction.start",
+            elapsed_ms = 0u128,
+            "grpc send transaction"
+        );
+        let connect_started_at = Instant::now();
         let mut client = self.get_client().await.context("failed to connect")?;
+        tracing::debug!(
+            endpoint = %self.endpoint,
+            tx_bytes_len = tx_bytes.len(),
+            phase = "grpc.send_transaction.client_ready",
+            elapsed_ms = connect_started_at.elapsed().as_millis(),
+            "grpc send transaction"
+        );
 
         let mut req = tonic::Request::new(RawTransaction {
             data: tx_bytes,
@@ -270,12 +286,20 @@ impl GrpcClient {
         });
         req.set_timeout(Duration::from_secs(10));
 
+        let rpc_started_at = Instant::now();
         let response = client
             .send_transaction(req)
             .await
             .map_err(|status| anyhow::anyhow!(status))
             .context("SendTransaction RPC failed")?
             .into_inner();
+        tracing::debug!(
+            endpoint = %self.endpoint,
+            phase = "grpc.send_transaction.rpc_done",
+            elapsed_ms = rpc_started_at.elapsed().as_millis(),
+            error_code = response.error_code,
+            "grpc send transaction"
+        );
 
         if response.error_code != 0 {
             return Err(anyhow::anyhow!(
@@ -285,6 +309,12 @@ impl GrpcClient {
             ));
         }
 
+        tracing::debug!(
+            endpoint = %self.endpoint,
+            phase = "grpc.send_transaction.success",
+            elapsed_ms = started_at.elapsed().as_millis(),
+            "grpc send transaction"
+        );
         Ok(())
     }
 

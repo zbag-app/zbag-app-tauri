@@ -1076,6 +1076,18 @@ impl<C: Clock> TxService<C> {
                 spending_key,
             );
         let prover = zcash_proofs::prover::LocalTxProver::bundled();
+        let proving_started_at = Instant::now();
+        if crate::logging::temporary_debug_enabled() {
+            debug!(
+                wallet_id = %wallet_id,
+                account_id = record.account_id,
+                proposal_id = proposal_id,
+                txid = "-",
+                phase = "tx_service.confirm_send.proving.start",
+                elapsed_ms = confirm_started_at.elapsed().as_millis(),
+                "temporary send debug"
+            );
+        }
 
         let txids = zcash_client_backend::data_api::wallet::create_proposed_transactions::<
             _,
@@ -1099,6 +1111,17 @@ impl<C: Clock> TxService<C> {
                 format!("failed to build tx: {e}"),
             )
         })?;
+        if crate::logging::temporary_debug_enabled() {
+            debug!(
+                wallet_id = %wallet_id,
+                account_id = record.account_id,
+                proposal_id = proposal_id,
+                tx_count = txids.len(),
+                phase = "tx_service.confirm_send.proving.done",
+                elapsed_ms = proving_started_at.elapsed().as_millis(),
+                "temporary send debug"
+            );
+        }
 
         let mut broadcast_errors: HashMap<String, String> = HashMap::new();
 
@@ -1106,6 +1129,18 @@ impl<C: Clock> TxService<C> {
         use zcash_client_backend::data_api::WalletRead as _;
 
         for txid in txids.iter() {
+            let txid_str = txid.to_string();
+            if crate::logging::temporary_debug_enabled() {
+                debug!(
+                    wallet_id = %wallet_id,
+                    account_id = record.account_id,
+                    proposal_id = proposal_id,
+                    txid = %txid_str,
+                    phase = "tx_service.confirm_send.tx_load.start",
+                    elapsed_ms = confirm_started_at.elapsed().as_millis(),
+                    "temporary send debug"
+                );
+            }
             let tx = wdb
                 .get_transaction(*txid)
                 .map_err(|e| {
@@ -1124,7 +1159,18 @@ impl<C: Clock> TxService<C> {
                 )
             })?;
 
-            let txid_str = txid.to_string();
+            if crate::logging::temporary_debug_enabled() {
+                debug!(
+                    wallet_id = %wallet_id,
+                    account_id = record.account_id,
+                    proposal_id = proposal_id,
+                    txid = %txid_str,
+                    tx_bytes_len = tx_bytes.len(),
+                    phase = "tx_service.confirm_send.tx_serialize.done",
+                    elapsed_ms = confirm_started_at.elapsed().as_millis(),
+                    "temporary send debug"
+                );
+            }
             if let Err(err) = self.send_transaction_bytes(
                 grpc_url,
                 &tx_bytes,
@@ -2265,6 +2311,20 @@ impl<C: Clock> TxService<C> {
     ) -> anyhow::Result<()> {
         let started_at = Instant::now();
         log_tx_lifecycle_start(ctx);
+        if crate::logging::temporary_debug_enabled() {
+            debug!(
+                wallet_id = %ctx.wallet_id,
+                account_id = ?ctx.account_id,
+                proposal_id = ctx.proposal_id.unwrap_or("-"),
+                txid = ctx.txid.unwrap_or("-"),
+                phase = "tx_service.send_transaction_bytes.start",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                grpc_url = %grpc_url,
+                tx_bytes_len = tx_bytes.len(),
+                tor_enabled = self.tor_manager.is_some(),
+                "temporary send debug"
+            );
+        }
 
         let client = match self.tor_manager.as_ref() {
             Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
@@ -2276,6 +2336,36 @@ impl<C: Clock> TxService<C> {
 
         let tx_bytes = tx_bytes.to_vec();
         let result = block_on(async move { client.send_transaction(tx_bytes).await });
+        if crate::logging::temporary_debug_enabled() {
+            match &result {
+                Ok(()) => {
+                    debug!(
+                        wallet_id = %ctx.wallet_id,
+                        account_id = ?ctx.account_id,
+                        proposal_id = ctx.proposal_id.unwrap_or("-"),
+                        txid = ctx.txid.unwrap_or("-"),
+                        phase = "tx_service.send_transaction_bytes.done",
+                        elapsed_ms = started_at.elapsed().as_millis(),
+                        error_code = "none",
+                        error_message = "",
+                        "temporary send debug"
+                    );
+                }
+                Err(err) => {
+                    warn!(
+                        wallet_id = %ctx.wallet_id,
+                        account_id = ?ctx.account_id,
+                        proposal_id = ctx.proposal_id.unwrap_or("-"),
+                        txid = ctx.txid.unwrap_or("-"),
+                        phase = "tx_service.send_transaction_bytes.done",
+                        elapsed_ms = started_at.elapsed().as_millis(),
+                        error_code = "unknown",
+                        error_message = %err,
+                        "temporary send debug"
+                    );
+                }
+            }
+        }
         match &result {
             Ok(()) => log_tx_lifecycle_success(ctx, started_at),
             Err(err) => log_tx_lifecycle_error(ctx, started_at, err),

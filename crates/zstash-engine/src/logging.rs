@@ -1,10 +1,13 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::Context as _;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt as _};
 
 use zstash_core::permissions::create_dir_all_secure;
+
+pub const TEMP_DEBUG_ENV_VAR: &str = "ZSTASH_TEMP_DEBUG";
 
 #[derive(Debug)]
 pub struct LoggingGuard {
@@ -82,7 +85,17 @@ pub fn redact_address(address: &str) -> RedactedAddress<'_> {
     RedactedAddress(address)
 }
 
+pub fn temporary_debug_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var(TEMP_DEBUG_ENV_VAR)
+            .map(|raw| parse_env_flag_value(&raw))
+            .unwrap_or(false)
+    })
+}
+
 pub fn init_logging() -> anyhow::Result<LoggingGuard> {
+    let temp_debug_enabled = temporary_debug_enabled();
     let log_directory = default_log_directory()?;
     // Create log directory with secure permissions (0700 on Unix)
     create_dir_all_secure(&log_directory).with_context(|| {
@@ -98,9 +111,9 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| default_env_filter());
+        .unwrap_or_else(|_| default_env_filter(temp_debug_enabled));
 
-    let writer: BoxMakeWriter = if cfg!(debug_assertions) {
+    let writer: BoxMakeWriter = if cfg!(debug_assertions) || temp_debug_enabled {
         BoxMakeWriter::new(non_blocking.and(std::io::stderr))
     } else {
         BoxMakeWriter::new(non_blocking)
@@ -109,12 +122,19 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     tracing_subscriber::fmt()
         .with_env_filter(env_filter)
         .with_writer(writer)
-        .with_file(cfg!(debug_assertions))
-        .with_line_number(cfg!(debug_assertions))
-        .with_target(cfg!(debug_assertions))
+        .with_file(cfg!(debug_assertions) || temp_debug_enabled)
+        .with_line_number(cfg!(debug_assertions) || temp_debug_enabled)
+        .with_target(cfg!(debug_assertions) || temp_debug_enabled)
         .with_ansi(false)
         .try_init()
         .map_err(|e| anyhow::anyhow!(e))?;
+
+    if temp_debug_enabled {
+        tracing::warn!(
+            env_var = TEMP_DEBUG_ENV_VAR,
+            "temporary debug logging enabled (verbose send diagnostics + stderr output)"
+        );
+    }
 
     let current_log_file = current_log_file_path(&log_directory);
     Ok(LoggingGuard {
@@ -124,8 +144,8 @@ pub fn init_logging() -> anyhow::Result<LoggingGuard> {
     })
 }
 
-fn default_env_filter() -> tracing_subscriber::EnvFilter {
-    if cfg!(debug_assertions) {
+fn default_env_filter(temp_debug_enabled: bool) -> tracing_subscriber::EnvFilter {
+    if cfg!(debug_assertions) || temp_debug_enabled {
         tracing_subscriber::EnvFilter::new(
             "info,zstash_engine=debug,zstash_network=debug,zstash_tor=debug,zstash_app_tauri_lib=debug",
         )
@@ -171,6 +191,33 @@ fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
             && let Err(e) = std::fs::remove_file(&path)
         {
             tracing::debug!(path = ?path, error = ?e, "failed to cleanup old log file");
+        }
+    }
+}
+
+fn parse_env_flag_value(value: &str) -> bool {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" | "" => false,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_env_flag_value;
+
+    #[test]
+    fn parse_env_flag_value_truthy_values() {
+        for value in ["1", "true", "TRUE", " yes ", "On"] {
+            assert!(parse_env_flag_value(value), "expected truthy for: {value}");
+        }
+    }
+
+    #[test]
+    fn parse_env_flag_value_falsey_values() {
+        for value in ["", "0", "false", "no", "off", "banana"] {
+            assert!(!parse_env_flag_value(value), "expected falsey for: {value}");
         }
     }
 }
