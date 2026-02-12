@@ -39,6 +39,7 @@ use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
 const PROPOSAL_TTL: Duration = Duration::from_secs(10 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const MAX_SHIELDING_INPUTS_PER_TX: usize = 200;
+const SEND_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(45);
 
 pub type TxEventHandler = Arc<dyn Fn(TransactionChangedEvent) + Send + Sync>;
 
@@ -2335,7 +2336,17 @@ impl<C: Clock> TxService<C> {
         };
 
         let tx_bytes = tx_bytes.to_vec();
-        let result = block_on(async move { client.send_transaction(tx_bytes).await });
+        let result = block_on(async move {
+            match tokio::time::timeout(SEND_TRANSACTION_TIMEOUT, client.send_transaction(tx_bytes))
+                .await
+            {
+                Ok(result) => result,
+                Err(_) => Err(anyhow::anyhow!(
+                    "send transaction timed out after {}s",
+                    SEND_TRANSACTION_TIMEOUT.as_secs()
+                )),
+            }
+        });
         if crate::logging::temporary_debug_enabled() {
             match &result {
                 Ok(()) => {
