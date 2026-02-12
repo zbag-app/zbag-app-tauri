@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { History, ChevronLeft, ChevronRight, AlertCircle, Copy, ChevronDown, ChevronUp, Check, FileText } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { listSwaps, listTransactions, reauthWallet, retryBroadcast } from '../services/ipc';
-import { onSwapChanged, onTransactionChanged } from '../services/events';
+import { onSwapChanged, onSyncProgress, onTransactionChanged } from '../services/events';
 import { formatRelativeTime, formatZatoshisToZec, formatFiat, zatoshisToFiat } from '../utils/zec';
 import { useFiatDisplayContext } from '../context/FiatDisplayContext';
 import { getDisplayableMemos, getMemoDisplayText } from '../utils/memo';
@@ -20,6 +20,10 @@ interface MemoDisplayProps {
   copyError: string | null;
   onCopyMemo: (txid: string, content: string) => void;
 }
+
+const SYNC_REFRESH_MIN_INTERVAL_MS = 1500;
+const SYNC_REFRESH_BLOCK_THRESHOLD = 250;
+const SYNC_NEAR_TIP_LAG_BLOCKS = 1;
 
 function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, onCopyMemo }: MemoDisplayProps) {
   const totalMemos = tx.memo_count;
@@ -125,6 +129,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
   const [copiedMemo, setCopiedMemo] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const lastSyncFrontierRef = useRef<number | null>(null);
+  const lastSyncRefreshAtRef = useRef(0);
+  const frontierAtLastSyncRefreshRef = useRef<number | null>(null);
+  const syncRefreshInFlightRef = useRef(false);
 
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
@@ -133,6 +141,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
 
   const canPagePrev = useMemo(() => offset > 0, [offset]);
   const canPageNext = useMemo(() => offset + limit < totalCount, [offset, limit, totalCount]);
+  const hasPendingTransactions = useMemo(
+    () => transactions.some((tx) => tx.status === 'Pending'),
+    [transactions]
+  );
 
   const load = useCallback(
     async (nextOffset: number) => {
@@ -159,6 +171,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     setOffset(0);
     setTransactions([]);
     setTotalCount(0);
+    lastSyncFrontierRef.current = null;
+    lastSyncRefreshAtRef.current = 0;
+    frontierAtLastSyncRefreshRef.current = null;
+    syncRefreshInFlightRef.current = false;
     if (activeAccountId == null) return;
     void load(0);
   }, [activeAccountId, load]);
@@ -175,6 +191,69 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   useEffect(() => {
     void loadSwaps();
   }, [loadSwaps]);
+
+  const triggerSyncRefresh = useCallback(() => {
+    if (syncRefreshInFlightRef.current) return;
+    syncRefreshInFlightRef.current = true;
+    void load(offset).finally(() => {
+      syncRefreshInFlightRef.current = false;
+    });
+  }, [load, offset]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+
+    async function run() {
+      unlisten = await onSyncProgress((event) => {
+        if (cancelled) return;
+        if (activeAccountId == null) return;
+        if (!hasPendingTransactions) return;
+
+        const frontier = event.progress.scan_frontier_height;
+        const tip = event.progress.wallet_tip_height;
+        const previousFrontier = lastSyncFrontierRef.current;
+        lastSyncFrontierRef.current = frontier;
+
+        if (previousFrontier != null && frontier <= previousFrontier) return;
+
+        const lag = tip > frontier ? tip - frontier : 0;
+        const nearTip = tip > 0 && lag <= SYNC_NEAR_TIP_LAG_BLOCKS;
+        const now = Date.now();
+
+        if (nearTip) {
+          lastSyncRefreshAtRef.current = now;
+          frontierAtLastSyncRefreshRef.current = frontier;
+          triggerSyncRefresh();
+          return;
+        }
+
+        const elapsedMs =
+          lastSyncRefreshAtRef.current > 0
+            ? now - lastSyncRefreshAtRef.current
+            : Number.POSITIVE_INFINITY;
+        const scannedSinceLastRefresh =
+          frontierAtLastSyncRefreshRef.current != null
+            ? frontier - frontierAtLastSyncRefreshRef.current
+            : Number.POSITIVE_INFINITY;
+
+        if (
+          elapsedMs >= SYNC_REFRESH_MIN_INTERVAL_MS ||
+          scannedSinceLastRefresh >= SYNC_REFRESH_BLOCK_THRESHOLD
+        ) {
+          lastSyncRefreshAtRef.current = now;
+          frontierAtLastSyncRefreshRef.current = frontier;
+          triggerSyncRefresh();
+        }
+      });
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [activeAccountId, hasPendingTransactions, triggerSyncRefresh]);
 
   useEffect(() => {
     let cancelled = false;
