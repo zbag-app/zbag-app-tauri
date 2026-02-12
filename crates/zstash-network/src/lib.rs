@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Transport and network clients (gRPC + HTTP).
 
 pub mod exchange_rate;

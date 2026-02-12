@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Core types and IPC contracts for zSTASH.
 
 pub mod domain;

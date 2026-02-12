@@ -44,38 +44,17 @@ impl SensitiveString {
 
     /// Trim leading and trailing whitespace in-place, zeroizing the removed bytes.
     ///
-    /// This avoids allocating a second copy of the sensitive string (e.g., during CLI argument
-    /// parsing) while still normalizing user input.
+    /// This normalizes user input (e.g., during CLI argument parsing) and zeroizes the previous
+    /// buffer before replacing it with the trimmed value.
     pub fn trim_in_place(&mut self) {
         let trimmed = self.0.trim();
         if trimmed.len() == self.0.len() {
             return;
         }
 
-        // `trim()` returns a subslice of the original string, but computing the byte range via
-        // pointer subtraction is more subtle than we need here. Instead, compute `start` via
-        // length differences and derive `end` from the trimmed length.
-        let start = self.0.len() - self.0.trim_start().len();
-        let new_len = trimmed.len();
-        let end = start + new_len;
-
-        // These bounds ensure the new string remains valid UTF-8 after the in-place move.
-        assert!(self.0.is_char_boundary(start));
-        assert!(self.0.is_char_boundary(end));
-
-        // Safety:
-        // - `trim()` returns a subslice of `self.0` that is valid UTF-8 and aligned to char
-        //   boundaries.
-        // - We copy exactly those bytes to the start of the buffer, zeroize the remainder of the
-        //   original length, and then truncate to the new length.
-        // - The resulting `String` stays valid UTF-8.
-        unsafe {
-            let bytes = self.0.as_mut_vec();
-            let old_len = bytes.len();
-            bytes.copy_within(start..end, 0);
-            bytes[new_len..old_len].zeroize();
-            bytes.truncate(new_len);
-        }
+        let trimmed_owned = trimmed.to_owned();
+        self.0.zeroize();
+        self.0 = trimmed_owned;
     }
 }
 
@@ -188,6 +167,13 @@ mod tests {
     #[test]
     fn trim_in_place_trailing_whitespace_only() {
         let mut s = SensitiveString::from("secret \n\t");
+        s.trim_in_place();
+        assert_eq!(s.as_ref(), "secret");
+    }
+
+    #[test]
+    fn trim_in_place_unicode_whitespace() {
+        let mut s = SensitiveString::from("\u{3000}secret\u{3000}");
         s.trim_in_place();
         assert_eq!(s.as_ref(), "secret");
     }

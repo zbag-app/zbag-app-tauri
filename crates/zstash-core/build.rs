@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Build script for zstash-core.
 //!
 //! Captures build metadata as compile-time environment variables:

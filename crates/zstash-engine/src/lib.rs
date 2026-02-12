@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Wallet engine wrapping librustzcash and providing storage, encryption and business logic.
 
 pub(crate) mod account_key_source;

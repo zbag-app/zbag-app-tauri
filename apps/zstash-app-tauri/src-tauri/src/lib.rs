@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 // Compile-time guard: prevent test-bridge from being enabled in release builds.
 // This feature exposes HTTP endpoints that return sensitive data (seed phrases).
 #[cfg(all(feature = "test-bridge", not(debug_assertions)))]

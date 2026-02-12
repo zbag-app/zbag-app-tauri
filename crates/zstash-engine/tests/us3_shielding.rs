@@ -17,36 +17,22 @@ use zstash_engine::reauth::SystemClock;
 use zstash_engine::tx_service::{TxEventHandler, TxService};
 use zstash_engine::wallet_manager::WalletManager;
 
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-    ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-struct GrpcUrlOverrideGuard {
-    prev: Option<String>,
-}
-
-impl GrpcUrlOverrideGuard {
-    /// Sets `ZSTASH_GRPC_URL` for test isolation.
-    /// Tests use `http://127.0.0.1:9999` - port 9999 is intentionally unreachable
-    /// so network calls fail predictably without external dependencies.
-    fn set(url: &str) -> Self {
-        let prev = std::env::var("ZSTASH_GRPC_URL").ok();
-        unsafe {
-            std::env::set_var("ZSTASH_GRPC_URL", url);
-        }
-        Self { prev }
-    }
-}
-
-impl Drop for GrpcUrlOverrideGuard {
-    fn drop(&mut self) {
-        match self.prev.take() {
-            Some(value) => unsafe { std::env::set_var("ZSTASH_GRPC_URL", value) },
-            None => unsafe { std::env::remove_var("ZSTASH_GRPC_URL") },
-        }
-    }
+/// Sets the default Testnet server URL in the per-test app DB.
+/// Tests use `http://127.0.0.1:9999` - port 9999 is intentionally unreachable
+/// so network calls fail predictably without external dependencies.
+fn set_default_testnet_grpc_url(mgr: &WalletManager, grpc_url: &str) {
+    let updated = mgr
+        .app_db()
+        .conn()
+        .execute(
+            "UPDATE servers SET grpc_url = ?1 WHERE network = 'Testnet' AND is_default = 1",
+            [grpc_url],
+        )
+        .expect("set default testnet server URL");
+    assert!(
+        updated > 0,
+        "expected at least one default testnet server row to update"
+    );
 }
 
 #[derive(Debug, Default, Clone)]
@@ -357,9 +343,6 @@ fn transparent_receive_address_and_spends_are_blocked_until_shielded() {
 
 #[test]
 fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
-    let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
-
     let root = temp_root("us3_shield_sweep");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -375,6 +358,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
         .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
+    set_default_testnet_grpc_url(&mgr, "http://127.0.0.1:9999");
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
         .expect("disable backup gate");
 
@@ -438,9 +422,6 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
 
 #[test]
 fn shield_funds_is_blocked_until_backup_complete() {
-    let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
-
     let root = temp_root("us3_shield_backup_gate");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -456,6 +437,7 @@ fn shield_funds_is_blocked_until_backup_complete() {
         .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
+    set_default_testnet_grpc_url(&mgr, "http://127.0.0.1:9999");
 
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
@@ -469,9 +451,6 @@ fn shield_funds_is_blocked_until_backup_complete() {
 
 #[test]
 fn shield_funds_insufficient_fee_includes_details() {
-    let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
-
     let root = temp_root("us3_shield_fee_insufficient");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -487,6 +466,7 @@ fn shield_funds_insufficient_fee_includes_details() {
         .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
+    set_default_testnet_grpc_url(&mgr, "http://127.0.0.1:9999");
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
         .expect("disable backup gate");
 
@@ -530,9 +510,6 @@ fn shield_funds_insufficient_fee_includes_details() {
 
 #[test]
 fn shield_funds_batches_large_input_sets() {
-    let _guard = env_lock();
-    let _env = GrpcUrlOverrideGuard::set("http://127.0.0.1:9999");
-
     let root = temp_root("us3_shield_batching");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -548,6 +525,7 @@ fn shield_funds_batches_large_input_sets() {
         .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
+    set_default_testnet_grpc_url(&mgr, "http://127.0.0.1:9999");
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
         .expect("disable backup gate");
 
