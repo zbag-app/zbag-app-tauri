@@ -1,18 +1,21 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use tauri::State;
 
+use zstash_core::errors;
 use zstash_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
 use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_engine::error::find_engine_ipc_error;
 
 use crate::events;
 use crate::state::AppState;
 
-use super::util::map_anyhow;
+use super::util::{map_anyhow, to_ipc_error};
 
 #[tauri::command(rename = "zstash_prepare_send")]
 pub fn zstash_prepare_send(
@@ -23,7 +26,21 @@ pub fn zstash_prepare_send(
         return IpcResult::Err { err };
     }
 
-    map_anyhow(|| {
+    let account_id = request.account_id;
+    let started_at = Instant::now();
+    tracing::info!(
+        wallet_id = "-",
+        account_id,
+        proposal_id = "-",
+        txid = "-",
+        phase = "tauri.zstash_prepare_send.start",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = "",
+        "send lifecycle event"
+    );
+
+    let result = (|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.prepare_send(
             request.account_id,
@@ -32,7 +49,44 @@ pub fn zstash_prepare_send(
             request.memo.as_deref(),
             request.allow_transparent_recipient,
         )
-    })
+    })();
+
+    match result {
+        Ok(response) => {
+            tracing::info!(
+                wallet_id = "-",
+                account_id,
+                proposal_id = %response.proposal_id,
+                txid = "-",
+                phase = "tauri.zstash_prepare_send.success",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = "none",
+                error_message = "",
+                "send lifecycle event"
+            );
+            IpcResult::ok(response)
+        }
+        Err(err) => {
+            let (error_code, error_message) = match find_engine_ipc_error(&err) {
+                Some(engine) => (engine.code.to_string(), engine.message.clone()),
+                None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
+            };
+            tracing::warn!(
+                wallet_id = "-",
+                account_id,
+                proposal_id = "-",
+                txid = "-",
+                phase = "tauri.zstash_prepare_send.error",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = %error_code,
+                error_message = %error_message,
+                "send lifecycle event"
+            );
+            IpcResult::Err {
+                err: to_ipc_error(err),
+            }
+        }
+    }
 }
 
 #[tauri::command(rename = "zstash_confirm_send")]
@@ -49,10 +103,61 @@ pub fn zstash_confirm_send(
         let _ = events::emit_transaction_changed(&app, event);
     });
 
-    map_anyhow(|| {
+    let proposal_id = request.proposal_id.clone();
+    let started_at = Instant::now();
+    tracing::info!(
+        wallet_id = "-",
+        account_id = "unknown",
+        proposal_id = %proposal_id,
+        txid = "-",
+        phase = "tauri.zstash_confirm_send.start",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = "",
+        "send lifecycle event"
+    );
+
+    let result = (|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         mgr.confirm_send(&request.proposal_id, &request.reauth_token, Some(handler))
-    })
+    })();
+
+    match result {
+        Ok(response) => {
+            tracing::info!(
+                wallet_id = "-",
+                account_id = "unknown",
+                proposal_id = %proposal_id,
+                txid = %response.txid,
+                phase = "tauri.zstash_confirm_send.success",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = "none",
+                error_message = "",
+                "send lifecycle event"
+            );
+            IpcResult::ok(response)
+        }
+        Err(err) => {
+            let (error_code, error_message) = match find_engine_ipc_error(&err) {
+                Some(engine) => (engine.code.to_string(), engine.message.clone()),
+                None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
+            };
+            tracing::warn!(
+                wallet_id = "-",
+                account_id = "unknown",
+                proposal_id = %proposal_id,
+                txid = "-",
+                phase = "tauri.zstash_confirm_send.error",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = %error_code,
+                error_message = %error_message,
+                "send lifecycle event"
+            );
+            IpcResult::Err {
+                err: to_ipc_error(err),
+            }
+        }
+    }
 }
 
 #[tauri::command(rename = "zstash_cancel_send")]

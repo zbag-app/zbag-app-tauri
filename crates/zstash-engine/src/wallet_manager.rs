@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Context as _;
 use bip39::Mnemonic;
@@ -28,7 +29,7 @@ use crate::db::{
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
 };
-use crate::error::ipc_err;
+use crate::error::{find_engine_ipc_error, ipc_err};
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{TxEventHandler, TxService};
@@ -1785,67 +1786,159 @@ impl WalletManager {
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ConfirmSendResponse> {
-        let Some(active) = self.active_wallet.as_ref() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
+        let started_at = Instant::now();
+        let mut wallet_id_for_log = self
+            .active_wallet
+            .as_ref()
+            .map(|active| active.wallet.id.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let mut account_id_for_log: Option<u32> = None;
 
-        // Watch-only wallets cannot use confirm_send (no seed for signing)
-        // Use the hardware signing flow (build_signing_request + finalize_signing) instead
-        if active.wallet.wallet_type == WalletType::WatchOnly {
-            return Err(ipc_err(
-                errors::WATCH_ONLY_CANNOT_SPEND,
-                "cannot confirm send for watch-only wallet; use hardware signing flow",
-            ));
+        tracing::info!(
+            wallet_id = %wallet_id_for_log,
+            account_id = ?account_id_for_log,
+            proposal_id = %proposal_id,
+            txid = "-",
+            phase = "wallet_manager.confirm_send.start",
+            elapsed_ms = 0u128,
+            error_code = "none",
+            error_message = "",
+            "send lifecycle event"
+        );
+
+        let result = (|| -> anyhow::Result<ConfirmSendResponse> {
+            let Some(active) = self.active_wallet.as_ref() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+
+            // Watch-only wallets cannot use confirm_send (no seed for signing)
+            // Use the hardware signing flow (build_signing_request + finalize_signing) instead
+            if active.wallet.wallet_type == WalletType::WatchOnly {
+                return Err(ipc_err(
+                    errors::WATCH_ONLY_CANNOT_SPEND,
+                    "cannot confirm send for watch-only wallet; use hardware signing flow",
+                ));
+            }
+
+            let wallet_id = active.wallet.id;
+            let wallet_network = active.wallet.network;
+            let wallet_dir = active.wallet_dir.clone();
+            wallet_id_for_log = wallet_id.to_string();
+            let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
+
+            let proposal_account_id = self
+                .tx_service
+                .validate_proposal_for_wallet(proposal_id, wallet_id)?;
+            account_id_for_log = Some(proposal_account_id);
+            tracing::info!(
+                wallet_id = %wallet_id_for_log,
+                account_id = ?account_id_for_log,
+                proposal_id = %proposal_id,
+                txid = "-",
+                phase = "wallet_manager.confirm_send.proposal_validated",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = "none",
+                error_message = "",
+                "send lifecycle event"
+            );
+
+            let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
+
+            self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+            tracing::info!(
+                wallet_id = %wallet_id_for_log,
+                account_id = ?account_id_for_log,
+                proposal_id = %proposal_id,
+                txid = "-",
+                phase = "wallet_manager.confirm_send.reauth_consumed",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = "none",
+                error_message = "",
+                "send lifecycle event"
+            );
+
+            let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
+                .context("failed to resolve active lightwalletd endpoint")?;
+            tracing::info!(
+                wallet_id = %wallet_id_for_log,
+                account_id = ?account_id_for_log,
+                proposal_id = %proposal_id,
+                txid = "-",
+                phase = "wallet_manager.confirm_send.grpc_resolved",
+                elapsed_ms = started_at.elapsed().as_millis(),
+                error_code = "none",
+                error_message = "",
+                "send lifecycle event"
+            );
+
+            let WalletManager {
+                app_db,
+                tx_service,
+                active_wallet,
+                ..
+            } = self;
+
+            let Some(active) = active_wallet.as_mut() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+            if active.lock_status != WalletLockStatus::Unlocked {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            }
+            if active.wallet.id != wallet_id {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            }
+            let Some(conn) = active.wallet_db.as_mut() else {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            };
+
+            tx_service.confirm_send(
+                app_db,
+                wallet_id,
+                wallet_network,
+                &wallet_dir,
+                &wallet_dek,
+                conn,
+                &grpc_url,
+                proposal_id,
+                spending_key,
+                on_tx_changed,
+            )
+        })();
+
+        match result {
+            Ok(response) => {
+                tracing::info!(
+                    wallet_id = %wallet_id_for_log,
+                    account_id = ?account_id_for_log,
+                    proposal_id = %proposal_id,
+                    txid = %response.txid,
+                    phase = "wallet_manager.confirm_send.success",
+                    elapsed_ms = started_at.elapsed().as_millis(),
+                    error_code = "none",
+                    error_message = "",
+                    "send lifecycle event"
+                );
+                Ok(response)
+            }
+            Err(err) => {
+                let (error_code, error_message) = match find_engine_ipc_error(&err) {
+                    Some(engine) => (engine.code.to_string(), engine.message.clone()),
+                    None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
+                };
+                tracing::warn!(
+                    wallet_id = %wallet_id_for_log,
+                    account_id = ?account_id_for_log,
+                    proposal_id = %proposal_id,
+                    txid = "-",
+                    phase = "wallet_manager.confirm_send.error",
+                    elapsed_ms = started_at.elapsed().as_millis(),
+                    error_code = %error_code,
+                    error_message = %error_message,
+                    "send lifecycle event"
+                );
+                Err(err)
+            }
         }
-
-        let wallet_id = active.wallet.id;
-        let wallet_network = active.wallet.network;
-        let wallet_dir = active.wallet_dir.clone();
-        let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
-
-        let proposal_account_id = self
-            .tx_service
-            .validate_proposal_for_wallet(proposal_id, wallet_id)?;
-
-        let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
-
-        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
-
-        let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
-            .context("failed to resolve active lightwalletd endpoint")?;
-
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        if active.lock_status != WalletLockStatus::Unlocked {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        if active.wallet.id != wallet_id {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-
-        tx_service.confirm_send(
-            app_db,
-            wallet_id,
-            wallet_network,
-            &wallet_dir,
-            &wallet_dek,
-            conn,
-            &grpc_url,
-            proposal_id,
-            spending_key,
-            on_tx_changed,
-        )
     }
 
     pub fn cancel_send(&mut self, proposal_id: &str) -> bool {

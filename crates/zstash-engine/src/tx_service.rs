@@ -1,9 +1,10 @@
 //! Transaction proposal creation, signing, and broadcast (US2+).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context as _;
 use chacha20poly1305::aead::{Aead, Payload};
@@ -11,7 +12,7 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::RngCore as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use zstash_core::domain::{
@@ -30,7 +31,7 @@ use zstash_core::ipc::v1::events::TransactionChangedEvent;
 
 use crate::db::AppDb;
 use crate::encryption::Dek;
-use crate::error::ipc_err;
+use crate::error::{find_engine_ipc_error, ipc_err};
 use crate::reauth::Clock;
 use crate::tokio_runtime::block_on;
 use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
@@ -85,6 +86,90 @@ pub(crate) struct QueuedBroadcastMeta {
     pub last_error: Option<String>,
 }
 
+#[derive(Clone, Copy)]
+struct TxLogContext<'a> {
+    wallet_id: Uuid,
+    account_id: Option<u32>,
+    proposal_id: Option<&'a str>,
+    txid: Option<&'a str>,
+    phase: &'a str,
+}
+
+fn log_tx_lifecycle_start(ctx: TxLogContext<'_>) {
+    info!(
+        wallet_id = %ctx.wallet_id,
+        account_id = ?ctx.account_id,
+        proposal_id = ctx.proposal_id.unwrap_or("-"),
+        txid = ctx.txid.unwrap_or("-"),
+        phase = ctx.phase,
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = "",
+        "send lifecycle event"
+    );
+}
+
+fn log_tx_lifecycle_success(ctx: TxLogContext<'_>, started_at: Instant) {
+    info!(
+        wallet_id = %ctx.wallet_id,
+        account_id = ?ctx.account_id,
+        proposal_id = ctx.proposal_id.unwrap_or("-"),
+        txid = ctx.txid.unwrap_or("-"),
+        phase = ctx.phase,
+        elapsed_ms = started_at.elapsed().as_millis(),
+        error_code = "none",
+        error_message = "",
+        "send lifecycle event"
+    );
+}
+
+fn log_tx_lifecycle_error(ctx: TxLogContext<'_>, started_at: Instant, err: &anyhow::Error) {
+    let (error_code, error_message) = match find_engine_ipc_error(err) {
+        Some(engine) => (engine.code.to_string(), engine.message.clone()),
+        None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
+    };
+    warn!(
+        wallet_id = %ctx.wallet_id,
+        account_id = ?ctx.account_id,
+        proposal_id = ctx.proposal_id.unwrap_or("-"),
+        txid = ctx.txid.unwrap_or("-"),
+        phase = ctx.phase,
+        elapsed_ms = started_at.elapsed().as_millis(),
+        error_code = %error_code,
+        error_message = %error_message,
+        "send lifecycle event"
+    );
+}
+
+fn log_status_transition(
+    wallet_id: Uuid,
+    account_id: u32,
+    txid: &str,
+    old_status: TransactionStatus,
+    new_status: TransactionStatus,
+    reason: &str,
+    chain_height: Option<u32>,
+    expiry_height: Option<u32>,
+    detail_message: Option<&str>,
+) {
+    info!(
+        wallet_id = %wallet_id,
+        account_id,
+        proposal_id = "-",
+        txid,
+        phase = "tx_service.transaction_status_transition",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = detail_message.unwrap_or(""),
+        old_status = ?old_status,
+        new_status = ?new_status,
+        reason,
+        chain_height = ?chain_height,
+        expiry_height = ?expiry_height,
+        "transaction status transition"
+    );
+}
+
 impl<C: Clock> TxService<C> {
     pub fn new(clock: C) -> Self {
         Self {
@@ -135,6 +220,18 @@ impl<C: Clock> TxService<C> {
         let queue_dir = queued_broadcasts_dir(wallet_dir);
         if !queue_dir.exists() {
             self.queued_broadcasts.remove(&wallet_id);
+            info!(
+                wallet_id = %wallet_id,
+                account_id = ?Option::<u32>::None,
+                proposal_id = "-",
+                txid = "-",
+                phase = "tx_service.scan_queued_broadcasts.no_queue_dir",
+                elapsed_ms = 0u128,
+                error_code = "none",
+                error_message = "",
+                decision = "clear_in_memory_queue",
+                "queued broadcast startup decision"
+            );
             return Ok(());
         }
 
@@ -161,7 +258,19 @@ impl<C: Clock> TxService<C> {
             let meta_bytes = match std::fs::read(&path) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    tracing::debug!(path = ?path, error = ?e, "skipping unreadable queue file");
+                    warn!(
+                        wallet_id = %wallet_id,
+                        account_id = ?Option::<u32>::None,
+                        proposal_id = "-",
+                        txid = %txid,
+                        phase = "tx_service.scan_queued_broadcasts.read_meta_error",
+                        elapsed_ms = 0u128,
+                        error_code = "QUEUE_META_READ_FAILED",
+                        error_message = %e,
+                        decision = "skip_unreadable_meta",
+                        path = ?path,
+                        "queued broadcast startup decision"
+                    );
                     continue;
                 }
             };
@@ -169,7 +278,19 @@ impl<C: Clock> TxService<C> {
             let meta: QueuedBroadcastMeta = match serde_json::from_slice(&meta_bytes) {
                 Ok(meta) => meta,
                 Err(e) => {
-                    tracing::debug!(path = ?path, error = ?e, "skipping unparseable queue meta file");
+                    warn!(
+                        wallet_id = %wallet_id,
+                        account_id = ?Option::<u32>::None,
+                        proposal_id = "-",
+                        txid = %txid,
+                        phase = "tx_service.scan_queued_broadcasts.parse_meta_error",
+                        elapsed_ms = 0u128,
+                        error_code = "QUEUE_META_PARSE_FAILED",
+                        error_message = %e,
+                        decision = "drop_unparseable_meta",
+                        path = ?path,
+                        "queued broadcast startup decision"
+                    );
                     if let Err(e) = std::fs::remove_file(&path) {
                         tracing::debug!(path = ?path, error = ?e, "failed to cleanup queue file");
                     }
@@ -181,6 +302,19 @@ impl<C: Clock> TxService<C> {
             let bin_path = queued_broadcast_bin_path(&queue_dir, &txid);
 
             if !bin_path.exists() {
+                info!(
+                    wallet_id = %wallet_id,
+                    account_id = ?Option::<u32>::None,
+                    proposal_id = "-",
+                    txid = %txid,
+                    phase = "tx_service.scan_queued_broadcasts.orphaned_meta",
+                    elapsed_ms = 0u128,
+                    error_code = "none",
+                    error_message = "",
+                    decision = "drop_orphaned_meta",
+                    path = ?path,
+                    "queued broadcast startup decision"
+                );
                 if let Err(e) = std::fs::remove_file(&path) {
                     tracing::debug!(path = ?path, error = ?e, "failed to cleanup orphaned queue meta file");
                 }
@@ -189,6 +323,19 @@ impl<C: Clock> TxService<C> {
 
             if now.duration_since(created_at).unwrap_or(Duration::ZERO) > QUEUED_BROADCAST_RETENTION
             {
+                info!(
+                    wallet_id = %wallet_id,
+                    account_id = ?Option::<u32>::None,
+                    proposal_id = "-",
+                    txid = %txid,
+                    phase = "tx_service.scan_queued_broadcasts.retention_expired",
+                    elapsed_ms = 0u128,
+                    error_code = "none",
+                    error_message = "",
+                    decision = "drop_retention_expired",
+                    created_at_ms = meta.created_at_ms,
+                    "queued broadcast startup decision"
+                );
                 if let Err(e) = std::fs::remove_file(&bin_path) {
                     tracing::debug!(path = ?bin_path, error = ?e, "failed to cleanup expired queue bin file");
                 }
@@ -205,9 +352,34 @@ impl<C: Clock> TxService<C> {
                     bin_path,
                 },
             );
+            info!(
+                wallet_id = %wallet_id,
+                account_id = ?Option::<u32>::None,
+                proposal_id = "-",
+                txid = %txid,
+                phase = "tx_service.scan_queued_broadcasts.loaded",
+                elapsed_ms = 0u128,
+                error_code = "none",
+                error_message = "",
+                decision = "keep_pending_for_manual_retry",
+                "queued broadcast startup decision"
+            );
         }
 
+        let loaded_count = entries.len();
         self.queued_broadcasts.insert(wallet_id, entries);
+        info!(
+            wallet_id = %wallet_id,
+            account_id = ?Option::<u32>::None,
+            proposal_id = "-",
+            txid = "-",
+            phase = "tx_service.scan_queued_broadcasts.complete",
+            elapsed_ms = 0u128,
+            error_code = "none",
+            error_message = "",
+            loaded_count,
+            "queued broadcast startup scan complete"
+        );
         Ok(())
     }
 
@@ -772,7 +944,17 @@ impl<C: Clock> TxService<C> {
 
         let txid_str = txid.to_string();
 
-        if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
+        if let Err(err) = self.send_transaction_bytes(
+            grpc_url,
+            &tx_bytes,
+            TxLogContext {
+                wallet_id,
+                account_id: None,
+                proposal_id: None,
+                txid: Some(&txid_str),
+                phase: "tx_service.finalize_signing.broadcast",
+            },
+        ) {
             queue_broadcast(
                 &self.clock,
                 wallet_id,
@@ -783,7 +965,12 @@ impl<C: Clock> TxService<C> {
                 Some(format!("{err:#}")),
             )?;
         } else {
-            delete_queued_broadcast(wallet_dir, txid_str.clone());
+            delete_queued_broadcast(
+                Some(wallet_id),
+                wallet_dir,
+                txid_str.clone(),
+                "finalize_signing_broadcast_success",
+            );
         }
 
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
@@ -834,7 +1021,27 @@ impl<C: Clock> TxService<C> {
         spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ConfirmSendResponse> {
-        self.validate_proposal_for_wallet(proposal_id, wallet_id)?;
+        let confirm_started_at = Instant::now();
+        log_tx_lifecycle_start(TxLogContext {
+            wallet_id,
+            account_id: None,
+            proposal_id: Some(proposal_id),
+            txid: None,
+            phase: "tx_service.confirm_send.start",
+        });
+
+        let validated_account_id = self.validate_proposal_for_wallet(proposal_id, wallet_id)?;
+        info!(
+            wallet_id = %wallet_id,
+            account_id = validated_account_id,
+            proposal_id = proposal_id,
+            txid = "-",
+            phase = "tx_service.confirm_send.proposal_validated",
+            elapsed_ms = confirm_started_at.elapsed().as_millis(),
+            error_code = "none",
+            error_message = "",
+            "send lifecycle event"
+        );
 
         let record = self
             .proposals
@@ -917,20 +1124,36 @@ impl<C: Clock> TxService<C> {
                 )
             })?;
 
-            if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
+            let txid_str = txid.to_string();
+            if let Err(err) = self.send_transaction_bytes(
+                grpc_url,
+                &tx_bytes,
+                TxLogContext {
+                    wallet_id,
+                    account_id: Some(record.account_id),
+                    proposal_id: Some(proposal_id),
+                    txid: Some(&txid_str),
+                    phase: "tx_service.confirm_send.broadcast",
+                },
+            ) {
                 let err_msg = format!("{err:#}");
-                broadcast_errors.insert(txid.to_string(), err_msg.clone());
+                broadcast_errors.insert(txid_str.clone(), err_msg.clone());
                 queue_broadcast(
                     &self.clock,
                     wallet_id,
                     wallet_dir,
                     wallet_dek,
-                    txid.to_string(),
+                    txid_str,
                     &tx_bytes,
                     Some(err_msg),
                 )?;
             } else {
-                delete_queued_broadcast(wallet_dir, txid.to_string());
+                delete_queued_broadcast(
+                    Some(wallet_id),
+                    wallet_dir,
+                    txid_str,
+                    "initial_broadcast_success",
+                );
             }
         }
 
@@ -944,10 +1167,34 @@ impl<C: Clock> TxService<C> {
             .and_then(|m| m.get(&primary_txid))
             .cloned();
 
-        let (status, last_error, can_retry_broadcast) = match queued {
-            Some(entry) => (TransactionStatus::Failed, entry.last_error.clone(), true),
-            None => (TransactionStatus::Pending, None, false),
+        let (status, last_error, can_retry_broadcast, status_reason) = match queued {
+            Some(entry) => (
+                TransactionStatus::Failed,
+                entry.last_error.clone(),
+                true,
+                "initial_broadcast_failed_queued",
+            ),
+            None => (
+                TransactionStatus::Pending,
+                None,
+                false,
+                "initial_broadcast_accepted",
+            ),
         };
+        info!(
+            wallet_id = %wallet_id,
+            account_id = record.account_id,
+            proposal_id = proposal_id,
+            txid = %primary_txid,
+            phase = "tx_service.confirm_send.initial_status",
+            elapsed_ms = confirm_started_at.elapsed().as_millis(),
+            error_code = "none",
+            error_message = last_error.as_deref().unwrap_or(""),
+            old_status = "Created",
+            new_status = ?status,
+            reason = status_reason,
+            "transaction status transition"
+        );
 
         if let Some(handler) = on_tx_changed.as_ref() {
             handler(TransactionChangedEvent {
@@ -974,6 +1221,17 @@ impl<C: Clock> TxService<C> {
         if broadcast_errors.contains_key(&primary_txid) {
             // Broadcast failure is communicated via TransactionInfo status + queued metadata.
         }
+
+        log_tx_lifecycle_success(
+            TxLogContext {
+                wallet_id,
+                account_id: Some(record.account_id),
+                proposal_id: Some(proposal_id),
+                txid: Some(&primary_txid),
+                phase: "tx_service.confirm_send.success",
+            },
+            confirm_started_at,
+        );
 
         Ok(ConfirmSendResponse {
             schema_version: SCHEMA_VERSION,
@@ -1234,22 +1492,37 @@ impl<C: Clock> TxService<C> {
                     )
                 })?;
 
-                if let Err(err) = self.send_transaction_bytes(grpc_url, &tx_bytes) {
+                let txid_str = txid.to_string();
+                if let Err(err) = self.send_transaction_bytes(
+                    grpc_url,
+                    &tx_bytes,
+                    TxLogContext {
+                        wallet_id,
+                        account_id: Some(account_id),
+                        proposal_id: None,
+                        txid: Some(&txid_str),
+                        phase: "tx_service.shield_funds.broadcast",
+                    },
+                ) {
                     let err_msg = format!("{err:#}");
                     queue_broadcast(
                         &self.clock,
                         wallet_id,
                         wallet_dir,
                         wallet_dek,
-                        txid.to_string(),
+                        txid_str.clone(),
                         &tx_bytes,
                         Some(err_msg),
                     )?;
                 } else {
-                    delete_queued_broadcast(wallet_dir, txid.to_string());
+                    delete_queued_broadcast(
+                        Some(wallet_id),
+                        wallet_dir,
+                        txid_str.clone(),
+                        "shield_broadcast_success",
+                    );
                 }
 
-                let txid_str = txid.to_string();
                 if primary_txid.is_none() {
                     primary_txid = Some(txid_str.clone());
                     primary_fee = Some(fee_u64);
@@ -1322,6 +1595,15 @@ impl<C: Clock> TxService<C> {
         txid: &str,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<String> {
+        let retry_started_at = Instant::now();
+        log_tx_lifecycle_start(TxLogContext {
+            wallet_id,
+            account_id: None,
+            proposal_id: None,
+            txid: Some(txid),
+            phase: "tx_service.retry_broadcast.start",
+        });
+
         self.scan_queued_broadcasts(wallet_id, wallet_dir)?;
 
         // Parse hex txid to bytes (reversed for internal representation)
@@ -1350,6 +1632,17 @@ impl<C: Clock> TxService<C> {
             ));
         };
         let account_id_u32 = account_id.max(0) as u32;
+        info!(
+            wallet_id = %wallet_id,
+            account_id = account_id_u32,
+            proposal_id = "-",
+            txid = txid,
+            phase = "tx_service.retry_broadcast.account_resolved",
+            elapsed_ms = retry_started_at.elapsed().as_millis(),
+            error_code = "none",
+            error_message = "",
+            "send lifecycle event"
+        );
 
         ensure_spend_allowed(app_db, wallet_id, account_id_u32)?;
 
@@ -1367,13 +1660,34 @@ impl<C: Clock> TxService<C> {
 
         let tx_bytes = decrypt_queued_tx_bytes(wallet_id, wallet_dek, &entry.bin_path)?;
 
-        match self.send_transaction_bytes(grpc_url, &tx_bytes) {
+        match self.send_transaction_bytes(
+            grpc_url,
+            &tx_bytes,
+            TxLogContext {
+                wallet_id,
+                account_id: Some(account_id_u32),
+                proposal_id: None,
+                txid: Some(txid),
+                phase: "tx_service.retry_broadcast.broadcast",
+            },
+        ) {
             Ok(()) => {
-                delete_queued_broadcast(wallet_dir, txid.to_string());
+                delete_queued_broadcast(
+                    Some(wallet_id),
+                    wallet_dir,
+                    txid.to_string(),
+                    "retry_broadcast_success",
+                );
             }
             Err(err) => {
                 let err_msg = format!("{err:#}");
-                update_queued_broadcast_error(&self.clock, wallet_dir, txid, Some(err_msg))?;
+                update_queued_broadcast_error(
+                    &self.clock,
+                    Some(wallet_id),
+                    wallet_dir,
+                    txid,
+                    Some(err_msg),
+                )?;
             }
         }
 
@@ -1397,6 +1711,17 @@ impl<C: Clock> TxService<C> {
                 });
             }
         }
+
+        log_tx_lifecycle_success(
+            TxLogContext {
+                wallet_id,
+                account_id: Some(account_id_u32),
+                proposal_id: None,
+                txid: Some(txid),
+                phase: "tx_service.retry_broadcast.success",
+            },
+            retry_started_at,
+        );
 
         Ok(txid.to_string())
     }
@@ -1493,8 +1818,25 @@ impl<C: Clock> TxService<C> {
                 && let Some(height) = chain_height
                 && height > expiry
             {
+                let old_status = status;
                 status = TransactionStatus::Expired;
-                delete_queued_broadcast(wallet_dir, txid.clone());
+                log_status_transition(
+                    wallet_id,
+                    account_id,
+                    &txid,
+                    old_status,
+                    status,
+                    "expiry_height_reached",
+                    chain_height,
+                    expiry_height_u32,
+                    Some("chain tip exceeded transaction expiry height"),
+                );
+                delete_queued_broadcast(
+                    Some(wallet_id),
+                    wallet_dir,
+                    txid.clone(),
+                    "expired_transaction_cleanup",
+                );
             }
 
             let queue_entry = self
@@ -1502,6 +1844,7 @@ impl<C: Clock> TxService<C> {
                 .get(&wallet_id)
                 .and_then(|map| map.get(&txid));
 
+            let status_before_queue = status;
             let (last_error, can_retry_broadcast) = match (status, queue_entry) {
                 (TransactionStatus::Confirmed, _) => (None, false),
                 (TransactionStatus::Expired, _) => (None, false),
@@ -1512,6 +1855,19 @@ impl<C: Clock> TxService<C> {
                 (TransactionStatus::Failed, Some(entry)) => (entry.last_error.clone(), true),
                 _ => (None, false),
             };
+            if status != status_before_queue {
+                log_status_transition(
+                    wallet_id,
+                    account_id,
+                    &txid,
+                    status_before_queue,
+                    status,
+                    "queued_broadcast_present",
+                    chain_height,
+                    expiry_height_u32,
+                    last_error.as_deref(),
+                );
+            }
 
             // Fetch structured memo content
             let memos = fetch_transaction_memos(wallet_db_conn, &txid_bytes)?;
@@ -1850,6 +2206,19 @@ fn queue_broadcast<C: Clock>(
         )
     })?;
 
+    info!(
+        wallet_id = %wallet_id,
+        account_id = ?Option::<u32>::None,
+        proposal_id = "-",
+        txid = %txid,
+        phase = "tx_service.queue_broadcast.created",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = meta.last_error.as_deref().unwrap_or(""),
+        reason = "broadcast_failed_queued_for_retry",
+        "queued broadcast decision"
+    );
+
     Ok(())
 }
 
@@ -1888,7 +2257,15 @@ fn decrypt_queued_tx_bytes(
 }
 
 impl<C: Clock> TxService<C> {
-    fn send_transaction_bytes(&self, grpc_url: &str, tx_bytes: &[u8]) -> anyhow::Result<()> {
+    fn send_transaction_bytes(
+        &self,
+        grpc_url: &str,
+        tx_bytes: &[u8],
+        ctx: TxLogContext<'_>,
+    ) -> anyhow::Result<()> {
+        let started_at = Instant::now();
+        log_tx_lifecycle_start(ctx);
+
         let client = match self.tor_manager.as_ref() {
             Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
                 grpc_url.to_string(),
@@ -1898,28 +2275,64 @@ impl<C: Clock> TxService<C> {
         };
 
         let tx_bytes = tx_bytes.to_vec();
-        block_on(async move { client.send_transaction(tx_bytes).await })
+        let result = block_on(async move { client.send_transaction(tx_bytes).await });
+        match &result {
+            Ok(()) => log_tx_lifecycle_success(ctx, started_at),
+            Err(err) => log_tx_lifecycle_error(ctx, started_at, err),
+        }
+        result
     }
 }
 
-fn delete_queued_broadcast(wallet_dir: &Path, txid: String) {
+fn delete_queued_broadcast(wallet_id: Option<Uuid>, wallet_dir: &Path, txid: String, reason: &str) {
+    let wallet_id_for_log = wallet_id
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| "-".to_string());
     let queue_dir = queued_broadcasts_dir(wallet_dir);
     let bin_path = queued_broadcast_bin_path(&queue_dir, &txid);
     let meta_path = queued_broadcast_meta_path(&queue_dir, &txid);
     if let Err(e) = std::fs::remove_file(&bin_path) {
-        tracing::debug!(path = ?bin_path, error = ?e, "failed to delete queued broadcast bin file");
+        if e.kind() != ErrorKind::NotFound {
+            tracing::debug!(
+                path = ?bin_path,
+                error = ?e,
+                "failed to delete queued broadcast bin file"
+            );
+        }
     }
     if let Err(e) = std::fs::remove_file(&meta_path) {
-        tracing::debug!(path = ?meta_path, error = ?e, "failed to delete queued broadcast meta file");
+        if e.kind() != ErrorKind::NotFound {
+            tracing::debug!(
+                path = ?meta_path,
+                error = ?e,
+                "failed to delete queued broadcast meta file"
+            );
+        }
     }
+    info!(
+        wallet_id = %wallet_id_for_log,
+        account_id = ?Option::<u32>::None,
+        proposal_id = "-",
+        txid = %txid,
+        phase = "tx_service.queue_broadcast.deleted",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = "",
+        reason,
+        "queued broadcast decision"
+    );
 }
 
 fn update_queued_broadcast_error<C: Clock>(
     clock: &C,
+    wallet_id: Option<Uuid>,
     wallet_dir: &Path,
     txid: &str,
     last_error: Option<String>,
 ) -> anyhow::Result<()> {
+    let wallet_id_for_log = wallet_id
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| "-".to_string());
     let queue_dir = queued_broadcasts_dir(wallet_dir);
     let meta_path = queued_broadcast_meta_path(&queue_dir, txid);
     let existing: QueuedBroadcastMeta = std::fs::read(&meta_path)
@@ -1941,6 +2354,18 @@ fn update_queued_broadcast_error<C: Clock>(
             meta_path.display()
         )
     })?;
+    info!(
+        wallet_id = %wallet_id_for_log,
+        account_id = ?Option::<u32>::None,
+        proposal_id = "-",
+        txid,
+        phase = "tx_service.queue_broadcast.updated",
+        elapsed_ms = 0u128,
+        error_code = "none",
+        error_message = updated.last_error.as_deref().unwrap_or(""),
+        reason = "retry_broadcast_failed",
+        "queued broadcast decision"
+    );
     Ok(())
 }
 
