@@ -239,11 +239,12 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   }, [loadSwaps]);
 
   const triggerSyncRefresh = useCallback(() => {
-    if (syncRefreshInFlightRef.current) return;
+    if (syncRefreshInFlightRef.current) return false;
     syncRefreshInFlightRef.current = true;
     void load(offsetRef.current).finally(() => {
       syncRefreshInFlightRef.current = false;
     });
+    return true;
   }, [load]);
 
   const markSubscriptionHealthy = useCallback((key: LiveSubscriptionKey) => {
@@ -281,16 +282,20 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
         const previousFrontier = lastSyncFrontierRef.current;
         lastSyncFrontierRef.current = frontier;
 
-        if (previousFrontier != null && frontier <= previousFrontier) return;
+        if (previousFrontier != null && frontier === previousFrontier) return;
+        if (previousFrontier != null && frontier < previousFrontier) {
+          frontierAtLastSyncRefreshRef.current = null;
+        }
 
         const lag = tip > frontier ? tip - frontier : 0;
         const nearTip = tip > 0 && lag <= SYNC_NEAR_TIP_LAG_BLOCKS;
         const now = Date.now();
 
         if (nearTip) {
-          lastSyncRefreshAtRef.current = now;
-          frontierAtLastSyncRefreshRef.current = frontier;
-          triggerSyncRefresh();
+          if (triggerSyncRefresh()) {
+            lastSyncRefreshAtRef.current = now;
+            frontierAtLastSyncRefreshRef.current = frontier;
+          }
           return;
         }
 
@@ -307,9 +312,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           elapsedMs >= SYNC_REFRESH_MIN_INTERVAL_MS ||
           scannedSinceLastRefresh >= SYNC_REFRESH_BLOCK_THRESHOLD
         ) {
-          lastSyncRefreshAtRef.current = now;
-          frontierAtLastSyncRefreshRef.current = frontier;
-          triggerSyncRefresh();
+          if (triggerSyncRefresh()) {
+            lastSyncRefreshAtRef.current = now;
+            frontierAtLastSyncRefreshRef.current = frontier;
+          }
         }
       })
       .then((fn) => {
