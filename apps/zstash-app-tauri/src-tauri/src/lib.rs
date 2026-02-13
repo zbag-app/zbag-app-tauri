@@ -201,8 +201,10 @@ where
                         let txid = task.txid.clone();
                         let tx_handler = Arc::clone(&tx_handler);
                         let failover_handler = Arc::clone(&failover_handler);
+                        let execute_wallet_manager = Arc::clone(&wallet_manager);
                         let join = tauri::async_runtime::spawn_blocking(move || {
-                            zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+                            let mut mgr = execute_wallet_manager.lock().expect("mutex poisoned");
+                            mgr.execute_retry_broadcast_task(
                                 task,
                                 Some(tx_handler),
                                 Some(failover_handler),
