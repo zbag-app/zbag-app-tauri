@@ -15,6 +15,7 @@ import { Progress } from "../ui/progress";
 import { Separator } from "../ui/separator";
 import type { TorState, SyncProgress } from "../../types/ipc";
 import { formatEta } from "../../utils/time";
+import { isEffectivelyAtTip } from "../../utils/sync";
 
 interface SidebarProps {
   walletName: string;
@@ -32,10 +33,6 @@ const navItems = [
   { to: "/activity", icon: History, label: "Activity" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
-
-function isEffectivelyAtTip(progress: SyncProgress): boolean {
-  return progress.wallet_tip_height > 0 && progress.scan_frontier_height >= progress.wallet_tip_height;
-}
 
 function getSyncLabel(progress: SyncProgress): string {
   switch (progress.phase) {

@@ -2117,50 +2117,52 @@ impl WalletManager {
             return Ok(0);
         };
 
-        let due_txids = tx_service.list_due_retry_txids(wallet_id, &wallet_dir)?;
-        let mut processed = 0usize;
+        // Retry at most one queued tx per worker tick. This keeps the manager lock
+        // from being held across a long sequence of network retries.
+        let Some(txid) = tx_service
+            .list_due_retry_txids(wallet_id, &wallet_dir)?
+            .into_iter()
+            .next()
+        else {
+            return Ok(0);
+        };
 
-        for txid in due_txids {
-            let grpc_url = match crate::server_resolver::resolve_grpc_url(app_db, wallet_network) {
-                Ok(url) => url,
-                Err(err) => {
-                    tracing::warn!(
-                        wallet_id = %wallet_id,
-                        network = ?wallet_network,
-                        error = ?err,
-                        "auto retry skipped: failed to resolve active lightwalletd endpoint"
-                    );
-                    break;
-                }
-            };
+        let grpc_url = match crate::server_resolver::resolve_grpc_url(app_db, wallet_network) {
+            Ok(url) => url,
+            Err(err) => {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    network = ?wallet_network,
+                    error = ?err,
+                    "auto retry skipped: failed to resolve active lightwalletd endpoint"
+                );
+                return Ok(0);
+            }
+        };
 
-            match tx_service.retry_broadcast(
-                app_db,
-                wallet_id,
-                wallet_network,
-                &wallet_dir,
-                &wallet_dek,
-                conn,
-                &grpc_url,
-                &txid,
-                on_tx_changed.clone(),
-                on_failover.clone(),
-            ) {
-                Ok(_) => {
-                    processed = processed.saturating_add(1);
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        wallet_id = %wallet_id,
-                        txid = %txid,
-                        error = ?err,
-                        "auto retry attempt failed"
-                    );
-                }
+        match tx_service.retry_broadcast(
+            app_db,
+            wallet_id,
+            wallet_network,
+            &wallet_dir,
+            &wallet_dek,
+            conn,
+            &grpc_url,
+            &txid,
+            on_tx_changed,
+            on_failover,
+        ) {
+            Ok(_) => Ok(1),
+            Err(err) => {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    txid = %txid,
+                    error = ?err,
+                    "auto retry attempt failed"
+                );
+                Ok(0)
             }
         }
-
-        Ok(processed)
     }
 
     pub fn list_transactions(

@@ -147,15 +147,21 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       if (activeAccountId == null) return;
       setLoading(true);
       setError(null);
-      const res = await listTransactions({ account_id: activeAccountId, limit, offset: nextOffset });
-      setLoading(false);
-      if ('err' in res) {
-        setError(res.err.message);
-        return;
+      try {
+        const res = await listTransactions({ account_id: activeAccountId, limit, offset: nextOffset });
+        if ('err' in res) {
+          setError(res.err.message);
+          return;
+        }
+        setTransactions(res.ok.transactions);
+        setTotalCount(res.ok.total_count);
+        setOffset(nextOffset);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load transactions';
+        setError(message);
+      } finally {
+        setLoading(false);
       }
-      setTransactions(res.ok.transactions);
-      setTotalCount(res.ok.total_count);
-      setOffset(nextOffset);
     },
     [activeAccountId]
   );
@@ -176,12 +182,17 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   }, [activeAccountId, load]);
 
   const loadSwaps = useCallback(async () => {
-    const res = await listSwaps();
-    if ('err' in res) {
-      setError(res.err.message);
-      return;
+    try {
+      const res = await listSwaps();
+      if ('err' in res) {
+        setError(res.err.message);
+        return;
+      }
+      setSwaps(res.ok.swaps);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load swaps';
+      setError(message);
     }
-    setSwaps(res.ok.swaps);
   }, []);
 
   useEffect(() => {

@@ -39,7 +39,11 @@ use crate::server_resolver;
 use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
 
 /// Default batch size for downloading blocks.
-/// Reduced to improve mid-sync UI balance refresh cadence.
+///
+/// Reduced from 1000 to 250 to improve mid-sync balance refresh cadence in the
+/// UI (more frequent progress/balance opportunities while catching up).
+/// Tradeoff: smaller batches increase round trips and can reduce peak sync
+/// throughput on fast links or sparse wallets.
 const BATCH_SIZE: u32 = 250;
 
 /// Smaller batch size for sandblasting periods where blocks are much larger.
@@ -439,7 +443,9 @@ impl SyncService {
             };
             let mut balance_db = if on_balance_task.as_ref().is_some() {
                 // Copy DEK bytes for the balance connection (original stays with sync)
-                match open_wallet_db_async(wallet_db_path.clone(), wallet_dek.copy()).await {
+                match open_wallet_db_async(wallet_db_path.clone(), wallet_dek.clone_key_material())
+                    .await
+                {
                     Ok(db) => Some(db),
                     Err(err) => {
                         tracing::debug!(
@@ -606,7 +612,7 @@ impl SyncService {
             // Open wallet DB for sync operations (on blocking thread)
             let mut sync_wallet_conn = match open_wallet_db_async(
                 wallet_db_path.clone(),
-                wallet_dek.copy(),
+                wallet_dek.clone_key_material(),
             )
             .await
             {
@@ -1234,7 +1240,7 @@ impl SyncService {
                     // Get total count for progress tracking.
                     let total_to_enhance = match count_txids_needing_memo_enhancement_blocking(
                         wallet_db_path.clone(),
-                        wallet_dek.copy(),
+                        wallet_dek.clone_key_material(),
                     )
                     .await
                     {
@@ -1300,7 +1306,7 @@ impl SyncService {
                             let txids_batch =
                                 match get_txids_needing_memo_enhancement_batch_blocking(
                                     wallet_db_path.clone(),
-                                    wallet_dek.copy(),
+                                    wallet_dek.clone_key_material(),
                                     batch_offset,
                                     ENHANCEMENT_BATCH_SIZE,
                                 )
@@ -2283,7 +2289,7 @@ async fn enhance_transaction_memo(
     let raw_tx = client.get_transaction(&txid).await?;
 
     let wallet_db_path = wallet_db_path.to_path_buf();
-    let wallet_dek = wallet_dek.copy();
+    let wallet_dek = wallet_dek.clone_key_material();
     let params = *params;
 
     crate::tokio_runtime::spawn_blocking(move || {

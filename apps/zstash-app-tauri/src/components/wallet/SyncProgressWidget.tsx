@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../../types/ipc';
 import { formatEta } from '../../utils/time';
+import { isEffectivelyAtTip } from '../../utils/sync';
 
 // NOTE: This countdown is an approximation based on the last `retry_in_seconds` value received from
 // the backend. Because we don't have an absolute retry timestamp, small drift (event latency + JS
@@ -61,10 +62,6 @@ function getDisplayPhase(phase: Exclude<IPC.SyncPhase, 'Offline' | 'Error'>): st
       const _exhaustive: never = phase;
       return _exhaustive;
   }
-}
-
-function isEffectivelyAtTip(progress: IPC.SyncProgress): boolean {
-  return progress.wallet_tip_height > 0 && progress.scan_frontier_height >= progress.wallet_tip_height;
 }
 
 function InterruptedSyncProgress(props: {
