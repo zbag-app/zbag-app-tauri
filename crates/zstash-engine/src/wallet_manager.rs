@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Context as _;
 use bip39::Mnemonic;
@@ -29,10 +28,11 @@ use crate::db::{
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
 };
-use crate::error::{find_engine_ipc_error, ipc_err};
+use crate::error::ipc_err;
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{ServerFailoverEventHandler, TxEventHandler, TxService};
+use rusqlite::OpenFlags;
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
 use zstash_core::ipc::v1::commands::job::{
@@ -59,6 +59,7 @@ pub struct WalletManager {
     wallets_root: PathBuf,
     active_wallet: Option<ActiveWallet>,
     reauth: ReauthManager,
+    job_service: JobService,
     backup_challenges: HashMap<Uuid, BackupChallengeState>,
     cached_balances: HashMap<(Uuid, u32), Balance>,
     cached_sync_status: HashMap<Uuid, SyncStatus>,
@@ -71,6 +72,22 @@ pub struct WalletManager {
 /// TxService is now managed separately from WalletManager to allow
 /// releasing the wallet_manager mutex during expensive tx operations.
 /// Create with TxService::new(SystemClock) and share via Arc<Mutex<TxService<SystemClock>>>.
+
+pub struct RetryBroadcastTask {
+    pub txid: String,
+    user_intent_confirmed: bool,
+    wallet_id: Uuid,
+    wallet_network: Network,
+    wallet_dir: PathBuf,
+    wallet_db_path: PathBuf,
+    // This owned DEK copy is required so prepared manual retry tasks can be
+    // executed later without borrowing WalletManager state. `Dek` zeroizes its
+    // key material on drop via `#[zeroize(drop)]`.
+    wallet_dek: Dek,
+    grpc_url: String,
+    app_db_path: PathBuf,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+}
 
 #[derive(Debug)]
 struct ActiveWallet {
@@ -132,6 +149,7 @@ impl WalletManager {
             wallets_root,
             active_wallet: None,
             reauth: ReauthManager::new(SystemClock),
+            job_service: JobService::new(),
             backup_challenges: HashMap::new(),
             cached_balances: HashMap::new(),
             cached_sync_status: HashMap::new(),
@@ -798,7 +816,7 @@ impl WalletManager {
         &mut self,
         wallet_id: Uuid,
         password: &str,
-        remember_unlock: bool,
+        _remember_unlock: bool,
         tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<WalletLockStatus> {
         let Some((wallet, directory_path_str)) =
@@ -1897,9 +1915,10 @@ impl WalletManager {
         txid: &str,
         reauth_token: &str,
         on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
         tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<String> {
-        let task = self.prepare_retry_broadcast_task(txid, reauth_token)?;
+        let task = self.prepare_retry_broadcast_task(txid, reauth_token, tx_service)?;
         self.execute_retry_broadcast_task(task, on_tx_changed, on_failover)
     }
 
@@ -1907,17 +1926,19 @@ impl WalletManager {
         &mut self,
         txid: &str,
         reauth_token: &str,
+        tx_service: &TxService<SystemClock>,
     ) -> anyhow::Result<RetryBroadcastTask> {
         let Some(active_wallet_id) = self.active_wallet.as_ref().map(|w| w.wallet.id) else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
 
         self.consume_reauth_token(active_wallet_id, reauth_token, ReauthPurpose::Spend)?;
-        self.build_retry_broadcast_task(txid, true)
+        self.build_retry_broadcast_task(txid, true, tx_service)
     }
 
     pub fn prepare_next_queued_broadcast_retry_task(
         &mut self,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<Option<RetryBroadcastTask>> {
         // Product policy: queued retries are manual-only. This method prepares
         // at most one due task for explicit caller-driven execution.
@@ -1931,11 +1952,9 @@ impl WalletManager {
             (active.wallet.id, active.wallet_dir.clone())
         };
 
-        self.tx_service
-            .scan_queued_broadcasts(wallet_id, &wallet_dir)?;
+        tx_service.scan_queued_broadcasts(wallet_id, &wallet_dir)?;
 
-        let Some(txid) = self
-            .tx_service
+        let Some(txid) = tx_service
             .list_due_retry_txids(wallet_id, &wallet_dir)?
             .into_iter()
             .next()
@@ -1943,7 +1962,7 @@ impl WalletManager {
             return Ok(None);
         };
 
-        let task = self.build_retry_broadcast_task(&txid, false)?;
+        let task = self.build_retry_broadcast_task(&txid, false, tx_service)?;
         Ok(Some(task))
     }
 
@@ -2054,6 +2073,7 @@ impl WalletManager {
         &mut self,
         txid: &str,
         user_intent_confirmed: bool,
+        tx_service: &TxService<SystemClock>,
     ) -> anyhow::Result<RetryBroadcastTask> {
         let (wallet_id, wallet_network, wallet_dir) = {
             let Some(active) = self.active_wallet.as_ref() else {
@@ -2074,21 +2094,9 @@ impl WalletManager {
         let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
             .context("failed to resolve active lightwalletd endpoint")?;
 
-        let Some(active) = self.active_wallet.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        if active.lock_status != WalletLockStatus::Unlocked {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        if active.wallet.id != wallet_id {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-
-        tx_service.retry_broadcast(
-            &self.app_db,
+        Ok(RetryBroadcastTask {
+            txid: txid.to_string(),
+            user_intent_confirmed,
             wallet_id,
             wallet_network,
             wallet_dir: wallet_dir.clone(),
@@ -2096,7 +2104,7 @@ impl WalletManager {
             wallet_dek,
             grpc_url,
             app_db_path: self.app_db.path().to_path_buf(),
-            tor_manager: self.tx_service.tor_manager(),
+            tor_manager: tx_service.tor_manager(),
         })
     }
 
@@ -2104,10 +2112,11 @@ impl WalletManager {
         &mut self,
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<usize> {
         // Compatibility helper for callers that explicitly invoke queued retry
         // processing. This is not an autonomous background scheduler.
-        let Some(task) = self.prepare_next_queued_broadcast_retry_task()? else {
+        let Some(task) = self.prepare_next_queued_broadcast_retry_task(tx_service)? else {
             return Ok(0);
         };
         let wallet_id = task.wallet_id;
@@ -2183,6 +2192,7 @@ impl WalletManager {
         tor_manager: Option<Arc<zstash_tor::TorManager>>,
         on_progress: Option<JobEventHandler>,
         on_tx_changed: Option<TxEventHandler>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<StartSendJobResponse> {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
@@ -2201,8 +2211,7 @@ impl WalletManager {
         let wallet_dir = active.wallet_dir.clone();
         let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
 
-        let proposal_account_id = self
-            .tx_service
+        let proposal_account_id = tx_service
             .proposal_account_id(proposal_id)
             .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
 
@@ -2214,8 +2223,7 @@ impl WalletManager {
             .context("failed to resolve active lightwalletd endpoint")?;
 
         // Get the proposal from tx_service
-        let proposal = self
-            .tx_service
+        let proposal = tx_service
             .take_proposal(proposal_id)
             .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found or expired"))?;
 
@@ -2254,6 +2262,7 @@ impl WalletManager {
         tor_manager: Option<Arc<zstash_tor::TorManager>>,
         on_progress: Option<JobEventHandler>,
         on_tx_changed: Option<TxEventHandler>,
+        _tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<StartShieldJobResponse> {
         let Some(active) = self.active_wallet.as_ref() else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
@@ -2439,7 +2448,7 @@ impl WalletManager {
         network: Network,
         password: &str,
         remember_unlock: bool,
-        seed_phrase: &str,
+        seed_phrase: impl Into<SensitiveString>,
         birthday_date_ms: Option<i64>,
     ) -> anyhow::Result<RestoreWalletResult> {
         let mut tx_service = TxService::new(SystemClock);
@@ -2448,7 +2457,7 @@ impl WalletManager {
             network,
             password,
             remember_unlock,
-            seed_phrase,
+            seed_phrase.into(),
             birthday_date_ms,
             &mut tx_service,
         )

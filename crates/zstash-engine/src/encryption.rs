@@ -84,6 +84,15 @@ impl Clone for Dek {
     }
 }
 
+impl Dek {
+    /// Explicitly clones sensitive key material into a new `Dek` value.
+    ///
+    /// This remains as a compatibility helper for existing call sites.
+    pub fn clone_key_material(&self) -> Self {
+        self.clone()
+    }
+}
+
 impl std::fmt::Debug for Dek {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Dek([REDACTED])")
