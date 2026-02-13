@@ -1174,13 +1174,34 @@ impl<C: Clock> TxService<C> {
         spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ConfirmSendResponse> {
+        let confirm_started_at = Instant::now();
+        log_tx_lifecycle_start(TxLogContext {
+            wallet_id,
+            account_id: None,
+            proposal_id: Some(proposal_id),
+            txid: None,
+            phase: "tx_service.confirm_send.start",
+        });
+
+        let validated_account_id = self.validate_proposal_for_wallet(proposal_id, wallet_id)?;
+        info!(
+            wallet_id = %wallet_id,
+            account_id = validated_account_id,
+            proposal_id = proposal_id,
+            txid = "-",
+            phase = "tx_service.confirm_send.proposal_validated",
+            elapsed_ms = confirm_started_at.elapsed().as_millis(),
+            error_code = "none",
+            error_message = "",
+            "send lifecycle event"
+        );
+
         let app_db = AppDb::open(app_db_path)?;
 
-        let now = self.clock.now();
         let record = self
             .proposals
             .remove(proposal_id)
-            .expect("proposal should exist");
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
 
         ensure_spend_allowed(&app_db, wallet_id, record.account_id)?;
 
@@ -3545,7 +3566,7 @@ mod tests {
 
         let err = service
             .confirm_send(
-                &app_db,
+                app_db.path(),
                 other_wallet_id,
                 Network::Testnet,
                 &wallet_dir,
@@ -3599,7 +3620,7 @@ mod tests {
 
         let err = service
             .confirm_send(
-                &app_db,
+                app_db.path(),
                 wallet_id,
                 Network::Testnet,
                 &wallet_dir,

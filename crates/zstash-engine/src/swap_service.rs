@@ -24,6 +24,7 @@ use zstash_network::near_intents::AppFee;
 use crate::db::{account_meta, open_app_db_connection, swap_meta};
 use crate::error::ipc_err;
 use crate::reauth::SystemClock;
+use crate::tokio_runtime::block_on;
 use crate::tx_service::TxService;
 use crate::wallet_manager::WalletManager;
 
@@ -172,7 +173,7 @@ impl SwapService {
         wallet_manager: Arc<Mutex<WalletManager>>,
         tx_service: Arc<Mutex<TxService<SystemClock>>>,
     ) -> anyhow::Result<Self> {
-        Self::new_with_near_client(
+        Self::new_with_near_client_and_tx(
             app_db_path,
             wallet_manager,
             tx_service,
@@ -181,6 +182,15 @@ impl SwapService {
     }
 
     pub fn new_with_near_client(
+        app_db_path: PathBuf,
+        wallet_manager: Arc<Mutex<WalletManager>>,
+        near: zstash_network::near_intents::NearIntentsClient,
+    ) -> anyhow::Result<Self> {
+        let tx_service = Arc::new(Mutex::new(TxService::new(SystemClock)));
+        Self::new_with_near_client_and_tx(app_db_path, wallet_manager, tx_service, near)
+    }
+
+    pub fn new_with_near_client_and_tx(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
         tx_service: Arc<Mutex<TxService<SystemClock>>>,
@@ -630,6 +640,7 @@ impl SwapService {
             })?;
 
         let now_ms = chrono::Utc::now().timestamp_millis();
+        let raw_input_amount = record.quote.input_amount.clone();
         let mut swap = SwapInfo {
             id: Uuid::new_v4(),
             remote_id: Some(record.quote.correlation_id.clone()),
@@ -673,7 +684,8 @@ impl SwapService {
                 let proposal = mgr.prepare_send(
                     account_id,
                     &deposit_address,
-                    &swap.input_amount,
+                    // Wallet send APIs require zatoshis (integer), not formatted units.
+                    &raw_input_amount,
                     swap.deposit_memo.as_deref(),
                     allow_transparent_interaction,
                     &mut tx_svc,
