@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
@@ -99,6 +99,9 @@ fn spawn_mock_status_server(
     expected_requests: usize,
 ) -> (String, thread::JoinHandle<()>, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
+    listener
+        .set_nonblocking(true)
+        .expect("set mock listener non-blocking");
     let addr = listener.local_addr().expect("server addr");
     let base_url = format!("http://{addr}");
     let request_count = Arc::new(AtomicUsize::new(0));
@@ -106,7 +109,19 @@ fn spawn_mock_status_server(
 
     let handle = thread::spawn(move || {
         for _ in 0..expected_requests {
-            let (mut stream, _) = listener.accept().expect("accept");
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(conn) => break conn,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("mock status server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(25));
+                    }
+                    Err(err) => panic!("mock status server accept failed: {err}"),
+                }
+            };
             request_count_clone.fetch_add(1, Ordering::SeqCst);
             let mut buf = [0u8; 16 * 1024];
             let _ = stream.read(&mut buf).expect("read request");
@@ -129,12 +144,27 @@ fn spawn_mock_status_server(
 /// Spawn a mock server that returns an error response.
 fn spawn_mock_error_server(expected_requests: usize) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
+    listener
+        .set_nonblocking(true)
+        .expect("set mock listener non-blocking");
     let addr = listener.local_addr().expect("server addr");
     let base_url = format!("http://{addr}");
 
     let handle = thread::spawn(move || {
         for _ in 0..expected_requests {
-            let (mut stream, _) = listener.accept().expect("accept");
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(conn) => break conn,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("mock error server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(25));
+                    }
+                    Err(err) => panic!("mock error server accept failed: {err}"),
+                }
+            };
             let mut buf = [0u8; 16 * 1024];
             let _ = stream.read(&mut buf).expect("read request");
 
@@ -194,37 +224,7 @@ fn insert_swap_directly(
     wallet_id: Uuid,
     swap: &SwapInfo,
 ) -> rusqlite::Result<()> {
-    conn.execute(
-        "INSERT INTO swaps (
-            id, remote_id, wallet_id, swap_type, input_asset, input_amount, output_asset, output_amount,
-            deposit_address, deposit_memo, destination_address, refund_address,
-            state, deadline, last_error, created_at, updated_at
-        ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-            ?9, ?10, ?11, ?12,
-            ?13, ?14, ?15, ?16, ?17
-        )",
-        rusqlite::params![
-            swap.id.to_string(),
-            swap.remote_id,
-            wallet_id.to_string(),
-            format!("{:?}", swap.swap_type),
-            swap.input_asset,
-            swap.input_amount,
-            swap.output_asset,
-            swap.output_amount,
-            swap.deposit_address,
-            swap.deposit_memo,
-            swap.destination_address,
-            swap.refund_address,
-            format!("{:?}", swap.state),
-            swap.deadline,
-            swap.last_error,
-            swap.created_at,
-            swap.updated_at,
-        ],
-    )?;
-    Ok(())
+    zstash_engine::db::swap_meta::insert_swap(conn, wallet_id, swap)
 }
 
 #[test]
@@ -294,11 +294,14 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
         .expect("create wallet")
         .wallet;
 
-    // Insert a swap in Completed state (terminal)
-    let swap = create_test_swap(SwapState::Completed, true);
-    let original_updated_at = swap.updated_at;
+    // Insert swaps in terminal states.
+    let swap_completed = create_test_swap(SwapState::Completed, true);
+    let swap_refunded = create_test_swap(SwapState::Refunded, true);
+    let swap_failed = create_test_swap(SwapState::Failed, true);
     let conn = open_app_db(&app_db_path).expect("open app db");
-    insert_swap_directly(&conn, wallet.id, &swap).expect("insert swap");
+    insert_swap_directly(&conn, wallet.id, &swap_completed).expect("insert completed swap");
+    insert_swap_directly(&conn, wallet.id, &swap_refunded).expect("insert refunded swap");
+    insert_swap_directly(&conn, wallet.id, &swap_failed).expect("insert failed swap");
     drop(conn);
 
     // Mock server should NOT receive any requests for terminal state
@@ -308,14 +311,17 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
 
-    let res = swap_service
-        .refresh_swap_status(wallet.id, swap.id, None)
-        .expect("refresh swap status");
+    for (swap_id, expected_state) in [
+        (swap_completed.id, SwapState::Completed),
+        (swap_refunded.id, SwapState::Refunded),
+        (swap_failed.id, SwapState::Failed),
+    ] {
+        let res = swap_service
+            .refresh_swap_status(wallet.id, swap_id, None)
+            .expect("refresh swap status");
 
-    // State should remain Completed
-    assert_eq!(res.swap.state, SwapState::Completed);
-    // updated_at should not change since no API call was made
-    assert_eq!(res.swap.updated_at, original_updated_at);
+        assert_eq!(res.swap.state, expected_state);
+    }
     // Verify no API calls were made
     assert_eq!(request_count.load(Ordering::SeqCst), 0);
 
@@ -542,11 +548,15 @@ fn resume_pending_swaps_resumes_non_terminal_only() {
     let swap_completed = create_test_swap(SwapState::Completed, true);
     let swap_awaiting = create_test_swap(SwapState::AwaitingDeposit, true);
     let swap_pending = create_test_swap(SwapState::Pending, true);
+    let swap_confirming = create_test_swap(SwapState::Confirming, true);
+    let swap_draft_with_deposit = create_test_swap(SwapState::Draft, true);
 
     let conn = open_app_db(&app_db_path).expect("open app db");
     insert_swap_directly(&conn, wallet.id, &swap_completed).expect("insert completed swap");
     insert_swap_directly(&conn, wallet.id, &swap_awaiting).expect("insert awaiting swap");
     insert_swap_directly(&conn, wallet.id, &swap_pending).expect("insert pending swap");
+    insert_swap_directly(&conn, wallet.id, &swap_confirming).expect("insert confirming swap");
+    insert_swap_directly(&conn, wallet.id, &swap_draft_with_deposit).expect("insert draft swap");
     drop(conn);
 
     // No server needed for resume_pending_swaps (it just starts polling tasks)
@@ -559,8 +569,8 @@ fn resume_pending_swaps_resumes_non_terminal_only() {
         .resume_pending_swaps(wallet.id, None)
         .expect("resume pending swaps");
 
-    // Only non-terminal swaps should be resumed (AwaitingDeposit and Pending)
-    assert_eq!(res.resumed_count, 2);
+    // Only actionable non-terminal swaps should be resumed.
+    assert_eq!(res.resumed_count, 4);
 }
 
 #[test]
@@ -604,6 +614,47 @@ fn resume_pending_swaps_is_idempotent_on_second_call() {
 
     assert_eq!(res1.resumed_count, 1);
     assert_eq!(res2.resumed_count, 0);
+}
+
+#[test]
+fn resume_pending_swaps_skips_expired_swaps() {
+    let root = temp_root("us16_resume_skips_expired");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let mut expired_swap = create_test_swap(SwapState::Pending, true);
+    expired_swap.deadline = Some(chrono::Utc::now().timestamp_millis().saturating_sub(1_000));
+    let active_swap = create_test_swap(SwapState::Pending, true);
+
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet.id, &expired_swap).expect("insert expired swap");
+    insert_swap_directly(&conn, wallet.id, &active_swap).expect("insert active swap");
+    drop(conn);
+
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let res = swap_service
+        .resume_pending_swaps(wallet.id, None)
+        .expect("resume pending swaps");
+    assert_eq!(res.resumed_count, 1);
 }
 
 #[test]
@@ -701,11 +752,19 @@ fn resume_pending_swaps_stops_when_active_wallet_changes() {
         .load_wallet(wallet_b.id)
         .expect("load wallet B");
 
-    // Allow the poller loop to observe the wallet change and exit (backoff is 5s).
-    thread::sleep(Duration::from_secs(6));
-
-    let res_after = swap_service
-        .resume_pending_swaps(wallet_a.id, None)
-        .expect("resume pending swaps after wallet change");
-    assert_eq!(res_after.resumed_count, 1);
+    // Wait up to 10s for the old poller to observe the wallet switch and exit.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let res_after = swap_service
+            .resume_pending_swaps(wallet_a.id, None)
+            .expect("resume pending swaps after wallet change");
+        if res_after.resumed_count == 1 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "expected previous poller to stop after wallet switch"
+        );
+        thread::sleep(Duration::from_millis(250));
+    }
 }

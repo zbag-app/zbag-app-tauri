@@ -190,31 +190,45 @@ pub async fn zstash_get_supported_tokens(
 }
 
 #[tauri::command(rename = "zstash_refresh_swap_status")]
-pub fn zstash_refresh_swap_status(
+pub async fn zstash_refresh_swap_status(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: RefreshSwapStatusRequest,
-) -> IpcResult<RefreshSwapStatusResponse> {
+) -> Result<IpcResult<RefreshSwapStatusResponse>, ()> {
     if let Err(err) = ensure_schema_version(request.schema_version) {
-        return IpcResult::Err { err };
+        return Ok(IpcResult::Err { err });
     }
 
+    let wallet_manager = Arc::clone(&state.wallet_manager);
+    let swap_service = state.swap_service.clone();
+    let swap_id = request.swap_id;
     let handler = Arc::new(move |event| {
         let _ = events::emit_swap_changed(&app, event);
     });
 
-    map_anyhow(|| {
-        let wallet = {
-            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
-            })?
-        };
+    let join = tauri::async_runtime::spawn_blocking(move || {
+        map_anyhow(|| {
+            let wallet = {
+                let mgr = wallet_manager.lock().expect("mutex poisoned");
+                mgr.active_wallet_info().ok_or_else(|| {
+                    zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                })?
+            };
 
-        state
-            .swap_service
-            .refresh_swap_status(wallet.id, request.swap_id, Some(handler))
-    })
+            swap_service.refresh_swap_status(wallet.id, swap_id, Some(handler))
+        })
+    });
+
+    match join.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(IpcResult::Err {
+            err: IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: "internal error".to_string(),
+                details: None,
+            },
+        }),
+    }
 }
 
 #[tauri::command(rename = "zstash_resume_pending_swaps")]

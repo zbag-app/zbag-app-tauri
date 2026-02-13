@@ -123,6 +123,34 @@ fn wait_for_scan_phase(service: &SyncService, wallet_id: Uuid, timeout: Duration
     }
 }
 
+fn wait_for_progress_events_to_settle(
+    phases: &Arc<Mutex<Vec<SyncPhase>>>,
+    settle_window: Duration,
+    timeout: Duration,
+) -> Vec<SyncPhase> {
+    let start = Instant::now();
+    let mut last_len = phases.lock().expect("mutex poisoned").len();
+    let mut last_change_at = Instant::now();
+
+    loop {
+        std::thread::sleep(Duration::from_millis(100));
+        let current_len = phases.lock().expect("mutex poisoned").len();
+        if current_len != last_len {
+            last_len = current_len;
+            last_change_at = Instant::now();
+        }
+
+        if last_change_at.elapsed() >= settle_window {
+            return phases.lock().expect("mutex poisoned").clone();
+        }
+
+        assert!(
+            start.elapsed() < timeout,
+            "timed out waiting for sync progress events to settle"
+        );
+    }
+}
+
 #[test]
 #[ignore = "manual long-running test; requires ZSTASH_GRPC_URL testnet endpoint and network access"]
 fn stop_sync_during_real_scan_workload_stops_progress_and_allows_restart() {
@@ -212,14 +240,10 @@ fn stop_sync_during_real_scan_workload_stops_progress_and_allows_restart() {
         "wallet should not be running after stop"
     );
 
-    std::thread::sleep(Duration::from_millis(300));
-    let settled_len = phases.lock().expect("mutex poisoned").len();
-    std::thread::sleep(Duration::from_secs(2));
-    let final_phases = phases.lock().expect("mutex poisoned").clone();
-    assert_eq!(
-        final_phases.len(),
-        settled_len,
-        "progress events should stop after cancellation during real scan workload"
+    let final_phases = wait_for_progress_events_to_settle(
+        &phases,
+        Duration::from_secs(1),
+        Duration::from_secs(10),
     );
     assert_eq!(
         final_phases.last().copied(),

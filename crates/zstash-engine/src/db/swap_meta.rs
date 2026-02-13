@@ -128,6 +128,7 @@ pub fn list_pollable_swaps_for_wallet(
     conn: &Connection,
     wallet_id: Uuid,
 ) -> rusqlite::Result<Vec<SwapInfo>> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
     let mut stmt = conn.prepare(
         "SELECT
             id, remote_id, swap_type, input_asset, input_amount, output_asset, output_amount,
@@ -137,11 +138,15 @@ pub fn list_pollable_swaps_for_wallet(
          WHERE wallet_id = ?1
            AND deposit_address IS NOT NULL
            AND state IN ('Draft', 'AwaitingDeposit', 'Pending', 'Confirming')
+           AND (deadline IS NULL OR deadline > ?2)
          ORDER BY created_at DESC",
     )?;
 
     let swaps = stmt
-        .query_map([wallet_id.to_string()], swap_info_from_list_row)?
+        .query_map(
+            params![wallet_id.to_string(), now_ms],
+            swap_info_from_list_row,
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(swaps)

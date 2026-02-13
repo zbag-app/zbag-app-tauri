@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -43,6 +43,7 @@ pub struct SwapService {
 struct State {
     quotes: HashMap<String, QuoteRecord>,
     jobs: HashMap<Uuid, SwapJob>,
+    refresh_inflight: HashSet<Uuid>,
     token_decimals: HashMap<String, u8>,
     token_decimals_updated_ms: Option<i64>,
 }
@@ -64,6 +65,22 @@ struct SwapJob {
 struct SwapJobGuard {
     state: Arc<Mutex<State>>,
     swap_id: Uuid,
+}
+
+#[derive(Debug)]
+struct RefreshInFlightGuard {
+    state: Arc<Mutex<State>>,
+    swap_id: Uuid,
+}
+
+impl Drop for RefreshInFlightGuard {
+    fn drop(&mut self) {
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        state.refresh_inflight.remove(&self.swap_id);
+    }
 }
 
 impl Drop for SwapJobGuard {
@@ -170,6 +187,7 @@ impl SwapService {
             state: Arc::new(Mutex::new(State {
                 quotes: HashMap::new(),
                 jobs: HashMap::new(),
+                refresh_inflight: HashSet::new(),
                 token_decimals: HashMap::new(),
                 token_decimals_updated_ms: None,
             })),
@@ -765,6 +783,26 @@ impl SwapService {
             });
         };
 
+        let refresh_acquired = {
+            let mut state = self.state.lock().expect("mutex poisoned");
+            state.refresh_inflight.insert(swap_id)
+        };
+        if !refresh_acquired {
+            tracing::debug!(
+                wallet_id = %wallet_id,
+                swap_id = %swap_id,
+                "refresh_swap_status skipped: refresh already in flight"
+            );
+            return Ok(RefreshSwapStatusResponse {
+                schema_version: SCHEMA_VERSION,
+                swap,
+            });
+        }
+        let _refresh_guard = RefreshInFlightGuard {
+            state: Arc::clone(&self.state),
+            swap_id,
+        };
+
         // Query remote API for latest status
         let status_res = block_on(async {
             match tokio::time::timeout(
@@ -891,6 +929,9 @@ impl SwapService {
         let state_for_task = Arc::clone(&state);
         let spawn_result = std::panic::catch_unwind(AssertUnwindSafe(|| {
             crate::tokio_runtime::spawn(async move {
+                // Runtime task completion always removes `jobs[swap_id]` via Drop.
+                // The outer `catch_unwind` path below only handles panics that happen
+                // before the async task is successfully spawned.
                 let _job_guard = SwapJobGuard {
                     state: state_for_task,
                     swap_id,
