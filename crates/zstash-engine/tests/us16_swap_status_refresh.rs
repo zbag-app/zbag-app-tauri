@@ -617,7 +617,7 @@ fn resume_pending_swaps_is_idempotent_on_second_call() {
 }
 
 #[test]
-fn resume_pending_swaps_skips_expired_swaps() {
+fn resume_pending_swaps_skips_expired_awaiting_deposit_swaps_only() {
     let root = temp_root("us16_resume_skips_expired");
     let app_db_path = root.join("app.db");
     let wallets_root = root.join("wallets");
@@ -637,12 +637,19 @@ fn resume_pending_swaps_skips_expired_swaps() {
         .expect("create wallet")
         .wallet;
 
-    let mut expired_swap = create_test_swap(SwapState::Pending, true);
-    expired_swap.deadline = Some(chrono::Utc::now().timestamp_millis().saturating_sub(1_000));
+    let mut expired_pending_swap = create_test_swap(SwapState::Pending, true);
+    expired_pending_swap.deadline =
+        Some(chrono::Utc::now().timestamp_millis().saturating_sub(1_000));
+    let mut expired_awaiting_swap = create_test_swap(SwapState::AwaitingDeposit, true);
+    expired_awaiting_swap.deadline =
+        Some(chrono::Utc::now().timestamp_millis().saturating_sub(1_000));
     let active_swap = create_test_swap(SwapState::Pending, true);
 
     let conn = open_app_db(&app_db_path).expect("open app db");
-    insert_swap_directly(&conn, wallet.id, &expired_swap).expect("insert expired swap");
+    insert_swap_directly(&conn, wallet.id, &expired_pending_swap)
+        .expect("insert expired pending swap");
+    insert_swap_directly(&conn, wallet.id, &expired_awaiting_swap)
+        .expect("insert expired awaiting-deposit swap");
     insert_swap_directly(&conn, wallet.id, &active_swap).expect("insert active swap");
     drop(conn);
 
@@ -654,7 +661,7 @@ fn resume_pending_swaps_skips_expired_swaps() {
     let res = swap_service
         .resume_pending_swaps(wallet.id, None)
         .expect("resume pending swaps");
-    assert_eq!(res.resumed_count, 1);
+    assert_eq!(res.resumed_count, 2);
 }
 
 #[test]

@@ -123,7 +123,8 @@ pub fn list_swaps_for_wallet(
 /// - **Confirming**: Included because the remote status may advance to a terminal state while
 ///   the local DB still shows an intermediate state.
 ///
-/// The `deposit_address IS NOT NULL` predicate ensures we only resume swaps that are actionable.
+/// `deadline` is only applied to pre-confirmation states (`Draft` and `AwaitingDeposit`)
+/// so expired swaps in `Pending`/`Confirming` can still reach terminal outcomes on resume.
 pub fn list_pollable_swaps_for_wallet(
     conn: &Connection,
     wallet_id: Uuid,
@@ -137,8 +138,13 @@ pub fn list_pollable_swaps_for_wallet(
          FROM swaps
          WHERE wallet_id = ?1
            AND deposit_address IS NOT NULL
-           AND state IN ('Draft', 'AwaitingDeposit', 'Pending', 'Confirming')
-           AND (deadline IS NULL OR deadline > ?2)
+           AND (
+               state IN ('Pending', 'Confirming')
+               OR (
+                   state IN ('Draft', 'AwaitingDeposit')
+                   AND (deadline IS NULL OR deadline > ?2)
+               )
+           )
          ORDER BY created_at DESC",
     )?;
 

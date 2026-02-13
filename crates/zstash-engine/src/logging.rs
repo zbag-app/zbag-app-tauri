@@ -200,7 +200,7 @@ fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
     }
 }
 
-#[cfg(any(debug_assertions, feature = "temporary-debug-logging"))]
+#[cfg(any(debug_assertions, feature = "temporary-debug-logging", test))]
 fn parse_env_flag_value(value: &str) -> bool {
     match value.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => true,
