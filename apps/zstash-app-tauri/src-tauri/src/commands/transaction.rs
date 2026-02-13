@@ -181,12 +181,14 @@ pub async fn zstash_retry_broadcast(
         }
     };
 
-    let execute_wallet_manager = Arc::clone(&wallet_manager);
     let execute_join = tauri::async_runtime::spawn_blocking(move || {
         map_anyhow(|| {
-            let mut mgr = execute_wallet_manager.lock().expect("mutex poisoned");
-            let txid =
-                mgr.execute_retry_broadcast_task(task, Some(handler), Some(failover_handler))?;
+            let txid = zstash_engine::wallet_manager::WalletManager::
+                execute_prepared_retry_broadcast_task(
+                    task,
+                    Some(handler),
+                    Some(failover_handler),
+                )?;
             Ok(RetryBroadcastResponse {
                 schema_version: SCHEMA_VERSION,
                 txid,

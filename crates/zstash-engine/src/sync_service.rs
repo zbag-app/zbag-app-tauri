@@ -629,7 +629,35 @@ impl SyncService {
             // Backfill account birthday tree sizes from lightwalletd (required for accurate
             // output-based progress ratios in WalletSummary).
             let (conn, backfill_result) =
-                backfill_birthday_tree_sizes(sync_wallet_conn, &client, wallet_id).await;
+                match backfill_birthday_tree_sizes(sync_wallet_conn, &client, wallet_id).await {
+                    Ok(result) => result,
+                    Err(err) => {
+                        tracing::error!(
+                            wallet_id = %wallet_id,
+                            error = ?err,
+                            "backfill worker failed"
+                        );
+                        update(SyncProgress {
+                            phase: SyncPhase::Error,
+                            scan_frontier_height: 0,
+                            wallet_tip_height: 0,
+                            progress_percent: 0,
+                            eta_seconds: None,
+                            retry_in_seconds: None,
+                            error_message: Some("Sync worker failed".to_string()),
+                        });
+                        balance_emitter
+                            .maybe_emit(
+                                &mut balance_emit_throttle,
+                                BalanceEmitTrigger::ForcedMilestone,
+                            )
+                            .await;
+                        let mut state = state.lock().expect("mutex poisoned");
+                        state.jobs.remove(&wallet_id);
+                        state.started_at.remove(&wallet_id);
+                        return;
+                    }
+                };
             sync_wallet_conn = conn;
             if let Err(err) = backfill_result {
                 tracing::warn!(
@@ -674,7 +702,26 @@ impl SyncService {
                         tracing::warn!(wallet_id = %wallet_id, error = ?err, "failed to get chain tip");
                         // Get progress on blocking thread
                         let (conn, progress_percent, fully_scanned, chain_height) =
-                            get_progress_blocking(sync_wallet_conn, params).await;
+                            match get_progress_blocking(sync_wallet_conn, params).await {
+                                Ok(result) => result,
+                                Err(join_err) => {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "sync progress worker failed"
+                                    );
+                                    update(SyncProgress {
+                                        phase: SyncPhase::Error,
+                                        scan_frontier_height: 0,
+                                        wallet_tip_height: 0,
+                                        progress_percent: 0,
+                                        eta_seconds: None,
+                                        retry_in_seconds: None,
+                                        error_message: Some("Sync worker failed".to_string()),
+                                    });
+                                    break 'auto_sync;
+                                }
+                            };
                         sync_wallet_conn = conn;
                         let wallet_tip_height = chain_height.map(u32::from).unwrap_or(0);
                         let retry_in_seconds = poll_backoff.as_secs();
@@ -705,7 +752,26 @@ impl SyncService {
 
                 // Update chain tip in wallet on blocking thread (retry with backoff on transient errors).
                 let (conn, update_result) =
-                    update_chain_tip_blocking(sync_wallet_conn, params, chain_tip).await;
+                    match update_chain_tip_blocking(sync_wallet_conn, params, chain_tip).await {
+                        Ok(result) => result,
+                        Err(join_err) => {
+                            tracing::error!(
+                                wallet_id = %wallet_id,
+                                error = ?join_err,
+                                "update_chain_tip worker failed"
+                            );
+                            update(SyncProgress {
+                                phase: SyncPhase::Error,
+                                scan_frontier_height: 0,
+                                wallet_tip_height: u32::from(chain_tip),
+                                progress_percent: 0,
+                                eta_seconds: None,
+                                retry_in_seconds: None,
+                                error_message: Some("Sync worker failed".to_string()),
+                            });
+                            break 'auto_sync;
+                        }
+                    };
                 sync_wallet_conn = conn;
                 if let Err(err) = update_result {
                     tracing::warn!(
@@ -714,7 +780,26 @@ impl SyncService {
                         "failed to update chain tip"
                     );
                     let (conn, progress_percent, fully_scanned, _) =
-                        get_progress_blocking(sync_wallet_conn, params).await;
+                        match get_progress_blocking(sync_wallet_conn, params).await {
+                            Ok(result) => result,
+                            Err(join_err) => {
+                                tracing::error!(
+                                    wallet_id = %wallet_id,
+                                    error = ?join_err,
+                                    "sync progress worker failed"
+                                );
+                                update(SyncProgress {
+                                    phase: SyncPhase::Error,
+                                    scan_frontier_height: 0,
+                                    wallet_tip_height: u32::from(chain_tip),
+                                    progress_percent: 0,
+                                    eta_seconds: None,
+                                    retry_in_seconds: None,
+                                    error_message: Some("Sync worker failed".to_string()),
+                                });
+                                break 'auto_sync;
+                            }
+                        };
                     sync_wallet_conn = conn;
                     let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
@@ -755,7 +840,26 @@ impl SyncService {
 
                     // Get suggested scan ranges on blocking thread
                     let (conn, ranges_result) =
-                        suggest_scan_ranges_blocking(sync_wallet_conn, params).await;
+                        match suggest_scan_ranges_blocking(sync_wallet_conn, params).await {
+                            Ok(result) => result,
+                            Err(join_err) => {
+                                tracing::error!(
+                                    wallet_id = %wallet_id,
+                                    error = ?join_err,
+                                    "suggest_scan_ranges worker failed"
+                                );
+                                update(SyncProgress {
+                                    phase: SyncPhase::Error,
+                                    scan_frontier_height: 0,
+                                    wallet_tip_height: u32::from(chain_tip),
+                                    progress_percent: 0,
+                                    eta_seconds: None,
+                                    retry_in_seconds: None,
+                                    error_message: Some("Sync worker failed".to_string()),
+                                });
+                                break 'auto_sync;
+                            }
+                        };
                     sync_wallet_conn = conn;
                     let ranges = match ranges_result {
                         Ok(ranges) => ranges,
@@ -817,7 +921,26 @@ impl SyncService {
 
                         // Get wallet tip on blocking thread
                         let (conn, _, _, chain_height) =
-                            get_progress_blocking(sync_wallet_conn, params).await;
+                            match get_progress_blocking(sync_wallet_conn, params).await {
+                                Ok(result) => result,
+                                Err(join_err) => {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "sync progress worker failed"
+                                    );
+                                    update(SyncProgress {
+                                        phase: SyncPhase::Error,
+                                        scan_frontier_height: 0,
+                                        wallet_tip_height: u32::from(chain_tip),
+                                        progress_percent: 0,
+                                        eta_seconds: None,
+                                        retry_in_seconds: None,
+                                        error_message: Some("Sync worker failed".to_string()),
+                                    });
+                                    break 'auto_sync;
+                                }
+                            };
                         sync_wallet_conn = conn;
                         let wallet_tip = chain_height.unwrap_or_else(|| {
                             tracing::debug!("chain height unavailable for progress calculation");
@@ -917,7 +1040,26 @@ impl SyncService {
                         // Update phase to downloading/scanning (pipelined)
                         // Get progress on blocking thread
                         let (conn, progress_percent, fully_scanned, _) =
-                            get_progress_blocking(sync_wallet_conn, params).await;
+                            match get_progress_blocking(sync_wallet_conn, params).await {
+                                Ok(result) => result,
+                                Err(join_err) => {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "sync progress worker failed"
+                                    );
+                                    update(SyncProgress {
+                                        phase: SyncPhase::Error,
+                                        scan_frontier_height: 0,
+                                        wallet_tip_height: u32::from(chain_tip),
+                                        progress_percent: 0,
+                                        eta_seconds: None,
+                                        retry_in_seconds: None,
+                                        error_message: Some("Sync worker failed".to_string()),
+                                    });
+                                    break 'auto_sync;
+                                }
+                            };
                         sync_wallet_conn = conn;
                         let initial_frontier =
                             fully_scanned.max(u32::from(range_start.saturating_sub(1)));
@@ -973,13 +1115,35 @@ impl SyncService {
                                     }
 
                                     // Write blocks to cache on blocking thread
-                                    let (db, block_metas) = write_blocks_to_cache_async(
+                                    let (db, block_metas) = match write_blocks_to_cache_async(
                                         blocks_dir.clone(),
                                         std::mem::take(&mut batch.blocks),
                                         fsblock_db,
                                         wallet_id,
                                     )
-                                    .await;
+                                    .await
+                                    {
+                                        Ok(result) => result,
+                                        Err(err) => {
+                                            tracing::error!(
+                                                wallet_id = %wallet_id,
+                                                error = ?err,
+                                                "write_blocks_to_cache worker failed"
+                                            );
+                                            update(SyncProgress {
+                                                phase: SyncPhase::Error,
+                                                scan_frontier_height: 0,
+                                                wallet_tip_height: u32::from(chain_tip),
+                                                progress_percent: 0,
+                                                eta_seconds: None,
+                                                retry_in_seconds: None,
+                                                error_message: Some(
+                                                    "Sync worker failed".to_string(),
+                                                ),
+                                            });
+                                            break 'auto_sync;
+                                        }
+                                    };
                                     fsblock_db = db;
 
                                     // Scan the batch immediately after caching
@@ -1010,7 +1174,7 @@ impl SyncService {
                                     };
                                     // Scan blocks on blocking thread
                                     let scan_started_at = Instant::now();
-                                    let scan_result = scan_batch_blocking(
+                                    let scan_result = match scan_batch_blocking(
                                         sync_wallet_conn,
                                         fsblock_db,
                                         params,
@@ -1022,7 +1186,29 @@ impl SyncService {
                                         Arc::clone(&state),
                                         wallet_id,
                                     )
-                                    .await;
+                                    .await
+                                    {
+                                        Ok(result) => result,
+                                        Err(err) => {
+                                            tracing::error!(
+                                                wallet_id = %wallet_id,
+                                                error = ?err,
+                                                "scan_batch worker failed"
+                                            );
+                                            update(SyncProgress {
+                                                phase: SyncPhase::Error,
+                                                scan_frontier_height: 0,
+                                                wallet_tip_height: u32::from(chain_tip),
+                                                progress_percent: 0,
+                                                eta_seconds: None,
+                                                retry_in_seconds: None,
+                                                error_message: Some(
+                                                    "Sync worker failed".to_string(),
+                                                ),
+                                            });
+                                            break 'auto_sync;
+                                        }
+                                    };
                                     let scan_elapsed = scan_started_at.elapsed();
 
                                     let ScanBatchResult {
@@ -1149,7 +1335,26 @@ impl SyncService {
 
                         // Final progress update for the range (on blocking thread)
                         let (conn, progress_percent, fully_scanned, _) =
-                            get_progress_blocking(sync_wallet_conn, params).await;
+                            match get_progress_blocking(sync_wallet_conn, params).await {
+                                Ok(result) => result,
+                                Err(join_err) => {
+                                    tracing::error!(
+                                        wallet_id = %wallet_id,
+                                        error = ?join_err,
+                                        "sync progress worker failed"
+                                    );
+                                    update(SyncProgress {
+                                        phase: SyncPhase::Error,
+                                        scan_frontier_height: 0,
+                                        wallet_tip_height: u32::from(chain_tip),
+                                        progress_percent: 0,
+                                        eta_seconds: None,
+                                        retry_in_seconds: None,
+                                        error_message: Some("Sync worker failed".to_string()),
+                                    });
+                                    break 'auto_sync;
+                                }
+                            };
                         sync_wallet_conn = conn;
                         update(SyncProgress {
                             phase: SyncPhase::Scanning,
@@ -1165,7 +1370,26 @@ impl SyncService {
 
                 if sync_error {
                     let (conn, progress_percent, fully_scanned, _) =
-                        get_progress_blocking(sync_wallet_conn, params).await;
+                        match get_progress_blocking(sync_wallet_conn, params).await {
+                            Ok(result) => result,
+                            Err(join_err) => {
+                                tracing::error!(
+                                    wallet_id = %wallet_id,
+                                    error = ?join_err,
+                                    "sync progress worker failed during error handling"
+                                );
+                                update(SyncProgress {
+                                    phase: SyncPhase::Error,
+                                    scan_frontier_height: 0,
+                                    wallet_tip_height: u32::from(chain_tip),
+                                    progress_percent: 0,
+                                    eta_seconds: None,
+                                    retry_in_seconds: None,
+                                    error_message: Some("Sync worker failed".to_string()),
+                                });
+                                break 'auto_sync;
+                            }
+                        };
                     sync_wallet_conn = conn;
                     let retry_in_seconds = poll_backoff.as_secs();
                     update(SyncProgress {
@@ -1560,11 +1784,20 @@ impl BalanceEmitter<'_> {
         };
 
         // Read balances on blocking thread, emit callbacks on async thread.
-        let (db, balances) =
-            fetch_balances_blocking(db, self.network, self.account_ids.to_vec()).await;
-        *self.balance_db = Some(db);
-        emit_balance_events(self.state, self.wallet_id, handler, balances);
-        throttle.record_emit(Instant::now());
+        match fetch_balances_blocking(db, self.network, self.account_ids.to_vec()).await {
+            Ok((db, balances)) => {
+                *self.balance_db = Some(db);
+                emit_balance_events(self.state, self.wallet_id, handler, balances);
+                throttle.record_emit(Instant::now());
+            }
+            Err(err) => {
+                tracing::warn!(
+                    wallet_id = %self.wallet_id,
+                    error = ?err,
+                    "failed to fetch balances on blocking worker"
+                );
+            }
+        }
     }
 }
 
@@ -1864,8 +2097,8 @@ where
 /// Query birthday heights that need tree size backfill on a blocking thread.
 async fn query_birthday_heights_blocking(
     conn: Connection,
-) -> (Connection, anyhow::Result<Vec<u32>>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(Connection, anyhow::Result<Vec<u32>>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let result = (|| {
                 let mut stmt = conn
@@ -1897,8 +2130,8 @@ async fn update_birthday_tree_sizes_blocking(
     sapling_tree_size: u64,
     orchard_tree_size: u64,
     wallet_id: uuid::Uuid,
-) -> (Connection, anyhow::Result<usize>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(Connection, anyhow::Result<usize>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let result = conn
                 .execute(
@@ -1937,13 +2170,16 @@ async fn backfill_birthday_tree_sizes(
     conn: Connection,
     client: &zstash_network::grpc_client::GrpcClient,
     wallet_id: uuid::Uuid,
-) -> (Connection, anyhow::Result<()>) {
+) -> anyhow::Result<(Connection, anyhow::Result<()>)> {
     // Query birthday heights on blocking thread
-    let (mut conn, heights_result) = query_birthday_heights_blocking(conn).await;
+    let (mut conn, heights_result) = match query_birthday_heights_blocking(conn).await {
+        Ok(result) => result,
+        Err(err) => return Err(err),
+    };
 
     let birthday_heights = match heights_result {
         Ok(heights) => heights,
-        Err(e) => return (conn, Err(e)),
+        Err(e) => return Ok((conn, Err(e))),
     };
 
     for birthday_height in birthday_heights {
@@ -1953,29 +2189,35 @@ async fn backfill_birthday_tree_sizes(
         // Async network call
         let chain_state = match fetch_chain_state(client, prior_height, wallet_id).await {
             Ok(state) => state,
-            Err(e) => return (conn, Err(e)),
+            Err(e) => return Ok((conn, Err(e))),
         };
 
         let sapling_tree_size = chain_state.final_sapling_tree().tree_size();
         let orchard_tree_size = chain_state.final_orchard_tree().tree_size();
 
         // Update on blocking thread
-        let (returned_conn, update_result) = update_birthday_tree_sizes_blocking(
+        let (returned_conn, update_result) = match update_birthday_tree_sizes_blocking(
             conn,
             birthday_height,
             sapling_tree_size,
             orchard_tree_size,
             wallet_id,
         )
-        .await;
+        .await
+        {
+            Ok(result) => result,
+            Err(err) => {
+                return Err(err);
+            }
+        };
         conn = returned_conn;
 
         if let Err(e) = update_result {
-            return (conn, Err(e));
+            return Ok((conn, Err(e)));
         }
     }
 
-    (conn, Ok(()))
+    Ok((conn, Ok(())))
 }
 
 /// Write a compact block to the filesystem block cache.
@@ -2392,23 +2634,22 @@ async fn download_blocks_with_retry(
 // These functions move blocking work onto the Tokio blocking thread pool to
 // avoid starving async worker threads during sync.
 
-async fn join_spawn_blocking_or_panic<T>(
+async fn join_spawn_blocking<T>(
     join: tokio::task::JoinHandle<T>,
     operation: &'static str,
-) -> T {
-    match join.await {
-        Ok(value) => value,
-        Err(err) => panic!("{operation}: spawn_blocking panicked: {err}"),
-    }
+) -> anyhow::Result<T> {
+    join.await
+        .with_context(|| format!("{operation}: spawn_blocking task failed"))
 }
 
 /// Initialize block cache directory on a blocking thread.
-async fn create_cache_dir_async(cache_dir: PathBuf) -> std::io::Result<()> {
-    join_spawn_blocking_or_panic(
+async fn create_cache_dir_async(cache_dir: PathBuf) -> anyhow::Result<()> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || create_dir_all_secure(&cache_dir)),
         "create_cache_dir_async",
     )
-    .await
+    .await??;
+    Ok(())
 }
 
 /// Count memo enhancement candidates on a blocking thread.
@@ -2441,8 +2682,8 @@ async fn get_txids_needing_memo_enhancement_batch_blocking(
 async fn init_fsblock_db_async(
     cache_dir: PathBuf,
     wallet_id: uuid::Uuid,
-) -> Result<FsBlockDb, zcash_client_sqlite::FsBlockDbError> {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<FsBlockDb> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let mut db = FsBlockDb::for_path(&cache_dir)?;
             // Initialize the block metadata database schema
@@ -2453,11 +2694,12 @@ async fn init_fsblock_db_async(
                     "failed to init blockmeta db schema"
                 );
             }
-            Ok(db)
+            Ok::<FsBlockDb, zcash_client_sqlite::FsBlockDbError>(db)
         }),
         "init_fsblock_db_async",
     )
-    .await
+    .await?
+    .map_err(|err| anyhow::anyhow!("failed to initialize fs block db: {err:?}"))
 }
 
 /// Remove cache directory on a blocking thread.
@@ -2485,8 +2727,8 @@ async fn write_blocks_to_cache_async(
     blocks: Vec<CompactBlock>,
     fsblock_db: FsBlockDb,
     wallet_id: uuid::Uuid,
-) -> (FsBlockDb, Vec<BlockMeta>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(FsBlockDb, Vec<BlockMeta>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let mut block_metas = Vec::with_capacity(blocks.len());
             for block in &blocks {
@@ -2553,10 +2795,10 @@ async fn scan_batch_blocking(
     batch_range_end: BlockHeight,
     state: Arc<Mutex<State>>,
     wallet_id: uuid::Uuid,
-) -> ScanBatchResult {
+) -> anyhow::Result<ScanBatchResult> {
     let in_flight = BlockingScanInFlightGuard::acquire(state, wallet_id);
 
-    join_spawn_blocking_or_panic(
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             #[cfg(test)]
             let _finish_guard = blocking_scan_test_hook::enter_blocking_scan();
@@ -2704,8 +2946,8 @@ async fn update_chain_tip_blocking(
     mut conn: Connection,
     params: zcash_protocol::consensus::Network,
     chain_tip: BlockHeight,
-) -> (Connection, Result<(), String>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(Connection, Result<(), String>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut conn,
@@ -2727,11 +2969,11 @@ async fn update_chain_tip_blocking(
 async fn suggest_scan_ranges_blocking(
     mut conn: Connection,
     params: zcash_protocol::consensus::Network,
-) -> (
+) -> anyhow::Result<(
     Connection,
     Result<Vec<zcash_client_backend::data_api::scanning::ScanRange>, String>,
-) {
-    join_spawn_blocking_or_panic(
+)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut conn,
@@ -2753,8 +2995,8 @@ async fn suggest_scan_ranges_blocking(
 async fn get_progress_blocking(
     mut conn: Connection,
     params: zcash_protocol::consensus::Network,
-) -> (Connection, u8, u32, Option<BlockHeight>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(Connection, u8, u32, Option<BlockHeight>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let wdb = zcash_client_sqlite::WalletDb::from_connection(
                 &mut conn,
@@ -2781,8 +3023,8 @@ async fn fetch_balances_blocking(
     conn: Connection,
     network: Network,
     account_ids: Vec<u32>,
-) -> (Connection, Vec<(u32, Balance)>) {
-    join_spawn_blocking_or_panic(
+) -> anyhow::Result<(Connection, Vec<(u32, Balance)>)> {
+    join_spawn_blocking(
         crate::tokio_runtime::spawn_blocking(move || {
             let mut conn = conn;
             let mut balances = Vec::with_capacity(account_ids.len());
@@ -3174,7 +3416,8 @@ mod tests {
                 Arc::clone(&state_for_task),
                 wallet_id,
             )
-            .await;
+            .await
+            .expect("scan batch should not fail");
 
             if let Some(handler) = on_progress_after_scan {
                 let progress = SyncProgress {
@@ -3249,7 +3492,8 @@ mod tests {
                 Arc::clone(&state_for_task),
                 wallet_id,
             )
-            .await;
+            .await
+            .expect("scan batch should not fail");
 
             if let Some(handler) = on_progress_after_scan {
                 let progress = SyncProgress {
