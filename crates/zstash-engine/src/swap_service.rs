@@ -692,7 +692,7 @@ impl SwapService {
                 )?;
 
                 let (ctx, spending_key) =
-                    mgr.prepare_confirm_send(&proposal.proposal_id, reauth_token, &tx_svc)?;
+                    mgr.prepare_confirm_send(&proposal.proposal_id, reauth_token, &mut tx_svc)?;
                 (ctx, spending_key, proposal.proposal_id)
             };
 

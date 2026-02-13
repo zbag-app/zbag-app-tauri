@@ -110,9 +110,9 @@ pub fn zstash_confirm_send(
         // Phase 1: Extract context while holding wallet_manager lock briefly
         let (ctx, spending_key, proposal_id) = {
             let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+            let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
             let (ctx, spending_key) =
-                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &tx_svc)?;
+                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &mut tx_svc)?;
             (ctx, spending_key, request.proposal_id.clone())
         };
         // wallet_manager lock is released here

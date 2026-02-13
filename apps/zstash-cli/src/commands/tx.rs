@@ -206,8 +206,12 @@ pub async fn run(
                 // Phase 1: Get context
                 let (ctx, spending_key) = {
                     let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                    let tx_svc = state.tx_service.lock().expect("mutex poisoned");
-                    wm.prepare_confirm_send(&prepare_response.proposal_id, &reauth_token, &tx_svc)?
+                    let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                    wm.prepare_confirm_send(
+                        &prepare_response.proposal_id,
+                        &reauth_token,
+                        &mut tx_svc,
+                    )?
                 };
 
                 // Phase 2: Expensive operations outside mutex

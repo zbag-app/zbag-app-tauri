@@ -32,7 +32,6 @@ use crate::error::ipc_err;
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{ServerFailoverEventHandler, TxEventHandler, TxService};
-use rusqlite::OpenFlags;
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
 use zstash_core::ipc::v1::commands::job::{
@@ -941,6 +940,7 @@ impl WalletManager {
         self.sync_stop_requested.remove(&wallet_id);
         self.last_emitted_status.remove(&wallet_id);
         self.backup_challenges.remove(&wallet_id);
+        self.job_service.clear_finished_jobs(wallet_id);
         tx_service.clear_proposals_for_wallet(wallet_id);
 
         // Deactivate the wallet
@@ -1846,7 +1846,7 @@ impl WalletManager {
         &mut self,
         proposal_id: &str,
         reauth_token: &str,
-        tx_service: &TxService<SystemClock>,
+        tx_service: &mut TxService<SystemClock>,
     ) -> anyhow::Result<(
         TxOperationContext,
         zcash_client_backend::keys::UnifiedSpendingKey,
@@ -1865,9 +1865,8 @@ impl WalletManager {
 
         let wallet_id = active.wallet.id;
 
-        let proposal_account_id = tx_service
-            .proposal_account_id(proposal_id)
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+        let proposal_account_id =
+            tx_service.validate_proposal_for_wallet(proposal_id, wallet_id)?;
 
         let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
 
@@ -2211,9 +2210,8 @@ impl WalletManager {
         let wallet_dir = active.wallet_dir.clone();
         let wallet_dek = self.unlocked_wallet_dek(wallet_id)?;
 
-        let proposal_account_id = tx_service
-            .proposal_account_id(proposal_id)
-            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+        let proposal_account_id =
+            tx_service.validate_proposal_for_wallet(proposal_id, wallet_id)?;
 
         let spending_key = self.derive_unified_spending_key(wallet_id, proposal_account_id)?;
 
@@ -2878,32 +2876,14 @@ pub fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::N
 /// outside the wallet_manager mutex, allowing other operations to proceed concurrently.
 pub fn open_wallet_db_for_tx(ctx: &TxOperationContext) -> anyhow::Result<rusqlite::Connection> {
     let wallet_db_path = ctx.wallet_dir.join("wallet.sqlite");
-
-    let conn =
-        rusqlite::Connection::open_with_flags(&wallet_db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-            .with_context(|| format!("failed to open wallet db: {}", wallet_db_path.display()))?;
-
-    let mut dek_hex = ctx
-        .dek
-        .0
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
-    let mut pragma = format!("PRAGMA key = \"x'{dek_hex}'\";");
-    conn.execute_batch(&pragma)
-        .context("failed to apply wallet db encryption key")?;
-
-    dek_hex.zeroize();
-    pragma.zeroize();
-
-    // Force an early read to detect an incorrect key.
-    let _: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-        .context("wallet db is not readable (incorrect key or corrupted db)")?;
-
-    rusqlite::vtab::array::load_module(&conn).context("failed to load sqlite array module")?;
-
-    Ok(conn)
+    open_sqlcipher_db(
+        &wallet_db_path,
+        &ctx.dek,
+        OpenSqlcipherOptions {
+            create_if_missing: false,
+            load_array_module: true,
+        },
+    )
 }
 
 fn mnemonic_aad(wallet_id: Uuid, network: Network) -> String {

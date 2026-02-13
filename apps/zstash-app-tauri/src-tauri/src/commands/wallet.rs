@@ -137,8 +137,9 @@ pub fn zstash_load_wallet(
         let should_auto_start_sync = resp.lock_status == WalletLockStatus::Unlocked;
 
         // Keep lock ordering consistent across commands: wallet_manager -> tx_service.
-        // Drop tx_service before taking wallet_manager again to avoid inversion deadlocks.
+        // Drop current guards before taking wallet_manager again to avoid self-deadlock.
         drop(tx_svc);
+        drop(mgr);
 
         if should_auto_start_sync {
             // Auto-start sync (best effort). LoadWallet should succeed even if sync can't start.
