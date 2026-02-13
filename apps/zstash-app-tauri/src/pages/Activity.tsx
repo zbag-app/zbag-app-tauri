@@ -24,6 +24,19 @@ interface MemoDisplayProps {
 const SYNC_REFRESH_MIN_INTERVAL_MS = 1500;
 const SYNC_REFRESH_BLOCK_THRESHOLD = 250;
 const SYNC_NEAR_TIP_LAG_BLOCKS = 1;
+type LiveSubscriptionKey = 'sync' | 'transaction' | 'swap';
+
+const LIVE_SUBSCRIPTION_LABELS: Record<LiveSubscriptionKey, string> = {
+  sync: 'sync progress',
+  transaction: 'transaction updates',
+  swap: 'swap updates',
+};
+
+const EMPTY_SUBSCRIPTION_ERRORS: Record<LiveSubscriptionKey, string | null> = {
+  sync: null,
+  transaction: null,
+  swap: null,
+};
 
 function MemoDisplay({ tx, isExpanded, onToggleExpanded, copiedMemo, copyError, onCopyMemo }: MemoDisplayProps) {
   const totalMemos = tx.memo_count;
@@ -125,6 +138,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set());
   const [copiedMemo, setCopiedMemo] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [subscriptionErrors, setSubscriptionErrors] = useState<
+    Record<LiveSubscriptionKey, string | null>
+  >({ ...EMPTY_SUBSCRIPTION_ERRORS });
+  const [subscriptionRetryToken, setSubscriptionRetryToken] = useState(0);
   const lastSyncFrontierRef = useRef<number | null>(null);
   const lastSyncRefreshAtRef = useRef(0);
   const frontierAtLastSyncRefreshRef = useRef<number | null>(null);
@@ -142,6 +159,14 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     () => transactions.some((tx) => tx.status === 'Pending'),
     [transactions]
   );
+  const failedSubscriptionLabels = useMemo(
+    () =>
+      (Object.entries(subscriptionErrors) as [LiveSubscriptionKey, string | null][])
+        .filter(([, message]) => message != null)
+        .map(([key]) => LIVE_SUBSCRIPTION_LABELS[key]),
+    [subscriptionErrors]
+  );
+  const hasSubscriptionFailure = failedSubscriptionLabels.length > 0;
 
   const load = useCallback(
     async (nextOffset: number) => {
@@ -172,6 +197,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     setRetryTxid(null);
     setRetryPassword('');
     setRetryError(null);
+    setSubscriptionErrors({ ...EMPTY_SUBSCRIPTION_ERRORS });
     setOffset(0);
     offsetRef.current = 0;
     setTransactions([]);
@@ -209,6 +235,28 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       syncRefreshInFlightRef.current = false;
     });
   }, [load]);
+
+  const markSubscriptionHealthy = useCallback((key: LiveSubscriptionKey) => {
+    setSubscriptionErrors((prev) => (prev[key] == null ? prev : { ...prev, [key]: null }));
+  }, []);
+
+  const markSubscriptionFailed = useCallback((key: LiveSubscriptionKey, err: unknown) => {
+    const message = err instanceof Error ? err.message : 'Unknown subscription error';
+    setSubscriptionErrors((prev) => ({ ...prev, [key]: message }));
+  }, []);
+
+  const refreshActivityData = useCallback(() => {
+    if (activeAccountId != null) {
+      void load(offsetRef.current);
+    }
+    void loadSwaps();
+  }, [activeAccountId, load, loadSwaps]);
+
+  const retryLiveUpdates = useCallback(() => {
+    setSubscriptionErrors({ ...EMPTY_SUBSCRIPTION_ERRORS });
+    setSubscriptionRetryToken((prev) => prev + 1);
+    refreshActivityData();
+  }, [refreshActivityData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,16 +309,25 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           return;
         }
         unlisten = fn;
+        markSubscriptionHealthy('sync');
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn('Failed to subscribe to sync progress events:', err);
+        markSubscriptionFailed('sync', err);
       });
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [activeAccountId, hasPendingTransactions, triggerSyncRefresh]);
+  }, [
+    activeAccountId,
+    hasPendingTransactions,
+    triggerSyncRefresh,
+    markSubscriptionHealthy,
+    markSubscriptionFailed,
+    subscriptionRetryToken,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,16 +345,24 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           return;
         }
         unlisten = fn;
+        markSubscriptionHealthy('transaction');
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn('Failed to subscribe to transaction events:', err);
+        markSubscriptionFailed('transaction', err);
       });
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [activeAccountId, load]);
+  }, [
+    activeAccountId,
+    load,
+    markSubscriptionHealthy,
+    markSubscriptionFailed,
+    subscriptionRetryToken,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,16 +378,18 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           return;
         }
         unlisten = fn;
+        markSubscriptionHealthy('swap');
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn('Failed to subscribe to swap events:', err);
+        markSubscriptionFailed('swap', err);
       });
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [loadSwaps]);
+  }, [loadSwaps, markSubscriptionHealthy, markSubscriptionFailed, subscriptionRetryToken]);
 
   const submitRetry = async () => {
     if (!retryTxid) return;
@@ -411,6 +478,30 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       {error && (
         <div className="rounded-none border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {hasSubscriptionFailure && (
+        <div className="rounded-none border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-medium">Live updates disconnected</div>
+                <div className="mt-1 text-xs">
+                  {failedSubscriptionLabels.join(', ')} stopped updating. Data may be stale until reconnect.
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button size="sm" variant="outline" onClick={retryLiveUpdates}>
+                Reconnect
+              </Button>
+              <Button size="sm" variant="outline" onClick={refreshActivityData}>
+                Refresh now
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

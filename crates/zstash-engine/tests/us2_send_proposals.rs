@@ -423,6 +423,55 @@ fn prepared_retry_task_can_execute_without_wallet_manager_guard() {
 }
 
 #[test]
+fn queued_retry_task_is_blocked_without_explicit_reauth() {
+    let root = temp_root("us2_retry_requires_reauth");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+
+    let wallet = mgr
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let (_wallet, wallet_dir_str) = wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+        .expect("load wallet metadata")
+        .expect("wallet exists");
+    let wallet_dir = PathBuf::from(wallet_dir_str);
+    let queue_dir = wallet_dir.join("queued_broadcasts");
+    std::fs::create_dir_all(&queue_dir).expect("create queued_broadcasts dir");
+
+    let txid = "1111111111111111111111111111111111111111111111111111111111111111";
+    std::fs::write(queue_dir.join(format!("{txid}.bin")), b"queued-bytes")
+        .expect("write queued tx bytes");
+    std::fs::write(
+        queue_dir.join(format!("{txid}.json")),
+        serde_json::to_vec(&serde_json::json!({
+            "created_at_ms": to_unix_ms(SystemTime::now()),
+            "last_error": "seed queued retry"
+        }))
+        .expect("serialize queued metadata"),
+    )
+    .expect("write queued metadata");
+
+    let task = mgr
+        .prepare_next_queued_broadcast_retry_task()
+        .expect("prepare queued retry task")
+        .expect("queued retry task should be available");
+
+    let err = WalletManager::execute_prepared_retry_broadcast_task(task, None, None)
+        .expect_err("queued retry should require explicit user reauth");
+    let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
+    assert_eq!(ipc.code, errors::REAUTH_REQUIRED);
+}
+
+#[test]
 fn process_queued_broadcast_retries_returns_zero_when_retry_attempt_fails() {
     let root = temp_root("us2_retry_failure_count");
     let app_db_path = root.join("app.db");

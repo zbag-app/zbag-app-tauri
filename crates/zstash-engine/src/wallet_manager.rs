@@ -74,6 +74,7 @@ pub struct WalletManager {
 
 pub struct RetryBroadcastTask {
     pub txid: String,
+    user_intent_confirmed: bool,
     wallet_id: Uuid,
     wallet_network: Network,
     wallet_dir: PathBuf,
@@ -2047,7 +2048,7 @@ impl WalletManager {
         };
 
         self.consume_reauth_token(active_wallet_id, reauth_token, ReauthPurpose::Spend)?;
-        self.build_retry_broadcast_task(txid)
+        self.build_retry_broadcast_task(txid, true)
     }
 
     pub fn prepare_next_queued_broadcast_retry_task(
@@ -2075,7 +2076,7 @@ impl WalletManager {
             return Ok(None);
         };
 
-        let task = self.build_retry_broadcast_task(&txid)?;
+        let task = self.build_retry_broadcast_task(&txid, false)?;
         Ok(Some(task))
     }
 
@@ -2090,7 +2091,8 @@ impl WalletManager {
     }
 
     pub fn validate_retry_broadcast_task(&self, task: &RetryBroadcastTask) -> anyhow::Result<()> {
-        self.ensure_retry_task_wallet_state(task)
+        self.ensure_retry_task_wallet_state(task)?;
+        Self::ensure_retry_task_user_intent(task)
     }
 
     pub fn execute_prepared_retry_broadcast_task(
@@ -2098,6 +2100,7 @@ impl WalletManager {
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<String> {
+        Self::ensure_retry_task_user_intent(&task)?;
         Self::execute_retry_broadcast_task_unchecked(task, on_tx_changed, on_failover)
     }
 
@@ -2164,7 +2167,21 @@ impl WalletManager {
         Ok(())
     }
 
-    fn build_retry_broadcast_task(&mut self, txid: &str) -> anyhow::Result<RetryBroadcastTask> {
+    fn ensure_retry_task_user_intent(task: &RetryBroadcastTask) -> anyhow::Result<()> {
+        if task.user_intent_confirmed {
+            return Ok(());
+        }
+        Err(ipc_err(
+            errors::REAUTH_REQUIRED,
+            "retry broadcast requires explicit reauth",
+        ))
+    }
+
+    fn build_retry_broadcast_task(
+        &mut self,
+        txid: &str,
+        user_intent_confirmed: bool,
+    ) -> anyhow::Result<RetryBroadcastTask> {
         let (wallet_id, wallet_network, wallet_dir) = {
             let Some(active) = self.active_wallet.as_ref() else {
                 return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
@@ -2186,6 +2203,7 @@ impl WalletManager {
 
         Ok(RetryBroadcastTask {
             txid: txid.to_string(),
+            user_intent_confirmed,
             wallet_id,
             wallet_network,
             wallet_dir: wallet_dir.clone(),

@@ -17,8 +17,6 @@ pub mod windows;
 #[cfg(not(feature = "test-bridge"))]
 use std::sync::Arc;
 #[cfg(not(feature = "test-bridge"))]
-use std::time::Duration;
-#[cfg(not(feature = "test-bridge"))]
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -151,86 +149,6 @@ where
                     let _ = events::emit_tor_status(&tor_app, rx.borrow().clone());
                 }
             });
-
-            {
-                let wallet_manager = Arc::clone(&state.wallet_manager);
-                let tx_app = app_handle.clone();
-                let failover_app = app_handle.clone();
-                let tx_handler: zstash_engine::tx_service::TxEventHandler =
-                    Arc::new(move |event| {
-                        let _ = events::emit_transaction_changed(&tx_app, event);
-                    });
-                let failover_handler: zstash_engine::tx_service::ServerFailoverEventHandler =
-                    Arc::new(move |event| {
-                        let _ = events::emit_server_failover(&failover_app, event);
-                    });
-
-                tauri::async_runtime::spawn(async move {
-                    let mut interval = tokio::time::interval(Duration::from_secs(5));
-                    loop {
-                        interval.tick().await;
-                        let maybe_task = {
-                            let Ok(mut mgr) = wallet_manager.try_lock() else {
-                                continue;
-                            };
-                            match mgr.prepare_next_queued_broadcast_retry_task() {
-                                Ok(Some(task)) => {
-                                    if let Err(err) = mgr.validate_retry_broadcast_task(&task) {
-                                        tracing::warn!(
-                                            txid = %task.txid,
-                                            error = ?err,
-                                            "auto retry worker task validation failed"
-                                        );
-                                        continue;
-                                    }
-                                    Some(task)
-                                }
-                                Ok(None) => None,
-                                Err(err) => {
-                                    tracing::warn!(
-                                        error = ?err,
-                                        "auto retry worker iteration failed while preparing task"
-                                    );
-                                    continue;
-                                }
-                            }
-                        };
-                        let Some(task) = maybe_task else {
-                            continue;
-                        };
-                        let txid = task.txid.clone();
-                        let tx_handler = Arc::clone(&tx_handler);
-                        let failover_handler = Arc::clone(&failover_handler);
-                        let execute_wallet_manager = Arc::clone(&wallet_manager);
-                        let join = tauri::async_runtime::spawn_blocking(move || {
-                            let mut mgr = execute_wallet_manager.lock().expect("mutex poisoned");
-                            mgr.execute_retry_broadcast_task(
-                                task,
-                                Some(tx_handler),
-                                Some(failover_handler),
-                            )
-                        });
-
-                        match join.await {
-                            Ok(Ok(_)) => {}
-                            Ok(Err(err)) => {
-                                tracing::warn!(
-                                    txid = %txid,
-                                    error = ?err,
-                                    "auto retry attempt failed"
-                                );
-                            }
-                            Err(err) => {
-                                tracing::warn!(
-                                    txid = %txid,
-                                    error = ?err,
-                                    "auto retry worker blocking task panicked"
-                                );
-                            }
-                        }
-                    }
-                });
-            }
 
             Ok(())
         })
