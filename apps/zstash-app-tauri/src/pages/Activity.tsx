@@ -9,7 +9,6 @@ import {
   ChevronUp,
   Check,
   FileText,
-  RefreshCw,
 } from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -158,15 +157,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const frontierAtLastSyncRefreshRef = useRef<number | null>(null);
   const syncRefreshInFlightRef = useRef(false);
   const offsetRef = useRef(0);
-  const [cooldown, setCooldown] = useState(false);
-  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-    };
-  }, []);
-
   const applyOffset = useCallback((nextOffset: number) => {
     setOffset(nextOffset);
     offsetRef.current = nextOffset;
@@ -269,8 +259,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       void load(offsetRef.current);
     }
     void loadSwaps();
-    setCooldown(true);
-    cooldownTimerRef.current = setTimeout(() => setCooldown(false), 500);
   }, [activeAccountId, load, loadSwaps]);
 
   const retryLiveUpdates = useCallback(() => {
@@ -493,16 +481,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           </div>
           <h1 className="text-2xl font-bold">Activity</h1>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={refreshActivityData}
-          disabled={activeAccountId == null || loading || cooldown}
-          className="shrink-0"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 transition-none ${loading || cooldown ? 'animate-spin' : ''}`} />
-          {loading ? 'Refreshing...' : 'Refresh'}
-        </Button>
       </div>
 
       {activeAccountId == null && (
@@ -531,7 +509,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
               <Button size="sm" variant="outline" onClick={retryLiveUpdates}>
                 Reconnect
               </Button>
-              <Button size="sm" variant="outline" onClick={refreshActivityData} disabled={loading || cooldown}>
+              <Button size="sm" variant="outline" onClick={refreshActivityData} disabled={loading}>
                 Refresh now
               </Button>
             </div>
