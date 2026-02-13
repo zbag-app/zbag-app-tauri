@@ -15,7 +15,7 @@ import { Progress } from "../ui/progress";
 import { Separator } from "../ui/separator";
 import type { TorState, SyncProgress } from "../../types/ipc";
 import { formatEta } from "../../utils/time";
-import { isEffectivelyAtTip } from "../../utils/sync";
+import { getDisplaySyncPercent, isEffectivelyAtTip } from "../../utils/sync";
 
 interface SidebarProps {
   walletName: string;
@@ -98,15 +98,7 @@ export function Sidebar({
     }
   };
 
-  // Cap at 99% for non-terminal phases to avoid "100% but still syncing" confusion.
-  const displayPercent = syncProgress
-    ? syncProgress.phase === "Idle" ||
-      (syncProgress.phase === "CatchingUp" && isEffectivelyAtTip(syncProgress))
-      ? syncProgress.phase === "CatchingUp"
-        ? 100
-        : syncProgress.progress_percent
-      : Math.min(syncProgress.progress_percent, 99)
-    : 0;
+  const displayPercent = syncProgress ? getDisplaySyncPercent(syncProgress) : 0;
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-border bg-card">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type * as IPC from '../../types/ipc';
 import { formatEta } from '../../utils/time';
-import { isEffectivelyAtTip } from '../../utils/sync';
+import { getDisplaySyncPercent, isEffectivelyAtTip } from '../../utils/sync';
 
 // NOTE: This countdown is an approximation based on the last `retry_in_seconds` value received from
 // the backend. Because we don't have an absolute retry timestamp, small drift (event latency + JS
@@ -132,13 +132,7 @@ export function SyncProgressWidget(props: { progress: IPC.SyncProgress }) {
 
   const showSyncedTerminal = progress.phase === 'CatchingUp' && atTip;
 
-  // Cap at 99% for non-terminal phases to avoid "100% but still syncing" confusion.
-  const displayPercent =
-    progress.phase === 'Idle' || showSyncedTerminal
-      ? showSyncedTerminal
-        ? 100
-        : progress.progress_percent
-      : Math.min(progress.progress_percent, 99);
+  const displayPercent = getDisplaySyncPercent(progress);
 
   const displayPhase = showSyncedTerminal ? 'Synced' : getDisplayPhase(progress.phase);
 

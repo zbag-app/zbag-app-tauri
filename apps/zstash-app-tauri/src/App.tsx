@@ -143,6 +143,11 @@ function AppInner() {
           const res = await resumePendingSwaps();
           if (cancelled) return;
           if ('err' in res) {
+            console.warn('resume_pending_swaps attempt failed', {
+              attempt: attempt + 1,
+              maxAttempts: delaysMs.length,
+              error: res.err,
+            });
             if (attempt === delaysMs.length - 1) {
               console.warn('Failed to resume pending swaps:', res.err);
               setResumePendingSwapsError(res.err);
@@ -152,6 +157,11 @@ function AppInner() {
           return;
         } catch (err) {
           if (cancelled) return;
+          console.warn('resume_pending_swaps attempt threw', {
+            attempt: attempt + 1,
+            maxAttempts: delaysMs.length,
+            error: err,
+          });
           if (attempt === delaysMs.length - 1) {
             console.warn('Failed to resume pending swaps:', err);
             setResumePendingSwapsError({

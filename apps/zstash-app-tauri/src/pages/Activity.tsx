@@ -129,6 +129,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const lastSyncRefreshAtRef = useRef(0);
   const frontierAtLastSyncRefreshRef = useRef<number | null>(null);
   const syncRefreshInFlightRef = useRef(false);
+  const offsetRef = useRef(0);
 
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
@@ -156,6 +157,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
         setTransactions(res.ok.transactions);
         setTotalCount(res.ok.total_count);
         setOffset(nextOffset);
+        offsetRef.current = nextOffset;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load transactions';
         setError(message);
@@ -171,6 +173,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     setRetryPassword('');
     setRetryError(null);
     setOffset(0);
+    offsetRef.current = 0;
     setTransactions([]);
     setTotalCount(0);
     lastSyncFrontierRef.current = null;
@@ -202,10 +205,10 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const triggerSyncRefresh = useCallback(() => {
     if (syncRefreshInFlightRef.current) return;
     syncRefreshInFlightRef.current = true;
-    void load(offset).finally(() => {
+    void load(offsetRef.current).finally(() => {
       syncRefreshInFlightRef.current = false;
     });
-  }, [load, offset]);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,7 +280,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
         if (cancelled) return;
         if (activeAccountId == null) return;
         if (event.transaction.account_id !== activeAccountId) return;
-        void load(offset);
+        void load(offsetRef.current);
       })
       .then((fn) => {
         if (cancelled) {
@@ -294,7 +297,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [activeAccountId, load, offset]);
+  }, [activeAccountId, load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -343,7 +346,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
       setRetryTxid(null);
       setRetryPassword('');
       setRetryError(null);
-      void load(offset);
+      void load(offsetRef.current);
     } catch (err) {
       setRetryError(err instanceof Error ? err.message : 'Failed to retry broadcast');
     } finally {
