@@ -1275,20 +1275,20 @@ impl<C: Clock> TxService<C> {
             ) {
                 let err_msg = format!("{err:#}");
                 let err_class = classify_broadcast_error_message(&err_msg);
+                let retryable = is_retryable_broadcast_error_class(err_class);
                 broadcast_errors.insert(txid_str.clone(), err_msg.clone());
-                if is_retryable_broadcast_error_class(err_class) {
-                    queue_broadcast(
-                        &self.clock,
-                        wallet_id,
-                        wallet_dir,
-                        wallet_dek,
-                        txid_str,
-                        &tx_bytes,
-                        Some(err_msg),
-                        Some(err_class),
-                        true,
-                    )?;
-                } else {
+                queue_broadcast(
+                    &self.clock,
+                    wallet_id,
+                    wallet_dir,
+                    wallet_dek,
+                    txid_str.clone(),
+                    &tx_bytes,
+                    Some(err_msg.clone()),
+                    Some(err_class),
+                    retryable,
+                )?;
+                if !retryable {
                     info!(
                         wallet_id = %wallet_id,
                         account_id = record.account_id,
@@ -1670,20 +1670,20 @@ impl<C: Clock> TxService<C> {
                 ) {
                     let err_msg = format!("{err:#}");
                     let err_class = classify_broadcast_error_message(&err_msg);
+                    let retryable = is_retryable_broadcast_error_class(err_class);
                     broadcast_errors.insert(txid_str.clone(), err_msg.clone());
-                    if is_retryable_broadcast_error_class(err_class) {
-                        queue_broadcast(
-                            &self.clock,
-                            wallet_id,
-                            wallet_dir,
-                            wallet_dek,
-                            txid_str.clone(),
-                            &tx_bytes,
-                            Some(err_msg),
-                            Some(err_class),
-                            true,
-                        )?;
-                    } else {
+                    queue_broadcast(
+                        &self.clock,
+                        wallet_id,
+                        wallet_dir,
+                        wallet_dek,
+                        txid_str.clone(),
+                        &tx_bytes,
+                        Some(err_msg.clone()),
+                        Some(err_class),
+                        retryable,
+                    )?;
+                    if !retryable {
                         info!(
                             wallet_id = %wallet_id,
                             account_id = account_id,
@@ -1860,6 +1860,8 @@ impl<C: Clock> TxService<C> {
         let mut attempt_count = entry.meta.attempt_count;
         let mut transport_failure_streak = entry.meta.transport_failure_streak;
         let mut attempted_failover_retry = false;
+        let mut retry_failed_error: Option<anyhow::Error> = None;
+        let mut retry_succeeded = false;
 
         loop {
             let send_result = self.send_transaction_bytes(
@@ -1882,6 +1884,7 @@ impl<C: Clock> TxService<C> {
                         txid.to_string(),
                         "retry_broadcast_success",
                     );
+                    retry_succeeded = true;
                     break;
                 }
                 Err(err) => {
@@ -1936,6 +1939,7 @@ impl<C: Clock> TxService<C> {
                         attempt_count,
                         transport_failure_streak,
                     )?;
+                    retry_failed_error = Some(err);
                     break;
                 }
             }
@@ -1962,18 +1966,34 @@ impl<C: Clock> TxService<C> {
             }
         }
 
-        log_tx_lifecycle_success(
+        if retry_succeeded {
+            log_tx_lifecycle_success(
+                TxLogContext {
+                    wallet_id,
+                    account_id: Some(account_id_u32),
+                    proposal_id: None,
+                    txid: Some(txid),
+                    phase: "tx_service.retry_broadcast.success",
+                },
+                retry_started_at,
+            );
+            return Ok(txid.to_string());
+        }
+
+        let err = retry_failed_error
+            .unwrap_or_else(|| anyhow::anyhow!("retry broadcast failed without explicit error"));
+        log_tx_lifecycle_error(
             TxLogContext {
                 wallet_id,
                 account_id: Some(account_id_u32),
                 proposal_id: None,
                 txid: Some(txid),
-                phase: "tx_service.retry_broadcast.success",
+                phase: "tx_service.retry_broadcast.failed",
             },
             retry_started_at,
+            &err,
         );
-
-        Ok(txid.to_string())
+        Err(err)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3121,6 +3141,46 @@ mod tests {
             .list_due_retry_txids(wallet_id, &wallet_dir)
             .expect("list due txids");
         assert!(due.is_empty());
+    }
+
+    #[test]
+    fn unknown_legacy_errors_stay_retryable_after_normalization() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(41_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+        let wallet_id = Uuid::new_v4();
+        let root = temp_root("tx_service_unknown_legacy_retryable");
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0x44; 32]);
+        let txid = "unknown_legacy_tx".to_string();
+
+        queue_broadcast(
+            &clock,
+            wallet_id,
+            &wallet_dir,
+            &wallet_dek,
+            txid.clone(),
+            &[0xBE, 0xEF],
+            Some("new upstream error we do not classify yet".to_string()),
+            None,
+            true,
+        )
+        .expect("queue unknown-class broadcast");
+
+        service
+            .scan_queued_broadcasts(wallet_id, &wallet_dir)
+            .expect("scan queued broadcasts");
+        let entry = service
+            .queued_broadcasts
+            .get(&wallet_id)
+            .and_then(|entries| entries.get(&txid))
+            .expect("unknown queued entry present");
+        assert!(entry.meta.retryable);
+        assert_eq!(
+            entry.meta.last_error_class,
+            Some(BroadcastErrorClass::Unknown)
+        );
+        assert!(entry.meta.next_attempt_at_ms.is_some());
     }
 
     #[test]

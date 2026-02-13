@@ -63,7 +63,9 @@ pub fn classify_broadcast_error_message(message: &str) -> BroadcastErrorClass {
 pub fn is_retryable_broadcast_error_class(class: BroadcastErrorClass) -> bool {
     matches!(
         class,
-        BroadcastErrorClass::TransientTransport | BroadcastErrorClass::TransientServer
+        BroadcastErrorClass::TransientTransport
+            | BroadcastErrorClass::TransientServer
+            | BroadcastErrorClass::Unknown
     )
 }
 
@@ -155,6 +157,13 @@ mod tests {
         );
         assert_eq!(class, BroadcastErrorClass::Terminal);
         assert!(!is_retryable_broadcast_error_class(class));
+    }
+
+    #[test]
+    fn unknown_errors_default_to_retryable() {
+        let class = classify_broadcast_error_message("some completely new upstream failure");
+        assert_eq!(class, BroadcastErrorClass::Unknown);
+        assert!(is_retryable_broadcast_error_class(class));
     }
 
     #[test]

@@ -572,7 +572,7 @@ async fn run_send_job(
                         "failed to persist queued broadcast metadata"
                     );
                 }
-                can_retry_broadcast = retryable;
+                can_retry_broadcast |= retryable;
                 broadcast_error = Some(err_msg);
             }
         }
@@ -1134,7 +1134,7 @@ fn shield_funds_blocking(
                         "failed to persist queued broadcast metadata"
                     );
                 }
-                can_retry_broadcast = retryable;
+                can_retry_broadcast |= retryable;
                 if broadcast_error.is_none() {
                     broadcast_error = Some(error);
                 }

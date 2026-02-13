@@ -211,8 +211,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
-    async function run() {
-      unlisten = await onSyncProgress((event) => {
+    onSyncProgress((event) => {
         if (cancelled) return;
         if (activeAccountId == null) return;
         if (!hasPendingTransactions) return;
@@ -252,10 +251,18 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
           frontierAtLastSyncRefreshRef.current = frontier;
           triggerSyncRefresh();
         }
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('Failed to subscribe to sync progress events:', err);
       });
-    }
-
-    run();
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
@@ -266,16 +273,23 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
-    async function run() {
-      unlisten = await onTransactionChanged((event) => {
+    onTransactionChanged((event) => {
         if (cancelled) return;
         if (activeAccountId == null) return;
         if (event.transaction.account_id !== activeAccountId) return;
         void load(offset);
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('Failed to subscribe to transaction events:', err);
       });
-    }
-
-    run();
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
@@ -286,14 +300,21 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     let cancelled = false;
     let unlisten: (() => void) | null = null;
 
-    async function run() {
-      unlisten = await onSwapChanged((_event) => {
+    onSwapChanged((_event) => {
         if (cancelled) return;
         void loadSwaps();
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('Failed to subscribe to swap events:', err);
       });
-    }
-
-    run();
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
@@ -306,24 +327,28 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     setRetrying(true);
     setRetryError(null);
 
-    const reauth = await reauthWallet({ wallet_id: walletId, password: retryPassword, purpose: 'Spend' });
-    if ('err' in reauth) {
+    try {
+      const reauth = await reauthWallet({ wallet_id: walletId, password: retryPassword, purpose: 'Spend' });
+      if ('err' in reauth) {
+        setRetryError(reauth.err.message);
+        return;
+      }
+
+      const res = await retryBroadcast({ txid: retryTxid, reauth_token: reauth.ok.reauth_token });
+      if ('err' in res) {
+        setRetryError(res.err.message);
+        return;
+      }
+
+      setRetryTxid(null);
+      setRetryPassword('');
+      setRetryError(null);
+      void load(offset);
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : 'Failed to retry broadcast');
+    } finally {
       setRetrying(false);
-      setRetryError(reauth.err.message);
-      return;
     }
-
-    const res = await retryBroadcast({ txid: retryTxid, reauth_token: reauth.ok.reauth_token });
-    setRetrying(false);
-    if ('err' in res) {
-      setRetryError(res.err.message);
-      return;
-    }
-
-    setRetryTxid(null);
-    setRetryPassword('');
-    setRetryError(null);
-    void load(offset);
   };
 
   const getStatusBadgeVariant = (status: string) => {
