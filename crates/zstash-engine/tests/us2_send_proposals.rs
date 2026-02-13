@@ -423,6 +423,49 @@ fn prepared_retry_task_can_execute_without_wallet_manager_guard() {
 }
 
 #[test]
+fn prepared_retry_task_survives_active_wallet_switch_before_execute() {
+    let root = temp_root("us2_retry_wallet_switch");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+
+    let wallet_a = mgr
+        .create_wallet("Wallet A", Network::Testnet, "pw", false, None)
+        .expect("create wallet A")
+        .wallet;
+
+    let txid = "1111111111111111111111111111111111111111111111111111111111111111";
+    let (reauth_token, _expires_at) = mgr
+        .reauth_wallet(wallet_a.id, "pw", ReauthPurpose::Spend)
+        .expect("reauth wallet A");
+    let task = mgr
+        .prepare_retry_broadcast_task(txid, &reauth_token)
+        .expect("prepare retry task for wallet A");
+
+    let _wallet_b = mgr
+        .create_wallet("Wallet B", Network::Testnet, "pw", false, None)
+        .expect("create wallet B")
+        .wallet;
+
+    let err = mgr
+        .validate_retry_broadcast_task(&task)
+        .expect_err("wallet switch should invalidate manager-side task validation");
+    let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
+    assert_eq!(ipc.code, errors::WALLET_LOCKED);
+
+    let err = WalletManager::execute_prepared_retry_broadcast_task(task, None, None)
+        .expect_err("lock-free execute should still run against prepared wallet context");
+    let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
+    assert_eq!(ipc.code, errors::QUEUED_BROADCAST_NOT_FOUND);
+}
+
+#[test]
 fn queued_retry_task_is_blocked_without_explicit_reauth() {
     let root = temp_root("us2_retry_requires_reauth");
     let app_db_path = root.join("app.db");

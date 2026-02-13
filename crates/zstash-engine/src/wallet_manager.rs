@@ -2095,6 +2095,12 @@ impl WalletManager {
         Self::ensure_retry_task_user_intent(task)
     }
 
+    /// Execute a previously prepared manual retry task without consulting current
+    /// `WalletManager` active-wallet state.
+    ///
+    /// Contract: once manual retry prepare-time reauth succeeds, execution must
+    /// remain valid even if the active wallet changes before the blocking retry
+    /// work starts.
     pub fn execute_prepared_retry_broadcast_task(
         task: RetryBroadcastTask,
         on_tx_changed: Option<TxEventHandler>,
