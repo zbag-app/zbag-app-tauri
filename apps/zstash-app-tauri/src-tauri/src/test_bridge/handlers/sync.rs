@@ -24,7 +24,8 @@ pub fn start_sync_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let (wallet, lock_status) = mgr.load_wallet(request.wallet_id)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (wallet, lock_status) = mgr.load_wallet(request.wallet_id, &mut tx_svc)?;
 
         if lock_status != WalletLockStatus::Unlocked {
             return Err(zstash_engine::error::ipc_err(

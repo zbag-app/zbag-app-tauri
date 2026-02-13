@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
+use anyhow::Context as _;
 use tauri::State;
 use tracing::warn;
 
-use zstash_core::domain::WalletLockStatus;
+use zstash_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
 use zstash_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
@@ -9,7 +12,7 @@ use zstash_core::ipc::v1::commands::wallet::{
     ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse,
     ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 use crate::wallet_logic;
@@ -124,12 +127,20 @@ pub fn zstash_load_wallet(
                     wallet_tip_height: 0,
                     progress_percent: 0,
                     eta_seconds: None,
+                    retry_in_seconds: None,
+                    error_message: None,
                 },
             );
         }
 
         let resp = build_load_wallet_response(&mut mgr, request.wallet_id, &mut tx_svc)?;
-        if resp.lock_status == WalletLockStatus::Unlocked {
+        let should_auto_start_sync = resp.lock_status == WalletLockStatus::Unlocked;
+
+        // Keep lock ordering consistent across commands: wallet_manager -> tx_service.
+        // Drop tx_service before taking wallet_manager again to avoid inversion deadlocks.
+        drop(tx_svc);
+
+        if should_auto_start_sync {
             // Auto-start sync (best effort). LoadWallet should succeed even if sync can't start.
             let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
             if let Err(err) = start_sync_with_handlers(&app, &state, &mut mgr, &resp.wallet) {
@@ -228,15 +239,6 @@ pub fn zstash_logout_wallet(
 
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-
-        // Validate and consume reauth token
-        mgr.consume_reauth_token(
-            request.wallet_id,
-            &request.reauth_token,
-            ReauthPurpose::Logout,
-        )?;
-
-        // Perform logout
         mgr.logout_wallet(request.wallet_id, &mut tx_svc)?;
 
         Ok(LogoutWalletResponse {

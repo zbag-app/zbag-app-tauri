@@ -49,15 +49,14 @@ impl AppState {
         let tx_service = Arc::new(Mutex::new(tx_service));
 
         let wallet_manager = Arc::new(Mutex::new(wallet_manager));
-        let near = zstash_network::near_intents::NearIntentsClient::new_with_tor(Arc::clone(
-            &tor_manager,
-        ))?;
-        let swap_service = SwapService::new_with_near_client(
+        let near_client = NearIntentsClient::new_with_tor(Arc::clone(&tor_manager))?;
+        let swap_service = SwapService::new_with_near_client_and_tx(
             app_db_path,
             Arc::clone(&wallet_manager),
             Arc::clone(&tx_service),
-            near,
+            near_client.clone(),
         )?;
+        let exchange_rate_service = ExchangeRateService::new_with_tor(Arc::clone(&tor_manager))?;
 
         Ok(Self {
             wallet_manager,

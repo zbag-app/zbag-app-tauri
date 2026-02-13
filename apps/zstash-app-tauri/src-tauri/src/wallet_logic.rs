@@ -64,12 +64,14 @@ pub fn create_wallet(
     birthday_height: Option<u32>,
 ) -> anyhow::Result<CreateWalletResponse> {
     let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+    let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
     let created = mgr.create_wallet(
         &request.name,
         request.network,
         &request.password,
         request.remember_unlock,
         birthday_height,
+        &mut tx_svc,
     )?;
 
     Ok(CreateWalletResponse {
@@ -84,8 +86,9 @@ pub fn load_wallet(state: &AppState, wallet_id: uuid::Uuid) -> anyhow::Result<Lo
     // Loads the wallet state but does not auto-start sync; callers can decide
     // whether to start sync based on their execution context.
     let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+    let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
     stop_previous_wallet_sync(state, &mut mgr, wallet_id);
-    build_load_wallet_response(&mut mgr, wallet_id)
+    build_load_wallet_response(&mut mgr, wallet_id, &mut tx_svc)
 }
 
 pub fn get_wallet_status(
@@ -105,10 +108,12 @@ pub fn unlock_wallet(
     request: UnlockWalletRequest,
 ) -> anyhow::Result<UnlockWalletResponse> {
     let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+    let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
     let status = mgr.unlock_wallet(
         request.wallet_id,
         &request.password,
         request.remember_unlock,
+        &mut tx_svc,
     )?;
     Ok(UnlockWalletResponse {
         schema_version: SCHEMA_VERSION,
@@ -132,7 +137,8 @@ pub fn logout_wallet(
 ) -> anyhow::Result<LogoutWalletResponse> {
     let _ = state.sync_service.stop_sync(wallet_id, None);
     let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-    mgr.logout_wallet(wallet_id)?;
+    let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+    mgr.logout_wallet(wallet_id, &mut tx_svc)?;
     Ok(LogoutWalletResponse {
         schema_version: SCHEMA_VERSION,
         success: true,
@@ -203,8 +209,9 @@ fn load_accounts_for_wallet(
 fn build_load_wallet_response(
     mgr: &mut zstash_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
+    tx_service: &mut zstash_engine::tx_service::TxService<zstash_engine::reauth::SystemClock>,
 ) -> anyhow::Result<LoadWalletResponse> {
-    let (wallet, lock_status) = mgr.load_wallet(wallet_id)?;
+    let (wallet, lock_status) = mgr.load_wallet(wallet_id, tx_service)?;
 
     let accounts = if lock_status == WalletLockStatus::Locked {
         vec![]
@@ -340,6 +347,9 @@ mod tests {
 
     #[test]
     fn load_wallet_returns_empty_accounts_when_locked_then_accounts_after_unlock() {
+        use zstash_engine::reauth::SystemClock;
+        use zstash_engine::tx_service::TxService;
+
         let root = temp_root("us1_load_wallet_accounts");
         let app_db_path = root.join("app.db");
         let wallets_root = root.join("wallets");
@@ -348,20 +358,28 @@ mod tests {
         let mut mgr =
             WalletManager::new_with_wallets_root(app_db_path, wallets_root, Box::new(key_store))
                 .expect("create wallet manager");
+        let mut tx_service = TxService::new(SystemClock);
 
         let created = mgr
-            .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+            .create_wallet(
+                "Test Wallet",
+                Network::Testnet,
+                "pw",
+                false,
+                None,
+                &mut tx_service,
+            )
             .expect("create wallet");
         mgr.lock_wallet(created.wallet.id).expect("lock wallet");
 
-        let resp =
-            super::build_load_wallet_response(&mut mgr, created.wallet.id).expect("load wallet");
+        let resp = super::build_load_wallet_response(&mut mgr, created.wallet.id, &mut tx_service)
+            .expect("load wallet");
         assert_eq!(resp.lock_status, WalletLockStatus::Locked);
         assert_eq!(resp.accounts.len(), 0);
 
-        mgr.unlock_wallet(created.wallet.id, "pw", false)
+        mgr.unlock_wallet(created.wallet.id, "pw", false, &mut tx_service)
             .expect("unlock wallet");
-        let resp = super::build_load_wallet_response(&mut mgr, created.wallet.id)
+        let resp = super::build_load_wallet_response(&mut mgr, created.wallet.id, &mut tx_service)
             .expect("load wallet after unlock");
         assert_eq!(resp.lock_status, WalletLockStatus::Unlocked);
         assert!(

@@ -81,13 +81,15 @@ pub fn restore_wallet_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         let restored = mgr.restore_wallet(
             &name,
             network,
             &password,
             remember_unlock,
-            seed_phrase,
+            &seed_phrase,
             birthday_date,
+            &mut tx_svc,
         )?;
 
         Ok(RestoreWalletResponse {

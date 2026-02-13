@@ -80,12 +80,12 @@ pub fn zstash_restore_wallet(
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         let restored = mgr.restore_wallet(
-            &request.name,
-            request.network,
-            &request.password,
-            request.remember_unlock,
-            &request.seed_phrase,
-            request.birthday_date,
+            &name,
+            network,
+            &password,
+            remember_unlock,
+            seed_phrase,
+            birthday_date,
             &mut tx_svc,
         )?;
 

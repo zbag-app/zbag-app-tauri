@@ -37,6 +37,7 @@ pub fn zstash_start_send_job(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         let tor_manager = Some(Arc::clone(&state.tor_manager));
         mgr.start_send_job(
             &request.proposal_id,
@@ -44,6 +45,7 @@ pub fn zstash_start_send_job(
             tor_manager,
             Some(job_handler),
             Some(tx_handler),
+            &mut tx_svc,
         )
     })
 }
@@ -71,6 +73,7 @@ pub fn zstash_start_shield_job(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         let tor_manager = Some(Arc::clone(&state.tor_manager));
         mgr.start_shield_job(
             request.account_id,
@@ -79,6 +82,7 @@ pub fn zstash_start_shield_job(
             tor_manager,
             Some(job_handler),
             Some(tx_handler),
+            &mut tx_svc,
         )
     })
 }

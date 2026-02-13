@@ -7,6 +7,7 @@ use zstash_core::ipc::v1::commands::transaction::{
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
 use zstash_core::ipc::v1::common::IpcResult;
+use zstash_engine::wallet_manager::open_wallet_db_for_tx;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -23,12 +24,14 @@ pub fn prepare_send_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         mgr.prepare_send(
             request.account_id,
             &request.recipient,
             &request.amount,
             request.memo.as_deref(),
             request.allow_transparent_recipient,
+            &mut tx_svc,
         )
     })
 }
@@ -46,8 +49,28 @@ pub fn confirm_send_impl(
     warn!("Test bridge: confirm_send invoked");
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.confirm_send(&request.proposal_id, &request.reauth_token, None)
+        let (ctx, spending_key, proposal_id) = {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+            let (ctx, spending_key) =
+                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &tx_svc)?;
+            (ctx, spending_key, request.proposal_id.clone())
+        };
+
+        let mut conn = open_wallet_db_for_tx(&ctx)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        tx_svc.confirm_send(
+            &ctx.app_db_path,
+            ctx.wallet_id,
+            ctx.network,
+            &ctx.wallet_dir,
+            &ctx.dek,
+            &mut conn,
+            &ctx.grpc_url,
+            &proposal_id,
+            spending_key,
+            None,
+        )
     })
 }
 
@@ -62,10 +85,10 @@ pub fn cancel_send_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
         Ok(CancelSendResponse {
             schema_version: SCHEMA_VERSION,
-            cancelled: mgr.cancel_send(&request.proposal_id),
+            cancelled: tx_svc.cancel_send(&request.proposal_id),
         })
     })
 }
@@ -82,8 +105,14 @@ pub fn retry_broadcast_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let task = mgr.prepare_retry_broadcast_task(&request.txid, &request.reauth_token)?;
-        let txid = mgr.execute_retry_broadcast_task(task, None, None)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let txid = mgr.retry_broadcast(
+            &request.txid,
+            &request.reauth_token,
+            None,
+            None,
+            &mut tx_svc,
+        )?;
         Ok(RetryBroadcastResponse {
             schema_version: SCHEMA_VERSION,
             txid,
@@ -103,7 +132,13 @@ pub fn list_transactions_impl(
 
     map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.list_transactions(request.account_id, request.limit, request.offset)
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        mgr.list_transactions(
+            request.account_id,
+            request.limit,
+            request.offset,
+            &mut tx_svc,
+        )
     })
 }
 
@@ -118,11 +153,24 @@ pub fn shield_funds_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        mgr.shield_funds(
+        let (ctx, spending_key) = {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.prepare_shield_funds(request.account_id, &request.reauth_token)?
+        };
+
+        let mut conn = open_wallet_db_for_tx(&ctx)?;
+        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        tx_svc.shield_funds(
+            &ctx.app_db_path,
+            ctx.wallet_id,
+            ctx.network,
+            &ctx.wallet_dir,
+            &ctx.dek,
+            &mut conn,
+            &ctx.grpc_url,
             request.account_id,
             request.consolidate,
-            &request.reauth_token,
+            spending_key,
             None,
         )
     })
