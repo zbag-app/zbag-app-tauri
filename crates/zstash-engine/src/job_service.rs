@@ -22,8 +22,8 @@ use zstash_core::ipc::v1::events::{JobProgressEvent, TransactionChangedEvent};
 use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
 
 use crate::broadcast::{
-    classify_broadcast_error_message, is_retryable_broadcast_error_class,
-    retry_backoff_with_jitter, send_with_timeout,
+    classify_broadcast_error_message, is_effective_success_broadcast_error,
+    is_retryable_broadcast_error_class, retry_backoff_with_jitter, send_with_timeout,
 };
 use crate::encryption::Dek;
 use crate::tx_service::QueuedBroadcastMeta;
@@ -545,8 +545,15 @@ async fn run_send_job(
             }
             Err(e) => {
                 let err_msg = format!("{e:#}");
-                let err_class = classify_broadcast_error_message(&err_msg);
-                let retryable = is_retryable_broadcast_error_class(err_class);
+                let Some((err_class, retryable)) = classify_job_broadcast_failure(&err_msg) else {
+                    info!(
+                        job_id = %job_id,
+                        txid = %txid,
+                        duplicate_error = %err_msg,
+                        "broadcast reported duplicate relay; treating as success"
+                    );
+                    continue;
+                };
                 debug!(
                     job_id = %job_id,
                     txid = %txid,
@@ -1108,8 +1115,15 @@ fn shield_funds_blocking(
 
             if let Err(e) = result {
                 let error = format!("{e:#}");
-                let err_class = classify_broadcast_error_message(&error);
-                let retryable = is_retryable_broadcast_error_class(err_class);
+                let Some((err_class, retryable)) = classify_job_broadcast_failure(&error) else {
+                    info!(
+                        job_id = %job_id,
+                        txid = %txid_str,
+                        duplicate_error = %error,
+                        "broadcast reported duplicate relay; treating as success"
+                    );
+                    continue;
+                };
                 debug!(
                     job_id = %job_id,
                     txid = %txid_str,
@@ -1194,6 +1208,17 @@ async fn broadcast_transaction(
     send_with_timeout(client.send_transaction(tx_bytes.to_vec())).await
 }
 
+fn classify_job_broadcast_failure(
+    error_message: &str,
+) -> Option<(crate::broadcast::BroadcastErrorClass, bool)> {
+    if is_effective_success_broadcast_error(error_message) {
+        return None;
+    }
+    let err_class = classify_broadcast_error_message(error_message);
+    let retryable = is_retryable_broadcast_error_class(err_class);
+    Some((err_class, retryable))
+}
+
 fn queue_broadcast_for_retry(
     wallet_id: &Uuid,
     wallet_dir: &std::path::Path,
@@ -1270,5 +1295,28 @@ fn zcash_consensus_network(network: Network) -> zcash_protocol::consensus::Netwo
     match network {
         Network::Mainnet => zcash_protocol::consensus::Network::MainNetwork,
         Network::Testnet => zcash_protocol::consensus::Network::TestNetwork,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::broadcast::BroadcastErrorClass;
+
+    use super::classify_job_broadcast_failure;
+
+    #[test]
+    fn duplicate_relay_errors_are_treated_as_success_for_jobs() {
+        let decision =
+            classify_job_broadcast_failure("sendrawtransaction RPC error: already known");
+        assert!(decision.is_none());
+    }
+
+    #[test]
+    fn non_duplicate_errors_remain_retryable_failures_for_jobs() {
+        let decision = classify_job_broadcast_failure("send transaction timed out after 45s");
+        assert_eq!(
+            decision,
+            Some((BroadcastErrorClass::TransientTransport, true))
+        );
     }
 }

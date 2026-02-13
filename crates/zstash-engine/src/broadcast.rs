@@ -30,6 +30,12 @@ pub fn is_benign_duplicate_relay_message(message: &str) -> bool {
     is_benign_duplicate_relay_message_lowercase(&message.to_lowercase())
 }
 
+/// Returns true when a broadcast error message should be treated as an effective
+/// success because the transaction is already propagated upstream.
+pub fn is_effective_success_broadcast_error(message: &str) -> bool {
+    is_benign_duplicate_relay_message(message)
+}
+
 pub fn classify_broadcast_error_message(message: &str) -> BroadcastErrorClass {
     let lower = message.to_lowercase();
 
@@ -201,6 +207,26 @@ mod tests {
         let class = classify_broadcast_error_message("sendrawtransaction RPC error: already known");
         assert_eq!(class, BroadcastErrorClass::TransientServer);
         assert!(is_retryable_broadcast_error_class(class));
+    }
+
+    #[test]
+    fn duplicate_relay_messages_are_effective_successes() {
+        assert!(is_effective_success_broadcast_error(
+            "broadcast rejected: transaction already in mempool"
+        ));
+        assert!(is_effective_success_broadcast_error(
+            "sendrawtransaction RPC error: already known"
+        ));
+        assert!(is_effective_success_broadcast_error(
+            "txn-already-in-mempool"
+        ));
+    }
+
+    #[test]
+    fn non_duplicate_messages_are_not_effective_successes() {
+        assert!(!is_effective_success_broadcast_error(
+            "broadcast rejected: txn-mempool-conflict"
+        ));
     }
 
     #[test]

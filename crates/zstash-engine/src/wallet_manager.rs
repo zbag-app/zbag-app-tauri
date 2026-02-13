@@ -79,6 +79,9 @@ pub struct RetryBroadcastTask {
     wallet_network: Network,
     wallet_dir: PathBuf,
     wallet_db_path: PathBuf,
+    // This owned DEK copy is required so prepared manual retry tasks can be
+    // executed later without borrowing WalletManager state. `Dek` zeroizes its
+    // key material on drop via `#[zeroize(drop)]`.
     wallet_dek: Dek,
     grpc_url: String,
     app_db_path: PathBuf,
@@ -2054,6 +2057,8 @@ impl WalletManager {
     pub fn prepare_next_queued_broadcast_retry_task(
         &mut self,
     ) -> anyhow::Result<Option<RetryBroadcastTask>> {
+        // Product policy: queued retries are manual-only. This method prepares
+        // at most one due task for explicit caller-driven execution.
         let (wallet_id, wallet_dir) = {
             let Some(active) = self.active_wallet.as_ref() else {
                 return Ok(None);
@@ -2226,6 +2231,8 @@ impl WalletManager {
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<usize> {
+        // Compatibility helper for callers that explicitly invoke queued retry
+        // processing. This is not an autonomous background scheduler.
         let Some(task) = self.prepare_next_queued_broadcast_retry_task()? else {
             return Ok(0);
         };
@@ -2239,7 +2246,7 @@ impl WalletManager {
                 wallet_id = %wallet_id,
                 txid = %txid,
                 error = ?err,
-                "auto retry attempt failed"
+                "queued retry attempt failed"
             );
             return Ok(0);
         }

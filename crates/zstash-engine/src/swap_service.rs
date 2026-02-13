@@ -195,6 +195,17 @@ impl SwapService {
         })
     }
 
+    fn try_acquire_refresh_inflight_guard(&self, swap_id: Uuid) -> Option<RefreshInFlightGuard> {
+        let state = Arc::clone(&self.state);
+        let mut lock = state.lock().expect("mutex poisoned");
+        if !lock.refresh_inflight.insert(swap_id) {
+            return None;
+        }
+        drop(lock);
+
+        Some(RefreshInFlightGuard { state, swap_id })
+    }
+
     fn resolve_asset_decimals(&self, asset_id: &str) -> anyhow::Result<u8> {
         let asset_id = asset_id.trim();
         if asset_id.is_empty() {
@@ -783,11 +794,7 @@ impl SwapService {
             });
         };
 
-        let refresh_acquired = {
-            let mut state = self.state.lock().expect("mutex poisoned");
-            state.refresh_inflight.insert(swap_id)
-        };
-        if !refresh_acquired {
+        let Some(_refresh_guard) = self.try_acquire_refresh_inflight_guard(swap_id) else {
             tracing::debug!(
                 wallet_id = %wallet_id,
                 swap_id = %swap_id,
@@ -797,10 +804,6 @@ impl SwapService {
                 schema_version: SCHEMA_VERSION,
                 swap,
             });
-        }
-        let _refresh_guard = RefreshInFlightGuard {
-            state: Arc::clone(&self.state),
-            swap_id,
         };
 
         // Query remote API for latest status

@@ -141,6 +141,57 @@ fn spawn_mock_status_server(
     (base_url, handle, request_count)
 }
 
+/// Spawn a mock server that delays successful status responses.
+fn spawn_mock_status_server_with_delay(
+    status: &'static str,
+    expected_requests: usize,
+    response_delay: Duration,
+) -> (String, thread::JoinHandle<()>, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
+    listener
+        .set_nonblocking(true)
+        .expect("set mock listener non-blocking");
+    let addr = listener.local_addr().expect("server addr");
+    let base_url = format!("http://{addr}");
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let request_count_clone = Arc::clone(&request_count);
+
+    let handle = thread::spawn(move || {
+        for _ in 0..expected_requests {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(conn) => break conn,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            panic!("mock status server timed out waiting for request");
+                        }
+                        thread::sleep(Duration::from_millis(25));
+                    }
+                    Err(err) => panic!("mock status server accept failed: {err}"),
+                }
+            };
+            request_count_clone.fetch_add(1, Ordering::SeqCst);
+            let mut buf = [0u8; 16 * 1024];
+            let _ = stream.read(&mut buf).expect("read request");
+
+            thread::sleep(response_delay);
+
+            let body = format!(r#"{{"status":"{status}"}}"#);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+        }
+    });
+
+    (base_url, handle, request_count)
+}
+
 /// Spawn a mock server that returns an error response.
 fn spawn_mock_error_server(expected_requests: usize) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");
@@ -419,6 +470,67 @@ fn refresh_swap_status_stores_error_on_api_failure() {
     assert!(res.swap.last_error.as_ref().unwrap().contains("500"));
 
     server.join().expect("server joined");
+}
+
+#[test]
+fn refresh_swap_status_is_noop_when_refresh_is_already_inflight() {
+    let root = temp_root("us16_refresh_inflight_single_remote_call");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mgr = WalletManager::new_with_wallets_root(
+        app_db_path.clone(),
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let wallet = mgr
+        .lock()
+        .expect("mutex poisoned")
+        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let swap = create_test_swap(SwapState::AwaitingDeposit, true);
+    let conn = open_app_db(&app_db_path).expect("open app db");
+    insert_swap_directly(&conn, wallet.id, &swap).expect("insert swap");
+    drop(conn);
+
+    let (base_url, server, request_count) =
+        spawn_mock_status_server_with_delay("SUCCESS", 1, Duration::from_millis(350));
+    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+        .expect("near client");
+    let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
+
+    let swap_service_for_thread = swap_service.clone();
+    let refresh_thread = thread::spawn(move || {
+        swap_service_for_thread
+            .refresh_swap_status(wallet.id, swap.id, None)
+            .expect("first refresh should succeed")
+    });
+
+    thread::sleep(Duration::from_millis(75));
+
+    let second_started = Instant::now();
+    let second = swap_service
+        .refresh_swap_status(wallet.id, swap.id, None)
+        .expect("second refresh should succeed");
+    let second_elapsed = second_started.elapsed();
+
+    let first = refresh_thread.join().expect("first refresh thread joined");
+    server.join().expect("server joined");
+
+    assert!(
+        second_elapsed < Duration::from_millis(250),
+        "second refresh should return quickly when in-flight; elapsed: {:?}",
+        second_elapsed
+    );
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+    assert_eq!(second.swap.state, SwapState::AwaitingDeposit);
+    assert_eq!(first.swap.state, SwapState::Confirming);
 }
 
 #[test]

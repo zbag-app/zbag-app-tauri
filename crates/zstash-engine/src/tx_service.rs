@@ -30,7 +30,7 @@ use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::{ServerFailoverEvent, TransactionChangedEvent};
 
 use crate::broadcast::{
-    BroadcastErrorClass, classify_broadcast_error_message, is_benign_duplicate_relay_message,
+    BroadcastErrorClass, classify_broadcast_error_message, is_effective_success_broadcast_error,
     is_retryable_broadcast_error_class, retry_backoff_with_jitter, retry_budget_terminal_reason,
     send_with_timeout, should_trigger_failover,
 };
@@ -2681,7 +2681,7 @@ impl<C: Clock> TxService<C> {
             Ok(()) => Ok(()),
             Err(err) => {
                 let err_msg = format!("{err:#}");
-                if is_benign_duplicate_relay_message(&err_msg) {
+                if is_effective_success_broadcast_error(&err_msg) {
                     info!(
                         wallet_id = %ctx.wallet_id,
                         account_id = ?ctx.account_id,

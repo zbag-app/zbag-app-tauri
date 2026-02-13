@@ -148,6 +148,11 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
   const syncRefreshInFlightRef = useRef(false);
   const offsetRef = useRef(0);
 
+  const applyOffset = useCallback((nextOffset: number) => {
+    setOffset(nextOffset);
+    offsetRef.current = nextOffset;
+  }, []);
+
   // Use centralized fiat display context
   const { settings: fiatSettings, rate: exchangeRate, isStale: fiatIsStale } = useFiatDisplayContext();
 
@@ -181,8 +186,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
         }
         setTransactions(res.ok.transactions);
         setTotalCount(res.ok.total_count);
-        setOffset(nextOffset);
-        offsetRef.current = nextOffset;
+        applyOffset(nextOffset);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load transactions';
         setError(message);
@@ -190,7 +194,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
         setLoading(false);
       }
     },
-    [activeAccountId]
+    [activeAccountId, applyOffset]
   );
 
   useEffect(() => {
@@ -198,8 +202,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     setRetryPassword('');
     setRetryError(null);
     setSubscriptionErrors({ ...EMPTY_SUBSCRIPTION_ERRORS });
-    setOffset(0);
-    offsetRef.current = 0;
+    applyOffset(0);
     setTransactions([]);
     setTotalCount(0);
     lastSyncFrontierRef.current = null;
@@ -208,7 +211,7 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     syncRefreshInFlightRef.current = false;
     if (activeAccountId == null) return;
     void load(0);
-  }, [activeAccountId, load]);
+  }, [activeAccountId, applyOffset, load]);
 
   const loadSwaps = useCallback(async () => {
     try {
