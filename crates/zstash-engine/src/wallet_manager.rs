@@ -2422,6 +2422,13 @@ impl WalletManager {
         self.active_wallet.as_ref().map(|w| w.wallet.clone())
     }
 
+    pub fn is_active_wallet_unlocked(&self, wallet_id: Uuid) -> bool {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return false;
+        };
+        active.wallet.id == wallet_id && active.lock_status == WalletLockStatus::Unlocked
+    }
+
     pub fn ensure_server_network_matches_active_wallet(
         &self,
         server_network: Network,

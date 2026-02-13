@@ -1209,12 +1209,7 @@ fn is_active_wallet(wallet_manager: &Arc<Mutex<WalletManager>>, wallet_id: Uuid)
     let Ok(mgr) = wallet_manager.lock() else {
         return false;
     };
-
-    let Some(active_wallet) = mgr.active_wallet_info() else {
-        return false;
-    };
-
-    active_wallet.id == wallet_id
+    mgr.is_active_wallet_unlocked(wallet_id)
 }
 
 fn parse_zatoshis(value: &str) -> Option<u64> {

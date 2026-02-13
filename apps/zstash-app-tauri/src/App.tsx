@@ -121,7 +121,7 @@ function AppInner() {
 
   // Resume pending swaps when wallet becomes ready
   useEffect(() => {
-    if (activeWalletId == null) return;
+    if (startup.kind !== 'ready') return;
     setResumePendingSwapsError(null);
 
     // Resume polling for any in-progress swaps from previous sessions
@@ -181,7 +181,7 @@ function AppInner() {
       cancelled = true;
       cancelSleep();
     };
-  }, [activeWalletId, resumePendingSwapsRetryNonce]);
+  }, [startup.kind, resumePendingSwapsRetryNonce]);
 
   // Throttled sync progress updates
   const throttledSetSync = useThrottledCallback(
