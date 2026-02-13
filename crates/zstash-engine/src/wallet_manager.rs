@@ -2205,6 +2205,7 @@ impl WalletManager {
                 error = ?err,
                 "auto retry attempt failed"
             );
+            return Ok(0);
         }
 
         Ok(1)

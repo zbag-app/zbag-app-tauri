@@ -71,6 +71,7 @@ function AppInner() {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
     return null;
   }, [startup]);
+  const resumePendingSwapsWalletId = startup.kind === 'ready' ? startup.wallet.id : null;
 
   const { activeAccountId, setActiveAccountId: _setActiveAccountId } = useActiveAccount(activeWalletId, accounts);
   const activeAccount = useMemo(() => {
@@ -121,7 +122,7 @@ function AppInner() {
 
   // Resume pending swaps when wallet becomes ready
   useEffect(() => {
-    if (startup.kind !== 'ready') return;
+    if (resumePendingSwapsWalletId == null) return;
     setResumePendingSwapsError(null);
 
     // Resume polling for any in-progress swaps from previous sessions
@@ -181,7 +182,7 @@ function AppInner() {
       cancelled = true;
       cancelSleep();
     };
-  }, [startup.kind, resumePendingSwapsRetryNonce]);
+  }, [resumePendingSwapsWalletId, resumePendingSwapsRetryNonce]);
 
   // Throttled sync progress updates
   const throttledSetSync = useThrottledCallback(
