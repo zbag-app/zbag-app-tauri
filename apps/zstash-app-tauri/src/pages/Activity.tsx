@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { History, ChevronLeft, ChevronRight, AlertCircle, Copy, ChevronDown, ChevronUp, Check, FileText } from 'lucide-react';
+import {
+  History,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  FileText,
+  RefreshCw,
+} from 'lucide-react';
 import type * as IPC from '../types/ipc';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -160,10 +171,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
 
   const canPagePrev = useMemo(() => offset > 0, [offset]);
   const canPageNext = useMemo(() => offset + limit < totalCount, [offset, limit, totalCount]);
-  const hasPendingTransactions = useMemo(
-    () => transactions.some((tx) => tx.status === 'Pending'),
-    [transactions]
-  );
   const failedSubscriptionLabels = useMemo(
     () =>
       (Object.entries(subscriptionErrors) as [LiveSubscriptionKey, string | null][])
@@ -268,7 +275,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     onSyncProgress((event) => {
         if (cancelled) return;
         if (activeAccountId == null) return;
-        if (!hasPendingTransactions) return;
 
         const frontier = event.progress.scan_frontier_height;
         const tip = event.progress.wallet_tip_height;
@@ -325,7 +331,6 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
     };
   }, [
     activeAccountId,
-    hasPendingTransactions,
     triggerSyncRefresh,
     markSubscriptionHealthy,
     markSubscriptionFailed,
@@ -465,13 +470,23 @@ export function Activity(props: { walletId: string; activeAccountId: number | nu
 
   return (
     <div className="space-y-6 animate-[fade-in-up_0.4s_ease-out]">
-      <div className="flex items-center">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
             <History className="h-5 w-5 text-primary" />
           </div>
           <h1 className="text-2xl font-bold">Activity</h1>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={refreshActivityData}
+          disabled={activeAccountId == null || loading}
+          className="shrink-0"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
 
       {activeAccountId == null && (
