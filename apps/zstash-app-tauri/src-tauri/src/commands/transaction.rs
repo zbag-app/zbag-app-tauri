@@ -159,15 +159,10 @@ pub async fn zstash_retry_broadcast(
 
     let join = tauri::async_runtime::spawn_blocking(move || {
         map_anyhow(|| {
-            let task = {
-                let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-                mgr.prepare_retry_broadcast_task(&txid, &reauth_token)?
-            };
-            let txid = zstash_engine::wallet_manager::WalletManager::execute_retry_broadcast_task(
-                task,
-                Some(handler),
-                Some(failover_handler),
-            )?;
+            let mut mgr = wallet_manager.lock().expect("mutex poisoned");
+            let task = mgr.prepare_retry_broadcast_task(&txid, &reauth_token)?;
+            let txid =
+                mgr.execute_retry_broadcast_task(task, Some(handler), Some(failover_handler))?;
             Ok(RetryBroadcastResponse {
                 schema_version: SCHEMA_VERSION,
                 txid,

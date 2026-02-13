@@ -1249,9 +1249,16 @@ fn queue_broadcast_for_retry(
         attempt_count: 0,
         next_attempt_at_ms,
         last_attempt_at_ms: Some(now_ms),
-        transport_failure_streak: 0,
+        transport_failure_streak: if last_error_class
+            == Some(crate::broadcast::BroadcastErrorClass::TransientTransport)
+        {
+            1
+        } else {
+            0
+        },
         retryable,
         last_error_class,
+        terminal_reason: None,
         last_error,
     };
     write_file_secure(&meta_path, &serde_json::to_vec_pretty(&meta)?)?;

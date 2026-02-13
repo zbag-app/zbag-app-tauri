@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 pub const SEND_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(45);
 pub const FAILOVER_TRANSPORT_FAILURE_THRESHOLD: u32 = 2;
+pub const MAX_TOTAL_BROADCAST_RETRY_ATTEMPTS: u32 = 7;
+pub const MAX_UNKNOWN_BROADCAST_RETRY_ATTEMPTS: u32 = 3;
 
 const RETRY_SCHEDULE_SECS: [u64; 7] = [5, 15, 45, 120, 300, 900, 1_800];
 const RETRY_JITTER_RATIO: f64 = 0.2;
@@ -91,6 +93,21 @@ pub fn should_trigger_failover(transport_failure_streak: u32) -> bool {
     transport_failure_streak >= FAILOVER_TRANSPORT_FAILURE_THRESHOLD
 }
 
+pub fn retry_budget_terminal_reason(
+    class: BroadcastErrorClass,
+    attempt_count: u32,
+) -> Option<&'static str> {
+    if class == BroadcastErrorClass::Unknown
+        && attempt_count >= MAX_UNKNOWN_BROADCAST_RETRY_ATTEMPTS
+    {
+        return Some("unknown broadcast retry budget exhausted");
+    }
+    if attempt_count >= MAX_TOTAL_BROADCAST_RETRY_ATTEMPTS {
+        return Some("broadcast retry budget exhausted");
+    }
+    None
+}
+
 pub async fn send_with_timeout<F>(send_future: F) -> anyhow::Result<()>
 where
     F: Future<Output = anyhow::Result<()>>,
@@ -170,6 +187,32 @@ mod tests {
     fn failover_triggers_after_repeated_transport_failures() {
         assert!(!should_trigger_failover(1));
         assert!(should_trigger_failover(2));
+    }
+
+    #[test]
+    fn unknown_retry_budget_exhausts_before_total_budget() {
+        assert_eq!(
+            retry_budget_terminal_reason(BroadcastErrorClass::Unknown, 2),
+            None
+        );
+        assert_eq!(
+            retry_budget_terminal_reason(
+                BroadcastErrorClass::Unknown,
+                MAX_UNKNOWN_BROADCAST_RETRY_ATTEMPTS
+            ),
+            Some("unknown broadcast retry budget exhausted")
+        );
+    }
+
+    #[test]
+    fn total_retry_budget_applies_for_all_retryable_classes() {
+        assert_eq!(
+            retry_budget_terminal_reason(
+                BroadcastErrorClass::TransientTransport,
+                MAX_TOTAL_BROADCAST_RETRY_ATTEMPTS
+            ),
+            Some("broadcast retry budget exhausted")
+        );
     }
 
     #[tokio::test]

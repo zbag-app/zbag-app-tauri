@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use zstash_core::domain::{AddressType, Network};
 use zstash_core::errors;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 use zstash_engine::db::backup_meta;
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
@@ -348,4 +349,41 @@ fn queued_broadcasts_with_invalid_metadata_are_dropped() {
         !queue_dir.join(format!("{txid}.json")).exists(),
         "invalid metadata should be deleted"
     );
+}
+
+#[test]
+fn prepared_retry_task_revalidates_wallet_unlocked_state_before_execution() {
+    let root = temp_root("us2_retry_revalidation");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+
+    let wallet = mgr
+        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .expect("create wallet")
+        .wallet;
+
+    let (reauth_token, _expires_at) = mgr
+        .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
+        .expect("reauth wallet");
+    let task = mgr
+        .prepare_retry_broadcast_task(
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            &reauth_token,
+        )
+        .expect("prepare retry task");
+
+    mgr.lock_wallet(wallet.id).expect("lock wallet");
+
+    let err = mgr
+        .execute_retry_broadcast_task(task, None, None)
+        .expect_err("locked wallet must block prepared retry task execution");
+    let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
+    assert_eq!(ipc.code, errors::WALLET_LOCKED);
 }

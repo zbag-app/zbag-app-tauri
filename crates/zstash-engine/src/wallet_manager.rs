@@ -2034,7 +2034,7 @@ impl WalletManager {
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<String> {
         let task = self.prepare_retry_broadcast_task(txid, reauth_token)?;
-        Self::execute_retry_broadcast_task(task, on_tx_changed, on_failover)
+        self.execute_retry_broadcast_task(task, on_tx_changed, on_failover)
     }
 
     pub fn prepare_retry_broadcast_task(
@@ -2080,6 +2080,16 @@ impl WalletManager {
     }
 
     pub fn execute_retry_broadcast_task(
+        &mut self,
+        task: RetryBroadcastTask,
+        on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
+    ) -> anyhow::Result<String> {
+        self.ensure_retry_task_wallet_state(&task)?;
+        Self::execute_retry_broadcast_task_unchecked(task, on_tx_changed, on_failover)
+    }
+
+    fn execute_retry_broadcast_task_unchecked(
         task: RetryBroadcastTask,
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
@@ -2118,6 +2128,28 @@ impl WalletManager {
             on_tx_changed,
             on_failover,
         )
+    }
+
+    fn ensure_retry_task_wallet_state(&self, task: &RetryBroadcastTask) -> anyhow::Result<()> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+        if active.lock_status != WalletLockStatus::Unlocked {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.id != task.wallet_id {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet.network != task.wallet_network {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.wallet_dir != task.wallet_dir {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        if active.dek.is_none() || active.wallet_db.is_none() {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        }
+        Ok(())
     }
 
     fn build_retry_broadcast_task(&mut self, txid: &str) -> anyhow::Result<RetryBroadcastTask> {
@@ -2166,17 +2198,14 @@ impl WalletManager {
         let tx_handler = on_tx_changed.clone();
         let failover_handler = on_failover.clone();
 
-        crate::tokio_runtime::spawn_blocking(move || {
-            if let Err(err) = Self::execute_retry_broadcast_task(task, tx_handler, failover_handler)
-            {
-                tracing::warn!(
-                    wallet_id = %wallet_id,
-                    txid = %txid,
-                    error = ?err,
-                    "auto retry attempt failed"
-                );
-            }
-        });
+        if let Err(err) = self.execute_retry_broadcast_task(task, tx_handler, failover_handler) {
+            tracing::warn!(
+                wallet_id = %wallet_id,
+                txid = %txid,
+                error = ?err,
+                "auto retry attempt failed"
+            );
+        }
 
         Ok(1)
     }

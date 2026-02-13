@@ -31,7 +31,8 @@ use zstash_core::ipc::v1::events::{ServerFailoverEvent, TransactionChangedEvent}
 
 use crate::broadcast::{
     BroadcastErrorClass, classify_broadcast_error_message, is_retryable_broadcast_error_class,
-    retry_backoff_with_jitter, send_with_timeout, should_trigger_failover,
+    retry_backoff_with_jitter, retry_budget_terminal_reason, send_with_timeout,
+    should_trigger_failover,
 };
 use crate::db::AppDb;
 use crate::encryption::Dek;
@@ -101,11 +102,64 @@ pub(crate) struct QueuedBroadcastMeta {
     pub retryable: bool,
     #[serde(default)]
     pub last_error_class: Option<BroadcastErrorClass>,
+    #[serde(default)]
+    pub terminal_reason: Option<String>,
     pub last_error: Option<String>,
 }
 
 fn default_retryable() -> bool {
     true
+}
+
+fn apply_retry_policy(
+    retryable: bool,
+    attempt_count: u32,
+    last_error_class: Option<BroadcastErrorClass>,
+    terminal_reason: Option<String>,
+) -> (bool, Option<String>) {
+    let mut effective_retryable = retryable;
+    let mut effective_terminal_reason = terminal_reason;
+
+    if let Some(class) = last_error_class {
+        if !is_retryable_broadcast_error_class(class) {
+            effective_retryable = false;
+        } else if effective_retryable
+            && let Some(reason) = retry_budget_terminal_reason(class, attempt_count)
+        {
+            effective_retryable = false;
+            effective_terminal_reason = Some(reason.to_string());
+        }
+
+        if !effective_retryable && effective_terminal_reason.is_none() {
+            effective_terminal_reason = if is_retryable_broadcast_error_class(class) {
+                None
+            } else {
+                Some(format!(
+                    "broadcast error classified as terminal ({class:?})"
+                ))
+            };
+        }
+    }
+
+    if effective_retryable {
+        (true, None)
+    } else {
+        (false, effective_terminal_reason)
+    }
+}
+
+fn queued_broadcast_error_for_display(meta: &QueuedBroadcastMeta) -> Option<String> {
+    match (meta.last_error.as_deref(), meta.terminal_reason.as_deref()) {
+        (Some(last_error), Some(terminal_reason)) if last_error.contains(terminal_reason) => {
+            Some(last_error.to_string())
+        }
+        (Some(last_error), Some(terminal_reason)) => {
+            Some(format!("{last_error} [terminal: {terminal_reason}]"))
+        }
+        (Some(last_error), None) => Some(last_error.to_string()),
+        (None, Some(terminal_reason)) => Some(terminal_reason.to_string()),
+        (None, None) => None,
+    }
 }
 
 fn normalize_queued_broadcast_meta(
@@ -118,11 +172,14 @@ fn normalize_queued_broadcast_meta(
         meta.last_error_class = Some(classify_broadcast_error_message(last_error));
     }
 
-    if let Some(class) = meta.last_error_class
-        && !is_retryable_broadcast_error_class(class)
-    {
-        meta.retryable = false;
-    }
+    let (retryable, terminal_reason) = apply_retry_policy(
+        meta.retryable,
+        meta.attempt_count,
+        meta.last_error_class,
+        meta.terminal_reason,
+    );
+    meta.retryable = retryable;
+    meta.terminal_reason = terminal_reason;
 
     if meta.retryable && meta.next_attempt_at_ms.is_none() {
         meta.next_attempt_at_ms = Some(now_ms);
@@ -406,6 +463,7 @@ impl<C: Clock> TxService<C> {
                     meta: meta.clone(),
                 },
             );
+            let display_error = queued_broadcast_error_for_display(&meta);
             info!(
                 wallet_id = %wallet_id,
                 account_id = ?Option::<u32>::None,
@@ -414,7 +472,7 @@ impl<C: Clock> TxService<C> {
                 phase = "tx_service.scan_queued_broadcasts.loaded",
                 elapsed_ms = 0u128,
                 error_code = "none",
-                error_message = meta.last_error.as_deref().unwrap_or(""),
+                error_message = display_error.as_deref().unwrap_or(""),
                 decision = if meta.retryable {
                     "keep_pending_for_retry"
                 } else {
@@ -1331,7 +1389,7 @@ impl<C: Clock> TxService<C> {
         {
             (Some(entry), _) => (
                 TransactionStatus::Failed,
-                entry.meta.last_error.clone(),
+                queued_broadcast_error_for_display(&entry.meta),
                 entry.meta.retryable,
                 "initial_broadcast_failed_queued",
             ),
@@ -1743,7 +1801,7 @@ impl<C: Clock> TxService<C> {
                     {
                         (Some(entry), _) => (
                             TransactionStatus::Failed,
-                            entry.meta.last_error.clone(),
+                            queued_broadcast_error_for_display(&entry.meta),
                             entry.meta.retryable,
                         ),
                         (None, Some(err)) => (TransactionStatus::Failed, Some(err), false),
@@ -1907,8 +1965,13 @@ impl<C: Clock> TxService<C> {
                 Err(err) => {
                     let err_msg = format!("{err:#}");
                     let err_class = classify_broadcast_error_message(&err_msg);
-                    let retryable = is_retryable_broadcast_error_class(err_class);
                     attempt_count = attempt_count.saturating_add(1);
+                    let (retryable, _) = apply_retry_policy(
+                        is_retryable_broadcast_error_class(err_class),
+                        attempt_count,
+                        Some(err_class),
+                        None::<String>,
+                    );
                     transport_failure_streak =
                         if err_class == BroadcastErrorClass::TransientTransport {
                             transport_failure_streak.saturating_add(1)
@@ -2137,11 +2200,15 @@ impl<C: Clock> TxService<C> {
                 (TransactionStatus::Expired, _) => (None, false),
                 (TransactionStatus::Pending, Some(entry)) => {
                     status = TransactionStatus::Failed;
-                    (entry.meta.last_error.clone(), entry.meta.retryable)
+                    (
+                        queued_broadcast_error_for_display(&entry.meta),
+                        entry.meta.retryable,
+                    )
                 }
-                (TransactionStatus::Failed, Some(entry)) => {
-                    (entry.meta.last_error.clone(), entry.meta.retryable)
-                }
+                (TransactionStatus::Failed, Some(entry)) => (
+                    queued_broadcast_error_for_display(&entry.meta),
+                    entry.meta.retryable,
+                ),
                 _ => (None, false),
             };
             if status != status_before_queue {
@@ -2485,6 +2552,8 @@ fn queue_broadcast<C: Clock>(
         .with_context(|| format!("failed to write queued tx bytes: {}", bin_path.display()))?;
 
     let created_at_ms = to_unix_ms(clock.now())?;
+    let (retryable, terminal_reason) =
+        apply_retry_policy(retryable, 0, last_error_class, None::<String>);
     let next_attempt_at_ms = if retryable {
         Some(schedule_next_attempt_at_ms(created_at_ms, 0))
     } else {
@@ -2504,6 +2573,7 @@ fn queue_broadcast<C: Clock>(
         },
         retryable,
         last_error_class,
+        terminal_reason,
         last_error,
     };
     write_queued_broadcast_meta(
@@ -2514,6 +2584,7 @@ fn queue_broadcast<C: Clock>(
         "broadcast_failed",
     )?;
 
+    let display_error = queued_broadcast_error_for_display(&meta);
     info!(
         wallet_id = %wallet_id,
         account_id = ?Option::<u32>::None,
@@ -2522,7 +2593,7 @@ fn queue_broadcast<C: Clock>(
         phase = "tx_service.queue_broadcast.created",
         elapsed_ms = 0u128,
         error_code = "none",
-        error_message = meta.last_error.as_deref().unwrap_or(""),
+        error_message = display_error.as_deref().unwrap_or(""),
         reason = if meta.retryable {
             "broadcast_failed_queued_for_retry"
         } else {
@@ -2827,9 +2898,16 @@ fn update_queued_broadcast_error<C: Clock>(
             transport_failure_streak: 0,
             retryable: true,
             last_error_class: None,
+            terminal_reason: None,
             last_error: None,
         });
     let now_ms = to_unix_ms(clock.now())?;
+    let (retryable, terminal_reason) = apply_retry_policy(
+        retryable,
+        attempt_count,
+        last_error_class,
+        existing.terminal_reason.clone(),
+    );
 
     let updated = QueuedBroadcastMeta {
         created_at_ms: existing.created_at_ms,
@@ -2843,6 +2921,7 @@ fn update_queued_broadcast_error<C: Clock>(
         transport_failure_streak,
         retryable,
         last_error_class,
+        terminal_reason,
         last_error,
     };
     write_queued_broadcast_meta(
@@ -2875,6 +2954,7 @@ fn write_queued_broadcast_meta(
         )
     })?;
 
+    let display_error = queued_broadcast_error_for_display(meta);
     info!(
         wallet_id = %wallet_id_for_log,
         account_id = ?Option::<u32>::None,
@@ -2883,12 +2963,13 @@ fn write_queued_broadcast_meta(
         phase = "tx_service.queue_broadcast.updated",
         elapsed_ms = 0u128,
         error_code = "none",
-        error_message = meta.last_error.as_deref().unwrap_or(""),
+        error_message = display_error.as_deref().unwrap_or(""),
         reason,
         retryable = meta.retryable,
         attempt_count = meta.attempt_count,
         next_attempt_at_ms = ?meta.next_attempt_at_ms,
         last_error_class = ?meta.last_error_class,
+        terminal_reason = ?meta.terminal_reason,
         "queued broadcast decision"
     );
     Ok(())
@@ -3061,6 +3142,7 @@ mod tests {
                 transport_failure_streak: 2,
                 retryable: true,
                 last_error_class: Some(BroadcastErrorClass::TransientTransport),
+                terminal_reason: None,
                 last_error: Some("timed out".to_string()),
             },
             "test_due_old",
@@ -3079,6 +3161,7 @@ mod tests {
                 transport_failure_streak: 1,
                 retryable: true,
                 last_error_class: Some(BroadcastErrorClass::TransientTransport),
+                terminal_reason: None,
                 last_error: Some("unavailable".to_string()),
             },
             "test_due_new",
@@ -3097,6 +3180,7 @@ mod tests {
                 transport_failure_streak: 1,
                 retryable: true,
                 last_error_class: Some(BroadcastErrorClass::TransientTransport),
+                terminal_reason: None,
                 last_error: Some("temporarily unavailable".to_string()),
             },
             "test_not_due",
@@ -3115,6 +3199,7 @@ mod tests {
                 transport_failure_streak: 0,
                 retryable: false,
                 last_error_class: Some(BroadcastErrorClass::Terminal),
+                terminal_reason: None,
                 last_error: Some("txn-mempool-conflict".to_string()),
             },
             "test_terminal",
@@ -3206,6 +3291,77 @@ mod tests {
             Some(BroadcastErrorClass::Unknown)
         );
         assert!(entry.meta.next_attempt_at_ms.is_some());
+    }
+
+    #[test]
+    fn unknown_errors_become_terminal_after_retry_budget_is_exhausted() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(42_000);
+        let now_ms = to_unix_ms(now).expect("convert now");
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+        let wallet_id = Uuid::new_v4();
+        let root = temp_root("tx_service_unknown_budget_exhausted");
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0x55; 32]);
+        let txid = "unknown_budget_tx".to_string();
+
+        queue_broadcast(
+            &clock,
+            wallet_id,
+            &wallet_dir,
+            &wallet_dek,
+            txid.clone(),
+            &[0xAA, 0xBB],
+            Some("upstream unknown failure".to_string()),
+            Some(BroadcastErrorClass::Unknown),
+            true,
+        )
+        .expect("queue unknown broadcast");
+
+        write_queued_broadcast_meta(
+            Some(wallet_id),
+            &wallet_dir,
+            &txid,
+            &QueuedBroadcastMeta {
+                created_at_ms: now_ms - 1_000,
+                attempt_count: crate::broadcast::MAX_UNKNOWN_BROADCAST_RETRY_ATTEMPTS,
+                next_attempt_at_ms: Some(now_ms - 100),
+                last_attempt_at_ms: Some(now_ms - 200),
+                transport_failure_streak: 0,
+                retryable: true,
+                last_error_class: Some(BroadcastErrorClass::Unknown),
+                terminal_reason: None,
+                last_error: Some("upstream unknown failure".to_string()),
+            },
+            "test_unknown_retry_budget",
+        )
+        .expect("write unknown budget meta");
+
+        service
+            .scan_queued_broadcasts(wallet_id, &wallet_dir)
+            .expect("scan queued broadcasts");
+        let entry = service
+            .queued_broadcasts
+            .get(&wallet_id)
+            .and_then(|entries| entries.get(&txid))
+            .expect("unknown queued entry present");
+        assert!(!entry.meta.retryable);
+        assert_eq!(entry.meta.next_attempt_at_ms, None);
+        assert_eq!(
+            entry.meta.terminal_reason.as_deref(),
+            Some("unknown broadcast retry budget exhausted")
+        );
+        let display_error = queued_broadcast_error_for_display(&entry.meta)
+            .expect("display error should include terminal reason");
+        assert!(display_error.contains("unknown broadcast retry budget exhausted"));
+
+        let due = service
+            .list_due_retry_txids(wallet_id, &wallet_dir)
+            .expect("list due txids");
+        assert!(
+            due.is_empty(),
+            "terminal unknown error should not remain due"
+        );
     }
 
     #[test]
@@ -3456,6 +3612,102 @@ mod tests {
         assert!(
             !service.proposals.contains_key(&proposal_id),
             "expired proposal should be removed"
+        );
+    }
+
+    #[test]
+    fn retry_broadcast_propagates_retry_failure_as_error() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(60_000);
+        let clock = TestClock(now);
+        let mut service = TxService::new(clock);
+        let wallet_id = Uuid::new_v4();
+        let root = temp_root("tx_service_retry_failure_contract");
+        let wallet_dir = root.join("wallet");
+        let wallet_dek = Dek([0x66; 32]);
+        let txid = "1111111111111111111111111111111111111111111111111111111111111111";
+
+        let mut app_db = AppDb::open(root.join("app.db")).expect("open app db");
+        set_backup_not_required(&app_db, wallet_id);
+        crate::db::account_meta::upsert_account(
+            app_db.conn(),
+            wallet_id,
+            &zstash_core::domain::AccountInfo {
+                id: 0,
+                name: "Main".to_string(),
+                account_type: zstash_core::domain::AccountType::Software,
+            },
+            0,
+        )
+        .expect("insert app account");
+
+        queue_broadcast(
+            &clock,
+            wallet_id,
+            &wallet_dir,
+            &wallet_dek,
+            txid.to_string(),
+            &[0xAB, 0xCD],
+            Some("initial transport failure".to_string()),
+            Some(BroadcastErrorClass::TransientTransport),
+            true,
+        )
+        .expect("queue retryable broadcast");
+
+        let mut wallet_db_conn = Connection::open_in_memory().expect("open in-memory wallet db");
+        wallet_db_conn
+            .execute_batch(
+                "
+                CREATE TABLE accounts (
+                    uuid BLOB PRIMARY KEY,
+                    hd_account_index INTEGER NOT NULL
+                );
+                CREATE TABLE v_tx_outputs (
+                    txid BLOB NOT NULL,
+                    from_account_uuid BLOB
+                );
+                ",
+            )
+            .expect("create retry test schema");
+        let account_uuid = Uuid::new_v4();
+        let txid_bytes: Vec<u8> = hex::decode(txid)
+            .expect("decode txid")
+            .into_iter()
+            .rev()
+            .collect();
+        wallet_db_conn
+            .execute(
+                "INSERT INTO accounts (uuid, hd_account_index) VALUES (?1, ?2)",
+                rusqlite::params![account_uuid.as_bytes().to_vec(), 0i64],
+            )
+            .expect("insert wallet account");
+        wallet_db_conn
+            .execute(
+                "INSERT INTO v_tx_outputs (txid, from_account_uuid) VALUES (?1, ?2)",
+                rusqlite::params![txid_bytes, account_uuid.as_bytes().to_vec()],
+            )
+            .expect("insert output mapping");
+
+        let err = service
+            .retry_broadcast(
+                &mut app_db,
+                wallet_id,
+                Network::Testnet,
+                &wallet_dir,
+                &wallet_dek,
+                &mut wallet_db_conn,
+                "http://127.0.0.1:9",
+                txid,
+                None,
+                None,
+            )
+            .expect_err("retry failure must propagate as Err");
+        let err_msg = err.to_string().to_lowercase();
+        assert!(
+            err_msg.contains("connect")
+                || err_msg.contains("connection")
+                || err_msg.contains("unavailable")
+                || err_msg.contains("failed"),
+            "unexpected retry failure message: {err_msg}"
         );
     }
 
