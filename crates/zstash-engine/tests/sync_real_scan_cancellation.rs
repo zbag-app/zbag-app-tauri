@@ -170,7 +170,7 @@ fn stop_sync_during_real_scan_workload_stops_progress_and_allows_restart() {
     .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet(
+        .create_wallet_for_test(
             "Sync Stress Wallet",
             Network::Testnet,
             password,

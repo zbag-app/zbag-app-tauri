@@ -298,7 +298,7 @@ fn request_swap_quote_exact_output_sends_correct_swap_type() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -358,7 +358,7 @@ fn request_swap_quote_exact_output_requires_output_amount() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -411,7 +411,7 @@ fn request_swap_quote_exact_output_rejects_empty_output_amount() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -458,7 +458,7 @@ fn request_swap_quote_exact_output_rejects_whitespace_output_amount() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -510,7 +510,7 @@ fn request_swap_quote_exact_output_truncates_excess_decimals() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -564,7 +564,7 @@ fn request_swap_quote_exact_output_rejects_zero_output_amount() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -616,7 +616,7 @@ fn request_swap_quote_exact_output_resolves_decimals_from_tokens_for_unknown_ass
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -690,7 +690,7 @@ fn request_swap_quote_exact_output_rejects_unknown_asset_missing_from_tokens() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -762,7 +762,7 @@ fn request_swap_quote_exact_output_omits_app_fees_in_development_mode() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 

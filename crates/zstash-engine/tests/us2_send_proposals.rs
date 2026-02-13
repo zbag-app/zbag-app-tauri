@@ -365,17 +365,19 @@ fn prepared_retry_task_revalidates_wallet_unlocked_state_before_lock_free_execut
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
+    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
     let task = mgr
         .prepare_retry_broadcast_task(
             "1111111111111111111111111111111111111111111111111111111111111111",
             &reauth_token,
+            &tx_service,
         )
         .expect("prepare retry task");
 
@@ -402,17 +404,19 @@ fn prepared_retry_task_can_execute_without_wallet_manager_guard() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
+    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
     let task = mgr
         .prepare_retry_broadcast_task(
             "1111111111111111111111111111111111111111111111111111111111111111",
             &reauth_token,
+            &tx_service,
         )
         .expect("prepare retry task");
 
@@ -436,7 +440,7 @@ fn prepared_retry_task_survives_active_wallet_switch_before_execute() {
     .expect("create wallet manager");
 
     let wallet_a = mgr
-        .create_wallet("Wallet A", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Wallet A", Network::Testnet, "pw", false, None)
         .expect("create wallet A")
         .wallet;
 
@@ -444,12 +448,13 @@ fn prepared_retry_task_survives_active_wallet_switch_before_execute() {
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet_a.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet A");
+    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
     let task = mgr
-        .prepare_retry_broadcast_task(txid, &reauth_token)
+        .prepare_retry_broadcast_task(txid, &reauth_token, &tx_service)
         .expect("prepare retry task for wallet A");
 
     let _wallet_b = mgr
-        .create_wallet("Wallet B", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Wallet B", Network::Testnet, "pw", false, None)
         .expect("create wallet B")
         .wallet;
 
@@ -479,7 +484,7 @@ fn queued_retry_task_is_blocked_without_explicit_reauth() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -503,8 +508,9 @@ fn queued_retry_task_is_blocked_without_explicit_reauth() {
     )
     .expect("write queued metadata");
 
+    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
     let task = mgr
-        .prepare_next_queued_broadcast_retry_task()
+        .prepare_next_queued_broadcast_retry_task(&mut tx_service)
         .expect("prepare queued retry task")
         .expect("queued retry task should be available");
 
@@ -528,7 +534,7 @@ fn process_queued_broadcast_retries_returns_zero_when_retry_attempt_fails() {
     .expect("create wallet manager");
 
     let wallet = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -552,8 +558,9 @@ fn process_queued_broadcast_retries_returns_zero_when_retry_attempt_fails() {
     )
     .expect("write queued metadata");
 
+    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
     let processed = mgr
-        .process_queued_broadcast_retries(None, None)
+        .process_queued_broadcast_retries(None, None, &mut tx_service)
         .expect("process queued broadcast retries");
 
     assert_eq!(

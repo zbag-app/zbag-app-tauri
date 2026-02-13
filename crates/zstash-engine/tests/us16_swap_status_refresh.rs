@@ -295,7 +295,7 @@ fn refresh_swap_status_updates_state_from_remote() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -341,7 +341,7 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -396,7 +396,7 @@ fn refresh_swap_status_is_noop_without_deposit_address() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -441,7 +441,7 @@ fn refresh_swap_status_stores_error_on_api_failure() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -489,7 +489,7 @@ fn refresh_swap_status_is_noop_when_refresh_is_already_inflight() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -550,7 +550,7 @@ fn refresh_swap_status_clears_stale_last_error_on_success_without_state_change()
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -601,7 +601,7 @@ fn refresh_swap_status_rejects_wrong_wallet() {
     let wallet_a = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Wallet A", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Wallet A", Network::Mainnet, "pw", false, None)
         .expect("create wallet A")
         .wallet;
 
@@ -609,7 +609,7 @@ fn refresh_swap_status_rejects_wrong_wallet() {
     let wallet_b = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Wallet B", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Wallet B", Network::Mainnet, "pw", false, None)
         .expect("create wallet B")
         .wallet;
 
@@ -652,7 +652,7 @@ fn resume_pending_swaps_resumes_non_terminal_only() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -702,7 +702,7 @@ fn resume_pending_swaps_is_idempotent_on_second_call() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -745,7 +745,7 @@ fn resume_pending_swaps_skips_expired_awaiting_deposit_swaps_only() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -793,7 +793,7 @@ fn resume_pending_swaps_skips_swaps_without_deposit_address() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
@@ -835,14 +835,14 @@ fn resume_pending_swaps_stops_when_active_wallet_changes() {
     let wallet_a = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Wallet A", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Wallet A", Network::Mainnet, "pw", false, None)
         .expect("create wallet A")
         .wallet;
 
     let wallet_b = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Wallet B", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Wallet B", Network::Mainnet, "pw", false, None)
         .expect("create wallet B")
         .wallet;
 
@@ -853,7 +853,7 @@ fn resume_pending_swaps_stops_when_active_wallet_changes() {
 
     mgr.lock()
         .expect("mutex poisoned")
-        .load_wallet(wallet_a.id)
+        .load_wallet_for_test(wallet_a.id)
         .expect("load wallet A");
 
     let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
@@ -868,7 +868,7 @@ fn resume_pending_swaps_stops_when_active_wallet_changes() {
 
     mgr.lock()
         .expect("mutex poisoned")
-        .load_wallet(wallet_b.id)
+        .load_wallet_for_test(wallet_b.id)
         .expect("load wallet B");
 
     // Wait up to 10s for the old poller to observe the wallet switch and exit.

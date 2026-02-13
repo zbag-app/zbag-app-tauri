@@ -12,6 +12,7 @@ use anyhow::Result;
 use uuid::Uuid;
 
 use zstash_core::domain::{Network, WalletInfo, WalletLockStatus};
+use zstash_core::permissions::create_dir_all_secure;
 use zstash_engine::reauth::SystemClock;
 use zstash_engine::sync_service::SyncService;
 use zstash_engine::tx_service::TxService;

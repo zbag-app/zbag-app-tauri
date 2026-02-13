@@ -386,7 +386,7 @@ pub async fn run(
             let result_txid = {
                 let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
                 let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-                wm.retry_broadcast(&txid, &reauth_token, None, &mut tx_svc)?
+                wm.retry_broadcast(&txid, &reauth_token, None, None, &mut tx_svc)?
             };
 
             output.print_tx_sent(&result_txid);

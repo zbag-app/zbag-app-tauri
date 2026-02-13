@@ -294,7 +294,7 @@ fn keychain_auto_unlock_is_disabled() {
             .expect("create wallet manager");
 
     let (_wallet, lock_status) = mgr.load_wallet_for_test(wallet_id).expect("load wallet");
-    assert_eq!(lock_status, WalletLockStatus::Unlocked);
+    assert_eq!(lock_status, WalletLockStatus::Locked);
 
     // Reauth still validates password (doesn't require wallet to be unlocked)
     assert!(

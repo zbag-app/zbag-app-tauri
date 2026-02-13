@@ -212,7 +212,7 @@ fn verify_backup_accepts_case_insensitive_words() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let mut answers =
@@ -453,7 +453,7 @@ fn view_seed_phrase_returns_original_words() {
             .expect("create wallet manager");
 
     let created = mgr
-        .create_wallet("Test Wallet", Network::Testnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Testnet, "pw", false, None)
         .expect("create wallet");
 
     let (token, _expires_at) = mgr

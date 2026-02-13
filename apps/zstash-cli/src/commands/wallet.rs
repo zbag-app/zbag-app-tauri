@@ -139,10 +139,16 @@ pub async fn run(
             let birthday =
                 fetch_birthday_height_for_new_wallet(&grpc_url, state.tor_manager.clone()).await;
 
+            let password = match provided_password.take() {
+                Some(p) => p,
+                None => password::get_password_with_confirm(None)?,
+            };
+
             let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
             let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
             let result =
                 wm.create_wallet(&name, network, &password, remember, birthday, &mut tx_svc)?;
+            drop(password);
 
             output.print_wallet_created(&result.wallet, &result.seed_phrase);
         }
@@ -180,7 +186,7 @@ They may be stored in shell history or visible to other processes via process li
                 network,
                 &password,
                 remember,
-                &seed_phrase,
+                seed_phrase,
                 birthday_ms,
                 &mut tx_svc,
             )?;

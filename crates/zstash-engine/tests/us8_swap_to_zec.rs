@@ -235,16 +235,8 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
         spawn_mock_1click_quote_server(deadline_iso, expected_amount, recipient, refund_to);
     let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
-    let tx_service = std::sync::Arc::new(std::sync::Mutex::new(
-        zstash_engine::tx_service::TxService::new(zstash_engine::reauth::SystemClock),
-    ));
-    let swap = SwapService::new_with_near_client(
-        app_db_path,
-        Arc::clone(&mgr),
-        Arc::clone(&tx_service),
-        near,
-    )
-    .expect("create swap service");
+    let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
+        .expect("create swap service");
 
     let intent = SwapIntent {
         swap_type: SwapType::ToZec,
@@ -293,7 +285,7 @@ fn start_swap_rejects_expired_quote() {
     let wallet = mgr
         .lock()
         .expect("mutex poisoned")
-        .create_wallet("Test Wallet", Network::Mainnet, "pw", false, None)
+        .create_wallet_for_test("Test Wallet", Network::Mainnet, "pw", false, None)
         .expect("create wallet")
         .wallet;
 
