@@ -9,7 +9,7 @@ use zstash_core::ipc::v1::commands::transaction::{
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
 use zstash_engine::error::find_engine_ipc_error;
 
 use crate::events;
@@ -111,70 +111,10 @@ pub fn zstash_confirm_send(
         let _ = events::emit_transaction_changed(&app, event);
     });
 
-    let proposal_id = request.proposal_id.clone();
-    let started_at = Instant::now();
-    tracing::info!(
-        wallet_id = "-",
-        account_id = "unknown",
-        proposal_id = %proposal_id,
-        txid = "-",
-        phase = "tauri.zstash_confirm_send.start",
-        elapsed_ms = 0u128,
-        error_code = "none",
-        error_message = "",
-        "send lifecycle event"
-    );
-
-    let result = (|| {
-        let lock_wait_started = Instant::now();
+    map_anyhow(|| {
         let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        if zstash_engine::logging::temporary_debug_enabled() {
-            tracing::debug!(
-                proposal_id = %proposal_id,
-                phase = "tauri.zstash_confirm_send.wallet_manager_lock_acquired",
-                elapsed_ms = lock_wait_started.elapsed().as_millis(),
-                "temporary send debug"
-            );
-        }
         mgr.confirm_send(&request.proposal_id, &request.reauth_token, Some(handler))
-    })();
-
-    match result {
-        Ok(response) => {
-            tracing::info!(
-                wallet_id = "-",
-                account_id = "unknown",
-                proposal_id = %proposal_id,
-                txid = %response.txid,
-                phase = "tauri.zstash_confirm_send.success",
-                elapsed_ms = started_at.elapsed().as_millis(),
-                error_code = "none",
-                error_message = "",
-                "send lifecycle event"
-            );
-            IpcResult::ok(response)
-        }
-        Err(err) => {
-            let (error_code, error_message) = match find_engine_ipc_error(&err) {
-                Some(engine) => (engine.code.to_string(), engine.message.clone()),
-                None => (errors::INTERNAL_ERROR.to_string(), err.to_string()),
-            };
-            tracing::warn!(
-                wallet_id = "-",
-                account_id = "unknown",
-                proposal_id = %proposal_id,
-                txid = "-",
-                phase = "tauri.zstash_confirm_send.error",
-                elapsed_ms = started_at.elapsed().as_millis(),
-                error_code = %error_code,
-                error_message = %error_message,
-                "send lifecycle event"
-            );
-            IpcResult::Err {
-                err: to_ipc_error(err),
-            }
-        }
-    }
+    })
 }
 
 #[tauri::command(rename = "zstash_cancel_send")]
@@ -196,15 +136,18 @@ pub fn zstash_cancel_send(
 }
 
 #[tauri::command(rename = "zstash_retry_broadcast")]
-pub fn zstash_retry_broadcast(
+pub async fn zstash_retry_broadcast(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: RetryBroadcastRequest,
-) -> IpcResult<RetryBroadcastResponse> {
+) -> Result<IpcResult<RetryBroadcastResponse>, ()> {
     if let Err(err) = ensure_schema_version(request.schema_version) {
-        return IpcResult::Err { err };
+        return Ok(IpcResult::Err { err });
     }
 
+    let wallet_manager = Arc::clone(&state.wallet_manager);
+    let txid = request.txid;
+    let reauth_token = request.reauth_token;
     let tx_app = app.clone();
     let failover_app = app.clone();
     let handler = Arc::new(move |event| {
@@ -214,19 +157,34 @@ pub fn zstash_retry_broadcast(
         let _ = events::emit_server_failover(&failover_app, event);
     });
 
-    map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let txid = mgr.retry_broadcast(
-            &request.txid,
-            &request.reauth_token,
-            Some(handler),
-            Some(failover_handler),
-        )?;
-        Ok(RetryBroadcastResponse {
-            schema_version: SCHEMA_VERSION,
-            txid,
+    let join = tauri::async_runtime::spawn_blocking(move || {
+        map_anyhow(|| {
+            let task = {
+                let mut mgr = wallet_manager.lock().expect("mutex poisoned");
+                mgr.prepare_retry_broadcast_task(&txid, &reauth_token)?
+            };
+            let txid = zstash_engine::wallet_manager::WalletManager::execute_retry_broadcast_task(
+                task,
+                Some(handler),
+                Some(failover_handler),
+            )?;
+            Ok(RetryBroadcastResponse {
+                schema_version: SCHEMA_VERSION,
+                txid,
+            })
         })
-    })
+    });
+
+    match join.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(IpcResult::Err {
+            err: IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: "internal error".to_string(),
+                details: None,
+            },
+        }),
+    }
 }
 
 #[tauri::command(rename = "zstash_list_transactions")]

@@ -81,8 +81,13 @@ pub fn retry_broadcast_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let txid = mgr.retry_broadcast(&request.txid, &request.reauth_token, None, None)?;
+        let task = {
+            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.prepare_retry_broadcast_task(&request.txid, &request.reauth_token)?
+        };
+        let txid = zstash_engine::wallet_manager::WalletManager::execute_retry_broadcast_task(
+            task, None, None,
+        )?;
         Ok(RetryBroadcastResponse {
             schema_version: SCHEMA_VERSION,
             txid,

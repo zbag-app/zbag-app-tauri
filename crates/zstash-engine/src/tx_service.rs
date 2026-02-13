@@ -233,6 +233,10 @@ impl<C: Clock> TxService<C> {
         self.tor_manager = Some(tor_manager);
     }
 
+    pub fn tor_manager(&self) -> Option<Arc<zstash_tor::TorManager>> {
+        self.tor_manager.as_ref().map(Arc::clone)
+    }
+
     pub fn proposal_account_id(&self, proposal_id: &str) -> Option<u32> {
         self.proposals.get(proposal_id).map(|r| r.account_id)
     }
@@ -1381,20 +1385,33 @@ impl<C: Clock> TxService<C> {
             });
         }
 
-        if broadcast_errors.contains_key(&primary_txid) {
+        if let Some(err_msg) = broadcast_errors.get(&primary_txid) {
             // Broadcast failure is communicated via TransactionInfo status + queued metadata.
+            let lifecycle_err =
+                anyhow::anyhow!("initial broadcast failed for tx {primary_txid}: {err_msg}");
+            log_tx_lifecycle_error(
+                TxLogContext {
+                    wallet_id,
+                    account_id: Some(record.account_id),
+                    proposal_id: Some(proposal_id),
+                    txid: Some(&primary_txid),
+                    phase: "tx_service.confirm_send.complete",
+                },
+                confirm_started_at,
+                &lifecycle_err,
+            );
+        } else {
+            log_tx_lifecycle_success(
+                TxLogContext {
+                    wallet_id,
+                    account_id: Some(record.account_id),
+                    proposal_id: Some(proposal_id),
+                    txid: Some(&primary_txid),
+                    phase: "tx_service.confirm_send.complete",
+                },
+                confirm_started_at,
+            );
         }
-
-        log_tx_lifecycle_success(
-            TxLogContext {
-                wallet_id,
-                account_id: Some(record.account_id),
-                proposal_id: Some(proposal_id),
-                txid: Some(&primary_txid),
-                phase: "tx_service.confirm_send.success",
-            },
-            confirm_started_at,
-        );
 
         Ok(ConfirmSendResponse {
             schema_version: SCHEMA_VERSION,
@@ -2672,8 +2689,16 @@ impl<C: Clock> TxService<C> {
                 .map_err(|e| anyhow::anyhow!(e))
                 .context("failed to switch default server during failover")?;
             let now_ms = to_unix_ms(self.clock.now())?;
-            let _ =
-                crate::db::server_meta::update_last_success_at(app_db.conn(), candidate.id, now_ms);
+            if let Err(err) =
+                crate::db::server_meta::update_last_success_at(app_db.conn(), candidate.id, now_ms)
+            {
+                warn!(
+                    server_id = %candidate.id,
+                    grpc_url = %candidate.grpc_url,
+                    error = ?err,
+                    "failed to update server last_success_at during failover"
+                );
+            }
 
             info!(
                 network = ?network,

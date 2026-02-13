@@ -72,6 +72,18 @@ pub struct WalletManager {
     wallet_db_force_validate_fail: bool,
 }
 
+pub struct RetryBroadcastTask {
+    pub txid: String,
+    wallet_id: Uuid,
+    wallet_network: Network,
+    wallet_dir: PathBuf,
+    wallet_db_path: PathBuf,
+    wallet_dek: Dek,
+    grpc_url: String,
+    app_db_path: PathBuf,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+}
+
 #[derive(Debug)]
 struct ActiveWallet {
     wallet: WalletInfo,
@@ -2021,15 +2033,101 @@ impl WalletManager {
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<String> {
+        let task = self.prepare_retry_broadcast_task(txid, reauth_token)?;
+        Self::execute_retry_broadcast_task(task, on_tx_changed, on_failover)
+    }
+
+    pub fn prepare_retry_broadcast_task(
+        &mut self,
+        txid: &str,
+        reauth_token: &str,
+    ) -> anyhow::Result<RetryBroadcastTask> {
         let Some(active_wallet_id) = self.active_wallet.as_ref().map(|w| w.wallet.id) else {
             return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
         };
 
         self.consume_reauth_token(active_wallet_id, reauth_token, ReauthPurpose::Spend)?;
+        self.build_retry_broadcast_task(txid)
+    }
+
+    pub fn prepare_next_queued_broadcast_retry_task(
+        &mut self,
+    ) -> anyhow::Result<Option<RetryBroadcastTask>> {
+        let (wallet_id, wallet_dir) = {
+            let Some(active) = self.active_wallet.as_ref() else {
+                return Ok(None);
+            };
+            if active.lock_status != WalletLockStatus::Unlocked {
+                return Ok(None);
+            }
+            (active.wallet.id, active.wallet_dir.clone())
+        };
+
+        self.tx_service
+            .scan_queued_broadcasts(wallet_id, &wallet_dir)?;
+
+        let Some(txid) = self
+            .tx_service
+            .list_due_retry_txids(wallet_id, &wallet_dir)?
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+
+        let task = self.build_retry_broadcast_task(&txid)?;
+        Ok(Some(task))
+    }
+
+    pub fn execute_retry_broadcast_task(
+        task: RetryBroadcastTask,
+        on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
+    ) -> anyhow::Result<String> {
+        let mut app_db =
+            AppDb::open(&task.app_db_path).context("failed to open app db for retry broadcast")?;
+        let mut wallet_db_conn = open_sqlcipher_db(
+            &task.wallet_db_path,
+            &task.wallet_dek,
+            OpenSqlcipherOptions {
+                create_if_missing: false,
+                load_array_module: true,
+            },
+        )
+        .with_context(|| {
+            format!(
+                "failed to open wallet db for retry broadcast: {}",
+                task.wallet_db_path.display()
+            )
+        })?;
+
+        let mut tx_service = TxService::new(SystemClock);
+        if let Some(tor_manager) = task.tor_manager {
+            tx_service.set_tor_manager(tor_manager);
+        }
+
+        tx_service.retry_broadcast(
+            &mut app_db,
+            task.wallet_id,
+            task.wallet_network,
+            &task.wallet_dir,
+            &task.wallet_dek,
+            &mut wallet_db_conn,
+            &task.grpc_url,
+            &task.txid,
+            on_tx_changed,
+            on_failover,
+        )
+    }
+
+    fn build_retry_broadcast_task(&mut self, txid: &str) -> anyhow::Result<RetryBroadcastTask> {
         let (wallet_id, wallet_network, wallet_dir) = {
             let Some(active) = self.active_wallet.as_ref() else {
                 return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
             };
+            if active.lock_status != WalletLockStatus::Unlocked {
+                return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+            }
             (
                 active.wallet.id,
                 active.wallet.network,
@@ -2042,38 +2140,17 @@ impl WalletManager {
         let grpc_url = crate::server_resolver::resolve_grpc_url(&self.app_db, wallet_network)
             .context("failed to resolve active lightwalletd endpoint")?;
 
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-        if active.lock_status != WalletLockStatus::Unlocked {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        if active.wallet.id != wallet_id {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-        };
-
-        tx_service.retry_broadcast(
-            app_db,
+        Ok(RetryBroadcastTask {
+            txid: txid.to_string(),
             wallet_id,
             wallet_network,
-            &wallet_dir,
-            &wallet_dek,
-            conn,
-            &grpc_url,
-            txid,
-            on_tx_changed,
-            on_failover,
-        )
+            wallet_dir: wallet_dir.clone(),
+            wallet_db_path: self.wallet_db_path(&wallet_dir),
+            wallet_dek,
+            grpc_url,
+            app_db_path: self.app_db.path().to_path_buf(),
+            tor_manager: self.tx_service.tor_manager(),
+        })
     }
 
     pub fn process_queued_broadcast_retries(
@@ -2081,88 +2158,27 @@ impl WalletManager {
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<usize> {
-        let (wallet_id, wallet_network, wallet_dir) = {
-            let Some(active) = self.active_wallet.as_ref() else {
-                return Ok(0);
-            };
-            if active.lock_status != WalletLockStatus::Unlocked {
-                return Ok(0);
-            }
-            (
-                active.wallet.id,
-                active.wallet.network,
-                active.wallet_dir.clone(),
-            )
-        };
-
-        let wallet_dek = match self.unlocked_wallet_dek(wallet_id) {
-            Ok(dek) => dek,
-            Err(_) => return Ok(0),
-        };
-
-        let WalletManager {
-            app_db,
-            tx_service,
-            active_wallet,
-            ..
-        } = self;
-
-        let Some(active) = active_wallet.as_mut() else {
+        let Some(task) = self.prepare_next_queued_broadcast_retry_task()? else {
             return Ok(0);
         };
-        if active.lock_status != WalletLockStatus::Unlocked || active.wallet.id != wallet_id {
-            return Ok(0);
-        }
-        let Some(conn) = active.wallet_db.as_mut() else {
-            return Ok(0);
-        };
+        let wallet_id = task.wallet_id;
+        let txid = task.txid.clone();
+        let tx_handler = on_tx_changed.clone();
+        let failover_handler = on_failover.clone();
 
-        // Retry at most one queued tx per worker tick. This keeps the manager lock
-        // from being held across a long sequence of network retries.
-        let Some(txid) = tx_service
-            .list_due_retry_txids(wallet_id, &wallet_dir)?
-            .into_iter()
-            .next()
-        else {
-            return Ok(0);
-        };
-
-        let grpc_url = match crate::server_resolver::resolve_grpc_url(app_db, wallet_network) {
-            Ok(url) => url,
-            Err(err) => {
-                tracing::warn!(
-                    wallet_id = %wallet_id,
-                    network = ?wallet_network,
-                    error = ?err,
-                    "auto retry skipped: failed to resolve active lightwalletd endpoint"
-                );
-                return Ok(0);
-            }
-        };
-
-        match tx_service.retry_broadcast(
-            app_db,
-            wallet_id,
-            wallet_network,
-            &wallet_dir,
-            &wallet_dek,
-            conn,
-            &grpc_url,
-            &txid,
-            on_tx_changed,
-            on_failover,
-        ) {
-            Ok(_) => Ok(1),
-            Err(err) => {
+        crate::tokio_runtime::spawn_blocking(move || {
+            if let Err(err) = Self::execute_retry_broadcast_task(task, tx_handler, failover_handler)
+            {
                 tracing::warn!(
                     wallet_id = %wallet_id,
                     txid = %txid,
                     error = ?err,
                     "auto retry attempt failed"
                 );
-                Ok(0)
             }
-        }
+        });
+
+        Ok(1)
     }
 
     pub fn list_transactions(

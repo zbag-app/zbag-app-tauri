@@ -26,6 +26,11 @@ where
 ///
 /// - If called from within a Tokio runtime, uses `block_in_place` and the current handle.
 /// - If called from outside any runtime, uses a shared fallback runtime.
+///
+/// # Panics
+///
+/// Panics when called from a current-thread Tokio runtime, because
+/// `tokio::task::block_in_place` requires the multi-thread runtime.
 pub(crate) fn block_on<F: std::future::Future>(future: F) -> F::Output {
     match Handle::try_current() {
         Ok(handle) => tokio::task::block_in_place(|| handle.block_on(future)),

@@ -261,7 +261,7 @@ struct BalanceEmitThrottle {
 }
 
 impl BalanceEmitThrottle {
-    fn should_emit(&mut self, trigger: BalanceEmitTrigger, now: Instant) -> bool {
+    fn should_emit_and_update(&mut self, trigger: BalanceEmitTrigger, now: Instant) -> bool {
         match trigger {
             BalanceEmitTrigger::ForcedMilestone => true,
             BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks } => {
@@ -297,6 +297,11 @@ impl BalanceEmitThrottle {
     fn record_emit(&mut self, now: Instant) {
         self.last_emit_at = Some(now);
         self.scanned_blocks_since_emit = 0;
+    }
+
+    fn start_new_auto_sync_iteration(&mut self) {
+        self.scanned_blocks_since_emit = 0;
+        self.saw_successful_scan_batch = false;
     }
 }
 
@@ -460,23 +465,26 @@ impl SyncService {
                 None
             };
             let mut balance_emit_throttle = BalanceEmitThrottle::default();
+            let mut balance_emitter = BalanceEmitter {
+                state: &state,
+                wallet_id,
+                on_balance_task: on_balance_task.as_ref(),
+                balance_db: &mut balance_db,
+                network,
+                account_ids: &account_ids,
+            };
 
             // Wait for Tor to be ready if enabled but not connected
             if let Some(ref tor) = tor_manager {
                 loop {
                     if *cancel_rx.borrow() {
                         tracing::debug!(wallet_id = %wallet_id, "sync cancelled while waiting for Tor");
-                        maybe_emit_balances(
-                            &state,
-                            wallet_id,
-                            on_balance_task.as_ref(),
-                            &mut balance_db,
-                            network,
-                            &account_ids,
-                            &mut balance_emit_throttle,
-                            BalanceEmitTrigger::ForcedMilestone,
-                        )
-                        .await;
+                        balance_emitter
+                            .maybe_emit(
+                                &mut balance_emit_throttle,
+                                BalanceEmitTrigger::ForcedMilestone,
+                            )
+                            .await;
                         let mut state = state.lock().expect("mutex poisoned");
                         state.jobs.remove(&wallet_id);
                         return;
@@ -538,17 +546,12 @@ impl SyncService {
 
             // Check cancellation
             if *cancel_rx.borrow() {
-                maybe_emit_balances(
-                    &state,
-                    wallet_id,
-                    on_balance_task.as_ref(),
-                    &mut balance_db,
-                    network,
-                    &account_ids,
-                    &mut balance_emit_throttle,
-                    BalanceEmitTrigger::ForcedMilestone,
-                )
-                .await;
+                balance_emitter
+                    .maybe_emit(
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                 update(default_progress());
                 // Clear job and return early
                 let mut state = state.lock().expect("mutex poisoned");
@@ -567,17 +570,12 @@ impl SyncService {
                 .join("block_cache");
             if let Err(err) = create_cache_dir_async(cache_dir.clone()).await {
                 tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to create block cache dir");
-                maybe_emit_balances(
-                    &state,
-                    wallet_id,
-                    on_balance_task.as_ref(),
-                    &mut balance_db,
-                    network,
-                    &account_ids,
-                    &mut balance_emit_throttle,
-                    BalanceEmitTrigger::ForcedMilestone,
-                )
-                .await;
+                balance_emitter
+                    .maybe_emit(
+                        &mut balance_emit_throttle,
+                        BalanceEmitTrigger::ForcedMilestone,
+                    )
+                    .await;
                 update(default_progress());
                 let mut state = state.lock().expect("mutex poisoned");
                 state.jobs.remove(&wallet_id);
@@ -590,17 +588,12 @@ impl SyncService {
                 Ok(db) => db,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to init FsBlockDb");
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -619,17 +612,12 @@ impl SyncService {
                 Ok(conn) => conn,
                 Err(err) => {
                     tracing::error!(wallet_id = %wallet_id, error = ?err, "failed to open wallet db for sync");
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                     update(default_progress());
                     let mut state = state.lock().expect("mutex poisoned");
                     state.jobs.remove(&wallet_id);
@@ -661,20 +649,17 @@ impl SyncService {
             // Note: We pass sync_wallet_conn and fsblock_db in/out of blocking operations
             // to keep SQLite work off the async runtime.
             'auto_sync: loop {
+                balance_emit_throttle.start_new_auto_sync_iteration();
+
                 // Check cancellation at start of each iteration
                 if *cancel_rx.borrow() {
                     tracing::debug!(wallet_id = %wallet_id, "sync cancelled");
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                     update(default_progress());
                     break 'auto_sync;
                 }
@@ -758,17 +743,12 @@ impl SyncService {
                     // Check cancellation at start of each iteration
                     if *cancel_rx.borrow() {
                         tracing::debug!(wallet_id = %wallet_id, "sync cancelled");
-                        maybe_emit_balances(
-                            &state,
-                            wallet_id,
-                            on_balance_task.as_ref(),
-                            &mut balance_db,
-                            network,
-                            &account_ids,
-                            &mut balance_emit_throttle,
-                            BalanceEmitTrigger::ForcedMilestone,
-                        )
-                        .await;
+                        balance_emitter
+                            .maybe_emit(
+                                &mut balance_emit_throttle,
+                                BalanceEmitTrigger::ForcedMilestone,
+                            )
+                            .await;
                         update(default_progress());
                         break 'auto_sync;
                     }
@@ -808,17 +788,12 @@ impl SyncService {
                                 wallet_id = %wallet_id,
                                 "sync cancelled during range processing"
                             );
-                            maybe_emit_balances(
-                                &state,
-                                wallet_id,
-                                on_balance_task.as_ref(),
-                                &mut balance_db,
-                                network,
-                                &account_ids,
-                                &mut balance_emit_throttle,
-                                BalanceEmitTrigger::ForcedMilestone,
-                            )
-                            .await;
+                            balance_emitter
+                                .maybe_emit(
+                                    &mut balance_emit_throttle,
+                                    BalanceEmitTrigger::ForcedMilestone,
+                                )
+                                .await;
                             update(default_progress());
                             break 'auto_sync;
                         }
@@ -1101,19 +1076,15 @@ impl SyncService {
                                                 error_message: None,
                                             });
 
-                                            maybe_emit_balances(
-                                                &state,
-                                                wallet_id,
-                                                on_balance_task.as_ref(),
-                                                &mut balance_db,
-                                                network,
-                                                &account_ids,
-                                                &mut balance_emit_throttle,
-                                                BalanceEmitTrigger::SuccessfulScanBatch {
-                                                    scanned_blocks: scan_activity.scanned_blocks,
-                                                },
-                                            )
-                                            .await;
+                                            balance_emitter
+                                                .maybe_emit(
+                                                    &mut balance_emit_throttle,
+                                                    BalanceEmitTrigger::SuccessfulScanBatch {
+                                                        scanned_blocks: scan_activity
+                                                            .scanned_blocks,
+                                                    },
+                                                )
+                                                .await;
                                         }
                                         ScanOutcome::ReorgDetected { rewind_height } => {
                                             tracing::debug!(
@@ -1161,17 +1132,12 @@ impl SyncService {
                         }
 
                         if range_cancelled {
-                            maybe_emit_balances(
-                                &state,
-                                wallet_id,
-                                on_balance_task.as_ref(),
-                                &mut balance_db,
-                                network,
-                                &account_ids,
-                                &mut balance_emit_throttle,
-                                BalanceEmitTrigger::ForcedMilestone,
-                            )
-                            .await;
+                            balance_emitter
+                                .maybe_emit(
+                                    &mut balance_emit_throttle,
+                                    BalanceEmitTrigger::ForcedMilestone,
+                                )
+                                .await;
                             update(default_progress());
                             break 'auto_sync;
                         }
@@ -1211,17 +1177,12 @@ impl SyncService {
                         retry_in_seconds: Some(retry_in_seconds),
                         error_message: sync_error_message,
                     });
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
 
                     tokio::time::sleep(poll_backoff).await;
                     poll_backoff = poll_backoff
@@ -1264,17 +1225,12 @@ impl SyncService {
                         let ratio = enhanced as f64 / total as f64;
                         (99.0 + ratio).min(100.0) as u8
                     };
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
 
                     update(SyncProgress {
                         phase: SyncPhase::Enhancing,
@@ -1446,17 +1402,12 @@ impl SyncService {
                         retry_in_seconds: None,
                         error_message: None,
                     });
-                    maybe_emit_balances(
-                        &state,
-                        wallet_id,
-                        on_balance_task.as_ref(),
-                        &mut balance_db,
-                        network,
-                        &account_ids,
-                        &mut balance_emit_throttle,
-                        BalanceEmitTrigger::ForcedMilestone,
-                    )
-                    .await;
+                    balance_emitter
+                        .maybe_emit(
+                            &mut balance_emit_throttle,
+                            BalanceEmitTrigger::ForcedMilestone,
+                        )
+                        .await;
                 }
 
                 tokio::time::sleep(POLL_INTERVAL).await;
@@ -1498,12 +1449,8 @@ impl SyncService {
         wallet_id: Uuid,
         on_progress: Option<SyncEventHandler>,
     ) -> anyhow::Result<()> {
-        let job = self
-            .state
-            .lock()
-            .expect("mutex poisoned")
-            .jobs
-            .remove(&wallet_id);
+        let mut state = self.state.lock().expect("mutex poisoned");
+        let job = state.jobs.remove(&wallet_id);
 
         let Some(job) = job else {
             return Ok(());
@@ -1512,22 +1459,10 @@ impl SyncService {
         let _ = job.cancel.send(true);
         job.handle.abort();
 
-        self.state
-            .lock()
-            .expect("mutex poisoned")
-            .progress
-            .insert(wallet_id, default_progress());
-
-        self.state
-            .lock()
-            .expect("mutex poisoned")
-            .started_at
-            .remove(&wallet_id);
-        self.state
-            .lock()
-            .expect("mutex poisoned")
-            .progress_estimates
-            .remove(&wallet_id);
+        state.progress.insert(wallet_id, default_progress());
+        state.started_at.remove(&wallet_id);
+        state.progress_estimates.remove(&wallet_id);
+        drop(state);
 
         self.emit_progress(wallet_id, on_progress.as_ref());
         Ok(())
@@ -1597,34 +1532,40 @@ fn emit_balance_events(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn maybe_emit_balances(
-    state: &Arc<Mutex<State>>,
+struct BalanceEmitter<'a> {
+    state: &'a Arc<Mutex<State>>,
     wallet_id: Uuid,
-    on_balance_task: Option<&BalanceEventHandler>,
-    balance_db: &mut Option<Connection>,
+    on_balance_task: Option<&'a BalanceEventHandler>,
+    balance_db: &'a mut Option<Connection>,
     network: Network,
-    account_ids: &[u32],
-    throttle: &mut BalanceEmitThrottle,
-    trigger: BalanceEmitTrigger,
-) {
-    let Some(handler) = on_balance_task else {
-        return;
-    };
-    let now = Instant::now();
-    if !throttle.should_emit(trigger, now) {
-        return;
+    account_ids: &'a [u32],
+}
+
+impl BalanceEmitter<'_> {
+    async fn maybe_emit(
+        &mut self,
+        throttle: &mut BalanceEmitThrottle,
+        trigger: BalanceEmitTrigger,
+    ) {
+        let Some(handler) = self.on_balance_task else {
+            return;
+        };
+        let now = Instant::now();
+        if !throttle.should_emit_and_update(trigger, now) {
+            return;
+        }
+
+        let Some(db) = self.balance_db.take() else {
+            return;
+        };
+
+        // Read balances on blocking thread, emit callbacks on async thread.
+        let (db, balances) =
+            fetch_balances_blocking(db, self.network, self.account_ids.to_vec()).await;
+        *self.balance_db = Some(db);
+        emit_balance_events(self.state, self.wallet_id, handler, balances);
+        throttle.record_emit(Instant::now());
     }
-
-    let Some(db) = balance_db.take() else {
-        return;
-    };
-
-    // Read balances on blocking thread, emit callbacks on async thread.
-    let (db, balances) = fetch_balances_blocking(db, network, account_ids.to_vec()).await;
-    *balance_db = Some(db);
-    emit_balance_events(state, wallet_id, handler, balances);
-    throttle.record_emit(Instant::now());
 }
 
 fn open_wallet_db(wallet_db_path: &Path, dek: &Dek) -> anyhow::Result<Connection> {
@@ -1924,27 +1865,29 @@ where
 async fn query_birthday_heights_blocking(
     conn: Connection,
 ) -> (Connection, anyhow::Result<Vec<u32>>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let result = (|| {
-            let mut stmt = conn
-                .prepare(
-                    r#"
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let result = (|| {
+                let mut stmt = conn
+                    .prepare(
+                        r#"
                 SELECT DISTINCT birthday_height
                 FROM accounts
                 WHERE birthday_sapling_tree_size IS NULL OR birthday_sapling_tree_size = 0
                    OR birthday_orchard_tree_size IS NULL OR birthday_orchard_tree_size = 0
                 "#,
-                )
-                .context("failed to query account birthdays for tree size backfill")?;
+                    )
+                    .context("failed to query account birthdays for tree size backfill")?;
 
-            stmt.query_map([], |row| row.get::<_, u32>(0))?
-                .collect::<Result<Vec<_>, _>>()
-                .context("failed to read account birthday heights")
-        })();
-        (conn, result)
-    })
+                stmt.query_map([], |row| row.get::<_, u32>(0))?
+                    .collect::<Result<Vec<_>, _>>()
+                    .context("failed to read account birthday heights")
+            })();
+            (conn, result)
+        }),
+        "query_birthday_heights_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Update account birthday tree sizes on a blocking thread.
@@ -1955,33 +1898,35 @@ async fn update_birthday_tree_sizes_blocking(
     orchard_tree_size: u64,
     wallet_id: uuid::Uuid,
 ) -> (Connection, anyhow::Result<usize>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let result = conn
-            .execute(
-                "UPDATE accounts
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let result = conn
+                .execute(
+                    "UPDATE accounts
                  SET birthday_sapling_tree_size = ?1,
                      birthday_orchard_tree_size = ?2
                  WHERE birthday_height = ?3",
-                rusqlite::params![sapling_tree_size, orchard_tree_size, birthday_height],
-            )
-            .context("failed to update account birthday tree sizes");
+                    rusqlite::params![sapling_tree_size, orchard_tree_size, birthday_height],
+                )
+                .context("failed to update account birthday tree sizes");
 
-        if let Ok(rows) = &result
-            && *rows > 0
-        {
-            tracing::debug!(
-                wallet_id = %wallet_id,
-                birthday_height,
-                sapling_tree_size,
-                orchard_tree_size,
-                updated_accounts = rows,
-                "backfilled account birthday tree sizes"
-            );
-        }
-        (conn, result)
-    })
+            if let Ok(rows) = &result
+                && *rows > 0
+            {
+                tracing::debug!(
+                    wallet_id = %wallet_id,
+                    birthday_height,
+                    sapling_tree_size,
+                    orchard_tree_size,
+                    updated_accounts = rows,
+                    "backfilled account birthday tree sizes"
+                );
+            }
+            (conn, result)
+        }),
+        "update_birthday_tree_sizes_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Backfill account birthday tree sizes from lightwalletd.
@@ -2447,11 +2392,23 @@ async fn download_blocks_with_retry(
 // These functions move blocking work onto the Tokio blocking thread pool to
 // avoid starving async worker threads during sync.
 
+async fn join_spawn_blocking_or_panic<T>(
+    join: tokio::task::JoinHandle<T>,
+    operation: &'static str,
+) -> T {
+    match join.await {
+        Ok(value) => value,
+        Err(err) => panic!("{operation}: spawn_blocking panicked: {err}"),
+    }
+}
+
 /// Initialize block cache directory on a blocking thread.
 async fn create_cache_dir_async(cache_dir: PathBuf) -> std::io::Result<()> {
-    crate::tokio_runtime::spawn_blocking(move || create_dir_all_secure(&cache_dir))
-        .await
-        .expect("spawn_blocking panicked")
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || create_dir_all_secure(&cache_dir)),
+        "create_cache_dir_async",
+    )
+    .await
 }
 
 /// Count memo enhancement candidates on a blocking thread.
@@ -2485,30 +2442,40 @@ async fn init_fsblock_db_async(
     cache_dir: PathBuf,
     wallet_id: uuid::Uuid,
 ) -> Result<FsBlockDb, zcash_client_sqlite::FsBlockDbError> {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let mut db = FsBlockDb::for_path(&cache_dir)?;
-        // Initialize the block metadata database schema
-        if let Err(err) = init_blockmeta_db(&mut db) {
-            tracing::warn!(
-                wallet_id = %wallet_id,
-                error = ?err,
-                "failed to init blockmeta db schema"
-            );
-        }
-        Ok(db)
-    })
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let mut db = FsBlockDb::for_path(&cache_dir)?;
+            // Initialize the block metadata database schema
+            if let Err(err) = init_blockmeta_db(&mut db) {
+                tracing::warn!(
+                    wallet_id = %wallet_id,
+                    error = ?err,
+                    "failed to init blockmeta db schema"
+                );
+            }
+            Ok(db)
+        }),
+        "init_fsblock_db_async",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Remove cache directory on a blocking thread.
 async fn remove_cache_dir_async(cache_dir: PathBuf) {
-    let _ = crate::tokio_runtime::spawn_blocking(move || {
+    let path_for_log = cache_dir.clone();
+    if let Err(err) = crate::tokio_runtime::spawn_blocking(move || {
         if let Err(e) = std::fs::remove_dir_all(&cache_dir) {
             tracing::debug!(path = ?cache_dir, error = ?e, "failed to cleanup block cache directory");
         }
     })
-    .await;
+    .await
+    {
+        tracing::warn!(
+            path = ?path_for_log,
+            error = ?err,
+            "cache cleanup worker panicked"
+        );
+    }
 }
 
 /// Write blocks to cache and register metadata on a blocking thread.
@@ -2519,38 +2486,39 @@ async fn write_blocks_to_cache_async(
     fsblock_db: FsBlockDb,
     wallet_id: uuid::Uuid,
 ) -> (FsBlockDb, Vec<BlockMeta>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let mut block_metas = Vec::with_capacity(blocks.len());
-        for block in &blocks {
-            match write_block_to_cache(&blocks_dir, block) {
-                Ok(meta) => block_metas.push(meta),
-                Err(err) => {
-                    tracing::error!(
-                        wallet_id = %wallet_id,
-                        block_height = block.height,
-                        error = ?err,
-                        "failed to cache block - block may not be scanned"
-                    );
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let mut block_metas = Vec::with_capacity(blocks.len());
+            for block in &blocks {
+                match write_block_to_cache(&blocks_dir, block) {
+                    Ok(meta) => block_metas.push(meta),
+                    Err(err) => {
+                        tracing::error!(
+                            wallet_id = %wallet_id,
+                            block_height = block.height,
+                            error = ?err,
+                            "failed to cache block - block may not be scanned"
+                        );
+                    }
                 }
             }
-        }
 
-        // Register block metadata
-        let fsblock_db = fsblock_db;
-        if !block_metas.is_empty()
-            && let Err(err) = fsblock_db.write_block_metadata(&block_metas)
-        {
-            tracing::error!(
-                wallet_id = %wallet_id,
-                error = ?err,
-                "failed to write block metadata"
-            );
-        }
+            // Register block metadata
+            if !block_metas.is_empty()
+                && let Err(err) = fsblock_db.write_block_metadata(&block_metas)
+            {
+                tracing::error!(
+                    wallet_id = %wallet_id,
+                    error = ?err,
+                    "failed to write block metadata"
+                );
+            }
 
-        (fsblock_db, block_metas)
-    })
+            (fsblock_db, block_metas)
+        }),
+        "write_blocks_to_cache_async",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Result of a batch scan operation.
@@ -2588,137 +2556,147 @@ async fn scan_batch_blocking(
 ) -> ScanBatchResult {
     let in_flight = BlockingScanInFlightGuard::acquire(state, wallet_id);
 
-    crate::tokio_runtime::spawn_blocking(move || {
-        #[cfg(test)]
-        let _finish_guard = blocking_scan_test_hook::enter_blocking_scan();
-        let _in_flight = in_flight;
-
-        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
-            &mut conn,
-            params,
-            zcash_client_sqlite::util::SystemClock,
-            rand::rngs::OsRng,
-        );
-
-        let limit = batch_block_metas.len();
-        let mut scan_activity = ScanBatchActivity {
-            scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
-            ..Default::default()
-        };
-
-        let scan_outcome = if limit > 0 {
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
             #[cfg(test)]
-            let _scan_call_guard = blocking_scan_test_hook::enter_scan_call();
+            let _finish_guard = blocking_scan_test_hook::enter_blocking_scan();
+            let _in_flight = in_flight;
 
-            match scan_cached_blocks(
-                &params,
-                &fsblock_db,
-                &mut wdb,
-                batch_range_start,
-                &chain_state,
-                limit,
-            ) {
-                Ok(scan_result) => {
-                    scan_activity = ScanBatchActivity {
-                        scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
-                        spent_sapling: u32::try_from(scan_result.spent_sapling_note_count())
-                            .unwrap_or(u32::MAX),
-                        spent_orchard: u32::try_from(scan_result.spent_orchard_note_count())
-                            .unwrap_or(u32::MAX),
-                        received_sapling: u32::try_from(scan_result.received_sapling_note_count())
-                            .unwrap_or(u32::MAX),
-                        received_orchard: u32::try_from(scan_result.received_orchard_note_count())
-                            .unwrap_or(u32::MAX),
-                    };
-                    tracing::debug!(
-                        wallet_id = %wallet_id,
-                        scanned_range = ?scan_result.scanned_range(),
-                        spent_sapling = scan_result.spent_sapling_note_count(),
-                        spent_orchard = scan_result.spent_orchard_note_count(),
-                        received_sapling = scan_result.received_sapling_note_count(),
-                        received_orchard = scan_result.received_orchard_note_count(),
-                        "scanned blocks"
-                    );
-                    ScanOutcome::Success
-                }
-                Err(ChainError::Scan(scan_err)) if scan_err.is_continuity_error() => {
-                    // Chain reorg detected. Rewind the wallet to recover.
-                    let rewind_height = scan_err.at_height().saturating_sub(10);
-                    tracing::warn!(
-                        wallet_id = %wallet_id,
-                        error_height = %u32::from(scan_err.at_height()),
-                        rewind_height = %u32::from(rewind_height),
-                        "chain reorg detected, rewinding wallet"
-                    );
+            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
 
-                    // Truncate the wallet database to the rewind height.
-                    if let Err(truncate_err) = wdb.truncate_to_height(rewind_height) {
+            let limit = batch_block_metas.len();
+            let mut scan_activity = ScanBatchActivity {
+                scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
+                ..Default::default()
+            };
+
+            let scan_outcome = if limit > 0 {
+                #[cfg(test)]
+                let _scan_call_guard = blocking_scan_test_hook::enter_scan_call();
+
+                match scan_cached_blocks(
+                    &params,
+                    &fsblock_db,
+                    &mut wdb,
+                    batch_range_start,
+                    &chain_state,
+                    limit,
+                ) {
+                    Ok(scan_result) => {
+                        scan_activity = ScanBatchActivity {
+                            scanned_blocks: u32::try_from(limit).unwrap_or(u32::MAX),
+                            spent_sapling: u32::try_from(scan_result.spent_sapling_note_count())
+                                .unwrap_or(u32::MAX),
+                            spent_orchard: u32::try_from(scan_result.spent_orchard_note_count())
+                                .unwrap_or(u32::MAX),
+                            received_sapling: u32::try_from(
+                                scan_result.received_sapling_note_count(),
+                            )
+                            .unwrap_or(u32::MAX),
+                            received_orchard: u32::try_from(
+                                scan_result.received_orchard_note_count(),
+                            )
+                            .unwrap_or(u32::MAX),
+                        };
+                        tracing::debug!(
+                            wallet_id = %wallet_id,
+                            scanned_range = ?scan_result.scanned_range(),
+                            spent_sapling = scan_result.spent_sapling_note_count(),
+                            spent_orchard = scan_result.spent_orchard_note_count(),
+                            received_sapling = scan_result.received_sapling_note_count(),
+                            received_orchard = scan_result.received_orchard_note_count(),
+                            "scanned blocks"
+                        );
+                        ScanOutcome::Success
+                    }
+                    Err(ChainError::Scan(scan_err)) if scan_err.is_continuity_error() => {
+                        // Chain reorg detected. Rewind the wallet to recover.
+                        let rewind_height = scan_err.at_height().saturating_sub(10);
+                        tracing::warn!(
+                            wallet_id = %wallet_id,
+                            error_height = %u32::from(scan_err.at_height()),
+                            rewind_height = %u32::from(rewind_height),
+                            "chain reorg detected, rewinding wallet"
+                        );
+
+                        // Truncate the wallet database to the rewind height.
+                        if let Err(truncate_err) = wdb.truncate_to_height(rewind_height) {
+                            tracing::error!(
+                                wallet_id = %wallet_id,
+                                error = ?truncate_err,
+                                "failed to truncate wallet for reorg recovery"
+                            );
+                            ScanOutcome::Error(format!("truncate failed: {truncate_err}"))
+                        } else {
+                            // Clear the block cache from rewind height onwards.
+                            if let Err(cache_err) = fsblock_db.truncate_to_height(rewind_height) {
+                                tracing::debug!(
+                                    wallet_id = %wallet_id,
+                                    error = ?cache_err,
+                                    "failed to truncate block cache after reorg"
+                                );
+                            }
+
+                            // Delete cached block files that are now invalid.
+                            delete_cached_block_files(
+                                &blocks_dir,
+                                rewind_height + 1,
+                                batch_range_end,
+                            );
+
+                            ScanOutcome::ReorgDetected { rewind_height }
+                        }
+                    }
+                    Err(err) => {
                         tracing::error!(
                             wallet_id = %wallet_id,
-                            error = ?truncate_err,
-                            "failed to truncate wallet for reorg recovery"
+                            range_start = %u32::from(batch_range_start),
+                            limit = limit,
+                            error = ?err,
+                            "failed to scan blocks, aborting range"
                         );
-                        ScanOutcome::Error(format!("truncate failed: {truncate_err}"))
-                    } else {
-                        // Clear the block cache from rewind height onwards.
-                        if let Err(cache_err) = fsblock_db.truncate_to_height(rewind_height) {
-                            tracing::debug!(
-                                wallet_id = %wallet_id,
-                                error = ?cache_err,
-                                "failed to truncate block cache after reorg"
-                            );
-                        }
-
-                        // Delete cached block files that are now invalid.
-                        delete_cached_block_files(&blocks_dir, rewind_height + 1, batch_range_end);
-
-                        ScanOutcome::ReorgDetected { rewind_height }
+                        ScanOutcome::Error(format!("{err}"))
                     }
                 }
-                Err(err) => {
-                    tracing::error!(
+            } else {
+                ScanOutcome::Success
+            };
+
+            // Clean up scanned blocks from cache (metadata) on success
+            if matches!(scan_outcome, ScanOutcome::Success) && limit > 0 {
+                let prior_height = batch_range_start.saturating_sub(1);
+                if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
+                    tracing::debug!(
                         wallet_id = %wallet_id,
-                        range_start = %u32::from(batch_range_start),
-                        limit = limit,
                         error = ?err,
-                        "failed to scan blocks, aborting range"
+                        "failed to truncate block cache metadata"
                     );
-                    ScanOutcome::Error(format!("{err}"))
                 }
-            }
-        } else {
-            ScanOutcome::Success
-        };
 
-        // Clean up scanned blocks from cache (metadata) on success
-        if matches!(scan_outcome, ScanOutcome::Success) && limit > 0 {
-            let prior_height = batch_range_start.saturating_sub(1);
-            if let Err(err) = fsblock_db.truncate_to_height(prior_height) {
-                tracing::debug!(
-                    wallet_id = %wallet_id,
-                    error = ?err,
-                    "failed to truncate block cache metadata"
-                );
+                // Delete the actual block files to prevent accumulation
+                delete_cached_block_files_for_batch(&blocks_dir, &batch_block_metas);
             }
 
-            // Delete the actual block files to prevent accumulation
-            delete_cached_block_files_for_batch(&blocks_dir, &batch_block_metas);
-        }
+            // Calculate progress while we still have wdb
+            let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
 
-        // Calculate progress while we still have wdb
-        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
-
-        ScanBatchResult {
-            conn,
-            fsblock_db,
-            scan_outcome,
-            scan_activity,
-            progress_percent,
-            fully_scanned,
-        }
-    })
+            ScanBatchResult {
+                conn,
+                fsblock_db,
+                scan_outcome,
+                scan_activity,
+                progress_percent,
+                fully_scanned,
+            }
+        }),
+        "scan_batch_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Run update_chain_tip on a blocking thread.
@@ -2727,20 +2705,22 @@ async fn update_chain_tip_blocking(
     params: zcash_protocol::consensus::Network,
     chain_tip: BlockHeight,
 ) -> (Connection, Result<(), String>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
-            &mut conn,
-            params,
-            zcash_client_sqlite::util::SystemClock,
-            rand::rngs::OsRng,
-        );
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let mut wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
 
-        let result = wdb.update_chain_tip(chain_tip).map_err(|e| format!("{e}"));
+            let result = wdb.update_chain_tip(chain_tip).map_err(|e| format!("{e}"));
 
-        (conn, result)
-    })
+            (conn, result)
+        }),
+        "update_chain_tip_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Get suggested scan ranges on a blocking thread.
@@ -2751,20 +2731,22 @@ async fn suggest_scan_ranges_blocking(
     Connection,
     Result<Vec<zcash_client_backend::data_api::scanning::ScanRange>, String>,
 ) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let wdb = zcash_client_sqlite::WalletDb::from_connection(
-            &mut conn,
-            params,
-            zcash_client_sqlite::util::SystemClock,
-            rand::rngs::OsRng,
-        );
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
 
-        let result = wdb.suggest_scan_ranges().map_err(|e| format!("{e}"));
+            let result = wdb.suggest_scan_ranges().map_err(|e| format!("{e}"));
 
-        (conn, result)
-    })
+            (conn, result)
+        }),
+        "suggest_scan_ranges_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Get chain height and progress on a blocking thread.
@@ -2772,21 +2754,23 @@ async fn get_progress_blocking(
     mut conn: Connection,
     params: zcash_protocol::consensus::Network,
 ) -> (Connection, u8, u32, Option<BlockHeight>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let wdb = zcash_client_sqlite::WalletDb::from_connection(
-            &mut conn,
-            params,
-            zcash_client_sqlite::util::SystemClock,
-            rand::rngs::OsRng,
-        );
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let wdb = zcash_client_sqlite::WalletDb::from_connection(
+                &mut conn,
+                params,
+                zcash_client_sqlite::util::SystemClock,
+                rand::rngs::OsRng,
+            );
 
-        let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
-        let chain_height = wdb.chain_height().ok().flatten();
+            let (progress_percent, fully_scanned) = calculate_progress_and_height(&wdb);
+            let chain_height = wdb.chain_height().ok().flatten();
 
-        (conn, progress_percent, fully_scanned, chain_height)
-    })
+            (conn, progress_percent, fully_scanned, chain_height)
+        }),
+        "get_progress_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 /// Fetch balances for all accounts on a blocking thread.
@@ -2798,19 +2782,22 @@ async fn fetch_balances_blocking(
     network: Network,
     account_ids: Vec<u32>,
 ) -> (Connection, Vec<(u32, Balance)>) {
-    crate::tokio_runtime::spawn_blocking(move || {
-        let mut conn = conn;
-        let mut balances = Vec::with_capacity(account_ids.len());
-        for account_id in account_ids {
-            let Ok(balance) = crate::balance::get_balance(&mut conn, network, account_id) else {
-                continue;
-            };
-            balances.push((account_id, balance));
-        }
-        (conn, balances)
-    })
+    join_spawn_blocking_or_panic(
+        crate::tokio_runtime::spawn_blocking(move || {
+            let mut conn = conn;
+            let mut balances = Vec::with_capacity(account_ids.len());
+            for account_id in account_ids {
+                let Ok(balance) = crate::balance::get_balance(&mut conn, network, account_id)
+                else {
+                    continue;
+                };
+                balances.push((account_id, balance));
+            }
+            (conn, balances)
+        }),
+        "fetch_balances_blocking",
+    )
     .await
-    .expect("spawn_blocking panicked")
 }
 
 #[cfg(test)]
@@ -2964,7 +2951,7 @@ mod tests {
         let mut throttle = BalanceEmitThrottle::default();
         let start = Instant::now();
 
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch {
                 scanned_blocks: 100
             },
@@ -2972,13 +2959,13 @@ mod tests {
         ));
         throttle.record_emit(start);
 
-        assert!(!throttle.should_emit(
+        assert!(!throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch {
                 scanned_blocks: 100
             },
             start + std::time::Duration::from_millis(500)
         ));
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch {
                 scanned_blocks: 150
             },
@@ -2986,11 +2973,11 @@ mod tests {
         ));
         throttle.record_emit(start + std::time::Duration::from_millis(800));
 
-        assert!(!throttle.should_emit(
+        assert!(!throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 10 },
             start + std::time::Duration::from_millis(2000)
         ));
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 10 },
             start + std::time::Duration::from_millis(2400)
         ));
@@ -3001,23 +2988,23 @@ mod tests {
         let mut throttle = BalanceEmitThrottle::default();
         let start = Instant::now();
 
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 1 },
             start
         ));
         throttle.record_emit(start);
 
-        assert!(!throttle.should_emit(
+        assert!(!throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch { scanned_blocks: 1 },
             start + std::time::Duration::from_millis(100)
         ));
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::ForcedMilestone,
             start + std::time::Duration::from_millis(100)
         ));
         throttle.record_emit(start + std::time::Duration::from_millis(100));
 
-        assert!(!throttle.should_emit(
+        assert!(!throttle.should_emit_and_update(
             BalanceEmitTrigger::SuccessfulScanBatch {
                 scanned_blocks: 100
             },
@@ -3033,7 +3020,7 @@ mod tests {
 
         for batch_idx in 0..20u32 {
             let now = start + std::time::Duration::from_millis(u64::from(batch_idx) * 100);
-            if throttle.should_emit(
+            if throttle.should_emit_and_update(
                 BalanceEmitTrigger::SuccessfulScanBatch {
                     scanned_blocks: 100,
                 },
@@ -3049,7 +3036,7 @@ mod tests {
             periodic_emit_batches.len() > 1,
             "long scans should emit periodically before final completion"
         );
-        assert!(throttle.should_emit(
+        assert!(throttle.should_emit_and_update(
             BalanceEmitTrigger::ForcedMilestone,
             start + std::time::Duration::from_secs(10)
         ));

@@ -29,6 +29,9 @@ pub fn run() {
         run_test_bridge_only();
     }
 
+    // NOTE: Keep this command list in sync with `src-tauri/src/main.rs`.
+    // The library entry point is used by tests/mobile contexts, while the binary
+    // entry point uses its own handler registration.
     #[cfg(not(feature = "test-bridge"))]
     run_with_invoke_handler(tauri::generate_handler![
         // Wallet
@@ -166,15 +169,51 @@ where
                     let mut interval = tokio::time::interval(Duration::from_secs(5));
                     loop {
                         interval.tick().await;
-                        let Ok(mut mgr) = wallet_manager.try_lock() else {
+                        let maybe_task = {
+                            let Ok(mut mgr) = wallet_manager.try_lock() else {
+                                continue;
+                            };
+                            match mgr.prepare_next_queued_broadcast_retry_task() {
+                                Ok(task) => task,
+                                Err(err) => {
+                                    tracing::warn!(
+                                        error = ?err,
+                                        "auto retry worker iteration failed while preparing task"
+                                    );
+                                    continue;
+                                }
+                            }
+                        };
+                        let Some(task) = maybe_task else {
                             continue;
                         };
+                        let txid = task.txid.clone();
+                        let tx_handler = Arc::clone(&tx_handler);
+                        let failover_handler = Arc::clone(&failover_handler);
+                        let join = tauri::async_runtime::spawn_blocking(move || {
+                            zstash_engine::wallet_manager::WalletManager::execute_retry_broadcast_task(
+                                task,
+                                Some(tx_handler),
+                                Some(failover_handler),
+                            )
+                        });
 
-                        if let Err(err) = mgr.process_queued_broadcast_retries(
-                            Some(Arc::clone(&tx_handler)),
-                            Some(Arc::clone(&failover_handler)),
-                        ) {
-                            tracing::warn!(error = ?err, "auto retry worker iteration failed");
+                        match join.await {
+                            Ok(Ok(_)) => {}
+                            Ok(Err(err)) => {
+                                tracing::warn!(
+                                    txid = %txid,
+                                    error = ?err,
+                                    "auto retry attempt failed"
+                                );
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    txid = %txid,
+                                    error = ?err,
+                                    "auto retry worker blocking task panicked"
+                                );
+                            }
                         }
                     }
                 });

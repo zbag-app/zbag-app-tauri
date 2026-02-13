@@ -87,11 +87,16 @@ pub fn redact_address(address: &str) -> RedactedAddress<'_> {
 
 pub fn temporary_debug_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var(TEMP_DEBUG_ENV_VAR)
-            .map(|raw| parse_env_flag_value(&raw))
-            .unwrap_or(false)
-    })
+    *ENABLED.get_or_init(
+        #[cfg(any(debug_assertions, feature = "temporary-debug-logging"))]
+        || {
+            std::env::var(TEMP_DEBUG_ENV_VAR)
+                .map(|raw| parse_env_flag_value(&raw))
+                .unwrap_or(false)
+        },
+        #[cfg(not(any(debug_assertions, feature = "temporary-debug-logging")))]
+        || false,
+    )
 }
 
 pub fn init_logging() -> anyhow::Result<LoggingGuard> {
@@ -195,6 +200,7 @@ fn cleanup_old_logs(log_directory: &Path, days_to_keep: i64) {
     }
 }
 
+#[cfg(any(debug_assertions, feature = "temporary-debug-logging"))]
 fn parse_env_flag_value(value: &str) -> bool {
     match value.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => true,
