@@ -20,14 +20,29 @@ pub enum BroadcastErrorClass {
     Unknown,
 }
 
+fn is_benign_duplicate_relay_message_lowercase(lower: &str) -> bool {
+    lower.contains("already in mempool")
+        || lower.contains("already known")
+        || lower.contains("txn-already-in-mempool")
+}
+
+pub fn is_benign_duplicate_relay_message(message: &str) -> bool {
+    is_benign_duplicate_relay_message_lowercase(&message.to_lowercase())
+}
+
 pub fn classify_broadcast_error_message(message: &str) -> BroadcastErrorClass {
     let lower = message.to_lowercase();
 
+    // Duplicate relay responses indicate the tx is already propagated.
+    if is_benign_duplicate_relay_message_lowercase(&lower) {
+        return BroadcastErrorClass::TransientServer;
+    }
+
     if lower.contains("broadcast rejected")
-        || lower.contains("mempool")
         || lower.contains("non-mandatory-script-verify-flag")
         || lower.contains("bad-txns")
         || lower.contains("already spent")
+        || lower.contains("double spend")
         || lower.contains("txn-mempool-conflict")
     {
         return BroadcastErrorClass::Terminal;
@@ -174,6 +189,18 @@ mod tests {
         );
         assert_eq!(class, BroadcastErrorClass::Terminal);
         assert!(!is_retryable_broadcast_error_class(class));
+    }
+
+    #[test]
+    fn classifies_duplicate_relay_as_non_terminal() {
+        let class =
+            classify_broadcast_error_message("broadcast rejected: transaction already in mempool");
+        assert_eq!(class, BroadcastErrorClass::TransientServer);
+        assert!(is_retryable_broadcast_error_class(class));
+
+        let class = classify_broadcast_error_message("sendrawtransaction RPC error: already known");
+        assert_eq!(class, BroadcastErrorClass::TransientServer);
+        assert!(is_retryable_broadcast_error_class(class));
     }
 
     #[test]

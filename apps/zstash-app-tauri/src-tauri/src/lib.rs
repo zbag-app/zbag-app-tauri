@@ -174,7 +174,18 @@ where
                                 continue;
                             };
                             match mgr.prepare_next_queued_broadcast_retry_task() {
-                                Ok(task) => task,
+                                Ok(Some(task)) => {
+                                    if let Err(err) = mgr.validate_retry_broadcast_task(&task) {
+                                        tracing::warn!(
+                                            txid = %task.txid,
+                                            error = ?err,
+                                            "auto retry worker task validation failed"
+                                        );
+                                        continue;
+                                    }
+                                    Some(task)
+                                }
+                                Ok(None) => None,
                                 Err(err) => {
                                     tracing::warn!(
                                         error = ?err,
@@ -188,13 +199,10 @@ where
                             continue;
                         };
                         let txid = task.txid.clone();
-                        let wallet_manager_for_execution = Arc::clone(&wallet_manager);
                         let tx_handler = Arc::clone(&tx_handler);
                         let failover_handler = Arc::clone(&failover_handler);
                         let join = tauri::async_runtime::spawn_blocking(move || {
-                            let mut mgr =
-                                wallet_manager_for_execution.lock().expect("mutex poisoned");
-                            mgr.execute_retry_broadcast_task(
+                            zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
                                 task,
                                 Some(tx_handler),
                                 Some(failover_handler),

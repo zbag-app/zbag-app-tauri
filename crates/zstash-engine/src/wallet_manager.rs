@@ -2085,7 +2085,19 @@ impl WalletManager {
         on_tx_changed: Option<TxEventHandler>,
         on_failover: Option<ServerFailoverEventHandler>,
     ) -> anyhow::Result<String> {
-        self.ensure_retry_task_wallet_state(&task)?;
+        self.validate_retry_broadcast_task(&task)?;
+        Self::execute_prepared_retry_broadcast_task(task, on_tx_changed, on_failover)
+    }
+
+    pub fn validate_retry_broadcast_task(&self, task: &RetryBroadcastTask) -> anyhow::Result<()> {
+        self.ensure_retry_task_wallet_state(task)
+    }
+
+    pub fn execute_prepared_retry_broadcast_task(
+        task: RetryBroadcastTask,
+        on_tx_changed: Option<TxEventHandler>,
+        on_failover: Option<ServerFailoverEventHandler>,
+    ) -> anyhow::Result<String> {
         Self::execute_retry_broadcast_task_unchecked(task, on_tx_changed, on_failover)
     }
 
