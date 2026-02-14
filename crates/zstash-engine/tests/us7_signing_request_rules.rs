@@ -1,13 +1,16 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
 use zstash_core::domain::{AddressType, Network};
 use zstash_core::errors;
-use zstash_engine::db::backup_meta;
+use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use zstash_engine::db::{backup_meta, wallet_meta};
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
+use zstash_engine::tx_service::TxService;
 use zstash_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
@@ -197,4 +200,63 @@ fn build_signing_request_rejects_memo_over_512_bytes() {
         .expect_err("memo too long should be rejected");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::MEMO_TOO_LONG);
+}
+
+#[test]
+fn prepare_finalize_signing_task_keeps_request_when_wallet_db_preflight_fails() {
+    let root = temp_root("us7_finalize_preflight");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+
+    let wallet = mgr
+        .create_wallet(
+            "Test Wallet",
+            Network::Testnet,
+            "pw",
+            false,
+            None,
+            &mut tx_service,
+        )
+        .expect("create wallet")
+        .wallet;
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
+
+    let signing_request_id = Uuid::new_v4().to_string();
+    tx_service.import_pending_signing_request_for_execution(
+        signing_request_id.clone(),
+        wallet.id,
+        "pczt-test".to_string(),
+        SystemTime::now() + Duration::from_secs(300),
+    );
+    let (reauth_token, _) = mgr
+        .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
+        .expect("reauth wallet");
+
+    let (_wallet, wallet_dir_str) = wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+        .expect("load wallet metadata")
+        .expect("wallet exists");
+    let wallet_db_path = PathBuf::from(wallet_dir_str).join("wallet.sqlite");
+    std::fs::remove_file(&wallet_db_path).expect("remove wallet db before preflight");
+
+    let prep =
+        mgr.prepare_finalize_signing_task(&signing_request_id, "", &reauth_token, &mut tx_service);
+    assert!(prep.is_err(), "wallet db preflight should fail");
+    let err = prep.err().expect("expected preflight failure");
+    assert!(
+        err.to_string().contains("finalize signing preflight"),
+        "expected finalize signing preflight context: {err:#}"
+    );
+
+    let (_pczt, _expires_at) = tx_service
+        .take_pending_signing_request_for_execution(&signing_request_id, wallet.id)
+        .expect("signing request should remain available after preflight failure");
 }

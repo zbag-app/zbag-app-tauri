@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{AddressType, Network};
+use zstash_core::domain::{AddressType, Network, RecipientKind};
 use zstash_core::errors;
 use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
 use zstash_engine::db::{backup_meta, wallet_meta};
@@ -203,6 +204,93 @@ fn prepare_send_rejects_memo_over_512_bytes() {
         .expect_err("memo too long should be rejected");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::MEMO_TOO_LONG);
+}
+
+#[test]
+fn prepare_confirm_send_task_keeps_proposal_when_wallet_db_preflight_fails() {
+    let root = temp_root("us2_confirm_preflight");
+    let app_db_path = root.join("app.db");
+    let wallets_root = root.join("wallets");
+
+    let mut mgr = WalletManager::new_with_wallets_root(
+        app_db_path,
+        wallets_root,
+        Box::new(TestKeyStore::default()),
+    )
+    .expect("create wallet manager");
+    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+
+    let wallet = mgr
+        .create_wallet(
+            "Test Wallet",
+            Network::Testnet,
+            "pw",
+            false,
+            None,
+            &mut tx_service,
+        )
+        .expect("create wallet")
+        .wallet;
+    backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
+        .expect("disable backup gate");
+
+    let proposal_id = Uuid::new_v4().to_string();
+    let fee = zcash_protocol::value::Zatoshis::ZERO;
+    let balance =
+        zcash_client_backend::fees::TransactionBalance::new(vec![], fee).expect("create balance");
+    let target_height: zcash_client_backend::data_api::wallet::TargetHeight =
+        zcash_protocol::consensus::BlockHeight::from_u32(1).into();
+    let proposal = zcash_client_backend::proposal::Proposal::<
+        zcash_client_backend::fees::StandardFeeRule,
+        zcash_client_sqlite::ReceivedNoteId,
+    >::single_step(
+        zcash_client_backend::zip321::TransactionRequest::empty(),
+        BTreeMap::new(),
+        vec![],
+        None,
+        balance,
+        zcash_client_backend::fees::StandardFeeRule::Zip317,
+        target_height,
+        false,
+    )
+    .expect("create test proposal");
+    tx_service.import_proposal_for_execution(
+        proposal_id.clone(),
+        wallet.id,
+        0,
+        zstash_core::ipc::v1::commands::transaction::TransactionSummary {
+            recipient: "test".to_string(),
+            recipient_kind: RecipientKind::Orchard,
+            amount: "1".to_string(),
+            fee: "0".to_string(),
+            memo_present: false,
+            total_spend: "1".to_string(),
+        },
+        SystemTime::now() + Duration::from_secs(300),
+        proposal,
+    );
+    let (reauth_token, _) = mgr
+        .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
+        .expect("reauth wallet");
+
+    let (_wallet, wallet_dir_str) = wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+        .expect("load wallet metadata")
+        .expect("wallet exists");
+    let wallet_db_path = PathBuf::from(wallet_dir_str).join("wallet.sqlite");
+    std::fs::remove_file(&wallet_db_path).expect("remove wallet db before preflight");
+
+    let prep = mgr.prepare_confirm_send_task(&proposal_id, &reauth_token, &mut tx_service);
+    assert!(prep.is_err(), "wallet db preflight should fail");
+    let err = prep.err().expect("expected preflight failure");
+    assert!(
+        err.to_string().contains("confirm send preflight"),
+        "expected confirm send preflight context: {err:#}"
+    );
+
+    assert!(
+        tx_service.cancel_send(&proposal_id),
+        "proposal should remain available after preflight failure"
+    );
 }
 
 #[derive(Debug, Clone)]

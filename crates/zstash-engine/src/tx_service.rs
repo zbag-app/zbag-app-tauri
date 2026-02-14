@@ -1116,6 +1116,7 @@ impl<C: Clock> TxService<C> {
     ) -> anyhow::Result<(
         u32,
         TransactionSummary,
+        SystemTime,
         zcash_client_backend::proposal::Proposal<
             zcash_client_backend::fees::StandardFeeRule,
             zcash_client_sqlite::ReceivedNoteId,
@@ -1141,7 +1142,12 @@ impl<C: Clock> TxService<C> {
             .remove(proposal_id)
             .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
 
-        Ok((record.account_id, record.summary, record.proposal))
+        Ok((
+            record.account_id,
+            record.summary,
+            record.expires_at,
+            record.proposal,
+        ))
     }
 
     pub fn import_proposal_for_execution(
@@ -1150,18 +1156,18 @@ impl<C: Clock> TxService<C> {
         wallet_id: Uuid,
         account_id: u32,
         summary: TransactionSummary,
+        expires_at: SystemTime,
         proposal: zcash_client_backend::proposal::Proposal<
             zcash_client_backend::fees::StandardFeeRule,
             zcash_client_sqlite::ReceivedNoteId,
         >,
     ) {
-        let now = self.clock.now();
         self.proposals.insert(
             proposal_id,
             ProposalRecord {
                 wallet_id,
                 account_id,
-                expires_at: now + PROPOSAL_TTL,
+                expires_at,
                 proposal,
                 summary,
             },
@@ -1172,7 +1178,7 @@ impl<C: Clock> TxService<C> {
         &mut self,
         signing_request_id: &str,
         wallet_id: Uuid,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<(String, SystemTime)> {
         let now = self.clock.now();
         let (pending_wallet_id, pending_expires_at) = self
             .pending_signing_requests
@@ -1205,7 +1211,7 @@ impl<C: Clock> TxService<C> {
                     "signing request not found or expired",
                 )
             })?;
-        Ok(request.pczt_with_proofs)
+        Ok((request.pczt_with_proofs, request.expires_at))
     }
 
     pub fn import_pending_signing_request_for_execution(
@@ -1213,14 +1219,14 @@ impl<C: Clock> TxService<C> {
         signing_request_id: String,
         wallet_id: Uuid,
         pczt_with_proofs: String,
+        expires_at: SystemTime,
     ) {
-        let now = self.clock.now();
         self.pending_signing_requests.insert(
             signing_request_id,
             PendingSigningRequest {
                 wallet_id,
                 pczt_with_proofs,
-                expires_at: now + PROPOSAL_TTL,
+                expires_at,
             },
         );
     }
@@ -3653,6 +3659,74 @@ mod tests {
                 total_spend: "0".to_string(),
             },
         }
+    }
+
+    #[test]
+    fn proposal_execution_take_import_preserves_original_expiry() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let mut service = TxService::new(TestClock(now));
+        let wallet_id = Uuid::new_v4();
+        let proposal_id = Uuid::new_v4().to_string();
+        let expires_at = now + Duration::from_secs(42);
+
+        service.proposals.insert(
+            proposal_id.clone(),
+            test_proposal_record(wallet_id, expires_at),
+        );
+
+        let (account_id, summary, returned_expires_at, proposal) = service
+            .take_proposal_for_execution(&proposal_id, wallet_id)
+            .expect("take proposal for execution");
+        assert_eq!(returned_expires_at, expires_at);
+
+        service.import_proposal_for_execution(
+            proposal_id.clone(),
+            wallet_id,
+            account_id,
+            summary,
+            returned_expires_at,
+            proposal,
+        );
+
+        let (_, _, roundtrip_expires_at, _) = service
+            .take_proposal_for_execution(&proposal_id, wallet_id)
+            .expect("retake proposal for execution");
+        assert_eq!(roundtrip_expires_at, expires_at);
+    }
+
+    #[test]
+    fn pending_signing_execution_take_import_preserves_original_expiry() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
+        let mut service = TxService::new(TestClock(now));
+        let wallet_id = Uuid::new_v4();
+        let signing_request_id = Uuid::new_v4().to_string();
+        let expires_at = now + Duration::from_secs(84);
+
+        service.pending_signing_requests.insert(
+            signing_request_id.clone(),
+            PendingSigningRequest {
+                wallet_id,
+                pczt_with_proofs: "pczt-test".to_string(),
+                expires_at,
+            },
+        );
+
+        let (pczt_with_proofs, returned_expires_at) = service
+            .take_pending_signing_request_for_execution(&signing_request_id, wallet_id)
+            .expect("take signing request for execution");
+        assert_eq!(returned_expires_at, expires_at);
+
+        service.import_pending_signing_request_for_execution(
+            signing_request_id.clone(),
+            wallet_id,
+            pczt_with_proofs,
+            returned_expires_at,
+        );
+
+        let (_, roundtrip_expires_at) = service
+            .take_pending_signing_request_for_execution(&signing_request_id, wallet_id)
+            .expect("retake signing request for execution");
+        assert_eq!(roundtrip_expires_at, expires_at);
     }
 
     #[test]

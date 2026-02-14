@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use anyhow::Context as _;
 use bip39::Mnemonic;
@@ -22,8 +23,8 @@ use zstash_core::errors;
 use crate::birthday;
 use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
 use crate::db::{
-    AppDb, OpenSqlcipherOptions, account_meta, backup_meta, open_sqlcipher_db,
-    wallet_encryption_meta, wallet_meta,
+    AppDb, OpenSqlcipherOptions, account_meta, backup_meta, open_app_db_connection,
+    open_sqlcipher_db, wallet_encryption_meta, wallet_meta,
 };
 use crate::encryption::{
     Dek, default_aead_params, default_kdf_params, generate_dek, unwrap_dek, wrap_dek,
@@ -94,6 +95,7 @@ pub struct ConfirmSendTask {
     proposal_id: String,
     account_id: u32,
     summary: TransactionSummary,
+    proposal_expires_at: SystemTime,
     proposal: zcash_client_backend::proposal::Proposal<
         zcash_client_backend::fees::StandardFeeRule,
         zcash_client_sqlite::ReceivedNoteId,
@@ -115,6 +117,7 @@ pub struct FinalizeSigningTask {
     signing_request_id: String,
     signed_payload: String,
     pending_pczt_with_proofs: String,
+    pending_request_expires_at: SystemTime,
     tor_manager: Option<Arc<zstash_tor::TorManager>>,
 }
 
@@ -1947,7 +1950,13 @@ impl WalletManager {
     ) -> anyhow::Result<ConfirmSendTask> {
         let (ctx, spending_key) =
             self.prepare_confirm_send(proposal_id, reauth_token, tx_service)?;
-        let (account_id, summary, proposal) =
+        // Preflight DB access before removing proposal state from shared TxService.
+        open_app_db_connection(&ctx.app_db_path)
+            .context("failed to open app db for confirm send preflight")?;
+        open_wallet_db_for_tx(&ctx)
+            .context("failed to open wallet db for confirm send preflight")?;
+
+        let (account_id, summary, proposal_expires_at, proposal) =
             tx_service.take_proposal_for_execution(proposal_id, ctx.wallet_id)?;
         let tor_manager = tx_service.tor_manager();
 
@@ -1956,6 +1965,7 @@ impl WalletManager {
             proposal_id: proposal_id.to_string(),
             account_id,
             summary,
+            proposal_expires_at,
             proposal,
             spending_key,
             tor_manager,
@@ -1977,6 +1987,7 @@ impl WalletManager {
             task.ctx.wallet_id,
             task.account_id,
             task.summary,
+            task.proposal_expires_at,
             task.proposal,
         );
 
@@ -2051,7 +2062,13 @@ impl WalletManager {
         let wallet_id = active.wallet.id;
         self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
         let ctx = self.get_tx_operation_context()?;
-        let pending_pczt_with_proofs =
+        // Preflight DB access before removing signing request state from shared TxService.
+        open_app_db_connection(&ctx.app_db_path)
+            .context("failed to open app db for finalize signing preflight")?;
+        open_wallet_db_for_tx(&ctx)
+            .context("failed to open wallet db for finalize signing preflight")?;
+
+        let (pending_pczt_with_proofs, pending_request_expires_at) =
             tx_service.take_pending_signing_request_for_execution(signing_request_id, wallet_id)?;
         let tor_manager = tx_service.tor_manager();
 
@@ -2060,6 +2077,7 @@ impl WalletManager {
             signing_request_id: signing_request_id.to_string(),
             signed_payload: signed_payload.to_string(),
             pending_pczt_with_proofs,
+            pending_request_expires_at,
             tor_manager,
         })
     }
@@ -2079,6 +2097,7 @@ impl WalletManager {
             task.signing_request_id.clone(),
             task.ctx.wallet_id,
             task.pending_pczt_with_proofs,
+            task.pending_request_expires_at,
         );
 
         tx_service.finalize_signing(
