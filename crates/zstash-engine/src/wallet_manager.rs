@@ -2115,9 +2115,11 @@ impl WalletManager {
     ) -> anyhow::Result<usize> {
         // Compatibility helper for callers that explicitly invoke queued retry
         // processing. This is not an autonomous background scheduler.
-        let Some(task) = self.prepare_next_queued_broadcast_retry_task(tx_service)? else {
+        let Some(mut task) = self.prepare_next_queued_broadcast_retry_task(tx_service)? else {
             return Ok(0);
         };
+        // Callers invoke this helper explicitly, so treat invocation as user intent.
+        task.user_intent_confirmed = true;
         let wallet_id = task.wallet_id;
         let txid = task.txid.clone();
         let tx_handler = on_tx_changed.clone();

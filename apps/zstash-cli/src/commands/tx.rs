@@ -388,9 +388,17 @@ pub async fn run(
 
             // Retry broadcast
             let result_txid = {
-                let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-                let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-                wm.retry_broadcast(&txid, &reauth_token, None, None, &mut tx_svc)?
+                let task = {
+                    let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
+                    let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+                    let task = wm.prepare_retry_broadcast_task(&txid, &reauth_token, &tx_svc)?;
+                    wm.validate_retry_broadcast_task(&task)?;
+                    task
+                };
+
+                zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+                    task, None, None,
+                )?
             };
 
             output.print_tx_sent(&result_txid);
