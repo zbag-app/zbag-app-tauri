@@ -34,7 +34,7 @@ use crate::broadcast::{
     is_retryable_broadcast_error_class, retry_backoff_with_jitter, retry_budget_terminal_reason,
     send_with_timeout, should_trigger_failover,
 };
-use crate::db::AppDb;
+use crate::db::{AppDb, open_app_db_connection};
 use crate::encryption::Dek;
 use crate::error::{find_engine_ipc_error, ipc_err};
 use crate::reauth::Clock;
@@ -1196,14 +1196,15 @@ impl<C: Clock> TxService<C> {
             "send lifecycle event"
         );
 
-        let app_db = AppDb::open(app_db_path)?;
+        let app_db_conn = open_app_db_connection(app_db_path)
+            .context("failed to open app db for send policy checks")?;
 
         let record = self
             .proposals
             .remove(proposal_id)
             .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
 
-        ensure_spend_allowed(&app_db, wallet_id, record.account_id)?;
+        ensure_spend_allowed_conn(&app_db_conn, wallet_id, record.account_id)?;
 
         if record
             .proposal
@@ -1494,8 +1495,9 @@ impl<C: Clock> TxService<C> {
         spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
         on_tx_changed: Option<TxEventHandler>,
     ) -> anyhow::Result<ShieldFundsResponse> {
-        let app_db = AppDb::open(app_db_path)?;
-        ensure_spend_allowed(&app_db, wallet_id, account_id)?;
+        let app_db_conn = open_app_db_connection(app_db_path)
+            .context("failed to open app db for shield policy checks")?;
+        ensure_spend_allowed_conn(&app_db_conn, wallet_id, account_id)?;
         let _ = consolidate;
 
         #[allow(deprecated)]
@@ -2332,14 +2334,21 @@ fn fetch_transaction_memos(conn: &Connection, txid_bytes: &[u8]) -> anyhow::Resu
 }
 
 fn ensure_spend_allowed(app_db: &AppDb, wallet_id: Uuid, account_id: u32) -> anyhow::Result<()> {
+    ensure_spend_allowed_conn(app_db.conn(), wallet_id, account_id)
+}
+
+fn ensure_spend_allowed_conn(
+    app_db_conn: &Connection,
+    wallet_id: Uuid,
+    account_id: u32,
+) -> anyhow::Result<()> {
     let backup_required =
-        crate::db::backup_meta::get_backup_required(app_db.conn(), wallet_id)?.unwrap_or(true);
+        crate::db::backup_meta::get_backup_required(app_db_conn, wallet_id)?.unwrap_or(true);
     if backup_required {
         return Err(ipc_err(errors::BACKUP_REQUIRED, "backup required"));
     }
 
-    let account_type: Option<String> = app_db
-        .conn()
+    let account_type: Option<String> = app_db_conn
         .query_row(
             "SELECT account_type FROM accounts WHERE wallet_id = ?1 AND account_id = ?2",
             params![wallet_id.to_string(), account_id as i64],
