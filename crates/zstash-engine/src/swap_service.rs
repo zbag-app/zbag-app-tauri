@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::panic::AssertUnwindSafe;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -168,6 +168,23 @@ fn try_persist_and_emit_swap_change(
 }
 
 impl SwapService {
+    fn lock_wallet_then_tx_service(
+        &self,
+    ) -> anyhow::Result<(
+        MutexGuard<'_, WalletManager>,
+        MutexGuard<'_, TxService<SystemClock>>,
+    )> {
+        let mgr = self
+            .wallet_manager
+            .lock()
+            .map_err(|_| ipc_err(errors::WALLET_LOCKED, "wallet locked"))?;
+        let tx_svc = self
+            .tx_service
+            .lock()
+            .map_err(|_| ipc_err(errors::WALLET_LOCKED, "tx service locked"))?;
+        Ok((mgr, tx_svc))
+    }
+
     pub fn new(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
@@ -672,14 +689,8 @@ impl SwapService {
 
         // Send ZEC to the deposit address
         let send_result: anyhow::Result<_> = (|| {
-            // Phase 1: Prepare and get context
-            let (ctx, spending_key, proposal_id) = {
-                let Ok(mut mgr) = self.wallet_manager.lock() else {
-                    return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
-                };
-                let Ok(mut tx_svc) = self.tx_service.lock() else {
-                    return Err(ipc_err(errors::WALLET_LOCKED, "tx service locked"));
-                };
+            let task = {
+                let (mut mgr, mut tx_svc) = self.lock_wallet_then_tx_service()?;
 
                 let proposal = mgr.prepare_send(
                     account_id,
@@ -691,29 +702,10 @@ impl SwapService {
                     &mut tx_svc,
                 )?;
 
-                let (ctx, spending_key) =
-                    mgr.prepare_confirm_send(&proposal.proposal_id, reauth_token, &mut tx_svc)?;
-                (ctx, spending_key, proposal.proposal_id)
+                mgr.prepare_confirm_send_task(&proposal.proposal_id, reauth_token, &mut tx_svc)?
             };
 
-            // Phase 2: Run expensive operations outside the mutex
-            let mut conn = crate::wallet_manager::open_wallet_db_for_tx(&ctx)?;
-            let Ok(mut tx_svc) = self.tx_service.lock() else {
-                return Err(ipc_err(errors::WALLET_LOCKED, "tx service locked"));
-            };
-
-            tx_svc.confirm_send(
-                &ctx.app_db_path,
-                ctx.wallet_id,
-                ctx.network,
-                &ctx.wallet_dir,
-                &ctx.dek,
-                &mut conn,
-                &ctx.grpc_url,
-                &proposal_id,
-                spending_key,
-                None,
-            )
+            WalletManager::execute_prepared_confirm_send_task(task, None)
         })();
 
         let txid = match send_result {
@@ -1099,27 +1091,34 @@ fn has_confirmed_zcash_tx(
     wallet_id: Uuid,
     swap: &SwapInfo,
 ) -> bool {
-    let Ok(mut mgr) = wallet_manager.lock() else {
-        return false;
+    let ctx = {
+        let Ok(mgr) = wallet_manager.lock() else {
+            return false;
+        };
+
+        let Some(active_wallet) = mgr.active_wallet_info() else {
+            return false;
+        };
+        if active_wallet.id != wallet_id {
+            return false;
+        }
+
+        match mgr.get_tx_operation_context() {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                tracing::debug!(error = ?e, "swap detection check failed");
+                return false;
+            }
+        }
     };
 
-    let Some(active_wallet) = mgr.active_wallet_info() else {
-        return false;
-    };
-    if active_wallet.id != wallet_id {
-        return false;
-    }
-
-    let (wallet, conn) = match mgr.require_active_unlocked_wallet_db() {
-        Ok(ctx) => ctx,
+    let conn = match crate::wallet_manager::open_wallet_db_for_tx(&ctx) {
+        Ok(conn) => conn,
         Err(e) => {
             tracing::debug!(error = ?e, "swap detection check failed");
             return false;
         }
     };
-    if wallet.id != wallet_id {
-        return false;
-    }
 
     let expected_amount_zat = match swap.swap_type {
         SwapType::ToZec => swap.output_amount.as_deref().and_then(parse_zatoshis),

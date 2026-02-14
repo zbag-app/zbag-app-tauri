@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use zstash_engine::key_store_keychain::KeyStoreKeychain;
 use zstash_engine::logging::LoggingGuard;
@@ -12,9 +12,12 @@ use zstash_network::exchange_rate::ExchangeRateService;
 use zstash_network::near_intents::NearIntentsClient;
 
 pub struct AppState {
+    /// Global lock-order rule: if both mutexes are needed, always acquire
+    /// `wallet_manager` first and `tx_service` second.
     pub wallet_manager: Arc<Mutex<WalletManager>>,
     /// TxService is separate from WalletManager to allow releasing the wallet_manager
     /// mutex during expensive proving/signing/broadcast operations.
+    /// Must be locked only after `wallet_manager` when both are required.
     pub tx_service: Arc<Mutex<TxService<SystemClock>>>,
     pub sync_service: SyncService,
     pub swap_service: SwapService,
@@ -25,6 +28,17 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn lock_wallet_then_tx_service(
+        &self,
+    ) -> (
+        MutexGuard<'_, WalletManager>,
+        MutexGuard<'_, TxService<SystemClock>>,
+    ) {
+        let wallet_manager = self.wallet_manager.lock().expect("mutex poisoned");
+        let tx_service = self.tx_service.lock().expect("mutex poisoned");
+        (wallet_manager, tx_service)
+    }
+
     pub fn new() -> anyhow::Result<Self> {
         let logging_guard = zstash_engine::logging::init_logging()?;
         let app_db_path = default_app_db_path()?;

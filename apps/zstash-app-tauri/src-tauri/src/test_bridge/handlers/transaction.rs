@@ -7,7 +7,7 @@ use zstash_core::ipc::v1::commands::transaction::{
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
 use zstash_core::ipc::v1::common::IpcResult;
-use zstash_engine::wallet_manager::open_wallet_db_for_tx;
+use zstash_engine::wallet_manager::WalletManager;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -23,8 +23,7 @@ pub fn prepare_send_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.prepare_send(
             request.account_id,
             &request.recipient,
@@ -49,28 +48,12 @@ pub fn confirm_send_impl(
     warn!("Test bridge: confirm_send invoked");
 
     map_anyhow(|| {
-        let (ctx, spending_key, proposal_id) = {
-            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-            let (ctx, spending_key) =
-                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &mut tx_svc)?;
-            (ctx, spending_key, request.proposal_id.clone())
+        let task = {
+            let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
+            mgr.prepare_confirm_send_task(&request.proposal_id, &request.reauth_token, &mut tx_svc)?
         };
 
-        let mut conn = open_wallet_db_for_tx(&ctx)?;
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-        tx_svc.confirm_send(
-            &ctx.app_db_path,
-            ctx.wallet_id,
-            ctx.network,
-            &ctx.wallet_dir,
-            &ctx.dek,
-            &mut conn,
-            &ctx.grpc_url,
-            &proposal_id,
-            spending_key,
-            None,
-        )
+        WalletManager::execute_prepared_confirm_send_task(task, None)
     })
 }
 
@@ -105,8 +88,7 @@ pub fn retry_broadcast_impl(
 
     map_anyhow(|| {
         let task = {
-            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let tx_svc = state.tx_service.lock().expect("mutex poisoned");
+            let (mut mgr, tx_svc) = state.lock_wallet_then_tx_service();
             let task =
                 mgr.prepare_retry_broadcast_task(&request.txid, &request.reauth_token, &tx_svc)?;
             mgr.validate_retry_broadcast_task(&task)?;
@@ -135,8 +117,7 @@ pub fn list_transactions_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.list_transactions(
             request.account_id,
             request.limit,
@@ -157,25 +138,16 @@ pub fn shield_funds_impl(
     }
 
     map_anyhow(|| {
-        let (ctx, spending_key) = {
-            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            mgr.prepare_shield_funds(request.account_id, &request.reauth_token)?
+        let task = {
+            let (mut mgr, tx_svc) = state.lock_wallet_then_tx_service();
+            mgr.prepare_shield_funds_task(
+                request.account_id,
+                request.consolidate,
+                &request.reauth_token,
+                &tx_svc,
+            )?
         };
 
-        let mut conn = open_wallet_db_for_tx(&ctx)?;
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-        tx_svc.shield_funds(
-            &ctx.app_db_path,
-            ctx.wallet_id,
-            ctx.network,
-            &ctx.wallet_dir,
-            &ctx.dek,
-            &mut conn,
-            &ctx.grpc_url,
-            request.account_id,
-            request.consolidate,
-            spending_key,
-            None,
-        )
+        WalletManager::execute_prepared_shield_funds_task(task, None)
     })
 }

@@ -470,6 +470,8 @@ impl SyncService {
                 wallet_id,
                 on_balance_task: on_balance_task.as_ref(),
                 balance_db: &mut balance_db,
+                wallet_db_path: &wallet_db_path,
+                wallet_dek: wallet_dek.as_ref(),
                 network,
                 account_ids: &account_ids,
             };
@@ -1761,6 +1763,8 @@ struct BalanceEmitter<'a> {
     wallet_id: Uuid,
     on_balance_task: Option<&'a BalanceEventHandler>,
     balance_db: &'a mut Option<Connection>,
+    wallet_db_path: &'a PathBuf,
+    wallet_dek: &'a Dek,
     network: Network,
     account_ids: &'a [u32],
 }
@@ -1779,8 +1783,24 @@ impl BalanceEmitter<'_> {
             return;
         }
 
-        let Some(db) = self.balance_db.take() else {
-            return;
+        let db = match self.balance_db.take() {
+            Some(db) => db,
+            None => match open_wallet_db_async(
+                self.wallet_db_path.clone(),
+                self.wallet_dek.clone_key_material(),
+            )
+            .await
+            {
+                Ok(db) => db,
+                Err(err) => {
+                    tracing::warn!(
+                        wallet_id = %self.wallet_id,
+                        error = ?err,
+                        "failed to open wallet db for balance updates"
+                    );
+                    return;
+                }
+            },
         };
 
         // Read balances on blocking thread, emit callbacks on async thread.
@@ -1796,6 +1816,23 @@ impl BalanceEmitter<'_> {
                     error = ?err,
                     "failed to fetch balances on blocking worker"
                 );
+                match open_wallet_db_async(
+                    self.wallet_db_path.clone(),
+                    self.wallet_dek.clone_key_material(),
+                )
+                .await
+                {
+                    Ok(db) => {
+                        *self.balance_db = Some(db);
+                    }
+                    Err(reopen_err) => {
+                        tracing::warn!(
+                            wallet_id = %self.wallet_id,
+                            error = ?reopen_err,
+                            "failed to reopen wallet db for balance updates"
+                        );
+                    }
+                }
             }
         }
     }

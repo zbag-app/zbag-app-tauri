@@ -11,7 +11,7 @@ use zstash_core::ipc::v1::commands::transaction::{
 };
 use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
 use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::wallet_manager::open_wallet_db_for_tx;
+use zstash_engine::wallet_manager::WalletManager;
 
 use crate::events;
 use crate::state::AppState;
@@ -42,8 +42,7 @@ pub fn zstash_prepare_send(
     );
 
     let result = (|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.prepare_send(
             request.account_id,
             &request.recipient,
@@ -107,33 +106,11 @@ pub fn zstash_confirm_send(
     });
 
     map_anyhow(|| {
-        // Phase 1: Extract context while holding wallet_manager lock briefly
-        let (ctx, spending_key, proposal_id) = {
-            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-            let (ctx, spending_key) =
-                mgr.prepare_confirm_send(&request.proposal_id, &request.reauth_token, &mut tx_svc)?;
-            (ctx, spending_key, request.proposal_id.clone())
+        let task = {
+            let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
+            mgr.prepare_confirm_send_task(&request.proposal_id, &request.reauth_token, &mut tx_svc)?
         };
-        // wallet_manager lock is released here
-
-        // Phase 2: Open a fresh database connection and perform expensive operations
-        // without holding the wallet_manager lock, allowing other operations to proceed.
-        let mut conn = open_wallet_db_for_tx(&ctx)?;
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-
-        tx_svc.confirm_send(
-            &ctx.app_db_path,
-            ctx.wallet_id,
-            ctx.network,
-            &ctx.wallet_dir,
-            &ctx.dek,
-            &mut conn,
-            &ctx.grpc_url,
-            &proposal_id,
-            spending_key,
-            Some(handler),
-        )
+        WalletManager::execute_prepared_confirm_send_task(task, Some(handler))
     })
 }
 
@@ -238,8 +215,7 @@ pub fn zstash_list_transactions(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.list_transactions(
             request.account_id,
             request.limit,
@@ -264,32 +240,15 @@ pub fn zstash_shield_funds(
     });
 
     map_anyhow(|| {
-        // Phase 1: Extract context while holding wallet_manager lock briefly
-        let (ctx, spending_key, account_id, consolidate) = {
-            let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let (ctx, spending_key) =
-                mgr.prepare_shield_funds(request.account_id, &request.reauth_token)?;
-            (ctx, spending_key, request.account_id, request.consolidate)
+        let task = {
+            let (mut mgr, tx_svc) = state.lock_wallet_then_tx_service();
+            mgr.prepare_shield_funds_task(
+                request.account_id,
+                request.consolidate,
+                &request.reauth_token,
+                &tx_svc,
+            )?
         };
-        // wallet_manager lock is released here
-
-        // Phase 2: Open a fresh database connection and perform expensive operations
-        // without holding the wallet_manager lock, allowing other operations to proceed.
-        let mut conn = open_wallet_db_for_tx(&ctx)?;
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-
-        tx_svc.shield_funds(
-            &ctx.app_db_path,
-            ctx.wallet_id,
-            ctx.network,
-            &ctx.wallet_dir,
-            &ctx.dek,
-            &mut conn,
-            &ctx.grpc_url,
-            account_id,
-            consolidate,
-            spending_key,
-            Some(handler),
-        )
+        WalletManager::execute_prepared_shield_funds_task(task, Some(handler))
     })
 }

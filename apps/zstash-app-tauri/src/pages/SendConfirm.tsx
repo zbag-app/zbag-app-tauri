@@ -73,8 +73,12 @@ export function SendConfirm(props: { walletId: string }) {
   };
 
   const cancel = async () => {
-    if (proposal) {
-      await cancelSend({ proposal_id: proposal.proposal_id });
+    try {
+      if (proposal) {
+        await cancelSend({ proposal_id: proposal.proposal_id });
+      }
+    } catch (err) {
+      console.warn('cancelSend failed:', err);
     }
     setPassword('');
     navigate('/send');

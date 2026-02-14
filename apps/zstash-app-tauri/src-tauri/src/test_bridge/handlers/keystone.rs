@@ -6,6 +6,7 @@ use zstash_core::ipc::v1::commands::keystone::{
     ImportUfvkRequest, ImportUfvkResponse,
 };
 use zstash_core::ipc::v1::common::IpcResult;
+use zstash_engine::wallet_manager::WalletManager;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -47,8 +48,7 @@ pub fn build_signing_request_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.build_signing_request(
             request.account_id,
             &request.recipient,
@@ -71,15 +71,16 @@ pub fn finalize_signing_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
-        mgr.finalize_signing(
-            &request.signing_request_id,
-            &request.signed_payload,
-            &request.reauth_token,
-            None,
-            &mut tx_svc,
-        )
+        let task = {
+            let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
+            mgr.prepare_finalize_signing_task(
+                &request.signing_request_id,
+                &request.signed_payload,
+                &request.reauth_token,
+                &mut tx_svc,
+            )?
+        };
+        WalletManager::execute_prepared_finalize_signing_task(task, None)
     })
 }
 
@@ -94,8 +95,7 @@ pub fn create_keystone_wallet_impl(
     }
 
     map_anyhow(|| {
-        let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
+        let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         let (wallet, account) = mgr.create_keystone_wallet(
             &request.name,
             request.network,

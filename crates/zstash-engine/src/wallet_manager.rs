@@ -41,7 +41,10 @@ use zstash_core::ipc::v1::commands::job::{
 use zstash_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
-use zstash_core::ipc::v1::commands::transaction::{ListTransactionsResponse, PrepareSendResponse};
+use zstash_core::ipc::v1::commands::transaction::{
+    ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
+    TransactionSummary,
+};
 use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
 use zstash_core::ipc::v1::common::SCHEMA_VERSION;
 use zstash_core::ipc::v1::events::WalletStatusEvent;
@@ -68,10 +71,8 @@ pub struct WalletManager {
     wallet_db_force_validate_fail: bool,
 }
 
-/// TxService is now managed separately from WalletManager to allow
-/// releasing the wallet_manager mutex during expensive tx operations.
-/// Create with TxService::new(SystemClock) and share via Arc<Mutex<TxService<SystemClock>>>.
-
+// TxService is managed separately from WalletManager to allow releasing
+// the wallet_manager mutex during expensive transaction operations.
 pub struct RetryBroadcastTask {
     pub txid: String,
     user_intent_confirmed: bool,
@@ -85,6 +86,35 @@ pub struct RetryBroadcastTask {
     wallet_dek: Dek,
     grpc_url: String,
     app_db_path: PathBuf,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+}
+
+pub struct ConfirmSendTask {
+    ctx: TxOperationContext,
+    proposal_id: String,
+    account_id: u32,
+    summary: TransactionSummary,
+    proposal: zcash_client_backend::proposal::Proposal<
+        zcash_client_backend::fees::StandardFeeRule,
+        zcash_client_sqlite::ReceivedNoteId,
+    >,
+    spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+}
+
+pub struct ShieldFundsTask {
+    ctx: TxOperationContext,
+    account_id: u32,
+    consolidate: bool,
+    spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
+    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+}
+
+pub struct FinalizeSigningTask {
+    ctx: TxOperationContext,
+    signing_request_id: String,
+    signed_payload: String,
+    pending_pczt_with_proofs: String,
     tor_manager: Option<Arc<zstash_tor::TorManager>>,
 }
 
@@ -1907,6 +1937,162 @@ impl WalletManager {
 
         let ctx = self.get_tx_operation_context()?;
         Ok((ctx, spending_key))
+    }
+
+    pub fn prepare_confirm_send_task(
+        &mut self,
+        proposal_id: &str,
+        reauth_token: &str,
+        tx_service: &mut TxService<SystemClock>,
+    ) -> anyhow::Result<ConfirmSendTask> {
+        let (ctx, spending_key) =
+            self.prepare_confirm_send(proposal_id, reauth_token, tx_service)?;
+        let (account_id, summary, proposal) =
+            tx_service.take_proposal_for_execution(proposal_id, ctx.wallet_id)?;
+        let tor_manager = tx_service.tor_manager();
+
+        Ok(ConfirmSendTask {
+            ctx,
+            proposal_id: proposal_id.to_string(),
+            account_id,
+            summary,
+            proposal,
+            spending_key,
+            tor_manager,
+        })
+    }
+
+    pub fn execute_prepared_confirm_send_task(
+        task: ConfirmSendTask,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<ConfirmSendResponse> {
+        let mut conn = open_wallet_db_for_tx(&task.ctx)?;
+        let mut tx_service = TxService::new(SystemClock);
+        if let Some(tor_manager) = task.tor_manager {
+            tx_service.set_tor_manager(tor_manager);
+        }
+
+        tx_service.import_proposal_for_execution(
+            task.proposal_id.clone(),
+            task.ctx.wallet_id,
+            task.account_id,
+            task.summary,
+            task.proposal,
+        );
+
+        tx_service.confirm_send(
+            &task.ctx.app_db_path,
+            task.ctx.wallet_id,
+            task.ctx.network,
+            &task.ctx.wallet_dir,
+            &task.ctx.dek,
+            &mut conn,
+            &task.ctx.grpc_url,
+            &task.proposal_id,
+            task.spending_key,
+            on_tx_changed,
+        )
+    }
+
+    pub fn prepare_shield_funds_task(
+        &mut self,
+        account_id: u32,
+        consolidate: bool,
+        reauth_token: &str,
+        tx_service: &TxService<SystemClock>,
+    ) -> anyhow::Result<ShieldFundsTask> {
+        let (ctx, spending_key) = self.prepare_shield_funds(account_id, reauth_token)?;
+        let tor_manager = tx_service.tor_manager();
+        Ok(ShieldFundsTask {
+            ctx,
+            account_id,
+            consolidate,
+            spending_key,
+            tor_manager,
+        })
+    }
+
+    pub fn execute_prepared_shield_funds_task(
+        task: ShieldFundsTask,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<ShieldFundsResponse> {
+        let mut conn = open_wallet_db_for_tx(&task.ctx)?;
+        let mut tx_service = TxService::new(SystemClock);
+        if let Some(tor_manager) = task.tor_manager {
+            tx_service.set_tor_manager(tor_manager);
+        }
+
+        tx_service.shield_funds(
+            &task.ctx.app_db_path,
+            task.ctx.wallet_id,
+            task.ctx.network,
+            &task.ctx.wallet_dir,
+            &task.ctx.dek,
+            &mut conn,
+            &task.ctx.grpc_url,
+            task.account_id,
+            task.consolidate,
+            task.spending_key,
+            on_tx_changed,
+        )
+    }
+
+    pub fn prepare_finalize_signing_task(
+        &mut self,
+        signing_request_id: &str,
+        signed_payload: &str,
+        reauth_token: &str,
+        tx_service: &mut TxService<SystemClock>,
+    ) -> anyhow::Result<FinalizeSigningTask> {
+        let Some(active) = self.active_wallet.as_ref() else {
+            return Err(ipc_err(errors::WALLET_LOCKED, "wallet locked"));
+        };
+
+        let wallet_id = active.wallet.id;
+        self.consume_reauth_token(wallet_id, reauth_token, ReauthPurpose::Spend)?;
+        let ctx = self.get_tx_operation_context()?;
+        let pending_pczt_with_proofs =
+            tx_service.take_pending_signing_request_for_execution(signing_request_id, wallet_id)?;
+        let tor_manager = tx_service.tor_manager();
+
+        Ok(FinalizeSigningTask {
+            ctx,
+            signing_request_id: signing_request_id.to_string(),
+            signed_payload: signed_payload.to_string(),
+            pending_pczt_with_proofs,
+            tor_manager,
+        })
+    }
+
+    pub fn execute_prepared_finalize_signing_task(
+        task: FinalizeSigningTask,
+        on_tx_changed: Option<TxEventHandler>,
+    ) -> anyhow::Result<FinalizeSigningResponse> {
+        let app_db = AppDb::open(&task.ctx.app_db_path)
+            .context("failed to open app db for finalize signing")?;
+        let mut conn = open_wallet_db_for_tx(&task.ctx)?;
+        let mut tx_service = TxService::new(SystemClock);
+        if let Some(tor_manager) = task.tor_manager {
+            tx_service.set_tor_manager(tor_manager);
+        }
+        tx_service.import_pending_signing_request_for_execution(
+            task.signing_request_id.clone(),
+            task.ctx.wallet_id,
+            task.pending_pczt_with_proofs,
+        );
+
+        tx_service.finalize_signing(
+            &app_db,
+            task.ctx.wallet_id,
+            task.ctx.network,
+            &task.ctx.wallet_dir,
+            &task.ctx.dek,
+            &mut conn,
+            &task.ctx.grpc_url,
+            &task.signing_request_id,
+            &task.signed_payload,
+            on_tx_changed,
+        )
     }
 
     pub fn retry_broadcast(

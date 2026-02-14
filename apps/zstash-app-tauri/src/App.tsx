@@ -191,13 +191,19 @@ function AppInner() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | null = null;
     onSyncProgress((evt) => throttledSetSync(evt.progress))
       .then((fn) => {
+        if (cancelled) {
+          fn();
+          return;
+        }
         unlisten = fn;
       })
       .catch(() => {});
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, [throttledSetSync]);

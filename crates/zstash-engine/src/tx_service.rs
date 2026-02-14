@@ -1109,6 +1109,122 @@ impl<C: Clock> TxService<C> {
         self.proposals.remove(proposal_id).is_some()
     }
 
+    pub fn take_proposal_for_execution(
+        &mut self,
+        proposal_id: &str,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<(
+        u32,
+        TransactionSummary,
+        zcash_client_backend::proposal::Proposal<
+            zcash_client_backend::fees::StandardFeeRule,
+            zcash_client_sqlite::ReceivedNoteId,
+        >,
+    )> {
+        let now = self.clock.now();
+        let (proposal_wallet_id, proposal_expires_at) = self
+            .proposals
+            .get(proposal_id)
+            .map(|r| (r.wallet_id, r.expires_at))
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        if proposal_wallet_id != wallet_id {
+            return Err(ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"));
+        }
+        if now > proposal_expires_at {
+            self.proposals.remove(proposal_id);
+            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "proposal expired"));
+        }
+
+        let record = self
+            .proposals
+            .remove(proposal_id)
+            .ok_or_else(|| ipc_err(errors::PROPOSAL_NOT_FOUND, "proposal not found"))?;
+
+        Ok((record.account_id, record.summary, record.proposal))
+    }
+
+    pub fn import_proposal_for_execution(
+        &mut self,
+        proposal_id: String,
+        wallet_id: Uuid,
+        account_id: u32,
+        summary: TransactionSummary,
+        proposal: zcash_client_backend::proposal::Proposal<
+            zcash_client_backend::fees::StandardFeeRule,
+            zcash_client_sqlite::ReceivedNoteId,
+        >,
+    ) {
+        let now = self.clock.now();
+        self.proposals.insert(
+            proposal_id,
+            ProposalRecord {
+                wallet_id,
+                account_id,
+                expires_at: now + PROPOSAL_TTL,
+                proposal,
+                summary,
+            },
+        );
+    }
+
+    pub fn take_pending_signing_request_for_execution(
+        &mut self,
+        signing_request_id: &str,
+        wallet_id: Uuid,
+    ) -> anyhow::Result<String> {
+        let now = self.clock.now();
+        let (pending_wallet_id, pending_expires_at) = self
+            .pending_signing_requests
+            .get(signing_request_id)
+            .map(|r| (r.wallet_id, r.expires_at))
+            .ok_or_else(|| {
+                ipc_err(
+                    errors::PROPOSAL_NOT_FOUND,
+                    "signing request not found or expired",
+                )
+            })?;
+
+        if now > pending_expires_at {
+            self.pending_signing_requests.remove(signing_request_id);
+            return Err(ipc_err(errors::PROPOSAL_EXPIRED, "signing request expired"));
+        }
+        if pending_wallet_id != wallet_id {
+            return Err(ipc_err(
+                errors::PROPOSAL_NOT_FOUND,
+                "signing request not found",
+            ));
+        }
+
+        let request = self
+            .pending_signing_requests
+            .remove(signing_request_id)
+            .ok_or_else(|| {
+                ipc_err(
+                    errors::PROPOSAL_NOT_FOUND,
+                    "signing request not found or expired",
+                )
+            })?;
+        Ok(request.pczt_with_proofs)
+    }
+
+    pub fn import_pending_signing_request_for_execution(
+        &mut self,
+        signing_request_id: String,
+        wallet_id: Uuid,
+        pczt_with_proofs: String,
+    ) {
+        let now = self.clock.now();
+        self.pending_signing_requests.insert(
+            signing_request_id,
+            PendingSigningRequest {
+                wallet_id,
+                pczt_with_proofs,
+                expires_at: now + PROPOSAL_TTL,
+            },
+        );
+    }
+
     /// Take a proposal out of the service, transferring ownership.
     /// Used by JobService to run the proposal asynchronously.
     pub fn take_proposal(
@@ -1939,7 +2055,6 @@ impl<C: Clock> TxService<C> {
         let mut grpc_target = grpc_url.to_string();
         let mut attempt_count = entry.meta.attempt_count;
         let mut transport_failure_streak = entry.meta.transport_failure_streak;
-        let mut attempted_failover_retry = false;
         let mut retry_failed_error: Option<anyhow::Error> = None;
         let mut retry_succeeded = false;
 
@@ -2008,8 +2123,7 @@ impl<C: Clock> TxService<C> {
                         }
                     }
 
-                    if retryable && failover_performed && !attempted_failover_retry {
-                        attempted_failover_retry = true;
+                    if retryable && failover_performed {
                         continue;
                     }
 
