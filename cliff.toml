@@ -67,8 +67,8 @@ commit_parsers = [
     { message = "^revert", group = "Reverted" },
     # User story commits (project-specific)
     { message = "^US\\d+:", group = "Features" },
-    # Catch-all for non-conventional commits
-    { body = ".*", group = "Other" },
+    # Skip non-conventional commits (investigation, review, debug notes)
+    { body = ".*", skip = true },
 ]
 protect_breaking_commits = false
 filter_commits = false

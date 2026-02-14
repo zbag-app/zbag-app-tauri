@@ -2,7 +2,7 @@
 
 All notable changes to zSTASH will be documented in this file.
 
-## [Unreleased]
+## [0.2.3] - 2026-02-14
 
 ### Bug Fixes
 
@@ -50,6 +50,134 @@ All notable changes to zSTASH will be documented in this file.
 
 - Add error handling and safe decimals parsing
 
+- Allow space key in TokenPicker search input
+
+- Harden filesystem permissions for wallet data and mnemonic files
+
+- Address async blocking I/O and dir creation race condition
+
+- Migrate CLI crate to centralized permissions module
+
+- Secure cli temp writes and async perms
+
+- Harden cli dirs and sqlite perms
+
+- Avoid exists() in secure dir creation
+
+- Tighten secure fs helpers
+
+- Polish permissions helpers
+
+- Randomize keystore temp files
+
+- Cleanup temp files on atomic write failures
+
+- Atomic overwrite in write_file_secure
+
+- Address remaining perms nits
+
+- Use write_file_secure for mnemonic writes
+
+- Minimize seed phrase and restore flow secrets lifetime in UI
+
+- Add race condition guard for navigation state clearing
+
+- Clear mnemonic from state on restore error paths
+
+- Add CrossPay feature for exact-output swaps from ZEC
+
+- Clear quote when refund address changes
+
+- Clear reauth token on error and add try/catch to quote request
+
+- Move reauth call inside try block for proper error handling
+
+- Improve CrossPay validation and quote expiry
+
+- Tick swap countdowns and reject zero amounts
+
+- Reject expired quotes when starting swap
+
+- Polish quote expiry UX and prune expired quotes
+
+- Reset starting state and refresh nowMs on toggle
+
+- Harden CrossPay validation and expiry handling
+
+- Normalize swap UI formatting and set swap_mode
+
+- Dedupe amount validation and set swap_mode
+
+- Clear password after reauth and normalize swap formatting
+
+- Guard CrossPay confirm when quote expired
+
+- Harden quote expiry checks and deadline fallback
+
+- Align swap validation and allow flag
+
+- Improve quote expiry UX and reauth retention
+
+- Update test bridge swap intent fields
+
+- Swap status refresh and resume polling for pending swaps
+
+- Reload swap when swapId param changes
+
+- Clear restore flow data immediately after seed is persisted (#101)
+
+- Improve SwapDeposit useEffect cleanup and dependencies
+
+- Handle swap refresh IPC exceptions
+
+- Tighten swap polling resume semantics
+
+- Validate swapId and consolidate swap status mapping
+
+- Add swap refresh timeout and clear stale errors
+
+- Harden swap refresh + resume polling
+
+- Surface resumePendingSwaps failures
+
+- Harden swap polling job registration
+
+- Polish swap resume startup
+
+- Harden swap UI when events fail
+
+- Register tauri swap commands in main
+
+- Re-register supported token swap command
+
+- Move blocking operations off async runtime in SyncService
+
+- Remove empty memo fallback text
+
+- Move broadcast retries off wallet lock and runtime threads
+
+- Harden swap refresh and resume with resilient tests
+
+- Reduce frontend event churn and cancellable sleep leaks
+
+- Bound broadcast retries and revalidate deferred retry tasks
+
+- Remove Activity header Refresh button
+
+- Release mutex during tx/proving operations
+
+- Complete TxService split and restore retry/job wiring
+
+- Preserve confirm_send validation and swap send amount semantics
+
+- Wire TxService through tauri commands, state, and test bridge
+
+- Update cli wiring and tests for TxService refactor
+
+- Harden tx flows and prevent wallet load deadlock
+
+- Remove public shield_funds compatibility wrapper
+
 
 ### Documentation
 
@@ -68,12 +196,16 @@ All notable changes to zSTASH will be documented in this file.
 
 - Add searchable TokenPicker component for swap asset selection
 
+- Expand fallback tokens with common crypto
+
 
 ### Miscellaneous
 
 - Update bun.lock and ignore test-results
 
 - Organize job service imports
+
+- Add swap polling wallet switch test
 
 
 ### Refactoring
@@ -86,6 +218,12 @@ All notable changes to zSTASH will be documented in this file.
 - Add shield_funds E2E test for test bridge coverage
 
 - Add sync polling workflow E2E test demonstrating documented pattern
+
+- Add coverage for RestoreWallet input clearing
+
+- Cover ExactOutput whitespace and truncation
+
+- Add tests for swap status refresh and resume functionality
 
 ## [0.1.10] - 2026-01-22
 
@@ -151,13 +289,6 @@ All notable changes to zSTASH will be documented in this file.
 
 - Remove unused FIAT_CURRENCY_DISPLAY_NAMES constant
 
-
-### Other
-
-- Revert "fix: clear restore flow data immediately after seed is persisted"
-
-This reverts commit d884e812e775b43acfac82f7d6859746603f0f52.
-
 ## [0.1.1] - 2026-01-18
 
 ### Bug Fixes
@@ -185,15 +316,6 @@ This reverts commit d884e812e775b43acfac82f7d6859746603f0f52.
 ### Documentation
 
 - Add macOS build guide for non-technical users
-
-
-### Other
-
-- ZSTASH Desktop -> zSTASH
-
-- Update logos
-
-$ cargo tauri icon 20260111_zSTASH_SqLogoPreview.png
 
 ## [0.0.5] - 2026-01-09
 
@@ -273,11 +395,6 @@ $ cargo tauri icon 20260111_zSTASH_SqLogoPreview.png
 - Increase chunk size warning limit to 1.5 MB
 
 - Add UR fountain decode script for PCZT testing
-
-
-### Other
-
-- Update gitignore
 
 ## [0.0.4] - 2026-01-07
 
@@ -398,13 +515,6 @@ $ cargo tauri icon 20260111_zSTASH_SqLogoPreview.png
 - Wallet create/backup/receive plumbing
 
 - Balance events + Settings page
-
-
-### Other
-
-- Wallet DB encryption, keychain unlock, mempool probe
-
-- Complete US1 milestone tests
 
 ## [0.0.1] - 2026-01-07
 
@@ -532,24 +642,5 @@ $ cargo tauri icon 20260111_zSTASH_SqLogoPreview.png
 - Ignore changes.md file
 
 - Scaffold zkore desktop wallet workspace
-
-
-### Other
-
-- Initial commit from Specify template
-
-- Add initial docs
-
-- Align specs with IPC contract
-
-- Update ignore list and plan template
-
-- Align wallet security model
-
-- Address encryption, migrations, and CI coverage
-
-- Enhance IPC contract tests and logging security
-
-- Resolve pre-implement inconsistencies
 
 
