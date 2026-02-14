@@ -204,7 +204,12 @@ fn regression_no_secret_logging() {
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
-            let _ = mgr.shield_funds(0, true, &reauth_token, None);
+            let tx_service =
+                zstash_engine::tx_service::TxService::new(zstash_engine::reauth::SystemClock);
+            let task = mgr.prepare_shield_funds_task(0, true, &reauth_token, &tx_service);
+            if let Ok(task) = task {
+                let _ = WalletManager::execute_prepared_shield_funds_task(task, None);
+            }
         }
 
         {

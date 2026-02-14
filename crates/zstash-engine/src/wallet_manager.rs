@@ -2711,36 +2711,6 @@ impl WalletManager {
         )
     }
 
-    /// Test-only: shield_funds with internal TxService (two-phase pattern internally)
-    #[doc(hidden)]
-    pub fn shield_funds(
-        &mut self,
-        account_id: u32,
-        consolidate: bool,
-        reauth_token: &str,
-        on_tx_changed: Option<TxEventHandler>,
-    ) -> anyhow::Result<zstash_core::ipc::v1::commands::transaction::ShieldFundsResponse> {
-        // Phase 1: Get context
-        let (ctx, spending_key) = self.prepare_shield_funds(account_id, reauth_token)?;
-
-        // Phase 2: Execute with internal TxService
-        let mut conn = open_wallet_db_for_tx(&ctx)?;
-        let mut tx_service = TxService::new(SystemClock);
-        tx_service.shield_funds(
-            &ctx.app_db_path,
-            ctx.wallet_id,
-            ctx.network,
-            &ctx.wallet_dir,
-            &ctx.dek,
-            &mut conn,
-            &ctx.grpc_url,
-            account_id,
-            consolidate,
-            spending_key,
-            on_tx_changed,
-        )
-    }
-
     /// Test-only: list_transactions with internal TxService
     #[doc(hidden)]
     pub fn list_transactions_for_test(

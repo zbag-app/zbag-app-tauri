@@ -13,7 +13,8 @@ use zstash_engine::db::{
 use zstash_engine::encryption;
 use zstash_engine::error::find_engine_ipc_error;
 use zstash_engine::key_store::KeyStore;
-use zstash_engine::tx_service::TxEventHandler;
+use zstash_engine::reauth::SystemClock;
+use zstash_engine::tx_service::{TxEventHandler, TxService};
 use zstash_engine::wallet_manager::WalletManager;
 
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -119,6 +120,18 @@ fn temp_root(prefix: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
+}
+
+fn shield_funds_for_test(
+    mgr: &mut WalletManager,
+    account_id: u32,
+    consolidate: bool,
+    reauth_token: &str,
+    on_tx_changed: Option<TxEventHandler>,
+) -> anyhow::Result<zstash_core::ipc::v1::commands::transaction::ShieldFundsResponse> {
+    let tx_service = TxService::new(SystemClock);
+    let task = mgr.prepare_shield_funds_task(account_id, consolidate, reauth_token, &tx_service)?;
+    WalletManager::execute_prepared_shield_funds_task(task, on_tx_changed)
 }
 
 fn wallet_db_path(wallets_root: &Path, network: Network, wallet_id: Uuid) -> PathBuf {
@@ -400,8 +413,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
         events_clone.lock().expect("mutex poisoned").push(evt);
     });
 
-    let resp = mgr
-        .shield_funds(0, true, &reauth_token, Some(handler))
+    let resp = shield_funds_for_test(&mut mgr, 0, true, &reauth_token, Some(handler))
         .expect("shield funds");
     assert!(!resp.txid.trim().is_empty());
 
@@ -449,8 +461,7 @@ fn shield_funds_is_blocked_until_backup_complete() {
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
 
-    let err = mgr
-        .shield_funds(0, true, &reauth_token, None)
+    let err = shield_funds_for_test(&mut mgr, 0, true, &reauth_token, None)
         .expect_err("BACKUP_REQUIRED should block shield_funds");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::BACKUP_REQUIRED);
@@ -499,8 +510,7 @@ fn shield_funds_insufficient_fee_includes_details() {
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
 
-    let err = mgr
-        .shield_funds(0, true, &reauth_token, None)
+    let err = shield_funds_for_test(&mut mgr, 0, true, &reauth_token, None)
         .expect_err("fee should exceed available transparent balance");
     let ipc = find_engine_ipc_error(&err).expect("engine ipc error");
     assert_eq!(ipc.code, errors::INSUFFICIENT_FUNDS);
@@ -560,9 +570,7 @@ fn shield_funds_batches_large_input_sets() {
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
-    let resp = mgr
-        .shield_funds(0, true, &reauth_token, None)
-        .expect("shield funds");
+    let resp = shield_funds_for_test(&mut mgr, 0, true, &reauth_token, None).expect("shield funds");
 
     let txs = mgr
         .list_transactions_for_test(0, 500, 0)
