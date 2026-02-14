@@ -239,8 +239,6 @@ mod tests {
     use zstash_engine::key_store::KeyStore;
     use zstash_engine::wallet_manager::WalletManager;
 
-    use super::*;
-
     type StoreKey = (Uuid, u8);
     type Store = HashMap<StoreKey, Vec<u8>>;
     type SharedStore = Arc<Mutex<Store>>;
