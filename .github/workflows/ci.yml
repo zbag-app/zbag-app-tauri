@@ -96,7 +96,7 @@ jobs:
     needs: [telemetry-guard]
     timeout-minutes: 10
     concurrency:
-      group: bun-lock-${{ github.repository }}
+      group: bun-lock-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { MenuEvents } from '../constants/menuEvents';
+import { resolveLogRevealPath } from '../lib/logPaths';
 import type * as IPC from '../types/ipc';
 import {
   lockWallet,
@@ -295,9 +296,18 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       listeners.push(
         addListener(MenuEvents.OPEN_LOGS, async () => {
           const res = await getLogLocation();
-          if ('ok' in res && res.ok.log_directory) {
+          if ('ok' in res) {
+            const revealPath = resolveLogRevealPath(res.ok);
+            if (revealPath == null) {
+              reportError('Open logs folder failed', {
+                code: 'OPEN_LOGS_EMPTY_PATH',
+                message: 'Backend returned an empty log path.',
+              });
+              return;
+            }
+
             try {
-              await revealItemInDir(res.ok.current_log_file || res.ok.log_directory);
+              await revealItemInDir(revealPath);
             } catch (err) {
               reportError('Open logs folder failed', {
                 code: 'OPEN_LOGS_FAILED',
