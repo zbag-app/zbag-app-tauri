@@ -97,10 +97,17 @@ function AppInner() {
     navigate('/wallets');
   }, [closeMenuLogout, navigate]);
 
+  const handleWalletSelectionRequested = useCallback(() => {
+    if (startup.kind === 'locked') {
+      setStartup({ kind: 'wallet-selection' });
+    }
+  }, [startup]);
+
   // Menu events handler
   useMenuEvents({
     walletId: activeWalletId,
     walletUnlocked: startup.kind === 'ready',
+    onWalletSelectionRequested: handleWalletSelectionRequested,
     onLocked: () => {
       if (startup.kind === 'ready') {
         setStartup({ kind: 'locked', wallet: startup.wallet });

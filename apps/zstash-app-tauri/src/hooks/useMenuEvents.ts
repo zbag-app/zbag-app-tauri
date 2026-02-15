@@ -20,6 +20,8 @@ export interface UseMenuEventsOptions {
   walletId: string | null;
   /** Whether the current wallet is unlocked/ready for wallet routes and actions. */
   walletUnlocked: boolean;
+  /** Callback to enter wallet-selection UI when route-only navigation is insufficient (e.g. locked state). */
+  onWalletSelectionRequested?: () => void;
   /** Callback when wallet is locked via menu. */
   onLocked?: () => void;
   /** Callback when user requests logout via menu. */
@@ -37,12 +39,22 @@ export interface UseMenuEventsOptions {
  * Must be used within a Router context.
  */
 export function useMenuEvents(options: UseMenuEventsOptions): void {
-  const { walletId, walletUnlocked, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError } = options;
+  const {
+    walletId,
+    walletUnlocked,
+    onWalletSelectionRequested,
+    onLocked,
+    onLogoutRequested,
+    onLogout,
+    onTorStateChanged,
+    onError,
+  } = options;
   const navigate = useNavigate();
 
   // Use refs to avoid stale closures in event handlers
   const walletIdRef = useRef(walletId);
   const walletUnlockedRef = useRef(walletUnlocked);
+  const onWalletSelectionRequestedRef = useRef(onWalletSelectionRequested);
   const onLockedRef = useRef(onLocked);
   const onLogoutRequestedRef = useRef(onLogoutRequested);
   const onLogoutRef = useRef(onLogout);
@@ -53,12 +65,22 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   useEffect(() => {
     walletIdRef.current = walletId;
     walletUnlockedRef.current = walletUnlocked;
+    onWalletSelectionRequestedRef.current = onWalletSelectionRequested;
     onLockedRef.current = onLocked;
     onLogoutRequestedRef.current = onLogoutRequested;
     onLogoutRef.current = onLogout;
     onTorStateChangedRef.current = onTorStateChanged;
     onErrorRef.current = onError;
-  }, [walletId, walletUnlocked, onLocked, onLogoutRequested, onLogout, onTorStateChanged, onError]);
+  }, [
+    walletId,
+    walletUnlocked,
+    onWalletSelectionRequested,
+    onLocked,
+    onLogoutRequested,
+    onLogout,
+    onTorStateChanged,
+    onError,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -131,10 +153,15 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
     async function setupListeners() {
       const listeners: Array<Promise<void>> = [];
 
+      function navigateViaWalletSelection(path: string) {
+        onWalletSelectionRequestedRef.current?.();
+        navigate(path);
+      }
+
       // Navigation events (no wallet required)
-      listeners.push(addListener(MenuEvents.NEW_WALLET, () => navigate('/create')));
-      listeners.push(addListener(MenuEvents.RESTORE_WALLET, () => navigate('/restore')));
-      listeners.push(addListener(MenuEvents.SWITCH_WALLET, () => navigate('/wallets')));
+      listeners.push(addListener(MenuEvents.NEW_WALLET, () => navigateViaWalletSelection('/create')));
+      listeners.push(addListener(MenuEvents.RESTORE_WALLET, () => navigateViaWalletSelection('/restore')));
+      listeners.push(addListener(MenuEvents.SWITCH_WALLET, () => navigateViaWalletSelection('/wallets')));
 
       // Navigation events (wallet required)
       listeners.push(
