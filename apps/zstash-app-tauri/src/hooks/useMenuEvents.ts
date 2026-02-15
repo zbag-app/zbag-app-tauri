@@ -275,7 +275,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       // Sync now
       listeners.push(
         addListener(MenuEvents.SYNC_NOW, async () => {
-          const id = ensureWalletLoaded();
+          const id = ensureWalletUnlocked();
           if (!id) return;
           const res = await startSync({ wallet_id: id });
           if ('err' in res) {
