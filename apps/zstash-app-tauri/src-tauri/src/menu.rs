@@ -144,6 +144,7 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> 
         .accelerator("CmdOrCtrl+L")
         .build(app)?;
 
+    // Intentionally no accelerator to reduce accidental logout.
     let logout = MenuItemBuilder::with_id("logout", "Logout").build(app)?;
 
     let separator2 = PredefinedMenuItem::separator(app)?;

@@ -61,6 +61,7 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
   const onTorStateChangedRef = useRef(onTorStateChanged);
   const onErrorRef = useRef(onError);
   const torToggleInFlightRef = useRef(false);
+  const torTogglePendingRef = useRef(false);
 
   useEffect(() => {
     walletIdRef.current = walletId;
@@ -298,20 +299,28 @@ export function useMenuEvents(options: UseMenuEventsOptions): void {
       // Toggle Tor
       listeners.push(
         addListener(MenuEvents.TOGGLE_TOR, async () => {
+          // Fold rapid key repeats/clicks into net toggle intent.
+          // Two quick toggles cancel each other; odd count applies one toggle.
+          torTogglePendingRef.current = !torTogglePendingRef.current;
           if (torToggleInFlightRef.current) return;
+
           torToggleInFlightRef.current = true;
           try {
-            const stateRes = await getTorState();
-            if ('ok' in stateRes) {
-              const currentEnabled = stateRes.ok.state.enabled;
-              const res = await setTorEnabled({ enabled: !currentEnabled });
-              if ('ok' in res) {
-                onTorStateChangedRef.current?.(res.ok.state);
-              } else if ('err' in res) {
-                reportError('Toggle Tor failed', res.err);
+            while (torTogglePendingRef.current) {
+              torTogglePendingRef.current = false;
+
+              const stateRes = await getTorState();
+              if ('ok' in stateRes) {
+                const currentEnabled = stateRes.ok.state.enabled;
+                const res = await setTorEnabled({ enabled: !currentEnabled });
+                if ('ok' in res) {
+                  onTorStateChangedRef.current?.(res.ok.state);
+                } else if ('err' in res) {
+                  reportError('Toggle Tor failed', res.err);
+                }
+              } else if ('err' in stateRes) {
+                reportError('Failed to read Tor state', stateRes.err);
               }
-            } else if ('err' in stateRes) {
-              reportError('Failed to read Tor state', stateRes.err);
             }
           } finally {
             torToggleInFlightRef.current = false;
