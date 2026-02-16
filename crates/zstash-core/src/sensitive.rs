@@ -45,16 +45,27 @@ impl SensitiveString {
     /// Trim leading and trailing whitespace in-place, zeroizing the removed bytes.
     ///
     /// This normalizes user input (e.g., during CLI argument parsing) and zeroizes the previous
-    /// buffer before replacing it with the trimmed value.
+    /// buffer without allocating a second plaintext string.
     pub fn trim_in_place(&mut self) {
-        let trimmed = self.0.trim();
-        if trimmed.len() == self.0.len() {
+        let trimmed_start = self.0.trim_start();
+        let start = self.0.len() - trimmed_start.len();
+        let trimmed = trimmed_start.trim_end();
+        let new_len = trimmed.len();
+
+        if new_len == self.0.len() {
             return;
         }
 
-        let trimmed_owned = trimmed.to_owned();
-        self.0.zeroize();
-        self.0 = trimmed_owned;
+        let end = start + new_len;
+        let mut bytes = std::mem::take(&mut self.0).into_bytes();
+        let old_len = bytes.len();
+
+        bytes.copy_within(start..end, 0);
+        bytes[new_len..old_len].zeroize();
+        bytes.truncate(new_len);
+
+        self.0 = String::from_utf8(bytes)
+            .expect("trim bounds come from UTF-8 char boundaries and preserve valid UTF-8");
     }
 }
 
