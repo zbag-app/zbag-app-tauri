@@ -45,7 +45,7 @@ impl SensitiveString {
     /// Trim leading and trailing whitespace in-place, zeroizing the removed bytes.
     ///
     /// This normalizes user input (e.g., during CLI argument parsing) and zeroizes the previous
-    /// buffer without allocating a second plaintext string.
+    /// buffer without creating a second plaintext copy.
     pub fn trim_in_place(&mut self) {
         let trimmed_start = self.0.trim_start();
         let start = self.0.len() - trimmed_start.len();
