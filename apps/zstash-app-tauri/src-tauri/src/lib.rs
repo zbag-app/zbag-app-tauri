@@ -29,49 +29,13 @@ type AppRuntime = tauri::Wry;
 type AppHandle = tauri::AppHandle<AppRuntime>;
 
 #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
-fn cef_runtime_args_from_env() -> Vec<(String, Option<String>)> {
+fn cef_runtime_args() -> Vec<(String, Option<String>)> {
     let mut args = Vec::new();
 
     #[cfg(target_os = "macos")]
     if std::env::var("ZSTASH_USE_SYSTEM_KEYCHAIN").as_deref() != Ok("1") {
         // POC default: avoid per-launch macOS keychain prompts from Chromium safe storage.
-        args.push(("use-mock-keychain".to_string(), None));
-    }
-
-    let Ok(cef_path) = std::env::var("CEF_PATH") else {
-        return args;
-    };
-
-    let framework =
-        std::path::PathBuf::from(&cef_path).join("Chromium Embedded Framework.framework");
-    if !framework.exists() {
-        tracing::warn!(
-            cef_path = %cef_path,
-            "CEF_PATH does not contain Chromium Embedded Framework.framework"
-        );
-        return args;
-    }
-
-    let resources = framework.join("Resources");
-    let locales = resources.join("locales");
-
-    args.push((
-        "framework-dir-path".to_string(),
-        Some(framework.to_string_lossy().into_owned()),
-    ));
-
-    if resources.exists() {
-        args.push((
-            "resources-dir-path".to_string(),
-            Some(resources.to_string_lossy().into_owned()),
-        ));
-    }
-
-    if locales.exists() {
-        args.push((
-            "locales-dir-path".to_string(),
-            Some(locales.to_string_lossy().into_owned()),
-        ));
+        args.push(("--use-mock-keychain".to_string(), None));
     }
 
     args
@@ -177,7 +141,7 @@ where
 
     #[cfg(feature = "cef-runtime")]
     {
-        let cef_args = cef_runtime_args_from_env();
+        let cef_args = cef_runtime_args();
         if !cef_args.is_empty() {
             builder = builder.command_line_args(cef_args);
         }
