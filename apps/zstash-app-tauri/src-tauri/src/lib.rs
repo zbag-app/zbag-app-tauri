@@ -155,15 +155,17 @@ where
         "zSTASH Desktop starting"
     );
 
-    let mut builder = tauri::Builder::<AppRuntime>::default();
+    let builder = tauri::Builder::<AppRuntime>::default();
 
     #[cfg(feature = "cef-runtime")]
-    {
+    let builder = {
         let cef_args = cef_runtime_args();
-        if !cef_args.is_empty() {
-            builder = builder.command_line_args(cef_args);
+        if cef_args.is_empty() {
+            builder
+        } else {
+            builder.command_line_args(cef_args)
         }
-    }
+    };
 
     builder
         .manage(state)
