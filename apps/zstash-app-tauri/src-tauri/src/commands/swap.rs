@@ -79,7 +79,7 @@ pub async fn zstash_request_swap_quote(
 
 #[tauri::command(rename = "zstash_start_swap")]
 pub fn zstash_start_swap(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartSwapRequest,
 ) -> IpcResult<StartSwapResponse> {
@@ -191,7 +191,7 @@ pub async fn zstash_get_supported_tokens(
 
 #[tauri::command(rename = "zstash_refresh_swap_status")]
 pub async fn zstash_refresh_swap_status(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: RefreshSwapStatusRequest,
 ) -> Result<IpcResult<RefreshSwapStatusResponse>, ()> {
@@ -233,7 +233,7 @@ pub async fn zstash_refresh_swap_status(
 
 #[tauri::command(rename = "zstash_resume_pending_swaps")]
 pub fn zstash_resume_pending_swaps(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ResumePendingSwapsRequest,
 ) -> IpcResult<ResumePendingSwapsResponse> {

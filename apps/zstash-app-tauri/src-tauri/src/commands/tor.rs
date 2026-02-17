@@ -16,7 +16,7 @@ use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "zstash_set_tor_enabled")]
 pub fn zstash_set_tor_enabled(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: SetTorEnabledRequest,
 ) -> IpcResult<SetTorEnabledResponse> {

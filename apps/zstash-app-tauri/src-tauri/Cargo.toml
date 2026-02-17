@@ -46,6 +46,8 @@ tower-http = { version = "0.6", features = ["cors", "limit"], optional = true }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Build this app against Tauri's experimental CEF runtime.
+cef-runtime = ["tauri/cef"]
 # Enable HTTP test bridge for E2E testing (Playwright/Chrome MCP)
 # When enabled, the app runs as an HTTP server instead of Tauri webview
 test-bridge = ["dep:axum", "dep:tower", "dep:tower-http"]

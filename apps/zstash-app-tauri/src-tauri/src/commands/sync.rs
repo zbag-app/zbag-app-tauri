@@ -18,7 +18,7 @@ use crate::state::AppState;
 use super::util::map_anyhow;
 
 pub(crate) fn start_sync_with_handlers(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     state: &AppState,
     mgr: &mut zstash_engine::wallet_manager::WalletManager,
     wallet: &zstash_core::domain::WalletInfo,
@@ -101,7 +101,7 @@ pub(crate) fn start_sync_with_handlers(
 
 #[tauri::command(rename = "zstash_start_sync")]
 pub fn zstash_start_sync(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartSyncRequest,
 ) -> IpcResult<StartSyncResponse> {
@@ -131,7 +131,7 @@ pub fn zstash_start_sync(
 
 #[tauri::command(rename = "zstash_stop_sync")]
 pub fn zstash_stop_sync(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StopSyncRequest,
 ) -> IpcResult<StopSyncResponse> {

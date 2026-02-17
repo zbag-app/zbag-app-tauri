@@ -100,7 +100,7 @@ pub fn zstash_list_wallets(
 
 #[tauri::command(rename = "zstash_load_wallet")]
 pub fn zstash_load_wallet(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: LoadWalletRequest,
 ) -> IpcResult<LoadWalletResponse> {

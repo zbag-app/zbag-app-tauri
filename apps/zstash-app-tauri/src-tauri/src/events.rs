@@ -14,53 +14,53 @@ pub const CHANNEL_JOB: &str = "zstash://job";
 pub const CHANNEL_SERVER_FAILOVER: &str = "zstash://server-failover";
 
 pub fn emit_sync_progress(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: SyncProgressEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_SYNC, event)
 }
 
 pub fn emit_balance_changed(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: BalanceChangedEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_BALANCE, event)
 }
 
 pub fn emit_transaction_changed(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: TransactionChangedEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_TX, event)
 }
 
 pub fn emit_swap_changed(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: SwapChangedEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_SWAP, event)
 }
 
-pub fn emit_tor_status(app: &tauri::AppHandle, event: TorStatusEvent) -> Result<(), tauri::Error> {
+pub fn emit_tor_status(app: &crate::AppHandle, event: TorStatusEvent) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_TOR, event)
 }
 
 pub fn emit_wallet_status(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: WalletStatusEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_WALLET_STATUS, event)
 }
 
 pub fn emit_job_progress(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: JobProgressEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_JOB, event)
 }
 
 pub fn emit_server_failover(
-    app: &tauri::AppHandle,
+    app: &crate::AppHandle,
     event: ServerFailoverEvent,
 ) -> Result<(), tauri::Error> {
     app.emit(CHANNEL_SERVER_FAILOVER, event)

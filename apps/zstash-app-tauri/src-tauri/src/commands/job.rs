@@ -16,7 +16,7 @@ use super::util::map_anyhow;
 
 #[tauri::command(rename = "zstash_start_send_job")]
 pub fn zstash_start_send_job(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartSendJobRequest,
 ) -> IpcResult<StartSendJobResponse> {
@@ -52,7 +52,7 @@ pub fn zstash_start_send_job(
 
 #[tauri::command(rename = "zstash_start_shield_job")]
 pub fn zstash_start_shield_job(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartShieldJobRequest,
 ) -> IpcResult<StartShieldJobResponse> {
