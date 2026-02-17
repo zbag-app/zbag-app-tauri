@@ -5,6 +5,7 @@
 
 TAURI_DIR := apps/zstash-app-tauri
 UNAME_S := $(shell uname -s)
+TAURI_FEATURES ?= cef-runtime
 
 # Force explicit macOS bundle outputs so build failures surface during DMG packaging.
 TAURI_BUILD_BUNDLES :=
@@ -120,11 +121,11 @@ check-telemetry: ## Check for telemetry code
 # ============================================================================
 
 dev: ## Full Tauri development
-	@cd $(TAURI_DIR) && bun run tauri dev
+	@cd $(TAURI_DIR) && bun run tauri dev --features $(TAURI_FEATURES)
 
 # Default CI=true avoids macOS DMG bundling detach/unmount flakiness (create-dmg can fail with EBUSY); override with CI=false if needed.
 tauri-build: ## Tauri production build
-	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build $(TAURI_BUILD_BUNDLES)
+	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build --features $(TAURI_FEATURES) $(TAURI_BUILD_BUNDLES)
 
 # ============================================================================
 # CLI
