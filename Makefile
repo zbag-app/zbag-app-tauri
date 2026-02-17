@@ -4,6 +4,13 @@
 .DEFAULT_GOAL := help
 
 TAURI_DIR := apps/zstash-app-tauri
+UNAME_S := $(shell uname -s)
+
+# Force explicit macOS bundle outputs so build failures surface during DMG packaging.
+TAURI_BUILD_BUNDLES :=
+ifeq ($(UNAME_S),Darwin)
+TAURI_BUILD_BUNDLES := --bundles app,dmg
+endif
 
 .PHONY: help install build build-release build-frontend \
         test test-engine test-core test-network test-keystone test-tor test-migrations \
@@ -117,7 +124,7 @@ dev: ## Full Tauri development
 
 # Default CI=true avoids macOS DMG bundling detach/unmount flakiness (create-dmg can fail with EBUSY); override with CI=false if needed.
 tauri-build: ## Tauri production build
-	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build
+	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build $(TAURI_BUILD_BUNDLES)
 
 # ============================================================================
 # CLI
