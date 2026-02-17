@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import type * as IPC from './types/ipc';
@@ -48,6 +48,9 @@ import { FiatDisplayProvider } from './context/FiatDisplayContext';
 const queryClient = new QueryClient();
 
 const RESUME_PENDING_SWAPS_RETRY_DELAYS_MS = [0, 1000, 3000] as const;
+const RESTRICTED_CONTEXT_MENU_WIDTH = 180;
+const RESTRICTED_CONTEXT_MENU_HEIGHT = 132;
+const RESTRICTED_CONTEXT_MENU_MARGIN = 8;
 
 type StartupState =
   | { kind: 'loading' }
@@ -56,6 +59,55 @@ type StartupState =
   | { kind: 'locked'; wallet: IPC.WalletInfo }
   | { kind: 'ready'; wallet: IPC.WalletInfo; accounts: IPC.AccountInfo[] }
   | { kind: 'error'; error: IPC.IpcError };
+
+type RestrictedContextMenuState = {
+  x: number;
+  y: number;
+};
+
+function nearestEditableElement(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof HTMLElement)) return null;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target;
+  return target.closest('[contenteditable="true"]');
+}
+
+function insertTextIntoEditable(editable: HTMLElement, text: string) {
+  if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+    const start = editable.selectionStart ?? editable.value.length;
+    const end = editable.selectionEnd ?? start;
+    editable.setRangeText(text, start, end, 'end');
+    editable.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+
+  editable.focus();
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    document.execCommand('insertText', false, text);
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(document.createTextNode(text));
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  editable.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function selectedTextFromEditable(editable: HTMLElement): string {
+  if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+    const start = editable.selectionStart ?? 0;
+    const end = editable.selectionEnd ?? start;
+    if (start !== end) {
+      return editable.value.slice(start, end);
+    }
+    return editable.value;
+  }
+
+  return window.getSelection()?.toString() ?? '';
+}
 
 function AppInner() {
   const navigate = useNavigate();
@@ -71,6 +123,9 @@ function AppInner() {
   const [dismissedTorError, setDismissedTorError] = useState(false);
   const [menuLogoutWalletId, setMenuLogoutWalletId] = useState<string | null>(null);
   const [menuLogoutOpen, setMenuLogoutOpen] = useState(false);
+  const [restrictedContextMenu, setRestrictedContextMenu] = useState<RestrictedContextMenuState | null>(null);
+  const restrictedContextMenuRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuTargetRef = useRef<HTMLElement | null>(null);
 
   const activeWalletId = useMemo(() => {
     if (startup.kind === 'locked' || startup.kind === 'ready') return startup.wallet.id;
@@ -87,6 +142,10 @@ function AppInner() {
   const closeMenuLogout = useCallback(() => {
     setMenuLogoutOpen(false);
     setMenuLogoutWalletId(null);
+  }, []);
+
+  const closeRestrictedContextMenu = useCallback(() => {
+    setRestrictedContextMenu(null);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -141,6 +200,54 @@ function AppInner() {
     />
   );
 
+  const handleRestrictedContextCopy = useCallback(async () => {
+    closeRestrictedContextMenu();
+    const editable = contextMenuTargetRef.current ?? nearestEditableElement(document.activeElement);
+    const text =
+      (editable ? selectedTextFromEditable(editable) : window.getSelection()?.toString())?.trim() ??
+      '';
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      document.execCommand('copy');
+    }
+  }, [closeRestrictedContextMenu]);
+
+  const handleRestrictedContextPaste = useCallback(async () => {
+    closeRestrictedContextMenu();
+    const editable = contextMenuTargetRef.current ?? nearestEditableElement(document.activeElement);
+    if (!editable) return;
+
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      return;
+    }
+    if (!text) return;
+    insertTextIntoEditable(editable, text);
+  }, [closeRestrictedContextMenu]);
+
+  const handleRestrictedContextSelectAll = useCallback(() => {
+    closeRestrictedContextMenu();
+    const editable = contextMenuTargetRef.current ?? nearestEditableElement(document.activeElement);
+    if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+      editable.select();
+      return;
+    }
+    if (editable) {
+      const range = document.createRange();
+      range.selectNodeContents(editable);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    document.execCommand('selectAll');
+  }, [closeRestrictedContextMenu]);
+
   // Tor state initialization and subscription
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +288,78 @@ function AppInner() {
       cancelled = true;
     };
   }, [startup]);
+
+  // CEF lock-down: disable browser context menu and browser-like drag behavior.
+  useEffect(() => {
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const target = nearestEditableElement(event.target);
+      if (target) {
+        target.focus();
+      }
+      contextMenuTargetRef.current = target;
+
+      const x = Math.max(
+        RESTRICTED_CONTEXT_MENU_MARGIN,
+        Math.min(
+          event.clientX,
+          window.innerWidth - RESTRICTED_CONTEXT_MENU_WIDTH - RESTRICTED_CONTEXT_MENU_MARGIN,
+        ),
+      );
+      const y = Math.max(
+        RESTRICTED_CONTEXT_MENU_MARGIN,
+        Math.min(
+          event.clientY,
+          window.innerHeight - RESTRICTED_CONTEXT_MENU_HEIGHT - RESTRICTED_CONTEXT_MENU_MARGIN,
+        ),
+      );
+      setRestrictedContextMenu({ x, y });
+    };
+
+    const onMouseDown = (event: MouseEvent) => {
+      if (
+        restrictedContextMenuRef.current &&
+        event.target instanceof Node &&
+        restrictedContextMenuRef.current.contains(event.target)
+      ) {
+        return;
+      }
+      closeRestrictedContextMenu();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeRestrictedContextMenu();
+      }
+    };
+
+    const disableDrag = (event: DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    document.addEventListener('contextmenu', onContextMenu, true);
+    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('dragstart', disableDrag, true);
+    document.addEventListener('dragover', disableDrag, true);
+    document.addEventListener('drop', disableDrag, true);
+    window.addEventListener('blur', closeRestrictedContextMenu);
+    window.addEventListener('resize', closeRestrictedContextMenu);
+
+    return () => {
+      document.removeEventListener('contextmenu', onContextMenu, true);
+      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('dragstart', disableDrag, true);
+      document.removeEventListener('dragover', disableDrag, true);
+      document.removeEventListener('drop', disableDrag, true);
+      window.removeEventListener('blur', closeRestrictedContextMenu);
+      window.removeEventListener('resize', closeRestrictedContextMenu);
+    };
+  }, [closeRestrictedContextMenu]);
 
   // Resume pending swaps when wallet becomes ready
   useEffect(() => {
@@ -604,6 +783,35 @@ function AppInner() {
       {menuErrorDialog}
       {menuLogoutDialog}
       {content}
+      {restrictedContextMenu ? (
+        <div
+          ref={restrictedContextMenuRef}
+          className="fixed z-[9999] min-w-[180px] rounded-none border border-border bg-card p-1 shadow-lg"
+          style={{ left: restrictedContextMenu.x, top: restrictedContextMenu.y }}
+        >
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+            onClick={() => void handleRestrictedContextCopy()}
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+            onClick={() => void handleRestrictedContextPaste()}
+          >
+            Paste
+          </button>
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+            onClick={handleRestrictedContextSelectAll}
+          >
+            Select All
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

@@ -3,9 +3,15 @@ import { cn } from "../../lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, type, ...props }, ref) => {
+    const autoComplete =
+      props.autoComplete ?? (type === "password" ? "new-password" : "off");
     return (
       <input
         type={type}
+        autoComplete={autoComplete}
+        autoCorrect={props.autoCorrect ?? "off"}
+        autoCapitalize={props.autoCapitalize ?? "off"}
+        spellCheck={props.spellCheck ?? false}
         className={cn(
           "flex h-9 w-full rounded-none border border-border bg-input px-3 py-2 text-sm text-foreground shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           className

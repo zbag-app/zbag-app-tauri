@@ -38,6 +38,17 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
         args.push(("--use-mock-keychain".to_string(), None));
     }
 
+    // Harden CEF browser-like behavior for desktop-app UX and reduce credential prompts.
+    args.push(("--disable-save-password-bubble".to_string(), None));
+    args.push((
+        "--disable-features".to_string(),
+        Some(
+            "AutofillEnableAccountWalletStorage,AutofillServerCommunication,PasswordGeneration,\
+             PasswordManagerEnableAccountStorage,PasswordManagerEnableOnboarding"
+                .to_string(),
+        ),
+    ));
+
     args
 }
 
