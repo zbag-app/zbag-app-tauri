@@ -43,6 +43,22 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
     args.push(("--disable-password-generation".to_string(), None));
     args.push(("--disable-single-click-autofill".to_string(), None));
     args.push(("--disable-sync".to_string(), None));
+    args.push(("--disable-background-networking".to_string(), None));
+    args.push(("--disable-component-update".to_string(), None));
+    args.push(("--disable-default-apps".to_string(), None));
+    args.push(("--disable-domain-reliability".to_string(), None));
+    args.push(("--disable-extensions".to_string(), None));
+    args.push(("--disable-plugins".to_string(), None));
+    args.push(("--disable-print-preview".to_string(), None));
+    args.push(("--disable-pdf".to_string(), None));
+    args.push(("--disable-context-menu".to_string(), None));
+    args.push(("--mute-audio".to_string(), None));
+    args.push(("--no-default-browser-check".to_string(), None));
+    args.push(("--no-first-run".to_string(), None));
+    args.push((
+        "--autoplay-policy".to_string(),
+        Some("user-gesture-required".to_string()),
+    ));
 
     // Harden CEF browser-like behavior for desktop-app UX and reduce credential prompts.
     args.push(("--disable-save-password-bubble".to_string(), None));
@@ -50,8 +66,8 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
         "--disable-features".to_string(),
         Some(
             "AutofillEnableAccountWalletStorage,AutofillServerCommunication,PasswordGeneration,\
-             PasswordLeakDetection,PasswordManagerEnableAccountStorage,\
-             PasswordManagerEnableOnboarding,PasswordManagerOnboarding"
+             MediaRouter,PasswordLeakDetection,PasswordManagerEnableAccountStorage,\
+             PasswordManagerEnableOnboarding,PasswordManagerOnboarding,Translate"
                 .to_string(),
         ),
     ));

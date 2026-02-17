@@ -109,6 +109,13 @@ function selectedTextFromEditable(editable: HTMLElement): string {
   return window.getSelection()?.toString() ?? '';
 }
 
+function allTextFromEditable(editable: HTMLElement): string {
+  if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+    return editable.value;
+  }
+  return editable.textContent ?? '';
+}
+
 function AppInner() {
   const navigate = useNavigate();
   const [startup, setStartup] = useState<StartupState>({ kind: 'loading' });
@@ -230,22 +237,28 @@ function AppInner() {
     insertTextIntoEditable(editable, text);
   }, [closeRestrictedContextMenu]);
 
-  const handleRestrictedContextSelectAll = useCallback(() => {
+  const handleRestrictedContextCopyAll = useCallback(async () => {
     closeRestrictedContextMenu();
     const editable = contextMenuTargetRef.current ?? nearestEditableElement(document.activeElement);
-    if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
-      editable.select();
-      return;
+    if (!editable) return;
+
+    const text = allTextFromEditable(editable).trim();
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+        editable.select();
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(editable);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+      document.execCommand('copy');
     }
-    if (editable) {
-      const range = document.createRange();
-      range.selectNodeContents(editable);
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      return;
-    }
-    document.execCommand('selectAll');
   }, [closeRestrictedContextMenu]);
 
   // Tor state initialization and subscription
@@ -289,17 +302,21 @@ function AppInner() {
     };
   }, [startup]);
 
-  // CEF lock-down: disable browser context menu and browser-like drag behavior.
+  // CEF lock-down: block native context menu except app-controlled editable fields.
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
 
       const target = nearestEditableElement(event.target);
-      if (target) {
-        target.focus();
-      }
       contextMenuTargetRef.current = target;
+
+      if (!target) {
+        closeRestrictedContextMenu();
+        return;
+      }
+      target.focus();
 
       const x = Math.max(
         RESTRICTED_CONTEXT_MENU_MARGIN,
@@ -335,27 +352,64 @@ function AppInner() {
       }
     };
 
-    const disableDrag = (event: DragEvent) => {
+    const disableDrag = (event: Event) => {
       event.preventDefault();
       event.stopPropagation();
+      if ('stopImmediatePropagation' in event) {
+        event.stopImmediatePropagation();
+      }
+    };
+
+    const hardenNoDragAttributes = (root: ParentNode) => {
+      for (const node of root.querySelectorAll<HTMLElement>('a,img,[draggable]')) {
+        node.setAttribute('draggable', 'false');
+        node.style.setProperty('user-drag', 'none');
+        node.style.setProperty('-webkit-user-drag', 'none');
+      }
     };
 
     document.addEventListener('contextmenu', onContextMenu, true);
+    window.addEventListener('contextmenu', onContextMenu, true);
     document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('dragstart', disableDrag, true);
+    document.addEventListener('drag', disableDrag, true);
+    document.addEventListener('dragend', disableDrag, true);
+    document.addEventListener('dragenter', disableDrag, true);
+    document.addEventListener('dragleave', disableDrag, true);
     document.addEventListener('dragover', disableDrag, true);
     document.addEventListener('drop', disableDrag, true);
+    hardenNoDragAttributes(document);
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          node.setAttribute('draggable', 'false');
+          node.style.setProperty('user-drag', 'none');
+          node.style.setProperty('-webkit-user-drag', 'none');
+          hardenNoDragAttributes(node);
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
     window.addEventListener('blur', closeRestrictedContextMenu);
     window.addEventListener('resize', closeRestrictedContextMenu);
 
     return () => {
       document.removeEventListener('contextmenu', onContextMenu, true);
+      window.removeEventListener('contextmenu', onContextMenu, true);
       document.removeEventListener('mousedown', onMouseDown, true);
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('dragstart', disableDrag, true);
+      document.removeEventListener('drag', disableDrag, true);
+      document.removeEventListener('dragend', disableDrag, true);
+      document.removeEventListener('dragenter', disableDrag, true);
+      document.removeEventListener('dragleave', disableDrag, true);
       document.removeEventListener('dragover', disableDrag, true);
       document.removeEventListener('drop', disableDrag, true);
+      observer.disconnect();
       window.removeEventListener('blur', closeRestrictedContextMenu);
       window.removeEventListener('resize', closeRestrictedContextMenu);
     };
@@ -806,9 +860,9 @@ function AppInner() {
           <button
             type="button"
             className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
-            onClick={handleRestrictedContextSelectAll}
+            onClick={() => void handleRestrictedContextCopyAll()}
           >
-            Select All
+            Copy All
           </button>
         </div>
       ) : null}
