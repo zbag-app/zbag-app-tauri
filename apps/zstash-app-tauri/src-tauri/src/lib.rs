@@ -17,8 +17,20 @@ pub mod time_utils;
 pub mod wallet_logic;
 pub mod windows;
 
+#[cfg(all(
+    not(feature = "test-bridge"),
+    feature = "cef-runtime",
+    target_os = "macos"
+))]
+use serde_json::{Map, Value};
 #[cfg(not(feature = "test-bridge"))]
 use std::sync::Arc;
+#[cfg(all(
+    not(feature = "test-bridge"),
+    feature = "cef-runtime",
+    target_os = "macos"
+))]
+use std::{fs, path::PathBuf};
 #[cfg(not(feature = "test-bridge"))]
 use tauri::Manager;
 
@@ -38,41 +50,112 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
         args.push(("--use-mock-keychain".to_string(), None));
     }
 
-    // Keep Chromium credential storage UI disabled so wallet auth remains app-controlled.
-    args.push(("--password-store".to_string(), Some("basic".to_string())));
-    args.push(("--disable-password-generation".to_string(), None));
-    args.push(("--disable-single-click-autofill".to_string(), None));
-    args.push(("--disable-sync".to_string(), None));
-    args.push(("--disable-background-networking".to_string(), None));
-    args.push(("--disable-component-update".to_string(), None));
-    args.push(("--disable-default-apps".to_string(), None));
-    args.push(("--disable-domain-reliability".to_string(), None));
-    args.push(("--disable-extensions".to_string(), None));
-    args.push(("--disable-plugins".to_string(), None));
-    args.push(("--disable-print-preview".to_string(), None));
-    args.push(("--disable-pdf".to_string(), None));
-    args.push(("--disable-context-menu".to_string(), None));
-    args.push(("--mute-audio".to_string(), None));
-    args.push(("--no-default-browser-check".to_string(), None));
-    args.push(("--no-first-run".to_string(), None));
-    args.push((
-        "--autoplay-policy".to_string(),
-        Some("user-gesture-required".to_string()),
-    ));
-
-    // Harden CEF browser-like behavior for desktop-app UX and reduce credential prompts.
+    // Keep Chromium credential UI disabled so wallet auth remains app-controlled.
     args.push(("--disable-save-password-bubble".to_string(), None));
-    args.push((
-        "--disable-features".to_string(),
-        Some(
-            "AutofillEnableAccountWalletStorage,AutofillServerCommunication,PasswordGeneration,\
-             MediaRouter,PasswordLeakDetection,PasswordManagerEnableAccountStorage,\
-             PasswordManagerEnableOnboarding,PasswordManagerOnboarding,Translate"
-                .to_string(),
-        ),
-    ));
 
     args
+}
+
+#[cfg(all(
+    not(feature = "test-bridge"),
+    feature = "cef-runtime",
+    target_os = "macos"
+))]
+fn cef_preferences_path(bundle_identifier: &str) -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(
+        PathBuf::from(home)
+            .join("Library")
+            .join("Caches")
+            .join(bundle_identifier)
+            .join("cef")
+            .join("Default")
+            .join("Preferences"),
+    )
+}
+
+#[cfg(all(
+    not(feature = "test-bridge"),
+    feature = "cef-runtime",
+    target_os = "macos"
+))]
+fn enforce_cef_password_policy(bundle_identifier: &str) {
+    let Some(preferences_path) = cef_preferences_path(bundle_identifier) else {
+        tracing::warn!("failed to locate HOME when applying CEF password policy");
+        return;
+    };
+
+    if let Some(parent) = preferences_path.parent() {
+        if let Err(error) = fs::create_dir_all(parent) {
+            tracing::warn!(
+                path = %parent.display(),
+                ?error,
+                "failed to prepare CEF preferences directory"
+            );
+            return;
+        }
+    }
+
+    let mut root = match fs::read_to_string(&preferences_path) {
+        Ok(raw) => {
+            serde_json::from_str::<Value>(&raw).unwrap_or_else(|_| Value::Object(Map::new()))
+        }
+        Err(_) => Value::Object(Map::new()),
+    };
+
+    if !root.is_object() {
+        root = Value::Object(Map::new());
+    }
+
+    let root_obj = root
+        .as_object_mut()
+        .expect("root should always be an object");
+    root_obj.insert("credentials_enable_service".to_string(), Value::Bool(false));
+
+    let profile = root_obj
+        .entry("profile".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !profile.is_object() {
+        *profile = Value::Object(Map::new());
+    }
+    if let Some(profile_obj) = profile.as_object_mut() {
+        profile_obj.insert("password_manager_enabled".to_string(), Value::Bool(false));
+        profile_obj.insert(
+            "password_manager_leak_detection".to_string(),
+            Value::Bool(false),
+        );
+    }
+
+    let autofill = root_obj
+        .entry("autofill".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !autofill.is_object() {
+        *autofill = Value::Object(Map::new());
+    }
+    if let Some(autofill_obj) = autofill.as_object_mut() {
+        autofill_obj.insert("enabled".to_string(), Value::Bool(false));
+        autofill_obj.insert("profile_enabled".to_string(), Value::Bool(false));
+        autofill_obj.insert("credit_card_enabled".to_string(), Value::Bool(false));
+    }
+
+    match serde_json::to_string(&root) {
+        Ok(serialized) => {
+            if let Err(error) = fs::write(&preferences_path, serialized) {
+                tracing::warn!(
+                    path = %preferences_path.display(),
+                    ?error,
+                    "failed to write CEF password policy preferences"
+                );
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                path = %preferences_path.display(),
+                ?error,
+                "failed to serialize CEF password policy preferences"
+            );
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -171,6 +254,11 @@ where
         "zSTASH Desktop starting"
     );
 
+    let context = tauri::generate_context!();
+
+    #[cfg(all(feature = "cef-runtime", target_os = "macos"))]
+    enforce_cef_password_policy(context.config().identifier.as_str());
+
     let builder = tauri::Builder::<AppRuntime>::default();
 
     #[cfg(feature = "cef-runtime")]
@@ -228,7 +316,7 @@ where
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(invoke_handler)
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 

@@ -368,6 +368,41 @@ function AppInner() {
       }
     };
 
+    const hardenCredentialAutofill = (root: ParentNode) => {
+      for (const form of root.querySelectorAll<HTMLFormElement>('form')) {
+        form.setAttribute('autocomplete', 'off');
+      }
+
+      for (const input of root.querySelectorAll<HTMLInputElement>('input')) {
+        const inputType = (input.getAttribute('type') ?? input.type ?? 'text').toLowerCase();
+        input.setAttribute('autocorrect', 'off');
+        input.setAttribute('autocapitalize', 'off');
+        input.spellcheck = false;
+
+        if (inputType === 'password') {
+          input.setAttribute('autocomplete', 'new-password');
+          input.setAttribute('data-lpignore', 'true');
+          input.setAttribute('data-1p-ignore', 'true');
+          input.setAttribute('data-form-type', 'other');
+          if (!input.hasAttribute('name') || input.getAttribute('name') === 'password') {
+            input.setAttribute('name', 'zstash-secret');
+          }
+          continue;
+        }
+
+        if (['text', 'search', 'email', 'tel', 'url'].includes(inputType)) {
+          input.setAttribute('autocomplete', 'off');
+        }
+      }
+
+      for (const textarea of root.querySelectorAll<HTMLTextAreaElement>('textarea')) {
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('autocapitalize', 'off');
+        textarea.spellcheck = false;
+      }
+    };
+
     document.addEventListener('contextmenu', onContextMenu, true);
     window.addEventListener('contextmenu', onContextMenu, true);
     document.addEventListener('mousedown', onMouseDown, true);
@@ -380,6 +415,7 @@ function AppInner() {
     document.addEventListener('dragover', disableDrag, true);
     document.addEventListener('drop', disableDrag, true);
     hardenNoDragAttributes(document);
+    hardenCredentialAutofill(document);
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -389,6 +425,7 @@ function AppInner() {
           node.style.setProperty('user-drag', 'none');
           node.style.setProperty('-webkit-user-drag', 'none');
           hardenNoDragAttributes(node);
+          hardenCredentialAutofill(node);
         }
       }
     });
