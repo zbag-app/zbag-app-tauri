@@ -38,13 +38,20 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
         args.push(("--use-mock-keychain".to_string(), None));
     }
 
+    // Keep Chromium credential storage UI disabled so wallet auth remains app-controlled.
+    args.push(("--password-store".to_string(), Some("basic".to_string())));
+    args.push(("--disable-password-generation".to_string(), None));
+    args.push(("--disable-single-click-autofill".to_string(), None));
+    args.push(("--disable-sync".to_string(), None));
+
     // Harden CEF browser-like behavior for desktop-app UX and reduce credential prompts.
     args.push(("--disable-save-password-bubble".to_string(), None));
     args.push((
         "--disable-features".to_string(),
         Some(
             "AutofillEnableAccountWalletStorage,AutofillServerCommunication,PasswordGeneration,\
-             PasswordManagerEnableAccountStorage,PasswordManagerEnableOnboarding"
+             PasswordLeakDetection,PasswordManagerEnableAccountStorage,\
+             PasswordManagerEnableOnboarding,PasswordManagerOnboarding"
                 .to_string(),
         ),
     ));

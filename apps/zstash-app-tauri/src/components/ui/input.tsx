@@ -3,8 +3,7 @@ import { cn } from "../../lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, type, ...props }, ref) => {
-    const autoComplete =
-      props.autoComplete ?? (type === "password" ? "new-password" : "off");
+    const autoComplete = props.autoComplete ?? "off";
     return (
       <input
         type={type}
