@@ -74,13 +74,6 @@ fn cef_runtime_args_from_env() -> Vec<(String, Option<String>)> {
         ));
     }
 
-    if let Ok(exe) = std::env::current_exe() {
-        args.push((
-            "browser-subprocess-path".to_string(),
-            Some(exe.to_string_lossy().into_owned()),
-        ));
-    }
-
     args
 }
 
