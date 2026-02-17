@@ -92,3 +92,8 @@ tempfile = "3"
 # CEF POC pin: keep Tauri Rust crates on a single feat/cef snapshot.
 tauri = { git = "https://github.com/tauri-apps/tauri", rev = "465b42cb21a015cd6c210907e26699e10745a533" }
 tauri-build = { git = "https://github.com/tauri-apps/tauri", rev = "465b42cb21a015cd6c210907e26699e10745a533" }
+
+[profile.release]
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
