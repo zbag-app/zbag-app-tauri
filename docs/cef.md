@@ -31,6 +31,55 @@ This now uses `scripts/tauri-cef-build.sh`, which resolves the pinned `cargo-tau
 open -na target/release/bundle/macos/zSTASH.app
 ```
 
+## Slim CEF profiles (no CEF rebuild)
+
+The default build remains unchanged:
+
+```bash
+make tauri-build
+```
+
+Optional slim builds stage a local CEF copy, prune optional assets, then build with `CEF_PATH` pointed at the staged copy.
+
+### Size audit
+
+```bash
+make cef-audit
+```
+
+### SAFE profile (recommended)
+
+```bash
+make tauri-build-slim-safe
+```
+
+Behavior:
+- keeps CEF runtime core files
+- keeps `resources.pak`, `chrome_100_percent.pak`, `chrome_200_percent.pak`
+- keeps minimal English locales (`en.lproj`, `en_GB.lproj` by default)
+- keeps ANGLE/SwiftShader libraries
+
+### AGGRESSIVE profile (opt-in)
+
+```bash
+make tauri-build-slim-aggressive
+```
+
+Behavior:
+- starts from SAFE profile pruning
+- additionally removes ANGLE/SwiftShader payload where present:
+  - `libEGL*`
+  - `libGLESv2*`
+  - `libvk_swiftshader*`
+  - `vk_swiftshader_icd*`
+  - related shader cache payload
+
+### Rollback / revert
+
+- Use the default build path at any time: `make tauri-build`.
+- Remove staged slim artifacts: `rm -rf target/cef-stage`.
+- No codec flags are changed and no CEF source build is required.
+
 ## Required quality gates
 
 The release readiness path is:
