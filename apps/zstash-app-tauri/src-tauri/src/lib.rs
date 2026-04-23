@@ -243,6 +243,12 @@ pub fn run_with_invoke_handler<F>(invoke_handler: F)
 where
     F: Fn(tauri::ipc::Invoke<AppRuntime>) -> bool + Send + Sync + 'static,
 {
+    // Install ring as rustls default CryptoProvider before any TLS use.
+    // Reqwest 0.13 is configured with `rustls-no-provider`; both reqwest and tonic
+    // pick up this default. Avoids aws-lc-rs (reqwest 0.13's default), which deadlocks
+    // when loaded alongside CEF's bundled BoringSSL.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let state = state::AppState::new().expect("failed to initialize application state");
 
     // Log version at startup
