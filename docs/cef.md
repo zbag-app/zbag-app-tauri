@@ -106,6 +106,50 @@ Key implementation files:
 - `apps/zstash-app-tauri/src/App.tsx`
 - `apps/zstash-app-tauri/src/components/ui/input.tsx`
 
+## Upgrading CEF
+
+Current pin (branch `cef`):
+
+- Tauri `feat/cef` rev: `562bc592b337de417aa48e72034c7816cfb4c142`
+- `cef` + `cef-dll-sys`: `146.4.1+146.0.9`
+- `tauri` crate: `2.10.3`
+- `@tauri-apps/api`: `2.10.1`
+- `@tauri-apps/cli`: `2.10.1`
+
+The CEF version is controlled by the pinned Tauri rev (`tauri-runtime-cef/Cargo.toml` contains `cef = "=<version>"`). Do not bump `cef` directly.
+
+### Upgrade steps
+
+1. Resolve the new Tauri `feat/cef` HEAD:
+   ```bash
+   git ls-remote https://github.com/tauri-apps/tauri refs/heads/feat/cef
+   ```
+2. Inspect the candidate rev for the CEF version and the JS package versions:
+   ```bash
+   curl -sL "https://raw.githubusercontent.com/tauri-apps/tauri/<rev>/crates/tauri-runtime-cef/Cargo.toml" | grep '^cef '
+   curl -sL "https://raw.githubusercontent.com/tauri-apps/tauri/<rev>/packages/cli/package.json" | head -5
+   curl -sL "https://raw.githubusercontent.com/tauri-apps/tauri/<rev>/packages/api/package.json" | head -5
+   ```
+3. Bump `Cargo.toml` `[patch.crates-io]` `tauri` + `tauri-build` to the new rev.
+4. Bump `apps/zstash-app-tauri/package.json` `@tauri-apps/cli` + `@tauri-apps/api`.
+5. Refresh locks:
+   ```bash
+   cargo update -p tauri -p tauri-build
+   cd apps/zstash-app-tauri && bun install
+   ```
+6. Rebuild and verify the framework actually landed in the bundle:
+   ```bash
+   make tauri-build
+   ls "target/release/bundle/macos/zSTASH.app/Contents/Frameworks/"
+   ```
+   Expect `Chromium Embedded Framework.framework` plus five `zstash-app-tauri Helper*.app` bundles. If `Frameworks/` is missing, see **Troubleshooting: missing CEF framework in bundle** below.
+7. Launch via `open -na target/release/bundle/macos/zSTASH.app` and confirm renderer + GPU helper processes spawn.
+
+### Known breakages when bumping Tauri
+
+- **Both `wry` and `cef` features enabled → `error[E0252]: webview_version` defined multiple times.** `tauri/src/lib.rs` re-exports `webview_version` from both runtimes. Fix: in `apps/zstash-app-tauri/src-tauri/Cargo.toml` keep `tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }`. Do not add `wry` back.
+- **`AppHandle` has no default `Runtime` when `wry` is off.** `#[default_runtime(crate::Wry, wry)]` only supplies the default when the `wry` feature is enabled. Every function that holds a Tauri handle needs an explicit runtime generic, e.g. `pub fn f<R: Runtime>(app: &AppHandle<R>)`. Same rule applies to `WebviewWindow<R>`, `Window<R>`, `Manager<R>`. Currently only `apps/zstash-app-tauri/src-tauri/src/windows.rs` is affected, but any new handle-taking function will have to follow suit.
+
 ## Common troubleshooting
 
 ### `Failed to request http://localhost:1420/`
@@ -116,6 +160,45 @@ Fix:
 
 - For production usage, run `make tauri-build` and open the built `.app`.
 - For dev usage, run `make dev` and keep the dev server active.
+
+### Missing CEF framework in bundle (app panics on launch)
+
+Symptom: `make tauri-build` exits 0, `.app` and `.dmg` are produced, but launching panics with:
+
+```
+thread 'main' panicked at cef-<ver>/src/library_loader.rs:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, ... }
+```
+
+and `.app/Contents/Frameworks/` is absent.
+
+Cause: `tauri-cli`'s `ensure_cef_directory` (`crates/tauri-cli/src/cef/exporter.rs`) tries to download/verify the pinned CEF version before the bundler runs. If the CDN lookup fails (logged as `CEF Failed to ensure CEF directory: version <ver> not found`), the exporter returns `Err`, `CEF_PATH` never gets set, and `tauri-bundler` silently skips `copy_cef_framework` + `create_cef_helpers`. The linker-side CEF (via `cef-dll-sys` build script) still succeeds, so compilation reports success.
+
+Fix (when exporter fails but `cef-dll-sys` already produced the framework):
+
+```bash
+ROOT=$(pwd)
+CEF_OUT=$(find target/release/build -type d -name cef_macos_aarch64 | head -1)
+mkdir -p target/cef-cache
+ln -sfn "$ROOT/$CEF_OUT" "target/cef-cache/<version>"  # e.g. 146.4.1
+CEF_PATH="$ROOT/target/cef-cache" make tauri-build
+```
+
+The exporter reads `CEF_PATH/<version>/archive.json`, sees the version matches, skips the download, and forwards `CEF_PATH` to the bundler. The staged dir does not have to be real; a symlink to the `cef-dll-sys` build output works.
+
+Verify after rebuild:
+
+```bash
+ls target/release/bundle/macos/zSTASH.app/Contents/Frameworks/
+# Chromium Embedded Framework.framework
+# zstash-app-tauri Helper.app
+# zstash-app-tauri Helper (GPU).app
+# zstash-app-tauri Helper (Renderer).app
+# zstash-app-tauri Helper (Plugin).app
+# zstash-app-tauri Helper (Alerts).app
+```
+
+A passing `make tauri-build` is not proof the framework shipped. Always check `Frameworks/` before claiming a build succeeded.
 
 ### Chromium Safe Storage / keychain password prompt
 
