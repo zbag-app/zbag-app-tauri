@@ -27,7 +27,7 @@ zstash-network = { path = "../../../crates/zstash-network" }
 zstash-keystone = { path = "../../../crates/zstash-keystone" }
 zstash-tor = { path = "../../../crates/zstash-tor" }
 
-tauri = { version = "2", features = [] }
+tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }
 tauri-plugin-opener = "2"
 
 serde.workspace = true

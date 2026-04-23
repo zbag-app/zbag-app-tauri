@@ -1,8 +1,8 @@
-use tauri::{AppHandle, Manager as _, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager as _, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 pub const SIGNING_WINDOW_LABEL: &str = "signing";
 
-pub fn open_signing_window(app: &AppHandle) -> Result<(), tauri::Error> {
+pub fn open_signing_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), tauri::Error> {
     if let Some(window) = app.get_webview_window(SIGNING_WINDOW_LABEL) {
         window.show()?;
         window.set_focus()?;
@@ -23,7 +23,7 @@ pub fn open_signing_window(app: &AppHandle) -> Result<(), tauri::Error> {
     Ok(())
 }
 
-pub fn close_signing_window(app: &AppHandle) -> Result<(), tauri::Error> {
+pub fn close_signing_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), tauri::Error> {
     if let Some(window) = app.get_webview_window(SIGNING_WINDOW_LABEL) {
         window.close()?;
     }
