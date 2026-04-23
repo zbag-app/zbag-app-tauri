@@ -93,7 +93,7 @@ pub fn zstash_prepare_send(
 
 #[tauri::command(rename = "zstash_confirm_send")]
 pub fn zstash_confirm_send(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ConfirmSendRequest,
 ) -> IpcResult<ConfirmSendResponse> {
@@ -134,7 +134,7 @@ pub fn zstash_cancel_send(
 
 #[tauri::command(rename = "zstash_retry_broadcast")]
 pub async fn zstash_retry_broadcast(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: RetryBroadcastRequest,
 ) -> Result<IpcResult<RetryBroadcastResponse>, ()> {
@@ -227,7 +227,7 @@ pub fn zstash_list_transactions(
 
 #[tauri::command(rename = "zstash_shield_funds")]
 pub fn zstash_shield_funds(
-    app: tauri::AppHandle,
+    app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ShieldFundsRequest,
 ) -> IpcResult<ShieldFundsResponse> {

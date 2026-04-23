@@ -27,7 +27,7 @@ zstash-network = { path = "../../../crates/zstash-network" }
 zstash-keystone = { path = "../../../crates/zstash-keystone" }
 zstash-tor = { path = "../../../crates/zstash-tor" }
 
-tauri = { version = "2", features = ["devtools"] }
+tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }
 tauri-plugin-opener = "2"
 
 serde.workspace = true
@@ -37,6 +37,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
 uuid.workspace = true
+reqwest.workspace = true
+rustls = { version = "0.23", features = ["ring"] }
 
 # Test bridge dependencies (optional)
 axum = { version = "0.8", optional = true }
@@ -46,6 +48,8 @@ tower-http = { version = "0.6", features = ["cors", "limit"], optional = true }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Build this app against Tauri's experimental CEF runtime.
+cef-runtime = ["tauri/cef"]
 # Enable HTTP test bridge for E2E testing (Playwright/Chrome MCP)
 # When enabled, the app runs as an HTTP server instead of Tauri webview
 test-bridge = ["dep:axum", "dep:tower", "dep:tower-http"]

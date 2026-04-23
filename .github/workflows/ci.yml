@@ -76,9 +76,40 @@ jobs:
           cache: false
       - run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
+  tauri-build-cef:
+    name: Tauri Build (CEF)
+    runs-on: self-hosted
+    needs: [telemetry-guard, rust-tests, rust-clippy, rust-migrations, bun-tests]
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: "16"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.5
+      - name: Install dependencies
+        run: make install
+      - name: Build Tauri bundles on CEF path
+        run: make tauri-build
+      - name: Upload Tauri bundles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-bundles-cef
+          path: |
+            target/release/bundle/macos/*.app
+            target/release/bundle/dmg/*.dmg
+          if-no-files-found: ignore
+          retention-days: 7
+
   rust-build:
     name: Rust Build (release)
-    needs: [telemetry-guard, rust-audit, rust-tests, rust-clippy, rust-migrations, bun-tests]
+    needs: [telemetry-guard, rust-audit, rust-tests, rust-clippy, rust-migrations, bun-tests, tauri-build-cef]
     runs-on: self-hosted
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:

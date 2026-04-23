@@ -4,13 +4,23 @@
 .DEFAULT_GOAL := help
 
 TAURI_DIR := apps/zstash-app-tauri
+UNAME_S := $(shell uname -s)
+TAURI_FEATURES ?= cef-runtime
+TAURI_BUNDLES ?=
+CEF_STAGE_ROOT ?= $(CURDIR)/target/cef-stage
+CEF_SAFE_LOCALES ?= en.lproj,en_GB.lproj
+
+# Force explicit macOS bundle outputs so build failures surface during DMG packaging.
+ifeq ($(UNAME_S),Darwin)
+TAURI_BUNDLES := app,dmg
+endif
 
 .PHONY: help install build build-release build-frontend \
         test test-engine test-core test-network test-keystone test-tor test-migrations \
         test-e2e test-bridge test-bridge-build \
         fmt fmt-check clippy clippy-strict lint \
         pre-commit check audit check-telemetry \
-        dev tauri-build \
+        dev tauri-build cef-audit cef-stage-safe cef-stage-aggressive tauri-build-slim-safe tauri-build-slim-aggressive \
         cli cli-dev cli-run cli-wallet-list cli-wallet-create cli-sync cli-balance cli-address \
         changelog changelog-unreleased \
         clean clean-frontend clean-all
@@ -113,11 +123,30 @@ check-telemetry: ## Check for telemetry code
 # ============================================================================
 
 dev: ## Full Tauri development
-	@cd $(TAURI_DIR) && bun run tauri dev
+	@cd $(TAURI_DIR) && bun run tauri dev --features $(TAURI_FEATURES)
 
 # Default CI=true avoids macOS DMG bundling detach/unmount flakiness (create-dmg can fail with EBUSY); override with CI=false if needed.
 tauri-build: ## Tauri production build
-	@cd $(TAURI_DIR) && CI=$${CI:-true} bun run tauri build
+	@CI=$${CI:-true} TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
+
+cef-audit: ## Report CEF + bundle sizes and largest payload entries
+	@./scripts/cef-size-report.sh
+
+cef-stage-safe: ## Stage pruned CEF payload (safe profile)
+	@CEF_SLIM_PROFILE=safe CEF_KEEP_LOCALES="$(CEF_SAFE_LOCALES)" CEF_STAGE_ROOT="$(CEF_STAGE_ROOT)" ./scripts/cef-stage-slim.sh
+
+cef-stage-aggressive: ## Stage pruned CEF payload (aggressive profile)
+	@CEF_SLIM_PROFILE=aggressive CEF_KEEP_LOCALES="$(CEF_SAFE_LOCALES)" CEF_STAGE_ROOT="$(CEF_STAGE_ROOT)" ./scripts/cef-stage-slim.sh
+
+tauri-build-slim-safe: ## Tauri production build using staged SAFE slim CEF
+	@STAGED_CEF_BASE=$$(CEF_SLIM_PROFILE=safe CEF_KEEP_LOCALES="$(CEF_SAFE_LOCALES)" CEF_STAGE_ROOT="$(CEF_STAGE_ROOT)" ./scripts/cef-stage-slim.sh --print-cef-base --quiet); \
+		echo "info: using staged SAFE CEF base: $$STAGED_CEF_BASE"; \
+		CI=$${CI:-true} CEF_PATH="$$STAGED_CEF_BASE" TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
+
+tauri-build-slim-aggressive: ## Tauri production build using staged AGGRESSIVE slim CEF
+	@STAGED_CEF_BASE=$$(CEF_SLIM_PROFILE=aggressive CEF_KEEP_LOCALES="$(CEF_SAFE_LOCALES)" CEF_STAGE_ROOT="$(CEF_STAGE_ROOT)" ./scripts/cef-stage-slim.sh --print-cef-base --quiet); \
+		echo "info: using staged AGGRESSIVE CEF base: $$STAGED_CEF_BASE"; \
+		CI=$${CI:-true} CEF_PATH="$$STAGED_CEF_BASE" TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
 
 # ============================================================================
 # CLI
