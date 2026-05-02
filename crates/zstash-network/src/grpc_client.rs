@@ -16,6 +16,7 @@ use zcash_protocol::consensus::BlockHeight;
 
 use tonic::Streaming;
 
+use crate::install_ring_crypto_provider;
 use crate::transport::{SelectedTransport, TransportConfig, TransportSelector};
 
 /// CompactTxStreamer gRPC client wrapper.
@@ -40,6 +41,7 @@ pub struct GrpcClient {
 
 impl GrpcClient {
     pub fn new(endpoint: impl Into<String>) -> Self {
+        install_ring_crypto_provider();
         Self {
             endpoint: endpoint.into(),
             transport: TransportSelector::new(TransportConfig::default()),
@@ -48,6 +50,7 @@ impl GrpcClient {
     }
 
     pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<zstash_tor::TorManager>) -> Self {
+        install_ring_crypto_provider();
         Self {
             endpoint: endpoint.into(),
             transport: TransportSelector::with_tor(TransportConfig::default(), tor),
@@ -56,6 +59,7 @@ impl GrpcClient {
     }
 
     pub fn new_with_transport(endpoint: impl Into<String>, transport: TransportSelector) -> Self {
+        install_ring_crypto_provider();
         Self {
             endpoint: endpoint.into(),
             transport,

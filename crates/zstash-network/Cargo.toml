@@ -20,6 +20,7 @@ tracing.workspace = true
 tonic = { workspace = true, features = ["tls-native-roots"] }
 prost.workspace = true
 reqwest.workspace = true
+rustls.workspace = true
 http-body-util = "0.1"
 zcash_client_backend.workspace = true
 zcash_primitives.workspace = true

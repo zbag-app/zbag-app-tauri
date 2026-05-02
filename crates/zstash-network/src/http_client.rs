@@ -8,6 +8,7 @@ use http_body_util::Full;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::install_ring_crypto_provider;
 use crate::transport::{SelectedTransport, TransportConfig, TransportError, TransportSelector};
 
 const DEFAULT_USER_AGENT: &str = concat!("zstash/", env!("CARGO_PKG_VERSION"));
@@ -35,6 +36,7 @@ impl HttpClient {
     }
 
     pub fn new_with_transport(transport: TransportSelector) -> anyhow::Result<Self> {
+        install_ring_crypto_provider();
         let direct = reqwest::Client::builder()
             .timeout(transport.config().timeout)
             .no_proxy()
