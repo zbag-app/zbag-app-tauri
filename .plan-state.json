@@ -10,8 +10,9 @@
     "3-ring-provider-regression-test",
     "4a-tauri-cef-rev-bump",
     "4b-js-minor-bumps",
-    "5-rust-transitive-patch-updates"
+    "5-rust-transitive-patch-updates",
+    "6-zcash-crate-bumps"
   ],
-  "current_tier": "6-zcash-crate-bumps",
-  "last_green_sha": "819c5d0ed57b74caf9e5ab0d2c347ad2e8f05b92"
+  "current_tier": "7-aggressive-transitive-update",
+  "last_green_sha": "ca10ea921c3b7406d2a61cd50a841945f51343db"
 }
