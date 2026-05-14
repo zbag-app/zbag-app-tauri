@@ -87,7 +87,7 @@ pub fn restore_wallet_impl(
             network,
             &password,
             remember_unlock,
-            &seed_phrase,
+            seed_phrase,
             birthday_date,
             &mut tx_svc,
         )?;
