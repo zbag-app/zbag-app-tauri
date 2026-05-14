@@ -4,8 +4,9 @@
   "baseline_sha": "8ca30485809b4f7bf7b07f8c9d2f7c78fb3b280e",
   "completed_tiers": [
     "0-setup",
-    "0a-baseline-clippy"
+    "0a-baseline-clippy",
+    "1-license-polyform-shield"
   ],
-  "current_tier": "1-license-polyform-shield",
-  "last_green_sha": "ad95c13e3734ea837b045704577e53874b248180"
+  "current_tier": "2-ring-provider-fix",
+  "last_green_sha": "cc1f1306df3dd3ca2660d0fd23b95e7c6530cf70"
 }
