@@ -11,8 +11,9 @@
     "4a-tauri-cef-rev-bump",
     "4b-js-minor-bumps",
     "5-rust-transitive-patch-updates",
-    "6-zcash-crate-bumps"
+    "6-zcash-crate-bumps",
+    "7-aggressive-transitive-update"
   ],
-  "current_tier": "7-aggressive-transitive-update",
-  "last_green_sha": "ca10ea921c3b7406d2a61cd50a841945f51343db"
+  "current_tier": "8-vite-8",
+  "last_green_sha": "97ad81de7544ec218fe0986e35228a4d5019036f"
 }
