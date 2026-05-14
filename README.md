@@ -132,7 +132,7 @@ See [docs/E2E_TESTING.md](docs/E2E_TESTING.md) for architecture details, CI work
 
 ## License
 
-[MIT](LICENSE)
+Bagz is source-available under the PolyForm Shield License 1.0.0. It is not open-source software.
 
 ## Security
 
