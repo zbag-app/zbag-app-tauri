@@ -7,8 +7,9 @@
     "0a-baseline-clippy",
     "1-license-polyform-shield",
     "2-ring-provider-fix",
-    "3-ring-provider-regression-test"
+    "3-ring-provider-regression-test",
+    "4a-tauri-cef-rev-bump"
   ],
-  "current_tier": "4a-tauri-cef-rev-bump",
-  "last_green_sha": "5d27f2cb1d82b09bf1f26642dcadaa0dd5ed6aa4"
+  "current_tier": "4b-js-minor-bumps",
+  "last_green_sha": "ec3b3681b183cb24482babce74c09aa57fe0a245"
 }
