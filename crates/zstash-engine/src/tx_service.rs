@@ -246,6 +246,7 @@ fn log_tx_lifecycle_error(ctx: TxLogContext<'_>, started_at: Instant, err: &anyh
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn log_status_transition(
     wallet_id: Uuid,
     account_id: u32,
@@ -2113,20 +2114,19 @@ impl<C: Clock> TxService<C> {
 
                     if err_class == BroadcastErrorClass::TransientTransport
                         && should_trigger_failover(transport_failure_streak)
-                    {
-                        if let Some((next_grpc_url, failover_event)) = self.try_failover_server(
+                        && let Some((next_grpc_url, failover_event)) = self.try_failover_server(
                             app_db,
                             network,
                             &grpc_target,
                             &failover_reason,
-                        )? {
-                            if let Some(handler) = on_failover.as_ref() {
-                                handler(failover_event);
-                            }
-                            grpc_target = next_grpc_url;
-                            transport_failure_streak = 0;
-                            failover_performed = true;
+                        )?
+                    {
+                        if let Some(handler) = on_failover.as_ref() {
+                            handler(failover_event);
                         }
+                        grpc_target = next_grpc_url;
+                        transport_failure_streak = 0;
+                        failover_performed = true;
                     }
 
                     if retryable && failover_performed {
@@ -2638,6 +2638,7 @@ fn queued_broadcast_meta_path(queue_dir: &Path, txid: &str) -> PathBuf {
     queue_dir.join(format!("{txid}.json"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn queue_broadcast<C: Clock>(
     clock: &C,
     wallet_id: Uuid,
@@ -2997,23 +2998,23 @@ fn delete_queued_broadcast(wallet_id: Option<Uuid>, wallet_dir: &Path, txid: Str
     let queue_dir = queued_broadcasts_dir(wallet_dir);
     let bin_path = queued_broadcast_bin_path(&queue_dir, &txid);
     let meta_path = queued_broadcast_meta_path(&queue_dir, &txid);
-    if let Err(e) = std::fs::remove_file(&bin_path) {
-        if e.kind() != ErrorKind::NotFound {
-            tracing::debug!(
-                path = ?bin_path,
-                error = ?e,
-                "failed to delete queued broadcast bin file"
-            );
-        }
+    if let Err(e) = std::fs::remove_file(&bin_path)
+        && e.kind() != ErrorKind::NotFound
+    {
+        tracing::debug!(
+            path = ?bin_path,
+            error = ?e,
+            "failed to delete queued broadcast bin file"
+        );
     }
-    if let Err(e) = std::fs::remove_file(&meta_path) {
-        if e.kind() != ErrorKind::NotFound {
-            tracing::debug!(
-                path = ?meta_path,
-                error = ?e,
-                "failed to delete queued broadcast meta file"
-            );
-        }
+    if let Err(e) = std::fs::remove_file(&meta_path)
+        && e.kind() != ErrorKind::NotFound
+    {
+        tracing::debug!(
+            path = ?meta_path,
+            error = ?e,
+            "failed to delete queued broadcast meta file"
+        );
     }
     info!(
         wallet_id = %wallet_id_for_log,
@@ -3029,6 +3030,7 @@ fn delete_queued_broadcast(wallet_id: Option<Uuid>, wallet_dir: &Path, txid: Str
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_queued_broadcast_error<C: Clock>(
     clock: &C,
     wallet_id: Option<Uuid>,

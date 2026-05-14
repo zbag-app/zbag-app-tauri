@@ -3,8 +3,9 @@
   "started_at": "2026-05-14T22:50:43Z",
   "baseline_sha": "8ca30485809b4f7bf7b07f8c9d2f7c78fb3b280e",
   "completed_tiers": [
-    "0-setup"
+    "0-setup",
+    "0a-baseline-clippy"
   ],
   "current_tier": "1-license-polyform-shield",
-  "last_green_sha": ""
+  "last_green_sha": "ad14b958b18c3d139820c7261ec96216dd769125"
 }

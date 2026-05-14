@@ -1219,6 +1219,7 @@ fn classify_job_broadcast_failure(
     Some((err_class, retryable))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn queue_broadcast_for_retry(
     wallet_id: &Uuid,
     wallet_dir: &std::path::Path,

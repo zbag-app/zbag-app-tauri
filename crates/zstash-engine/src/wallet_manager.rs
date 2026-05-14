@@ -450,6 +450,7 @@ impl WalletManager {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn restore_wallet(
         &mut self,
         name: &str,
@@ -2459,6 +2460,7 @@ impl WalletManager {
 
     /// Start a shield operation as a background job.
     /// Returns immediately with a job_id; progress is reported via events.
+    #[allow(clippy::too_many_arguments)]
     pub fn start_shield_job(
         &mut self,
         account_id: u32,
