@@ -12,8 +12,9 @@
     "4b-js-minor-bumps",
     "5-rust-transitive-patch-updates",
     "6-zcash-crate-bumps",
-    "7-aggressive-transitive-update"
+    "7-aggressive-transitive-update",
+    "8-vite-8"
   ],
-  "current_tier": "8-vite-8",
-  "last_green_sha": "97ad81de7544ec218fe0986e35228a4d5019036f"
+  "current_tier": "9-cargo-audit",
+  "last_green_sha": "0180cc38c51ac23efd56b1e000cb9357d411ae47"
 }
