@@ -1,0 +1,10 @@
+{
+  "branch": "overnight/bagz-rebrand-refresh-20260515",
+  "started_at": "2026-05-14T22:50:43Z",
+  "baseline_sha": "8ca30485809b4f7bf7b07f8c9d2f7c78fb3b280e",
+  "completed_tiers": [
+    "0-setup"
+  ],
+  "current_tier": "1-license-polyform-shield",
+  "last_green_sha": ""
+}
