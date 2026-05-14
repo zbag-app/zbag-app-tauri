@@ -6,8 +6,9 @@
     "0-setup",
     "0a-baseline-clippy",
     "1-license-polyform-shield",
-    "2-ring-provider-fix"
+    "2-ring-provider-fix",
+    "3-ring-provider-regression-test"
   ],
-  "current_tier": "3-ring-provider-regression-test",
-  "last_green_sha": "ae0c7cecf4ec3a00307cbfc501c789328217eda5"
+  "current_tier": "4a-tauri-cef-rev-bump",
+  "last_green_sha": "5d27f2cb1d82b09bf1f26642dcadaa0dd5ed6aa4"
 }
