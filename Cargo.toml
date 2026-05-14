@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/zstash-core",
-  "crates/zstash-engine",
-  "crates/zstash-network",
-  "crates/zstash-keystone",
-  "crates/zstash-tor",
-  "apps/zstash-app-tauri/src-tauri",
-  "apps/zstash-cli",
+  "crates/bagz-core",
+  "crates/bagz-engine",
+  "crates/bagz-network",
+  "crates/bagz-keystone",
+  "crates/bagz-tor",
+  "apps/bagz-app-tauri/src-tauri",
+  "apps/bagz-cli",
 ]
 
 [workspace.package]
@@ -15,7 +15,7 @@ version = "0.2.2"
 edition = "2024"
 rust-version = "1.92.0"
 license-file = "LICENSE"
-repository = "https://github.com/zstash/zstash-desktop"
+repository = "https://github.com/bagzwallet/bagz-cef-git"
 
 [workspace.dependencies]
 # Zcash libraries (aligned with librustzcash/Zashi)
