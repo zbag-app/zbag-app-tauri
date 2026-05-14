@@ -13,8 +13,9 @@
     "5-rust-transitive-patch-updates",
     "6-zcash-crate-bumps",
     "7-aggressive-transitive-update",
-    "8-vite-8"
+    "8-vite-8",
+    "9-cargo-audit"
   ],
-  "current_tier": "9-cargo-audit",
+  "current_tier": "10-rebrand-directories",
   "last_green_sha": "0180cc38c51ac23efd56b1e000cb9357d411ae47"
 }
