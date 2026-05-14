@@ -461,6 +461,7 @@ async fn run_send_job(
                 &spending_keys,
                 zcash_client_backend::wallet::OvkPolicy::Sender,
                 &proposal,
+                None,
             )
             .map_err(|e| format!("failed to build tx: {e}"))?;
 
@@ -888,7 +889,12 @@ fn shield_funds_blocking(
     let mut transparent_inputs = Vec::new();
     for addr in from_addrs.iter() {
         let outputs = wdb
-            .get_spendable_transparent_outputs(addr, target_height, confirmations_policy)
+            .get_spendable_transparent_outputs(
+                addr,
+                target_height,
+                confirmations_policy,
+                zcash_client_backend::data_api::TransparentOutputFilter::All,
+            )
             .map_err(|e| format!("failed to list transparent outputs: {e}"))?;
         transparent_inputs.extend(outputs.into_iter().map(|u| u.into_wallet_output()));
     }
@@ -968,7 +974,7 @@ fn shield_funds_blocking(
             fn serialized_size(&self) -> transparent_fees::InputSize {
                 match self.utxo.recipient_address() {
                     zcash_transparent::address::TransparentAddress::PublicKeyHash(_) => {
-                        transparent_fees::InputSize::Known(149)
+                        transparent_fees::InputSize::STANDARD_P2PKH
                     }
                     _ => transparent_fees::InputSize::Unknown(self.utxo.outpoint().clone()),
                 }
@@ -1066,6 +1072,7 @@ fn shield_funds_blocking(
             &spending_keys,
             zcash_client_backend::wallet::OvkPolicy::Sender,
             &proposal,
+            None,
         )
         .map_err(|e| format!("failed to build shielding tx: {e}"))?;
 

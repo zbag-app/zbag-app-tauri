@@ -359,6 +359,7 @@ impl GrpcClient {
                 height: u64::from(end),
                 hash: vec![],
             }),
+            pool_types: vec![],
         };
 
         Ok(client.get_block_range(request).await?.into_inner())

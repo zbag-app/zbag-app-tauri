@@ -612,6 +612,7 @@ impl<C: Clock> TxService<C> {
                 memo_bytes,
                 None,
                 zcash_protocol::ShieldedProtocol::Orchard,
+                None,
             )
         };
 
@@ -803,6 +804,7 @@ impl<C: Clock> TxService<C> {
                     memo_bytes,
                     None,
                     zcash_protocol::ShieldedProtocol::Orchard,
+                    None,
                 )
                 .map_err(|err| {
                     let err_str = err.to_string();
@@ -1383,6 +1385,7 @@ impl<C: Clock> TxService<C> {
             &spending_keys,
             zcash_client_backend::wallet::OvkPolicy::Sender,
             &record.proposal,
+            None,
         )
         .map_err(|e| {
             ipc_err(
@@ -1657,7 +1660,12 @@ impl<C: Clock> TxService<C> {
         let mut transparent_inputs = Vec::new();
         for addr in from_addrs.iter() {
             let outputs = wdb
-                .get_spendable_transparent_outputs(addr, target_height, confirmations_policy)
+                .get_spendable_transparent_outputs(
+                    addr,
+                    target_height,
+                    confirmations_policy,
+                    zcash_client_backend::data_api::TransparentOutputFilter::All,
+                )
                 .context("failed to list transparent outputs")?;
             transparent_inputs.extend(outputs.into_iter().map(|u| u.into_wallet_output()));
         }
@@ -1720,7 +1728,7 @@ impl<C: Clock> TxService<C> {
                     fn serialized_size(&self) -> transparent_fees::InputSize {
                         match self.utxo.recipient_address() {
                             zcash_transparent::address::TransparentAddress::PublicKeyHash(_) => {
-                                transparent_fees::InputSize::Known(149)
+                                transparent_fees::InputSize::STANDARD_P2PKH
                             }
                             _ => transparent_fees::InputSize::Unknown(self.utxo.outpoint().clone()),
                         }
@@ -1829,6 +1837,7 @@ impl<C: Clock> TxService<C> {
                 &spending_keys,
                 zcash_client_backend::wallet::OvkPolicy::Sender,
                 &proposal,
+                None,
             )
             .map_err(|e| {
                 ipc_err(
