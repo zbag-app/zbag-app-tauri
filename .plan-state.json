@@ -14,8 +14,16 @@
     "6-zcash-crate-bumps",
     "7-aggressive-transitive-update",
     "8-vite-8",
-    "9-cargo-audit"
+    "9-cargo-audit",
+    "10-rebrand-directories",
+    "11-rebrand-cargo-packages",
+    "12-rebrand-code-docs-ipc-env",
+    "13-ipc-env-runtime-audit",
+    "14-rebrand-assets-and-bundle-metadata",
+    "15-full-rust-validation",
+    "16-cef-build-and-bridge-e2e",
+    "17-packaged-app-smoke"
   ],
-  "current_tier": "10-rebrand-directories",
-  "last_green_sha": "0180cc38c51ac23efd56b1e000cb9357d411ae47"
+  "current_tier": "complete",
+  "last_green_sha": "8be0203812738b8ead2511b9f1f31d5bf7a1eef7"
 }
