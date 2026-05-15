@@ -1,5 +1,5 @@
 [package]
-name = "zstash-network"
+name = "bagz-network"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -25,5 +25,5 @@ http-body-util = "0.1"
 zcash_client_backend.workspace = true
 zcash_primitives.workspace = true
 zcash_protocol.workspace = true
-zstash-core = { path = "../zstash-core" }
-zstash-tor = { path = "../zstash-tor" }
+bagz-core = { path = "../bagz-core" }
+bagz-tor = { path = "../bagz-tor" }

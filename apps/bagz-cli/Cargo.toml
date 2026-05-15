@@ -1,22 +1,22 @@
 [package]
-name = "zstash-cli"
+name = "bagz-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license-file.workspace = true
 repository.workspace = true
-description = "CLI for zSTASH Zcash wallet"
+description = "CLI for bagZ Zcash wallet"
 
 [[bin]]
-name = "zstash"
+name = "bagz"
 path = "src/main.rs"
 
 [dependencies]
-# zSTASH crates
-zstash-core = { path = "../../crates/zstash-core" }
-zstash-engine = { path = "../../crates/zstash-engine" }
-zstash-network = { path = "../../crates/zstash-network" }
-zstash-tor = { path = "../../crates/zstash-tor" }
+# bagZ crates
+bagz-core = { path = "../../crates/bagz-core" }
+bagz-engine = { path = "../../crates/bagz-engine" }
+bagz-network = { path = "../../crates/bagz-network" }
+bagz-tor = { path = "../../crates/bagz-tor" }
 
 # CLI framework
 clap = { version = "4", features = ["derive", "env"] }

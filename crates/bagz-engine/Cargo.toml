@@ -1,5 +1,5 @@
 [package]
-name = "zstash-engine"
+name = "bagz-engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -34,10 +34,10 @@ url.workspace = true
 zip32.workspace = true
 zcash_proofs.workspace = true
 prost.workspace = true
-zstash-core = { path = "../zstash-core" }
-zstash-keystone = { path = "../zstash-keystone" }
-zstash-network = { path = "../zstash-network" }
-zstash-tor = { path = "../zstash-tor" }
+bagz-core = { path = "../bagz-core" }
+bagz-keystone = { path = "../bagz-keystone" }
+bagz-network = { path = "../bagz-network" }
+bagz-tor = { path = "../bagz-tor" }
 zcash_client_backend.workspace = true
 zcash_client_sqlite.workspace = true
 zcash_primitives.workspace = true
