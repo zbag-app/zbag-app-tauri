@@ -26,9 +26,7 @@ pub(crate) fn start_sync_with_handlers<R: Runtime>(
     let wallet_db_path = bagz_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
         .map_err(|e| anyhow::anyhow!(e))?
         .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
-        .ok_or_else(|| {
-            bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
-        })?;
+        .ok_or_else(|| bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found"))?;
 
     let wallet_dek = mgr.unlocked_wallet_dek(wallet.id)?;
     let account_ids = mgr.list_wallet_db_account_ids(wallet.id)?;

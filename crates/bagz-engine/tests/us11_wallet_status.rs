@@ -4,9 +4,7 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use bagz_core::domain::{
-    AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus,
-};
+use bagz_core::domain::{AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus};
 use bagz_engine::db::{
     OpenSqlcipherOptions, backup_meta, open_sqlcipher_db, wallet_encryption_meta,
 };

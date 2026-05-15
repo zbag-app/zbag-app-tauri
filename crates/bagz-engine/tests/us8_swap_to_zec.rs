@@ -150,10 +150,7 @@ fn spawn_mock_1click_quote_server(
             Some("DESTINATION_CHAIN")
         );
         assert_eq!(json.get("dry").and_then(|v| v.as_bool()), Some(false));
-        assert_eq!(
-            json.get("referral").and_then(|v| v.as_str()),
-            Some("bagz")
-        );
+        assert_eq!(json.get("referral").and_then(|v| v.as_str()), Some("bagz"));
         assert!(
             json.get("deadline").and_then(|v| v.as_str()).is_some(),
             "deadline must be present"

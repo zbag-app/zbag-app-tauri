@@ -36,9 +36,7 @@ use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{error, info, warn};
 
-use bagz_core::ipc::v1::commands::address::{
-    GetReceiveAddressRequest, GetReceiveAddressResponse,
-};
+use bagz_core::ipc::v1::commands::address::{GetReceiveAddressRequest, GetReceiveAddressResponse};
 use bagz_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
@@ -367,12 +365,13 @@ async fn invoke_command(
             })
         }
         // Address commands
-        "bagz_get_receive_address" => dispatch::<
-            GetReceiveAddressRequest,
-            GetReceiveAddressResponse,
-        >(&state, body.request, |s, req| {
-            get_receive_address_impl(s, req)
-        }),
+        "bagz_get_receive_address" => {
+            dispatch::<GetReceiveAddressRequest, GetReceiveAddressResponse>(
+                &state,
+                body.request,
+                |s, req| get_receive_address_impl(s, req),
+            )
+        }
         // Backup commands
         "bagz_get_backup_challenge" => dispatch::<
             GetBackupChallengeRequest,
@@ -411,13 +410,11 @@ async fn invoke_command(
             body.request,
             retry_broadcast_impl,
         ),
-        "bagz_list_transactions" => {
-            dispatch::<ListTransactionsRequest, ListTransactionsResponse>(
-                &state,
-                body.request,
-                list_transactions_impl,
-            )
-        }
+        "bagz_list_transactions" => dispatch::<ListTransactionsRequest, ListTransactionsResponse>(
+            &state,
+            body.request,
+            list_transactions_impl,
+        ),
         "bagz_shield_funds" => {
             dispatch::<ShieldFundsRequest, ShieldFundsResponse>(&state, body.request, |s, req| {
                 shield_funds_impl(s, req)
@@ -447,13 +444,11 @@ async fn invoke_command(
             create_keystone_wallet_impl(s, req)
         }),
         // Swap commands
-        "bagz_request_swap_quote" => {
-            dispatch::<RequestSwapQuoteRequest, RequestSwapQuoteResponse>(
-                &state,
-                body.request,
-                request_swap_quote_impl,
-            )
-        }
+        "bagz_request_swap_quote" => dispatch::<RequestSwapQuoteRequest, RequestSwapQuoteResponse>(
+            &state,
+            body.request,
+            request_swap_quote_impl,
+        ),
         "bagz_start_swap" => {
             dispatch::<StartSwapRequest, StartSwapResponse>(&state, body.request, |s, req| {
                 start_swap_impl(s, req)
@@ -486,13 +481,11 @@ async fn invoke_command(
                 add_server_impl(s, req)
             })
         }
-        "bagz_set_default_server" => {
-            dispatch::<SetDefaultServerRequest, SetDefaultServerResponse>(
-                &state,
-                body.request,
-                set_default_server_impl,
-            )
-        }
+        "bagz_set_default_server" => dispatch::<SetDefaultServerRequest, SetDefaultServerResponse>(
+            &state,
+            body.request,
+            set_default_server_impl,
+        ),
         "bagz_test_server" => {
             dispatch::<TestServerRequest, TestServerResponse>(&state, body.request, |s, req| {
                 test_server_impl(s, req)

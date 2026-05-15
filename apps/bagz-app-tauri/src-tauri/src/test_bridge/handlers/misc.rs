@@ -1,8 +1,6 @@
 //! Miscellaneous command handlers (balance, address, logs, version).
 
-use bagz_core::ipc::v1::commands::address::{
-    GetReceiveAddressRequest, GetReceiveAddressResponse,
-};
+use bagz_core::ipc::v1::commands::address::{GetReceiveAddressRequest, GetReceiveAddressResponse};
 use bagz_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
 use bagz_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
 use bagz_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};

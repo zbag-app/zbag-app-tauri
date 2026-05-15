@@ -33,8 +33,6 @@ use crate::error::ipc_err;
 use crate::key_store::KeyStore;
 use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{ServerFailoverEventHandler, TxEventHandler, TxService};
-use zcash_client_backend::data_api::{Account as _, WalletRead as _};
-use zcash_protocol::consensus::Parameters as _;
 use bagz_core::ipc::v1::commands::job::{
     CancelJobResponse, GetJobStatusResponse, ListJobsResponse, StartSendJobResponse,
     StartShieldJobResponse,
@@ -53,6 +51,8 @@ use bagz_core::permissions::{
     create_dir_all_secure, set_file_permissions, set_sqlite_file_permissions,
 };
 use bagz_core::sensitive::SensitiveString;
+use zcash_client_backend::data_api::{Account as _, WalletRead as _};
+use zcash_protocol::consensus::Parameters as _;
 
 use crate::job_service::{JobEventHandler, JobService, SendJobContext, ShieldJobContext};
 

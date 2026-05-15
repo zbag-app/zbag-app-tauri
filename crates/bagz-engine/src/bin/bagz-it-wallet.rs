@@ -5,10 +5,10 @@ use bip39::Mnemonic;
 use rand::RngCore as _;
 use zeroize::Zeroize as _;
 
+use bagz_core::permissions::create_dir_all_secure;
 use zcash_client_backend::address::Address;
 use zcash_client_backend::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
 use zcash_protocol::consensus::Network as ConsensusNetwork;
-use bagz_core::permissions::create_dir_all_secure;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

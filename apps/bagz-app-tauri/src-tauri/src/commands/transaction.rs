@@ -181,11 +181,12 @@ pub async fn bagz_retry_broadcast<R: Runtime>(
 
     let execute_join = tauri::async_runtime::spawn_blocking(move || {
         map_anyhow(|| {
-            let txid = bagz_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
-                task,
-                Some(handler),
-                Some(failover_handler),
-            )?;
+            let txid =
+                bagz_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+                    task,
+                    Some(handler),
+                    Some(failover_handler),
+                )?;
             Ok(RetryBroadcastResponse {
                 schema_version: SCHEMA_VERSION,
                 txid,

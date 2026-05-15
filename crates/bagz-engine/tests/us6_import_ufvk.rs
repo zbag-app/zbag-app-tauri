@@ -7,12 +7,12 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use zip32::AccountId;
 
-use zcash_protocol::consensus::Network as ConsensusNetwork;
 use bagz_core::domain::{AccountType, AddressType, Network};
 use bagz_core::errors;
 use bagz_engine::error::find_engine_ipc_error;
 use bagz_engine::key_store::KeyStore;
 use bagz_engine::wallet_manager::WalletManager;
+use zcash_protocol::consensus::Network as ConsensusNetwork;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;

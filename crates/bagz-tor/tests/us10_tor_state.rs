@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use tempfile::TempDir;
-use tokio::sync::oneshot;
 use bagz_core::domain::{TorState, TorStatus};
 use bagz_tor::{TorManager, TorManagerConfig};
+use tempfile::TempDir;
+use tokio::sync::oneshot;
 
 fn new_tor_dir(prefix: &str) -> TempDir {
     // The returned TempDir must outlive any TorManager that uses its path.

@@ -1,6 +1,5 @@
 //! Wallet-related command handlers.
 
-use tracing::warn;
 use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
@@ -9,6 +8,7 @@ use bagz_core::ipc::v1::commands::wallet::{
     ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
 use bagz_core::ipc::v1::common::IpcResult;
+use tracing::warn;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;

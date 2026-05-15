@@ -1,8 +1,6 @@
 use tauri::State;
 
-use bagz_core::ipc::v1::commands::address::{
-    GetReceiveAddressRequest, GetReceiveAddressResponse,
-};
+use bagz_core::ipc::v1::commands::address::{GetReceiveAddressRequest, GetReceiveAddressResponse};
 use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;

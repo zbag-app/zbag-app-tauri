@@ -999,15 +999,14 @@ impl<C: Clock> TxService<C> {
 
         // Combine the two PCZTs (proofs + signatures)
         debug!("Combining proved and signed PCZTs");
-        let pczt = bagz_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(
-            |e| {
+        let pczt =
+            bagz_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(|e| {
                 error!("Failed to combine PCZTs: {}", e);
                 ipc_err(
                     errors::SIGNING_FAILED,
                     format!("failed to combine PCZTs: {e}"),
                 )
-            },
-        )?;
+            })?;
         debug!("PCZTs combined successfully");
 
         let params = zcash_consensus_network(network);
