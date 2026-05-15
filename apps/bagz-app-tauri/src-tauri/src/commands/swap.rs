@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tauri::State;
+use tauri::{Runtime, State};
 
 use bagz_core::domain::{SupportedToken, SwapIntent};
 use bagz_core::errors;
@@ -78,8 +78,8 @@ pub async fn bagz_request_swap_quote(
 }
 
 #[tauri::command(rename = "bagz_start_swap")]
-pub fn bagz_start_swap(
-    app: crate::AppHandle,
+pub fn bagz_start_swap<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: StartSwapRequest,
 ) -> IpcResult<StartSwapResponse> {
@@ -190,8 +190,8 @@ pub async fn bagz_get_supported_tokens(
 }
 
 #[tauri::command(rename = "bagz_refresh_swap_status")]
-pub async fn bagz_refresh_swap_status(
-    app: crate::AppHandle,
+pub async fn bagz_refresh_swap_status<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: RefreshSwapStatusRequest,
 ) -> Result<IpcResult<RefreshSwapStatusResponse>, ()> {
@@ -232,8 +232,8 @@ pub async fn bagz_refresh_swap_status(
 }
 
 #[tauri::command(rename = "bagz_resume_pending_swaps")]
-pub fn bagz_resume_pending_swaps(
-    app: crate::AppHandle,
+pub fn bagz_resume_pending_swaps<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: ResumePendingSwapsRequest,
 ) -> IpcResult<ResumePendingSwapsResponse> {

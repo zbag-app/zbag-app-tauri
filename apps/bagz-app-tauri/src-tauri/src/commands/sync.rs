@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tauri::State;
+use tauri::{Runtime, State};
 
 use bagz_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
 use bagz_core::errors;
@@ -17,8 +17,8 @@ use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-pub(crate) fn start_sync_with_handlers(
-    app: &crate::AppHandle,
+pub(crate) fn start_sync_with_handlers<R: Runtime>(
+    app: &tauri::AppHandle<R>,
     state: &AppState,
     mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet: &bagz_core::domain::WalletInfo,
@@ -100,8 +100,8 @@ pub(crate) fn start_sync_with_handlers(
 }
 
 #[tauri::command(rename = "bagz_start_sync")]
-pub fn bagz_start_sync(
-    app: crate::AppHandle,
+pub fn bagz_start_sync<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: StartSyncRequest,
 ) -> IpcResult<StartSyncResponse> {
@@ -130,8 +130,8 @@ pub fn bagz_start_sync(
 }
 
 #[tauri::command(rename = "bagz_stop_sync")]
-pub fn bagz_stop_sync(
-    app: crate::AppHandle,
+pub fn bagz_stop_sync<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: StopSyncRequest,
 ) -> IpcResult<StopSyncResponse> {

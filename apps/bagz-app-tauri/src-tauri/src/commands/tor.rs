@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{Runtime, State};
 
 use bagz_core::domain::WalletLockStatus;
 use bagz_core::errors;
@@ -15,8 +15,8 @@ use crate::state::AppState;
 use super::util::{map_anyhow, system_time_to_unix_ms};
 
 #[tauri::command(rename = "bagz_set_tor_enabled")]
-pub fn bagz_set_tor_enabled(
-    app: crate::AppHandle,
+pub fn bagz_set_tor_enabled<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: SetTorEnabledRequest,
 ) -> IpcResult<SetTorEnabledResponse> {

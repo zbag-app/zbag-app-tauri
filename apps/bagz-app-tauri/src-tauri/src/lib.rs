@@ -23,7 +23,7 @@ pub mod windows;
     target_os = "macos"
 ))]
 use serde_json::{Map, Value};
-#[cfg(not(feature = "test-bridge"))]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use std::sync::Arc;
 #[cfg(all(
     not(feature = "test-bridge"),
@@ -31,14 +31,11 @@ use std::sync::Arc;
     target_os = "macos"
 ))]
 use std::{fs, path::PathBuf};
-#[cfg(not(feature = "test-bridge"))]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use tauri::Manager;
 
-#[cfg(feature = "cef-runtime")]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 type AppRuntime = tauri::Cef;
-#[cfg(not(feature = "cef-runtime"))]
-type AppRuntime = tauri::Wry;
-type AppHandle = tauri::AppHandle<AppRuntime>;
 
 #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 fn cef_runtime_args() -> Vec<(String, Option<String>)> {
@@ -169,7 +166,7 @@ pub fn run() {
     // NOTE: Keep this command list in sync with `src-tauri/src/main.rs`.
     // The library entry point is used by tests/mobile contexts, while the binary
     // entry point uses its own handler registration.
-    #[cfg(not(feature = "test-bridge"))]
+    #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
     run_with_invoke_handler(tauri::generate_handler![
         // Wallet
         commands::wallet::bagz_create_wallet,
@@ -238,7 +235,7 @@ pub fn run() {
     ]);
 }
 
-#[cfg(not(feature = "test-bridge"))]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 pub fn run_with_invoke_handler<F>(invoke_handler: F)
 where
     F: Fn(tauri::ipc::Invoke<AppRuntime>) -> bool + Send + Sync + 'static,

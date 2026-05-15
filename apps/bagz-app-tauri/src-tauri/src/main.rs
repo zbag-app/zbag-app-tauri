@@ -12,7 +12,7 @@ fn main() {
     // NOTE: Keep this command list in sync with `src-tauri/src/lib.rs`.
     // The binary uses this registration path, while the library has its own
     // entry point for other runtime contexts.
-    #[cfg(not(feature = "test-bridge"))]
+    #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
     {
         bagz_app_tauri_lib::run_with_invoke_handler(tauri::generate_handler![
             // Wallet

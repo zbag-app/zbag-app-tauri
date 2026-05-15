@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tauri::State;
+use tauri::{Runtime, State};
 
 use bagz_core::ipc::v1::commands::job::{
     CancelJobRequest, CancelJobResponse, GetJobStatusRequest, GetJobStatusResponse,
@@ -15,8 +15,8 @@ use crate::state::AppState;
 use super::util::map_anyhow;
 
 #[tauri::command(rename = "bagz_start_send_job")]
-pub fn bagz_start_send_job(
-    app: crate::AppHandle,
+pub fn bagz_start_send_job<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: StartSendJobRequest,
 ) -> IpcResult<StartSendJobResponse> {
@@ -51,8 +51,8 @@ pub fn bagz_start_send_job(
 }
 
 #[tauri::command(rename = "bagz_start_shield_job")]
-pub fn bagz_start_shield_job(
-    app: crate::AppHandle,
+pub fn bagz_start_shield_job<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: StartShieldJobRequest,
 ) -> IpcResult<StartShieldJobResponse> {

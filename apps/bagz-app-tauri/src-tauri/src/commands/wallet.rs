@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Context as _;
-use tauri::State;
+use tauri::{Runtime, State};
 use tracing::warn;
 
 use bagz_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
@@ -99,8 +99,8 @@ pub fn bagz_list_wallets(
 }
 
 #[tauri::command(rename = "bagz_load_wallet")]
-pub fn bagz_load_wallet(
-    app: crate::AppHandle,
+pub fn bagz_load_wallet<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: LoadWalletRequest,
 ) -> IpcResult<LoadWalletResponse> {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use tauri::State;
+use tauri::{Runtime, State};
 
 use bagz_core::errors;
 use bagz_core::ipc::v1::commands::transaction::{
@@ -92,8 +92,8 @@ pub fn bagz_prepare_send(
 }
 
 #[tauri::command(rename = "bagz_confirm_send")]
-pub fn bagz_confirm_send(
-    app: crate::AppHandle,
+pub fn bagz_confirm_send<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: ConfirmSendRequest,
 ) -> IpcResult<ConfirmSendResponse> {
@@ -133,8 +133,8 @@ pub fn bagz_cancel_send(
 }
 
 #[tauri::command(rename = "bagz_retry_broadcast")]
-pub async fn bagz_retry_broadcast(
-    app: crate::AppHandle,
+pub async fn bagz_retry_broadcast<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: RetryBroadcastRequest,
 ) -> Result<IpcResult<RetryBroadcastResponse>, ()> {
@@ -226,8 +226,8 @@ pub fn bagz_list_transactions(
 }
 
 #[tauri::command(rename = "bagz_shield_funds")]
-pub fn bagz_shield_funds(
-    app: crate::AppHandle,
+pub fn bagz_shield_funds<R: Runtime>(
+    app: tauri::AppHandle<R>,
     state: State<'_, AppState>,
     request: ShieldFundsRequest,
 ) -> IpcResult<ShieldFundsResponse> {
