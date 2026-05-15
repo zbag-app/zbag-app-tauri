@@ -6,7 +6,7 @@ use rusqlite::{Connection, params};
 use super::schema::INITIAL_SCHEMA_V1;
 use bagz_core::permissions::set_file_permissions;
 
-pub const LATEST_VERSION: i64 = 2;
+pub const LATEST_VERSION: i64 = 3;
 
 pub fn migrate_with_rollback(db_path: &Path) -> anyhow::Result<()> {
     let existed = db_path.exists();
@@ -98,6 +98,11 @@ pub fn apply_migrations(conn: &Connection) -> anyhow::Result<()> {
         record_version(conn, 2)?;
     }
 
+    if current_version < 3 {
+        apply_v3(conn)?;
+        record_version(conn, 3)?;
+    }
+
     Ok(())
 }
 
@@ -145,8 +150,8 @@ fn seed_servers_v1(conn: &Connection) -> anyhow::Result<()> {
          VALUES (?1, ?2, ?3, 'Mainnet', 1, NULL, ?4)",
         params![
             "00000000-0000-0000-0000-000000000001",
-            "lwd.zec.pro",
-            "https://lwd.zec.pro",
+            "zec.rocks",
+            "https://zec.rocks",
             now_ms
         ],
     )
@@ -154,11 +159,6 @@ fn seed_servers_v1(conn: &Connection) -> anyhow::Result<()> {
 
     // Mainnet non-defaults
     for (id, name, url) in [
-        (
-            "00000000-0000-0000-0000-000000000002",
-            "zec.rocks",
-            "https://zec.rocks",
-        ),
         (
             "00000000-0000-0000-0000-000000000003",
             "na.zec.rocks",
@@ -189,8 +189,8 @@ fn seed_servers_v1(conn: &Connection) -> anyhow::Result<()> {
          VALUES (?1, ?2, ?3, 'Testnet', 1, NULL, ?4)",
         params![
             "00000000-0000-0000-0000-000000000006",
-            "lwd.testnet.zec.pro",
-            "https://lwd.testnet.zec.pro",
+            "testnet.zec.rocks",
+            "https://testnet.zec.rocks",
             now_ms
         ],
     )
@@ -237,5 +237,39 @@ fn seed_fiat_settings_v2(conn: &Connection) -> anyhow::Result<()> {
         params![now_ms],
     )
     .context("failed to seed fiat_settings")?;
+    Ok(())
+}
+
+fn apply_v3(conn: &Connection) -> anyhow::Result<()> {
+    conn.execute(
+        "UPDATE servers
+         SET name = 'zec.rocks', grpc_url = 'https://zec.rocks'
+         WHERE id = '00000000-0000-0000-0000-000000000001'
+           AND name = 'lwd.zec.pro'
+           AND grpc_url = 'https://lwd.zec.pro'",
+        [],
+    )
+    .context("failed to update seeded mainnet lightwalletd endpoint")?;
+
+    conn.execute(
+        "DELETE FROM servers
+         WHERE id = '00000000-0000-0000-0000-000000000002'
+           AND name = 'zec.rocks'
+           AND grpc_url = 'https://zec.rocks'
+           AND is_default = 0",
+        [],
+    )
+    .context("failed to remove duplicate seeded zec.rocks endpoint")?;
+
+    conn.execute(
+        "UPDATE servers
+         SET name = 'testnet.zec.rocks', grpc_url = 'https://testnet.zec.rocks'
+         WHERE id = '00000000-0000-0000-0000-000000000006'
+           AND name = 'lwd.testnet.zec.pro'
+           AND grpc_url = 'https://lwd.testnet.zec.pro'",
+        [],
+    )
+    .context("failed to update seeded testnet lightwalletd endpoint")?;
+
     Ok(())
 }

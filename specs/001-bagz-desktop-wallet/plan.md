@@ -335,9 +335,9 @@ This section is **non-normative**. It clarifies how the requirements above are i
 
 ### Server Configuration
 - **Default Servers**: lightwalletd + Zebra infrastructure (CompactTxStreamer gRPC)
-  - Primary endpoint: `https://lwd.zec.pro` (team)
-  - Regional endpoints: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
-- **Testnet**: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
+  - Primary endpoint: `https://zec.rocks`
+  - Regional endpoints: `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
+- **Testnet**: `https://testnet.zec.rocks`
   - SSL via reverse proxy recommended for production-like testing
   - Development/CI only: configure default server override via `BAGZ_GRPC_URL` environment variable; production builds should rely on persisted server configuration and MUST NOT silently override user-selected servers via environment variables
 - **Custom Server**: User can configure alternative lightwalletd endpoint

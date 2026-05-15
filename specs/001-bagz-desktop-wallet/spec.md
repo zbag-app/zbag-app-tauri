@@ -451,7 +451,7 @@ Implementation-oriented security and persistence guidance is in the plan: [Secur
 - User devices have sufficient storage for wallet database (estimated under 1GB for typical usage)
 - Webcam access is available for QR scanning (with microSD fallback if not)
 - Same seed phrase generates different addresses on mainnet vs testnet (due to BIP-44 coin_type)
-- Default server is https://lwd.zec.pro with https://zec.rocks regional endpoints available
+- Default server is https://zec.rocks with regional endpoints available
 
 ## Dependencies
 

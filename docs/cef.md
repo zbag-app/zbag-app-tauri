@@ -13,7 +13,7 @@ This document is the single entry point for CEF usage in bagZ: build path, harde
 - Packaging target on macOS: `.app` and `.dmg`
 - Known-good output paths:
   - `target/release/bundle/macos/bagZ.app`
-  - `target/release/bundle/dmg/bagZ_0.2.1_aarch64.dmg`
+  - `target/release/bundle/dmg/bagZ_0.2.2_aarch64.dmg`
 
 ## Build and run
 

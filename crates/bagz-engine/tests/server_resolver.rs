@@ -52,7 +52,7 @@ fn defaults_to_seeded_default_server_when_no_override() {
     let db = AppDb::open(db_path).expect("db open");
 
     let url = resolve_grpc_url_with_dev_override(&db, Network::Testnet, None).expect("resolve");
-    assert_eq!(url, "https://lwd.testnet.zec.pro");
+    assert_eq!(url, "https://testnet.zec.rocks");
 }
 
 #[cfg(not(debug_assertions))]
@@ -64,7 +64,7 @@ fn override_is_ignored_in_release_builds() {
     let url =
         resolve_grpc_url_with_dev_override(&db, Network::Testnet, Some("https://example.invalid"))
             .expect("resolve");
-    assert_eq!(url, "https://lwd.testnet.zec.pro");
+    assert_eq!(url, "https://testnet.zec.rocks");
 }
 
 #[cfg(not(debug_assertions))]
@@ -79,7 +79,7 @@ fn resolve_grpc_url_ignores_env_wrapper_in_release_builds() {
         let db = AppDb::open(db_path).expect("db open");
 
         let url = resolve_grpc_url(&db, Network::Testnet).expect("resolve");
-        assert_eq!(url, "https://lwd.testnet.zec.pro");
+        assert_eq!(url, "https://testnet.zec.rocks");
         return;
     }
 

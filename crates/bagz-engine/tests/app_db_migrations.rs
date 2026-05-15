@@ -38,7 +38,7 @@ fn app_db_initial_migration_creates_schema_and_seeds_servers() {
     let server_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM servers", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(server_count, 6);
+    assert_eq!(server_count, 5);
 
     let mainnet_defaults: i64 = conn
         .query_row(
@@ -57,6 +57,24 @@ fn app_db_initial_migration_creates_schema_and_seeds_servers() {
         )
         .unwrap();
     assert_eq!(testnet_defaults, 1);
+
+    let mainnet_default_url: String = conn
+        .query_row(
+            "SELECT grpc_url FROM servers WHERE network='Mainnet' AND is_default=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(mainnet_default_url, "https://zec.rocks");
+
+    let testnet_default_url: String = conn
+        .query_row(
+            "SELECT grpc_url FROM servers WHERE network='Testnet' AND is_default=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(testnet_default_url, "https://testnet.zec.rocks");
 }
 
 #[test]
@@ -70,7 +88,61 @@ fn app_db_migration_is_idempotent() {
     let server_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM servers", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(server_count, 6);
+    assert_eq!(server_count, 5);
+}
+
+#[test]
+fn app_db_v3_migration_replaces_unavailable_seeded_servers() {
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_app_db_test");
+
+    migrations::migrate_with_rollback(&db_path).expect("migration should succeed");
+
+    {
+        let conn = open_app_db_connection(&db_path).expect("should open db");
+        conn.execute(
+            "UPDATE servers
+             SET name = 'lwd.zec.pro', grpc_url = 'https://lwd.zec.pro'
+             WHERE id = '00000000-0000-0000-0000-000000000001'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO servers (id, name, grpc_url, network, is_default, last_success_at, created_at)
+             VALUES ('00000000-0000-0000-0000-000000000002', 'zec.rocks', 'https://zec.rocks', 'Mainnet', 0, NULL, 0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE servers
+             SET name = 'lwd.testnet.zec.pro', grpc_url = 'https://lwd.testnet.zec.pro'
+             WHERE id = '00000000-0000-0000-0000-000000000006'",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM _app_migrations WHERE version = 3", [])
+            .unwrap();
+    }
+
+    migrations::migrate_with_rollback(&db_path).expect("v3 migration should succeed");
+
+    let conn = open_app_db_connection(&db_path).expect("should open db");
+    let old_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM servers WHERE grpc_url IN ('https://lwd.zec.pro', 'https://lwd.testnet.zec.pro')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(old_count, 0);
+
+    let duplicate_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM servers WHERE id = '00000000-0000-0000-0000-000000000002'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(duplicate_count, 0);
 }
 
 #[test]

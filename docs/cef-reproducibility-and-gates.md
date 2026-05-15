@@ -38,7 +38,7 @@ Executed on February 18, 2026 (local machine):
 
 `make tauri-build` outputs confirmed:
 - `.app`: `target/release/bundle/macos/bagZ.app`
-- `.dmg`: `target/release/bundle/dmg/bagZ_0.2.1_aarch64.dmg`
+- `.dmg`: `target/release/bundle/dmg/bagZ_0.2.2_aarch64.dmg`
 
 Size snapshot:
 - app bundle: `372M`

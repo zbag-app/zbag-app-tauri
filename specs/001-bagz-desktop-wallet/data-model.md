@@ -368,8 +368,8 @@ Stored in the app metadata DB globally per network (shared across wallets). Sele
 | created_at | Timestamp | When added | Auto-set |
 
 **Default Servers**:
-- Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
-- Testnet: https://lwd.testnet.zec.pro (default)
+- Mainnet: https://zec.rocks (default; regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
+- Testnet: https://testnet.zec.rocks (default)
 
 **Validation Rules**:
 - `grpc_url` MUST include scheme (defaults use https://)

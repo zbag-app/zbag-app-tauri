@@ -56,7 +56,7 @@ jobs:
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      BAGZ_GRPC_URL: https://lwd.testnet.zec.pro
+      BAGZ_GRPC_URL: https://testnet.zec.rocks
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1

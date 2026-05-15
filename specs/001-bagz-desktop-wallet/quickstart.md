@@ -229,11 +229,11 @@ Create `.env.development`:
 
 ```bash
 # Light client server
-# Mainnet: https://lwd.zec.pro (default), https://zec.rocks (regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
-# Testnet: https://lwd.testnet.zec.pro (default)
+# Mainnet: https://zec.rocks (default; regional: https://na.zec.rocks, https://eu.zec.rocks, https://sa.zec.rocks)
+# Testnet: https://testnet.zec.rocks (default)
 # Note: this override does NOT set wallet network. Wallet network is selected at wallet creation and is immutable.
 # Note: this is for local development/CI only; release builds should rely on persisted server configuration and must not silently override user-selected servers via environment variables.
-BAGZ_GRPC_URL=https://lwd.testnet.zec.pro
+BAGZ_GRPC_URL=https://testnet.zec.rocks
 
 # Logging
 RUST_LOG=info,bagz=debug
@@ -332,8 +332,8 @@ Add these to the CI pipeline:
 - name: Integration tests (lightwalletd matrix)
   run: |
     # Constitution Principle V: validate against at least two independent deployments.
-    BAGZ_GRPC_URL=https://lwd.zec.pro cargo test --workspace
     BAGZ_GRPC_URL=https://zec.rocks cargo test --workspace
+    BAGZ_GRPC_URL=https://testnet.zec.rocks cargo test --workspace
 
 - name: Build with lock verification
   run: cargo build --release --locked

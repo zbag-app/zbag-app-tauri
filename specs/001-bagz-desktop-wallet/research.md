@@ -278,18 +278,17 @@
 **Implementation Notes**:
 
 **Mainnet servers (production)**:
-- Primary: `https://lwd.zec.pro` (team lightwalletd + Zebra)
-- Regional: `https://zec.rocks`, `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
+- Primary: `https://zec.rocks`
+- Regional: `https://na.zec.rocks`, `https://eu.zec.rocks`, `https://sa.zec.rocks`
 
 **Testnet servers**:
-- Default: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra)
-- Optional community endpoint (not shipped as a default): `https://testnet.zec.rocks` (may be added via Custom Servers; check Hosh for status)
+- Default: `https://testnet.zec.rocks`
 
 **Testing**:
 - CI should validate against at least two independent lightwalletd deployments (primary + secondary)
 
 **Development Configuration**:
-- Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
+- Default testnet: `https://testnet.zec.rocks` (TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
 - Development/CI only: `BAGZ_GRPC_URL` may override the default lightwalletd endpoint for developer workflows and CI. Production builds should rely on persisted server configuration (FR-052 through FR-055) and MUST NOT silently override user-selected servers via environment variables.
 
@@ -380,7 +379,7 @@ All technical context items have been resolved. No outstanding clarifications ne
 | Target platforms | macOS, Windows, Linux |
 | Performance goals | <60s wallet creation, <10min typical restore |
 | Constraints | Secrets in Rust only, shielded-by-default (Sapling + Orchard), fail-closed Tor |
-| Default server | https://lwd.zec.pro (lightwalletd+Zebra), https://zec.rocks (regional) |
+| Default server | https://zec.rocks (lightwalletd+Zebra) |
 | Network selection | Runtime at wallet creation, immutable after |
 | Version strategy | Caret (^) semver constraints, commit Cargo.lock, build with --locked |
 
