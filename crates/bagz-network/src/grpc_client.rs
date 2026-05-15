@@ -49,7 +49,7 @@ impl GrpcClient {
         }
     }
 
-    pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<zstash_tor::TorManager>) -> Self {
+    pub fn new_with_tor(endpoint: impl Into<String>, tor: Arc<bagz_tor::TorManager>) -> Self {
         install_ring_crypto_provider();
         Self {
             endpoint: endpoint.into(),

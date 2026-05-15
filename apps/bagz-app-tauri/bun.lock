@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "zstash-app-tauri",
+      "name": "bagz-app-tauri",
       "dependencies": {
         "@fontsource/jetbrains-mono": "^5.2.8",
         "@fontsource/syne": "^5.2.7",

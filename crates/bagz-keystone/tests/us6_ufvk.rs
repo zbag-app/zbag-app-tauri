@@ -15,7 +15,7 @@ fn parses_mainnet_and_testnet_ufvk_and_extracts_network() {
     let ufvk_main = usk_main.to_unified_full_viewing_key();
     let encoded_main = ufvk_main.encode(&Network::MainNetwork);
 
-    let parsed_main = zstash_keystone::ufvk::parse_ufvk(&encoded_main).expect("parse mainnet ufvk");
+    let parsed_main = bagz_keystone::ufvk::parse_ufvk(&encoded_main).expect("parse mainnet ufvk");
     assert_eq!(parsed_main.network, Network::MainNetwork.network_type());
     assert_eq!(parsed_main.ufvk.encode(&Network::MainNetwork), encoded_main);
 
@@ -25,14 +25,14 @@ fn parses_mainnet_and_testnet_ufvk_and_extracts_network() {
     let ufvk_test = usk_test.to_unified_full_viewing_key();
     let encoded_test = ufvk_test.encode(&Network::TestNetwork);
 
-    let parsed_test = zstash_keystone::ufvk::parse_ufvk(&encoded_test).expect("parse testnet ufvk");
+    let parsed_test = bagz_keystone::ufvk::parse_ufvk(&encoded_test).expect("parse testnet ufvk");
     assert_eq!(parsed_test.network, Network::TestNetwork.network_type());
     assert_eq!(parsed_test.ufvk.encode(&Network::TestNetwork), encoded_test);
 }
 
 #[test]
 fn rejects_invalid_ufvk() {
-    let err = zstash_keystone::ufvk::parse_ufvk("not-a-ufvk").expect_err("invalid ufvk");
+    let err = bagz_keystone::ufvk::parse_ufvk("not-a-ufvk").expect_err("invalid ufvk");
     let msg = err.to_string();
     assert!(!msg.trim().is_empty());
 }

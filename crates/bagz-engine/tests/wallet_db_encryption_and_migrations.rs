@@ -5,12 +5,12 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, WalletLockStatus};
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::{OpenSqlcipherOptions, open_sqlcipher_db, wallet_encryption_meta};
-use zstash_engine::encryption;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, WalletLockStatus};
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_engine::db::{OpenSqlcipherOptions, open_sqlcipher_db, wallet_encryption_meta};
+use bagz_engine::encryption;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -107,7 +107,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }

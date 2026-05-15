@@ -1,6 +1,6 @@
-# Building zSTASH on macOS
+# Building bagZ on macOS
 
-This guide walks you through setting up your Mac to build zSTASH. No programming experience required.
+This guide walks you through setting up your Mac to build bagZ. No programming experience required.
 
 ---
 
@@ -95,7 +95,7 @@ You should see a version number like `Homebrew 4.x.x`. If you see "command not f
 
 ## Step 3: Install Required Tools via Homebrew
 
-Now we install the tools needed to build zSTASH.
+Now we install the tools needed to build bagZ.
 
 Copy and paste this command into Terminal:
 
@@ -109,7 +109,7 @@ Wait for it to finish. You will see progress messages as each tool installs.
 
 ## Step 4: Install Rust
 
-Rust is the programming language zSTASH is written in.
+Rust is the programming language bagZ is written in.
 
 Copy and paste this command into Terminal:
 
@@ -177,18 +177,18 @@ A code will be displayed. Press Enter, and your web browser will open. Paste the
 
 ---
 
-## Step 7: Download and Build zSTASH
+## Step 7: Download and Build bagZ
 
 Now we download the code and build the app.
 
 Run these commands one at a time:
 
 ```bash
-gh repo clone zstashapp/zstash
+gh repo clone bagzapp/bagz
 ```
 
 ```bash
-cd zstash
+cd bagz
 ```
 
 ```bash
@@ -208,16 +208,16 @@ When the build completes without errors, your app is ready.
 The built application is located at:
 
 ```
-apps/zstash-app-tauri/src-tauri/target/release/bundle/macos/zSTASH.app
+apps/bagz-app-tauri/src-tauri/target/release/bundle/macos/bagZ.app
 ```
 
 You can open this folder in Finder by running:
 
 ```bash
-open apps/zstash-app-tauri/src-tauri/target/release/bundle/macos/
+open apps/bagz-app-tauri/src-tauri/target/release/bundle/macos/
 ```
 
-Drag **zSTASH.app** to your Applications folder to install it.
+Drag **bagZ.app** to your Applications folder to install it.
 
 ---
 

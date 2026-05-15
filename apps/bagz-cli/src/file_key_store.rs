@@ -12,15 +12,15 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use zstash_core::domain::Network;
-use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
-use zstash_engine::key_store::KeyStore;
+use bagz_core::domain::Network;
+use bagz_core::permissions::{create_dir_all_secure, write_file_secure};
+use bagz_engine::key_store::KeyStore;
 
 /// File-based key store for CLI usage.
 ///
 /// Structure:
-/// - `~/.zstash/keystore.json` - Contains unlock material entries
-/// - `~/.zstash/wallets/{network}/{wallet_id}/mnemonic.enc` - Encrypted mnemonic
+/// - `~/.bagz/keystore.json` - Contains unlock material entries
+/// - `~/.bagz/wallets/{network}/{wallet_id}/mnemonic.enc` - Encrypted mnemonic
 #[derive(Debug, Clone)]
 pub struct FileKeyStore {
     wallets_root: PathBuf,

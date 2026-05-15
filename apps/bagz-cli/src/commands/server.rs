@@ -13,10 +13,10 @@ use tokio::task::JoinSet;
 use uuid::Uuid;
 use zcash_protocol::consensus::BlockHeight;
 
-use zstash_core::domain::{Network, ServerInfo};
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::grpc_url::validate_grpc_url;
-use zstash_network::grpc_client::GrpcClient;
+use bagz_core::domain::{Network, ServerInfo};
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::grpc_url::validate_grpc_url;
+use bagz_network::grpc_client::GrpcClient;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -135,7 +135,7 @@ async fn list_servers(data_dir: &Path, output: &OutputMode) -> Result<()> {
 
     let servers = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::list_servers(wm.app_db().conn())
+        bagz_engine::db::server_meta::list_servers(wm.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?
     };
     // Intentionally do not validate URLs here: this is a read-only listing, and invalid/legacy
@@ -190,7 +190,7 @@ async fn add_server(data_dir: &Path, name: &str, url: &str, output: &OutputMode)
 
     {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::insert_server(wm.app_db().conn(), &server, now_ms)
+        bagz_engine::db::server_meta::insert_server(wm.app_db().conn(), &server, now_ms)
             .map_err(|e| anyhow::anyhow!(e))?;
     }
 
@@ -209,7 +209,7 @@ async fn set_default_server(
 
     let server = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
+        bagz_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
@@ -219,7 +219,7 @@ async fn set_default_server(
 
     {
         let mut wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::set_default_server(wm.app_db_mut().conn_mut(), server_id)
+        bagz_engine::db::server_meta::set_default_server(wm.app_db_mut().conn_mut(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?;
     }
 
@@ -234,7 +234,7 @@ async fn test_server(data_dir: &Path, server_id_str: &str, output: &OutputMode) 
 
     let server = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
+        bagz_engine::db::server_meta::get_server(wm.app_db().conn(), server_id)
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| anyhow::anyhow!("server not found: {}", server_id_str))?
     };
@@ -284,7 +284,7 @@ async fn test_server(data_dir: &Path, server_id_str: &str, output: &OutputMode) 
             let now_ms = chrono::Utc::now().timestamp_millis();
             {
                 let wm = state.wallet_manager.lock().expect("mutex poisoned");
-                let _ = zstash_engine::db::server_meta::update_last_success_at(
+                let _ = bagz_engine::db::server_meta::update_last_success_at(
                     wm.app_db().conn(),
                     server.id,
                     now_ms,
@@ -327,7 +327,7 @@ fn parse_server_id(state: &CliAppState, id_str: &str) -> Result<Uuid> {
     // Otherwise, try prefix matching
     let servers = {
         let wm = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::list_servers(wm.app_db().conn())
+        bagz_engine::db::server_meta::list_servers(wm.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?
     };
 
@@ -359,7 +359,7 @@ fn print_server_list(output: &OutputMode, servers: &[ServerInfo]) {
             println!();
             println!(
                 "Add one with: {} server add --name <NAME> --url <URL>",
-                style("zstash").cyan()
+                style("bagz").cyan()
             );
             return;
         }
@@ -413,7 +413,7 @@ fn print_server_added(output: &OutputMode, server: &ServerInfo, latency_ms: u64)
         println!();
         println!(
             "To set as default: {} server set-default {}",
-            style("zstash").cyan(),
+            style("bagz").cyan(),
             &server.id.to_string()[..8]
         );
     }

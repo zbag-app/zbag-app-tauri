@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use anyhow::{Context as _, Result};
 use zeroize::Zeroizing;
 
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::sensitive::SensitiveString;
 
 /// Wrap a provided password argument in `Zeroizing`, rejecting empty strings.
 #[must_use = "the returned password is sensitive; use it and drop it promptly"]

@@ -1,6 +1,6 @@
-# Building zSTASH on Windows
+# Building bagZ on Windows
 
-This guide walks you through setting up your Windows system to build zSTASH. No programming experience required.
+This guide walks you through setting up your Windows system to build bagZ. No programming experience required.
 
 ---
 
@@ -15,7 +15,7 @@ This guide walks you through setting up your Windows system to build zSTASH. No 
 - [Step 6: Download the Code](#step-6-download-the-code)
 - [Step 7: Run the Setup Script](#step-7-run-the-setup-script)
 - [Step 8: Open a New Terminal](#step-8-open-a-new-terminal-critical)
-- [Step 9: Build zSTASH](#step-9-build-zstash)
+- [Step 9: Build bagZ](#step-9-build-bagz)
 - [Troubleshooting](#troubleshooting)
 - [Getting Help](#getting-help)
 
@@ -134,15 +134,15 @@ A code will be displayed. Press Enter, and your web browser will open. Paste the
 
 ## Step 6: Download the Code
 
-Now download the zSTASH source code. First, navigate to your home directory, then clone the repository:
+Now download the bagZ source code. First, navigate to your home directory, then clone the repository:
 
 ```powershell
 cd $env:USERPROFILE
-gh repo clone zstashapp/zstash
-cd zstash
+gh repo clone bagzapp/bagz
+cd bagz
 ```
 
-This creates the folder `%USERPROFILE%\zstash` (typically `C:\Users\YourName\zstash`).
+This creates the folder `%USERPROFILE%\bagz` (typically `C:\Users\YourName\bagz`).
 
 > **Note:** If you prefer a different location, clone there instead and remember the path for Step 8.
 
@@ -175,17 +175,17 @@ This will take several minutes as it downloads and installs each tool.
 
 1. Close the current PowerShell window completely
 2. Open a new PowerShell window (Administrator is no longer required)
-3. Navigate back to the zstash folder:
+3. Navigate back to the bagz folder:
 
 ```powershell
-cd $env:USERPROFILE\zstash
+cd $env:USERPROFILE\bagz
 ```
 
 > **Note:** This assumes you followed Step 6 and cloned to your home directory. If you cloned elsewhere, navigate to that location instead.
 
 ---
 
-## Step 9: Build zSTASH
+## Step 9: Build bagZ
 
 Now build the application:
 
@@ -219,7 +219,7 @@ The built installer is located at:
 target\release\bundle\nsis\
 ```
 
-Inside you will find an NSIS installer (.exe) that you can run to install zSTASH on your system.
+Inside you will find an NSIS installer (.exe) that you can run to install bagZ on your system.
 
 You can open this folder in File Explorer by running:
 
@@ -358,7 +358,7 @@ Ensure you have at least 8 GB of RAM available. Close other applications if need
 
 If you encounter problems not covered in the troubleshooting section, please open an issue:
 
-- **GitHub Issues:** https://github.com/zstashapp/zstash/issues
+- **GitHub Issues:** https://github.com/bagzapp/bagz/issues
 
 When reporting an issue, include:
 1. The exact error message (copy/paste, not a screenshot if possible)
@@ -375,7 +375,7 @@ To capture detailed build output for troubleshooting:
 make tauri-build 2>&1 | Tee-Object -FilePath build-log.txt
 ```
 
-This creates `build-log.txt` in your zstash folder with the complete build output.
+This creates `build-log.txt` in your bagz folder with the complete build output.
 
 ### Common Log Locations
 

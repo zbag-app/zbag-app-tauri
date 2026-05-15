@@ -1,10 +1,10 @@
 //! Sync-related command handlers.
 
-use zstash_core::ipc::v1::commands::sync::{
+use bagz_core::ipc::v1::commands::sync::{
     GetSyncProgressRequest, GetSyncProgressResponse, StartSyncRequest, StartSyncResponse,
     StopSyncRequest, StopSyncResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -14,9 +14,9 @@ pub fn start_sync_impl(
     request: StartSyncRequest,
 ) -> IpcResult<StartSyncResponse> {
     use std::path::PathBuf;
-    use zstash_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
-    use zstash_core::errors;
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
+    use bagz_core::errors;
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -28,7 +28,7 @@ pub fn start_sync_impl(
         let (wallet, lock_status) = mgr.load_wallet(request.wallet_id, &mut tx_svc)?;
 
         if lock_status != WalletLockStatus::Unlocked {
-            return Err(zstash_engine::error::ipc_err(
+            return Err(bagz_engine::error::ipc_err(
                 errors::WALLET_LOCKED,
                 "wallet locked",
             ));
@@ -36,11 +36,11 @@ pub fn start_sync_impl(
 
         // Get wallet DB path
         let wallet_db_path =
-            zstash_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
+            bagz_engine::db::wallet_meta::get_wallet(mgr.app_db().conn(), wallet.id)
                 .map_err(|e| anyhow::anyhow!(e))?
                 .map(|(_, dir)| PathBuf::from(dir).join("wallet.sqlite"))
                 .ok_or_else(|| {
-                    zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
+                    bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not found")
                 })?;
 
         let wallet_dek = mgr.unlocked_wallet_dek(wallet.id)?;
@@ -78,7 +78,7 @@ pub fn start_sync_impl(
                 })
             }
             Err(err)
-                if zstash_engine::error::find_engine_ipc_error(&err)
+                if bagz_engine::error::find_engine_ipc_error(&err)
                     .is_some_and(|e| e.code == errors::SYNC_IN_PROGRESS) =>
             {
                 Ok(StartSyncResponse {
@@ -92,7 +92,7 @@ pub fn start_sync_impl(
 }
 
 pub fn stop_sync_impl(state: &AppState, request: StopSyncRequest) -> IpcResult<StopSyncResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -116,7 +116,7 @@ pub fn get_sync_progress_impl(
     state: &AppState,
     request: GetSyncProgressRequest,
 ) -> IpcResult<GetSyncProgressResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

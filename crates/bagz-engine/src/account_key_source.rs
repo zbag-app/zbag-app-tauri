@@ -1,4 +1,4 @@
-pub const ACCOUNT_ID_KEY_SOURCE_PREFIX: &str = "zstash-account-id:";
+pub const ACCOUNT_ID_KEY_SOURCE_PREFIX: &str = "bagz-account-id:";
 
 pub fn key_source_for_account_id(account_id: u32) -> String {
     format!("{ACCOUNT_ID_KEY_SOURCE_PREFIX}{account_id}")

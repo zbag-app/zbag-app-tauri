@@ -4,15 +4,15 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use zstash_core::domain::{
+use bagz_core::domain::{
     AddressType, Network, ShieldAction, SyncPhase, SyncProgress, SyncStatus,
 };
-use zstash_engine::db::{
+use bagz_engine::db::{
     OpenSqlcipherOptions, backup_meta, open_sqlcipher_db, wallet_encryption_meta,
 };
-use zstash_engine::encryption;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_engine::encryption;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -82,7 +82,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -257,11 +257,11 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
     assert_eq!(
         status.backup_status,
-        zstash_core::domain::BackupAction::Required
+        bagz_core::domain::BackupAction::Required
     );
     assert_eq!(
         status.privacy_posture,
-        zstash_core::domain::PrivacyPosture::NeedsAction
+        bagz_core::domain::PrivacyPosture::NeedsAction
     );
 
     backup_meta::set_backup_required(mgr.app_db().conn(), wallet.id, false)
@@ -269,11 +269,11 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     let status = mgr.compute_wallet_status(wallet.id).expect("wallet status");
     assert_eq!(
         status.backup_status,
-        zstash_core::domain::BackupAction::Complete
+        bagz_core::domain::BackupAction::Complete
     );
     assert_eq!(
         status.privacy_posture,
-        zstash_core::domain::PrivacyPosture::Optimal
+        bagz_core::domain::PrivacyPosture::Optimal
     );
 
     let transparent = mgr
@@ -299,7 +299,7 @@ fn wallet_status_tracks_backup_and_shielding_needs() {
     }
     assert_eq!(
         status.privacy_posture,
-        zstash_core::domain::PrivacyPosture::NeedsAction
+        bagz_core::domain::PrivacyPosture::NeedsAction
     );
 }
 

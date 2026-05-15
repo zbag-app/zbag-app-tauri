@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 
-use zstash_core::domain::{FiatCurrency, FiatDisplaySettings};
+use bagz_core::domain::{FiatCurrency, FiatDisplaySettings};
 
 pub fn get_fiat_settings(conn: &Connection) -> rusqlite::Result<FiatDisplaySettings> {
     let mut stmt = conn.prepare(

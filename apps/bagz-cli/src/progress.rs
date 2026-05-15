@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
-use zstash_core::domain::{SyncPhase, SyncProgress};
+use bagz_core::domain::{SyncPhase, SyncProgress};
 
 fn phase_label(phase: SyncPhase) -> &'static str {
     match phase {

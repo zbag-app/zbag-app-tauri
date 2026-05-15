@@ -5,9 +5,9 @@ use std::path::Path;
 use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
 
-use zstash_core::domain::Network;
-use zstash_core::sensitive::SensitiveString;
-use zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet;
+use bagz_core::domain::Network;
+use bagz_core::sensitive::SensitiveString;
+use bagz_engine::wallet_manager::fetch_birthday_height_for_new_wallet;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -250,7 +250,7 @@ They may be stored in shell history or visible to other processes via process li
 
 fn resolve_grpc_url(state: &CliAppState, network: Network) -> Result<String> {
     let wm = state.wallet_manager.lock().expect("mutex poisoned");
-    zstash_engine::server_resolver::resolve_grpc_url(wm.app_db(), network)
+    bagz_engine::server_resolver::resolve_grpc_url(wm.app_db(), network)
 }
 
 fn parse_birthday_date(date_str: &str) -> Result<i64> {

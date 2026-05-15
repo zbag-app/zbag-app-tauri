@@ -5,13 +5,13 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SwapIntent, SwapType};
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_core::sensitive::SensitiveString;
-use zstash_engine::db::backup_meta;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::swap_service::SwapService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SwapIntent, SwapType};
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_core::sensitive::SensitiveString;
+use bagz_engine::db::backup_meta;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::swap_service::SwapService;
+use bagz_engine::wallet_manager::WalletManager;
 
 type StoreKey = (Uuid, u8);
 type Store = HashMap<StoreKey, Vec<u8>>;
@@ -127,7 +127,7 @@ fn network_key(network: Network) -> u8 {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -152,8 +152,8 @@ fn regression_no_secret_logging() {
         let signed_payload = "signed-payload-SECRET-12345";
         let restore_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
 
-        tracing::info!(memo = %zstash_engine::logging::redact_memo(memo));
-        tracing::info!(address = %zstash_engine::logging::redact_address(full_address));
+        tracing::info!(memo = %bagz_engine::logging::redact_memo(memo));
+        tracing::info!(address = %bagz_engine::logging::redact_address(full_address));
 
         // Create wallet (exercise mnemonic/password handling).
         let root = temp_root("no_secret_logging_create");
@@ -195,7 +195,7 @@ fn regression_no_secret_logging() {
         };
         *reauth_token_seen.lock().expect("mutex poisoned") = reauth_token.clone();
 
-        tracing::info!(reauth_token = %zstash_engine::logging::Redacted(&reauth_token));
+        tracing::info!(reauth_token = %bagz_engine::logging::Redacted(&reauth_token));
 
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
@@ -205,7 +205,7 @@ fn regression_no_secret_logging() {
         {
             let mut mgr = wallet_manager.lock().expect("mutex poisoned");
             let tx_service =
-                zstash_engine::tx_service::TxService::new(zstash_engine::reauth::SystemClock);
+                bagz_engine::tx_service::TxService::new(bagz_engine::reauth::SystemClock);
             let task = mgr.prepare_shield_funds_task(0, true, &reauth_token, &tx_service);
             if let Ok(task) = task {
                 let _ = WalletManager::execute_prepared_shield_funds_task(task, None);
@@ -224,7 +224,7 @@ fn regression_no_secret_logging() {
 
         // Swap-from / quote paths should fail closed on Testnet without network calls.
         let tx_service = std::sync::Arc::new(std::sync::Mutex::new(
-            zstash_engine::tx_service::TxService::new(zstash_engine::reauth::SystemClock),
+            bagz_engine::tx_service::TxService::new(bagz_engine::reauth::SystemClock),
         ));
         let swap_service = SwapService::new(
             app_db_path,

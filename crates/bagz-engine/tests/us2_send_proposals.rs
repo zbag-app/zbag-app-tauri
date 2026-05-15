@@ -5,15 +5,15 @@ use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{AddressType, Network, RecipientKind};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::{backup_meta, wallet_meta};
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::reauth::Clock;
-use zstash_engine::tx_service::TxService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{AddressType, Network, RecipientKind};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_engine::db::{backup_meta, wallet_meta};
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::reauth::Clock;
+use bagz_engine::tx_service::TxService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -83,7 +83,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -218,7 +218,7 @@ fn prepare_confirm_send_task_keeps_proposal_when_wallet_db_preflight_fails() {
         Box::new(TestKeyStore::default()),
     )
     .expect("create wallet manager");
-    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let mut tx_service = TxService::new(bagz_engine::reauth::SystemClock);
 
     let wallet = mgr
         .create_wallet(
@@ -258,7 +258,7 @@ fn prepare_confirm_send_task_keeps_proposal_when_wallet_db_preflight_fails() {
         proposal_id.clone(),
         wallet.id,
         0,
-        zstash_core::ipc::v1::commands::transaction::TransactionSummary {
+        bagz_core::ipc::v1::commands::transaction::TransactionSummary {
             recipient: "test".to_string(),
             recipient_kind: RecipientKind::Orchard,
             amount: "1".to_string(),
@@ -460,7 +460,7 @@ fn prepared_retry_task_revalidates_wallet_unlocked_state_before_lock_free_execut
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
-    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let tx_service = TxService::new(bagz_engine::reauth::SystemClock);
     let task = mgr
         .prepare_retry_broadcast_task(
             "1111111111111111111111111111111111111111111111111111111111111111",
@@ -499,7 +499,7 @@ fn prepared_retry_task_can_execute_without_wallet_manager_guard() {
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
-    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let tx_service = TxService::new(bagz_engine::reauth::SystemClock);
     let task = mgr
         .prepare_retry_broadcast_task(
             "1111111111111111111111111111111111111111111111111111111111111111",
@@ -536,7 +536,7 @@ fn prepared_retry_task_survives_active_wallet_switch_before_execute() {
     let (reauth_token, _expires_at) = mgr
         .reauth_wallet(wallet_a.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet A");
-    let tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let tx_service = TxService::new(bagz_engine::reauth::SystemClock);
     let task = mgr
         .prepare_retry_broadcast_task(txid, &reauth_token, &tx_service)
         .expect("prepare retry task for wallet A");
@@ -596,7 +596,7 @@ fn queued_retry_task_is_blocked_without_explicit_reauth() {
     )
     .expect("write queued metadata");
 
-    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let mut tx_service = TxService::new(bagz_engine::reauth::SystemClock);
     let task = mgr
         .prepare_next_queued_broadcast_retry_task(&mut tx_service)
         .expect("prepare queued retry task")
@@ -646,7 +646,7 @@ fn process_queued_broadcast_retries_returns_zero_when_retry_attempt_fails() {
     )
     .expect("write queued metadata");
 
-    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let mut tx_service = TxService::new(bagz_engine::reauth::SystemClock);
     let processed = mgr
         .process_queued_broadcast_retries(None, None, &mut tx_service)
         .expect("process queued broadcast retries");

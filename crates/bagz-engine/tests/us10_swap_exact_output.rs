@@ -8,12 +8,12 @@ use std::thread;
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SwapIntent, SwapMode, SwapType};
-use zstash_core::errors;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::swap_service::SwapService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SwapIntent, SwapMode, SwapType};
+use bagz_core::errors;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::swap_service::SwapService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -92,7 +92,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -303,7 +303,7 @@ fn request_swap_quote_exact_output_sends_correct_swap_type() {
         .wallet;
 
     let (base_url, captured_request, server) = spawn_mock_1click_server_capturing_quote_request(1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -363,7 +363,7 @@ fn request_swap_quote_exact_output_requires_output_amount() {
         .wallet;
 
     // No server needed - request should fail validation before any network call
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(
         "http://127.0.0.1:1".to_string(),
     )
     .expect("near client");
@@ -415,7 +415,7 @@ fn request_swap_quote_exact_output_rejects_empty_output_amount() {
         .expect("create wallet")
         .wallet;
 
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(
         "http://127.0.0.1:1".to_string(),
     )
     .expect("near client");
@@ -463,7 +463,7 @@ fn request_swap_quote_exact_output_rejects_whitespace_output_amount() {
         .wallet;
 
     // No server needed - request should fail validation before any network call.
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(
         "http://127.0.0.1:1".to_string(),
     )
     .expect("near client");
@@ -515,7 +515,7 @@ fn request_swap_quote_exact_output_truncates_excess_decimals() {
         .wallet;
 
     let (base_url, captured_request, server) = spawn_mock_1click_server_capturing_quote_request(1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -569,7 +569,7 @@ fn request_swap_quote_exact_output_rejects_zero_output_amount() {
         .wallet;
 
     // No server needed - request should fail validation before any network call.
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(
         "http://127.0.0.1:1".to_string(),
     )
     .expect("near client");
@@ -637,7 +637,7 @@ fn request_swap_quote_exact_output_resolves_decimals_from_tokens_for_unknown_ass
 
     let (base_url, captured_request, server) =
         spawn_mock_1click_server_tokens_and_quote(tokens_body, 2);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -709,7 +709,7 @@ fn request_swap_quote_exact_output_rejects_unknown_asset_missing_from_tokens() {
 
     let (base_url, captured_request, server) =
         spawn_mock_1click_server_tokens_and_quote(tokens_body, 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -767,7 +767,7 @@ fn request_swap_quote_exact_output_omits_app_fees_in_development_mode() {
         .wallet;
 
     let (base_url, captured, server) = spawn_mock_1click_server_capturing_quote_request(1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

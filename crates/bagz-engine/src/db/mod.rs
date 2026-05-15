@@ -6,7 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 use zeroize::Zeroize;
 
 use crate::encryption::Dek;
-use zstash_core::permissions::{create_dir_all_secure, set_sqlite_file_permissions};
+use bagz_core::permissions::{create_dir_all_secure, set_sqlite_file_permissions};
 
 /// SQLite busy timeout for concurrent operations (sync + tx).
 ///

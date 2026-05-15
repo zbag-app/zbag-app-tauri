@@ -9,7 +9,7 @@ use clap::{Args, Subcommand};
 use console::style;
 use zeroize::Zeroizing;
 
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::sensitive::SensitiveString;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -215,7 +215,7 @@ They may be stored in shell history or visible to other processes via process li
             println!();
             println!("Please check that you entered the correct words.");
             println!(
-                "You can try again with: zstash backup verify --wallet {}",
+                "You can try again with: bagz backup verify --wallet {}",
                 wallet_prefix
             );
             return Err(e);

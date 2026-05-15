@@ -155,7 +155,7 @@ export function Settings(props: {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Opt-in Tor anonymization for all network traffic. When enabled, zSTASH fails closed if Tor is not healthy.
+            Opt-in Tor anonymization for all network traffic. When enabled, bagZ fails closed if Tor is not healthy.
           </p>
           <label className="flex items-center gap-3 cursor-pointer">
             <input

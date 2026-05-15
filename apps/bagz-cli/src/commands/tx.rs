@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use zeroize::Zeroizing;
 
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -215,7 +215,7 @@ pub async fn run(
                 };
 
                 // Phase 2: Expensive operations outside mutex
-                let mut conn = zstash_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
+                let mut conn = bagz_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
                 let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
                 tx_svc.confirm_send(
                     &ctx.app_db_path,
@@ -280,7 +280,7 @@ pub async fn run(
                 };
 
                 // Phase 2: Expensive operations outside mutex
-                let mut conn = zstash_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
+                let mut conn = bagz_engine::wallet_manager::open_wallet_db_for_tx(&ctx)?;
                 let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
                 tx_svc.shield_funds(
                     &ctx.app_db_path,
@@ -396,7 +396,7 @@ pub async fn run(
                     task
                 };
 
-                zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+                bagz_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
                     task, None, None,
                 )?
             };
@@ -411,13 +411,13 @@ pub async fn run(
 fn load_wallet(
     state: &CliAppState,
     wallet_prefix: Option<&str>,
-) -> Result<(zstash_core::domain::WalletInfo, bool)> {
+) -> Result<(bagz_core::domain::WalletInfo, bool)> {
     let wallet_info = if let Some(prefix) = wallet_prefix {
         state.get_wallet_by_prefix(prefix)?
     } else {
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: bagz wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
             anyhow::bail!("multiple wallets found - specify one with --wallet <ID>");

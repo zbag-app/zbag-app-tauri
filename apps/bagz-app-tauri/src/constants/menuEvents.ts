@@ -1,7 +1,7 @@
 /**
  * Menu event channel names from the backend.
  *
- * Keep in sync with `apps/zstash-app-tauri/src-tauri/src/menu.rs`.
+ * Keep in sync with `apps/bagz-app-tauri/src-tauri/src/menu.rs`.
  */
 export const MenuEvents = {
   NEW_WALLET: 'menu:new-wallet',

@@ -11,10 +11,10 @@ use std::time::Duration;
 
 use rusqlite::{Connection, OpenFlags};
 
-use zstash_engine::db::{
+use bagz_engine::db::{
     OpenSqlcipherOptions, SQLITE_BUSY_TIMEOUT, open_app_db_connection, open_sqlcipher_db,
 };
-use zstash_engine::encryption;
+use bagz_engine::encryption;
 
 /// Opens a plain (unencrypted) SQLite database connection for test fixtures.
 ///
@@ -54,7 +54,7 @@ fn busy_timeout_constant_is_30_seconds() {
 /// when busy_timeout is properly configured.
 #[test]
 fn concurrent_access_with_busy_timeout_succeeds() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_concurrency_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_concurrency_test");
 
     // Create the database and table.
     {
@@ -143,7 +143,7 @@ fn concurrent_access_with_busy_timeout_succeeds() {
 
 #[test]
 fn app_db_busy_timeout_waits_for_lock_release() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_concurrency_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_concurrency_test");
 
     {
         let conn = open_app_db_connection(&db_path).expect("open db");
@@ -191,7 +191,7 @@ fn app_db_busy_timeout_waits_for_lock_release() {
 
 #[test]
 fn app_db_busy_timeout_eventually_fails_when_lock_is_held() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_concurrency_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_concurrency_test");
 
     {
         let conn = open_app_db_connection(&db_path).expect("open db");
@@ -264,7 +264,7 @@ fn app_db_busy_timeout_eventually_fails_when_lock_is_held() {
 /// configured via `open_sqlcipher_db`.
 #[test]
 fn concurrent_sqlcipher_access_with_busy_timeout_succeeds() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_concurrency_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_concurrency_test");
     let dek = Arc::new(encryption::generate_dek());
 
     // Create the encrypted database and table.
@@ -377,7 +377,7 @@ fn concurrent_sqlcipher_access_with_busy_timeout_succeeds() {
 #[test]
 #[ignore] // Run manually: cargo test --ignored
 fn concurrent_access_without_busy_timeout_can_fail() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_concurrency_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_concurrency_test");
 
     // Create the database and table.
     {

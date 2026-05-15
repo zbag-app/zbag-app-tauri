@@ -1,12 +1,12 @@
 //! Swap command handlers.
 
-use zstash_core::domain::SwapIntent;
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::swap::{
+use bagz_core::domain::SwapIntent;
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::swap::{
     GetSwapStatusRequest, GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse,
     RequestSwapQuoteRequest, RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -15,7 +15,7 @@ pub fn request_swap_quote_impl(
     state: &AppState,
     request: RequestSwapQuoteRequest,
 ) -> IpcResult<RequestSwapQuoteResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -25,7 +25,7 @@ pub fn request_swap_quote_impl(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -50,7 +50,7 @@ pub fn start_swap_impl(
     state: &AppState,
     request: StartSwapRequest,
 ) -> IpcResult<StartSwapResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -60,7 +60,7 @@ pub fn start_swap_impl(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -79,7 +79,7 @@ pub fn get_swap_status_impl(
     state: &AppState,
     request: GetSwapStatusRequest,
 ) -> IpcResult<GetSwapStatusResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -89,7 +89,7 @@ pub fn get_swap_status_impl(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -103,7 +103,7 @@ pub fn list_swaps_impl(
     state: &AppState,
     request: ListSwapsRequest,
 ) -> IpcResult<ListSwapsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -113,7 +113,7 @@ pub fn list_swaps_impl(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 

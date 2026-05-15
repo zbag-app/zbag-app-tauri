@@ -6,8 +6,8 @@ use anyhow::Result;
 use clap::Args;
 use console::style;
 
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_core::sensitive::SensitiveString;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -35,10 +35,10 @@ pub async fn run(args: SeedArgs, data_dir: &Path, output: &OutputMode) -> Result
     } else {
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: bagz wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
-            anyhow::bail!("multiple wallets found - specify one with: zstash seed --wallet <ID>");
+            anyhow::bail!("multiple wallets found - specify one with: bagz seed --wallet <ID>");
         }
         wallets.into_iter().next().unwrap()
     };

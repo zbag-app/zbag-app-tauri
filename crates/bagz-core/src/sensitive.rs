@@ -24,7 +24,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// accidentally printing secrets.
 ///
 /// ```compile_fail
-/// use zstash_core::sensitive::SensitiveString;
+/// use bagz_core::sensitive::SensitiveString;
 /// let s = SensitiveString::from("secret");
 /// println!("{s}");
 /// ```

@@ -1,4 +1,4 @@
-//! Native application menu for zSTASH.
+//! Native application menu for bagZ.
 //!
 //! Provides app, file, wallet, security, network, and standard edit/window menus.
 
@@ -9,7 +9,7 @@ use tauri::{
 
 /// Menu event channel names emitted to the frontend.
 ///
-/// Keep in sync with `apps/zstash-app-tauri/src/constants/menuEvents.ts`.
+/// Keep in sync with `apps/bagz-app-tauri/src/constants/menuEvents.ts`.
 pub mod events {
     pub const NEW_WALLET: &str = "menu:new-wallet";
     pub const RESTORE_WALLET: &str = "menu:restore-wallet";
@@ -73,9 +73,9 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     let about = PredefinedMenuItem::about(
         app,
-        Some("About zSTASH"),
+        Some("About bagZ"),
         Some(AboutMetadata {
-            name: Some("zSTASH".into()),
+            name: Some("bagZ".into()),
             version: Some(env!("CARGO_PKG_VERSION").into()),
             ..Default::default()
         }),
@@ -85,12 +85,12 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
         .accelerator("CmdOrCtrl+,")
         .build(app)?;
 
-    let quit = PredefinedMenuItem::quit(app, Some("Quit zSTASH"))?;
+    let quit = PredefinedMenuItem::quit(app, Some("Quit bagZ"))?;
     let separator = PredefinedMenuItem::separator(app)?;
 
     #[cfg(target_os = "macos")]
     {
-        let hide = PredefinedMenuItem::hide(app, Some("Hide zSTASH"))?;
+        let hide = PredefinedMenuItem::hide(app, Some("Hide bagZ"))?;
         let hide_others = PredefinedMenuItem::hide_others(app, Some("Hide Others"))?;
         let show_all = PredefinedMenuItem::show_all(app, Some("Show All"))?;
         let separator2 = PredefinedMenuItem::separator(app)?;
@@ -98,7 +98,7 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
 
         return Submenu::with_items(
             app,
-            "zSTASH",
+            "bagZ",
             true,
             &[
                 &about,
@@ -118,7 +118,7 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     {
         return Submenu::with_items(
             app,
-            "zSTASH",
+            "bagZ",
             true,
             &[&about, &separator, &preferences, &quit],
         );

@@ -1,8 +1,8 @@
 /**
- * zSTASH Desktop Wallet - IPC Contract v1
+ * bagZ Desktop Wallet - IPC Contract v1
  *
  * TypeScript type definitions for Tauri IPC commands and events.
- * These types MUST match the Rust definitions in zstash-core/src/ipc/v1/
+ * These types MUST match the Rust definitions in bagz-core/src/ipc/v1/
  *
  * @version 1
  */
@@ -58,7 +58,7 @@ export interface WalletInfo {
   network: Network;
   /**
    * DISABLED: Keychain biometric auto-unlock is disabled. Always `false`.
-   * See https://github.com/zstashapp/zstash/issues/45
+   * See https://github.com/bagzapp/bagz/issues/45
    */
   remember_unlock_enabled: boolean;
   created_at: UnixTimestampMs;
@@ -436,7 +436,7 @@ export interface CreateWalletRequest extends VersionedPayload {
   password: string;
   /**
    * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
-   * See https://github.com/zstashapp/zstash/issues/45
+   * See https://github.com/bagzapp/bagz/issues/45
    */
   remember_unlock: boolean;
 }
@@ -469,7 +469,7 @@ export interface UnlockWalletRequest extends VersionedPayload {
   password: string;
   /**
    * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
-   * See https://github.com/zstashapp/zstash/issues/45
+   * See https://github.com/bagzapp/bagz/issues/45
    */
   remember_unlock: boolean;
 }
@@ -622,7 +622,7 @@ export interface RestoreWalletRequest extends VersionedPayload {
   password: string;
   /**
    * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
-   * See https://github.com/zstashapp/zstash/issues/45
+   * See https://github.com/bagzapp/bagz/issues/45
    */
   remember_unlock: boolean;
   seed_phrase: string;
@@ -1021,7 +1021,7 @@ export interface CreateKeystoneWalletRequest extends VersionedPayload {
   password: string;
   /**
    * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
-   * See https://github.com/zstashapp/zstash/issues/45
+   * See https://github.com/bagzapp/bagz/issues/45
    */
   remember_unlock: boolean;
   ufvk: string;
@@ -1299,81 +1299,81 @@ export const ErrorCodes = {
 
 export const Commands = {
   // Wallet
-  CREATE_WALLET: 'zstash_create_wallet',
-  LOAD_WALLET: 'zstash_load_wallet',
-  LIST_WALLETS: 'zstash_list_wallets',
-  GET_WALLET_STATUS: 'zstash_get_wallet_status',
-  UNLOCK_WALLET: 'zstash_unlock_wallet',
-  LOCK_WALLET: 'zstash_lock_wallet',
-  REAUTH_WALLET: 'zstash_reauth_wallet',
-  VIEW_SEED_PHRASE: 'zstash_view_seed_phrase',
-  LOGOUT_WALLET: 'zstash_logout_wallet',
+  CREATE_WALLET: 'bagz_create_wallet',
+  LOAD_WALLET: 'bagz_load_wallet',
+  LIST_WALLETS: 'bagz_list_wallets',
+  GET_WALLET_STATUS: 'bagz_get_wallet_status',
+  UNLOCK_WALLET: 'bagz_unlock_wallet',
+  LOCK_WALLET: 'bagz_lock_wallet',
+  REAUTH_WALLET: 'bagz_reauth_wallet',
+  VIEW_SEED_PHRASE: 'bagz_view_seed_phrase',
+  LOGOUT_WALLET: 'bagz_logout_wallet',
 
   // Address
-  GET_RECEIVE_ADDRESS: 'zstash_get_receive_address',
+  GET_RECEIVE_ADDRESS: 'bagz_get_receive_address',
 
   // Sync
-  START_SYNC: 'zstash_start_sync',
-  STOP_SYNC: 'zstash_stop_sync',
-  GET_SYNC_PROGRESS: 'zstash_get_sync_progress',
+  START_SYNC: 'bagz_start_sync',
+  STOP_SYNC: 'bagz_stop_sync',
+  GET_SYNC_PROGRESS: 'bagz_get_sync_progress',
 
   // Balance
-  GET_BALANCE: 'zstash_get_balance',
+  GET_BALANCE: 'bagz_get_balance',
 
   // Transactions
-  LIST_TRANSACTIONS: 'zstash_list_transactions',
-  PREPARE_SEND: 'zstash_prepare_send',
-  CONFIRM_SEND: 'zstash_confirm_send',
-  CANCEL_SEND: 'zstash_cancel_send',
-  RETRY_BROADCAST: 'zstash_retry_broadcast',
-  SHIELD_FUNDS: 'zstash_shield_funds',
+  LIST_TRANSACTIONS: 'bagz_list_transactions',
+  PREPARE_SEND: 'bagz_prepare_send',
+  CONFIRM_SEND: 'bagz_confirm_send',
+  CANCEL_SEND: 'bagz_cancel_send',
+  RETRY_BROADCAST: 'bagz_retry_broadcast',
+  SHIELD_FUNDS: 'bagz_shield_funds',
 
   // Backup
-  GET_BACKUP_CHALLENGE: 'zstash_get_backup_challenge',
-  VERIFY_BACKUP: 'zstash_verify_backup',
-  RESTORE_WALLET: 'zstash_restore_wallet',
+  GET_BACKUP_CHALLENGE: 'bagz_get_backup_challenge',
+  VERIFY_BACKUP: 'bagz_verify_backup',
+  RESTORE_WALLET: 'bagz_restore_wallet',
 
   // Keystone
-  IMPORT_UFVK: 'zstash_import_ufvk',
-  BUILD_SIGNING_REQUEST: 'zstash_build_signing_request',
-  FINALIZE_SIGNING: 'zstash_finalize_signing',
-  CREATE_KEYSTONE_WALLET: 'zstash_create_keystone_wallet',
+  IMPORT_UFVK: 'bagz_import_ufvk',
+  BUILD_SIGNING_REQUEST: 'bagz_build_signing_request',
+  FINALIZE_SIGNING: 'bagz_finalize_signing',
+  CREATE_KEYSTONE_WALLET: 'bagz_create_keystone_wallet',
 
   // Swaps
-  REQUEST_SWAP_QUOTE: 'zstash_request_swap_quote',
-  START_SWAP: 'zstash_start_swap',
-  GET_SWAP_STATUS: 'zstash_get_swap_status',
-  LIST_SWAPS: 'zstash_list_swaps',
-  GET_SUPPORTED_TOKENS: 'zstash_get_supported_tokens',
-  REFRESH_SWAP_STATUS: 'zstash_refresh_swap_status',
-  RESUME_PENDING_SWAPS: 'zstash_resume_pending_swaps',
+  REQUEST_SWAP_QUOTE: 'bagz_request_swap_quote',
+  START_SWAP: 'bagz_start_swap',
+  GET_SWAP_STATUS: 'bagz_get_swap_status',
+  LIST_SWAPS: 'bagz_list_swaps',
+  GET_SUPPORTED_TOKENS: 'bagz_get_supported_tokens',
+  REFRESH_SWAP_STATUS: 'bagz_refresh_swap_status',
+  RESUME_PENDING_SWAPS: 'bagz_resume_pending_swaps',
 
   // Tor
-  SET_TOR_ENABLED: 'zstash_set_tor_enabled',
-  GET_TOR_STATE: 'zstash_get_tor_state',
+  SET_TOR_ENABLED: 'bagz_set_tor_enabled',
+  GET_TOR_STATE: 'bagz_get_tor_state',
 
   // Servers
-  ADD_SERVER: 'zstash_add_server',
-  SET_DEFAULT_SERVER: 'zstash_set_default_server',
-  TEST_SERVER: 'zstash_test_server',
-  LIST_SERVERS: 'zstash_list_servers',
+  ADD_SERVER: 'bagz_add_server',
+  SET_DEFAULT_SERVER: 'bagz_set_default_server',
+  TEST_SERVER: 'bagz_test_server',
+  LIST_SERVERS: 'bagz_list_servers',
 
   // Logs
-  GET_LOG_LOCATION: 'zstash_get_log_location',
+  GET_LOG_LOCATION: 'bagz_get_log_location',
 
   // Version
-  GET_VERSION: 'zstash_get_version',
+  GET_VERSION: 'bagz_get_version',
 
   // Exchange Rate
-  GET_FIAT_SETTINGS: 'zstash_get_fiat_settings',
-  SET_FIAT_SETTINGS: 'zstash_set_fiat_settings',
-  GET_EXCHANGE_RATE: 'zstash_get_exchange_rate',
+  GET_FIAT_SETTINGS: 'bagz_get_fiat_settings',
+  SET_FIAT_SETTINGS: 'bagz_set_fiat_settings',
+  GET_EXCHANGE_RATE: 'bagz_get_exchange_rate',
   // Jobs (async operations)
-  START_SEND_JOB: 'zstash_start_send_job',
-  START_SHIELD_JOB: 'zstash_start_shield_job',
-  CANCEL_JOB: 'zstash_cancel_job',
-  GET_JOB_STATUS: 'zstash_get_job_status',
-  LIST_JOBS: 'zstash_list_jobs',
+  START_SEND_JOB: 'bagz_start_send_job',
+  START_SHIELD_JOB: 'bagz_start_shield_job',
+  CANCEL_JOB: 'bagz_cancel_job',
+  GET_JOB_STATUS: 'bagz_get_job_status',
+  LIST_JOBS: 'bagz_list_jobs',
 } as const;
 
 // ============================================================================
@@ -1381,12 +1381,12 @@ export const Commands = {
 // ============================================================================
 
 export const EventChannels = {
-  SYNC: 'zstash://sync',
-  BALANCE: 'zstash://balance',
-  TRANSACTION: 'zstash://tx',
-  SWAP: 'zstash://swap',
-  TOR: 'zstash://tor',
-  WALLET_STATUS: 'zstash://wallet-status',
-  JOB: 'zstash://job',
-  SERVER_FAILOVER: 'zstash://server-failover',
+  SYNC: 'bagz://sync',
+  BALANCE: 'bagz://balance',
+  TRANSACTION: 'bagz://tx',
+  SWAP: 'bagz://swap',
+  TOR: 'bagz://tor',
+  WALLET_STATUS: 'bagz://wallet-status',
+  JOB: 'bagz://job',
+  SERVER_FAILOVER: 'bagz://server-failover',
 } as const;

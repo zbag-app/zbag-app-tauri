@@ -1,14 +1,14 @@
 use tauri::State;
 
-use zstash_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
+use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zstash_get_balance")]
-pub fn zstash_get_balance(
+#[tauri::command(rename = "bagz_get_balance")]
+pub fn bagz_get_balance(
     state: State<'_, AppState>,
     request: GetBalanceRequest,
 ) -> IpcResult<GetBalanceResponse> {

@@ -6,12 +6,12 @@ use std::thread;
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SwapIntent, SwapType};
-use zstash_core::errors;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::swap_service::SwapService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SwapIntent, SwapType};
+use bagz_core::errors;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::swap_service::SwapService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -81,7 +81,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -152,7 +152,7 @@ fn spawn_mock_1click_quote_server(
         assert_eq!(json.get("dry").and_then(|v| v.as_bool()), Some(false));
         assert_eq!(
             json.get("referral").and_then(|v| v.as_str()),
-            Some("zstash")
+            Some("bagz")
         );
         assert!(
             json.get("deadline").and_then(|v| v.as_str()).is_some(),
@@ -233,7 +233,7 @@ fn request_swap_quote_to_zec_builds_expected_1click_payload() {
     let deadline_iso = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
     let (base_url, server) =
         spawn_mock_1click_quote_server(deadline_iso, expected_amount, recipient, refund_to);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -296,7 +296,7 @@ fn start_swap_rejects_expired_quote() {
     let deadline_iso = (chrono::Utc::now() - chrono::Duration::minutes(1)).to_rfc3339();
     let (base_url, server) =
         spawn_mock_1click_quote_server(deadline_iso, expected_amount, recipient, refund_to);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

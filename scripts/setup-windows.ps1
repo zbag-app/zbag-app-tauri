@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Setup script for building zSTASH Desktop on Windows.
+    Setup script for building bagZ Desktop on Windows.
 
 .DESCRIPTION
     Installs all required development tools via Chocolatey:
@@ -37,7 +37,7 @@ function Update-PathFromEnvironment {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-Write-Host "=== zSTASH Windows Build Setup ===" -ForegroundColor Cyan
+Write-Host "=== bagZ Windows Build Setup ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Check if running as admin
@@ -152,7 +152,7 @@ if (Test-Path $opensslPath) {
             Write-Host "Copied OpenSSL libs to $opensslPath\lib\" -ForegroundColor Green
         } else {
             Write-Host "Warning: libcrypto.lib not found. Build may fail with LNK1181 error." -ForegroundColor Yellow
-            Write-Host "See HOW_TO_BUILD_ZSTASH_ON_WINDOWS.md troubleshooting section." -ForegroundColor Yellow
+            Write-Host "See HOW_TO_BUILD_BAGZ_ON_WINDOWS.md troubleshooting section." -ForegroundColor Yellow
         }
     }
 } else {
@@ -172,9 +172,9 @@ Write-Host ""
 Write-Host "IMPORTANT: Close this terminal and open a new one for PATH changes to take effect!" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Then run these commands to build:" -ForegroundColor Cyan
-Write-Host "  cd <your-zstash-clone-directory>  # Navigate to where you cloned zstash" -ForegroundColor White
+Write-Host "  cd <your-bagz-clone-directory>  # Navigate to where you cloned bagz" -ForegroundColor White
 Write-Host "  make install" -ForegroundColor White
 Write-Host "  make tauri-build" -ForegroundColor White
 Write-Host ""
 Write-Host "The installer will be at:" -ForegroundColor Cyan
-Write-Host "  target\release\bundle\nsis\zSTASH_*_x64-setup.exe" -ForegroundColor White
+Write-Host "  target\release\bundle\nsis\bagZ_*_x64-setup.exe" -ForegroundColor White

@@ -1,4 +1,4 @@
-# Data Model: zSTASH Desktop Wallet
+# Data Model: bagZ Desktop Wallet
 
 **Branch**: `main`
 **Status**: Complete
@@ -24,7 +24,7 @@ The root entity containing seed-derived keys and accounts.
 |-------|------|-------------|------------|
 | id | UUID | Unique wallet identifier | Auto-generated |
 | name | String | User-defined wallet name | 1-50 chars, non-empty |
-| directory_path | String | Filesystem path to wallet data (network-specific: `~/.zstash/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`) | Valid path, writable |
+| directory_path | String | Filesystem path to wallet data (network-specific: `~/.bagz/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`) | Valid path, writable |
 | wallet_type | WalletType | Software or WatchOnly (Keystone hardware wallet) | Enum value |
 | network | Network | Mainnet or Testnet (IMMUTABLE after creation) | Enum value |
 | remember_unlock_enabled | bool | OS keychain-backed auto-unlock preference (stores unlock material, never satisfies per-action re-auth) | Default false |
@@ -211,7 +211,7 @@ Persisted broadcast retry queue entry for the “disconnect during broadcast” 
 | encrypted_tx_bytes_path | String | Location of the encrypted signed transaction bytes | Within wallet directory |
 
 **Storage**:
-- Signed tx bytes MUST be encrypted-at-rest (AEAD under the wallet DEK or equivalent) and stored under the wallet directory, e.g. `~/.zstash/wallets/{network}/{wallet-id}/queued_broadcasts/{txid}.bin`.
+- Signed tx bytes MUST be encrypted-at-rest (AEAD under the wallet DEK or equivalent) and stored under the wallet directory, e.g. `~/.bagz/wallets/{network}/{wallet-id}/queued_broadcasts/{txid}.bin`.
 - Metadata is intentionally minimal; no plaintext tx bytes are persisted.
 
 **Constraints**:
@@ -483,10 +483,10 @@ TorState ─────── (global singleton)
 - Contains: accounts, addresses, transactions, notes, witnesses
 - Migrations handled by library
 - Encrypted at rest with the wallet password; not readable without successful unlock
-- Directory structure: ~/.zstash/wallets/mainnet/{wallet-id}/ and ~/.zstash/wallets/testnet/{wallet-id}/
+- Directory structure: ~/.bagz/wallets/mainnet/{wallet-id}/ and ~/.bagz/wallets/testnet/{wallet-id}/
 
 ### Wallet Directory (encrypted auxiliary blobs)
-- Stored under: `~/.zstash/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
+- Stored under: `~/.bagz/wallets/{network}/{wallet-id}/` where `{network}` is lowercase `mainnet` or `testnet`
 - `queued_broadcasts/`: AEAD-encrypted signed tx bytes for broadcast retry queue entries (7-day retention; deleted on success; user-initiated retry only)
   - `{txid}.bin`: AEAD-encrypted signed tx bytes
   - `{txid}.json`: minimal user-safe metadata (plaintext JSON), including `created_at` (Unix ms) and `last_error` (string | null)
@@ -498,7 +498,7 @@ TorState ─────── (global singleton)
 CREATE TABLE wallets (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    directory_path TEXT NOT NULL,  -- Network-specific path: ~/.zstash/wallets/{network}/{wallet-id}/ (lowercase: mainnet/testnet)
+    directory_path TEXT NOT NULL,  -- Network-specific path: ~/.bagz/wallets/{network}/{wallet-id}/ (lowercase: mainnet/testnet)
     wallet_type TEXT NOT NULL,
     network TEXT NOT NULL,  -- IMMUTABLE after creation
     remember_unlock_enabled INTEGER NOT NULL DEFAULT 0, -- OS keychain-backed auto-unlock (must not satisfy per-action re-auth)

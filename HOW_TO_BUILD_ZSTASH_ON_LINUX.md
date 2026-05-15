@@ -1,6 +1,6 @@
-# Building zSTASH on Linux
+# Building bagZ on Linux
 
-This guide walks you through setting up your Linux system to build zSTASH. No programming experience required.
+This guide walks you through setting up your Linux system to build bagZ. No programming experience required.
 
 ---
 
@@ -40,7 +40,7 @@ You will be asked for your password. Type it (it will not show as you type) and 
 
 ## Step 3: Install Required System Packages
 
-zSTASH needs several system libraries and tools to build. Install them all with this command:
+bagZ needs several system libraries and tools to build. Install them all with this command:
 
 ```bash
 sudo apt install -y build-essential curl wget git pkg-config libssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev protobuf-compiler
@@ -82,7 +82,7 @@ sudo apt install -y gh
 
 ## Step 5: Install Rust
 
-Rust is the programming language zSTASH is written in.
+Rust is the programming language bagZ is written in.
 
 Copy and paste this command into Terminal:
 
@@ -150,18 +150,18 @@ A code will be displayed. Press Enter, and your web browser will open. Paste the
 
 ---
 
-## Step 8: Download and Build zSTASH
+## Step 8: Download and Build bagZ
 
 Now we download the code and build the app.
 
 Run these commands one at a time:
 
 ```bash
-gh repo clone zstashapp/zstash
+gh repo clone bagzapp/bagz
 ```
 
 ```bash
-cd zstash
+cd bagz
 ```
 
 ```bash
@@ -181,7 +181,7 @@ When the build completes without errors, your app is ready.
 The built application bundles are located at:
 
 ```
-apps/zstash-app-tauri/src-tauri/target/release/bundle/
+apps/bagz-app-tauri/src-tauri/target/release/bundle/
 ```
 
 Inside you will find:
@@ -192,7 +192,7 @@ Inside you will find:
 You can open this folder in your file manager by running:
 
 ```bash
-xdg-open apps/zstash-app-tauri/src-tauri/target/release/bundle/
+xdg-open apps/bagz-app-tauri/src-tauri/target/release/bundle/
 ```
 
 ### Installing the Debian Package
@@ -200,7 +200,7 @@ xdg-open apps/zstash-app-tauri/src-tauri/target/release/bundle/
 To install the .deb package:
 
 ```bash
-sudo dpkg -i apps/zstash-app-tauri/src-tauri/target/release/bundle/deb/*.deb
+sudo dpkg -i apps/bagz-app-tauri/src-tauri/target/release/bundle/deb/*.deb
 ```
 
 ### Running the AppImage
@@ -208,8 +208,8 @@ sudo dpkg -i apps/zstash-app-tauri/src-tauri/target/release/bundle/deb/*.deb
 To run the AppImage directly:
 
 ```bash
-chmod +x apps/zstash-app-tauri/src-tauri/target/release/bundle/appimage/*.AppImage
-./apps/zstash-app-tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+chmod +x apps/bagz-app-tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+./apps/bagz-app-tauri/src-tauri/target/release/bundle/appimage/*.AppImage
 ```
 
 ---

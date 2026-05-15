@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 use rusqlite::{Connection, params};
 
 use super::schema::INITIAL_SCHEMA_V1;
-use zstash_core::permissions::set_file_permissions;
+use bagz_core::permissions::set_file_permissions;
 
 pub const LATEST_VERSION: i64 = 2;
 

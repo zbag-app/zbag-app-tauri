@@ -1,12 +1,12 @@
 //! Miscellaneous command handlers (balance, address, logs, version).
 
-use zstash_core::ipc::v1::commands::address::{
+use bagz_core::ipc::v1::commands::address::{
     GetReceiveAddressRequest, GetReceiveAddressResponse,
 };
-use zstash_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
-use zstash_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
-use zstash_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
+use bagz_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
+use bagz_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -15,7 +15,7 @@ pub fn get_balance_impl(
     state: &AppState,
     request: GetBalanceRequest,
 ) -> IpcResult<GetBalanceResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -35,7 +35,7 @@ pub fn get_receive_address_impl(
     state: &AppState,
     request: GetReceiveAddressRequest,
 ) -> IpcResult<GetReceiveAddressResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -55,7 +55,7 @@ pub fn get_log_location_impl(
     state: &AppState,
     request: GetLogLocationRequest,
 ) -> IpcResult<GetLogLocationResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -75,7 +75,7 @@ pub fn get_version_impl(
     _state: &AppState,
     request: GetVersionRequest,
 ) -> IpcResult<GetVersionResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -83,6 +83,6 @@ pub fn get_version_impl(
 
     IpcResult::ok(GetVersionResponse {
         schema_version: SCHEMA_VERSION,
-        version_info: zstash_core::version::VersionInfo::current(),
+        version_info: bagz_core::version::VersionInfo::current(),
     })
 }

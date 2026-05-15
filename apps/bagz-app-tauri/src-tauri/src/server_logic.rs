@@ -3,15 +3,15 @@ use std::time::{Duration, Instant};
 
 use tracing::warn;
 
-use zstash_core::domain::{Network, ServerInfo};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::server::{
+use bagz_core::domain::{Network, ServerInfo};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::server::{
     AddServerRequest, AddServerResponse, ListServersResponse, SetDefaultServerRequest,
     SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_engine::error::{find_engine_ipc_error, ipc_err};
-use zstash_engine::grpc_url::validate_grpc_url;
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_engine::error::{find_engine_ipc_error, ipc_err};
+use bagz_engine::grpc_url::validate_grpc_url;
 
 use crate::state::AppState;
 use crate::time_utils::system_time_to_unix_ms;
@@ -31,7 +31,7 @@ pub async fn add_server(
     }
     validate_grpc_url(grpc_url)?;
 
-    let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
+    let client = bagz_network::grpc_client::GrpcClient::new_with_tor(
         grpc_url.to_string(),
         Arc::clone(&state.tor_manager),
     );
@@ -59,7 +59,7 @@ pub async fn add_server(
     };
 
     let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-    zstash_engine::db::server_meta::insert_server(mgr.app_db().conn(), &server, now_ms)
+    bagz_engine::db::server_meta::insert_server(mgr.app_db().conn(), &server, now_ms)
         .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(AddServerResponse {
@@ -73,7 +73,7 @@ pub fn set_default_server(
     request: SetDefaultServerRequest,
 ) -> anyhow::Result<SetDefaultServerResponse> {
     let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
-    let server = zstash_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
+    let server = bagz_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
         .map_err(|e| anyhow::anyhow!(e))?
         .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?;
 
@@ -90,7 +90,7 @@ pub fn set_default_server(
     // `set_default_server` is state-changing: invalid stored configuration should fail.
     mgr.ensure_server_network_matches_active_wallet(server.network)?;
 
-    zstash_engine::db::server_meta::set_default_server(
+    bagz_engine::db::server_meta::set_default_server(
         mgr.app_db_mut().conn_mut(),
         request.server_id,
     )
@@ -104,7 +104,7 @@ pub fn set_default_server(
 
 pub fn list_servers(state: &AppState) -> anyhow::Result<ListServersResponse> {
     let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-    let servers = zstash_engine::db::server_meta::list_servers(mgr.app_db().conn())
+    let servers = bagz_engine::db::server_meta::list_servers(mgr.app_db().conn())
         .map_err(|e| anyhow::anyhow!(e))?;
 
     let servers = servers
@@ -133,7 +133,7 @@ pub async fn test_server(
 ) -> anyhow::Result<TestServerResponse> {
     let server = {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-        zstash_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
+        bagz_engine::db::server_meta::get_server(mgr.app_db().conn(), request.server_id)
             .map_err(|e| anyhow::anyhow!(e))?
             .ok_or_else(|| ipc_err(errors::INVALID_REQUEST, "server not found"))?
     };
@@ -152,7 +152,7 @@ pub async fn test_server(
         });
     }
 
-    let client = zstash_network::grpc_client::GrpcClient::new_with_tor(
+    let client = bagz_network::grpc_client::GrpcClient::new_with_tor(
         server.grpc_url.clone(),
         Arc::clone(&state.tor_manager),
     );
@@ -175,7 +175,7 @@ pub async fn test_server(
 
             let now_ms = system_time_to_unix_ms(std::time::SystemTime::now())?;
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            let _ = zstash_engine::db::server_meta::update_last_success_at(
+            let _ = bagz_engine::db::server_meta::update_last_success_at(
                 mgr.app_db().conn(),
                 server.id,
                 now_ms,
@@ -198,7 +198,7 @@ pub async fn test_server(
 }
 
 async fn probe_chain_name_with_timeout(
-    client: &zstash_network::grpc_client::GrpcClient,
+    client: &bagz_network::grpc_client::GrpcClient,
     timeout: Duration,
 ) -> anyhow::Result<String> {
     let info = tokio::time::timeout(timeout, client.probe_server())

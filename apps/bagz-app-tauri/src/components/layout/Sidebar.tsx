@@ -106,7 +106,7 @@ export function Sidebar({
       <div className="flex items-center gap-3 p-6">
         <Logo size={40} />
         <div className="flex flex-col">
-          <span className="font-display text-lg font-bold tracking-tight">zSTASH</span>
+          <span className="font-display text-lg font-bold tracking-tight">bagZ</span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground truncate max-w-[100px]">{walletName}</span>
             <Badge variant={network === "Mainnet" ? "success" : "warning"} className="text-[10px] px-1.5 py-0">

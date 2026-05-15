@@ -4,18 +4,18 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use uuid::Uuid;
 
-use zstash_core::domain::{AddressType, Network};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::{
+use bagz_core::domain::{AddressType, Network};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_engine::db::{
     OpenSqlcipherOptions, backup_meta, open_sqlcipher_db, wallet_encryption_meta,
 };
-use zstash_engine::encryption;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::reauth::SystemClock;
-use zstash_engine::tx_service::{TxEventHandler, TxService};
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_engine::encryption;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::reauth::SystemClock;
+use bagz_engine::tx_service::{TxEventHandler, TxService};
+use bagz_engine::wallet_manager::WalletManager;
 
 /// Sets the default Testnet server URL in the per-test app DB.
 /// Tests use `http://127.0.0.1:9999` - port 9999 is intentionally unreachable
@@ -103,7 +103,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -114,7 +114,7 @@ fn shield_funds_for_test(
     consolidate: bool,
     reauth_token: &str,
     on_tx_changed: Option<TxEventHandler>,
-) -> anyhow::Result<zstash_core::ipc::v1::commands::transaction::ShieldFundsResponse> {
+) -> anyhow::Result<bagz_core::ipc::v1::commands::transaction::ShieldFundsResponse> {
     let tx_service = TxService::new(SystemClock);
     let task = mgr.prepare_shield_funds_task(account_id, consolidate, reauth_token, &tx_service)?;
     WalletManager::execute_prepared_shield_funds_task(task, on_tx_changed)
@@ -390,7 +390,7 @@ fn shield_funds_sweeps_transparent_balance_and_deducts_fee() {
         .reauth_wallet(wallet.id, "pw", ReauthPurpose::Spend)
         .expect("reauth wallet");
 
-    let events: Arc<Mutex<Vec<zstash_core::ipc::v1::events::TransactionChangedEvent>>> =
+    let events: Arc<Mutex<Vec<bagz_core::ipc::v1::events::TransactionChangedEvent>>> =
         Arc::new(Mutex::new(Vec::new()));
     let events_clone = Arc::clone(&events);
     let handler: TxEventHandler = Arc::new(move |evt| {
@@ -556,7 +556,7 @@ fn shield_funds_batches_large_input_sets() {
         .transactions;
     let shield_txs: Vec<_> = txs
         .iter()
-        .filter(|t| t.tx_type == zstash_core::domain::TransactionType::Shield)
+        .filter(|t| t.tx_type == bagz_core::domain::TransactionType::Shield)
         .collect();
     assert!(
         shield_txs.len() >= 2,

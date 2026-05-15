@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use uuid::Uuid;
 
-use zstash_core::domain::Network;
+use bagz_core::domain::Network;
 
 use crate::key_store::KeyStore;
-use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
+use bagz_core::permissions::{create_dir_all_secure, write_file_secure};
 
 #[derive(Debug, Clone)]
 pub struct KeyStoreKeychain {
@@ -18,7 +18,7 @@ impl KeyStoreKeychain {
     pub fn new(wallets_root: PathBuf) -> Self {
         Self {
             wallets_root,
-            service: "zstash".to_string(),
+            service: "bagz".to_string(),
         }
     }
 
@@ -97,7 +97,7 @@ impl KeyStore for KeyStoreKeychain {
     /// fingerprints. This is problematic for shared devices or situations where someone else's
     /// fingerprint was added to the device.
     ///
-    /// See: https://github.com/zstashapp/zstash/issues/45
+    /// See: https://github.com/bagzapp/bagz/issues/45
     fn store_keychain_unlock_material(
         &self,
         _wallet_id: Uuid,

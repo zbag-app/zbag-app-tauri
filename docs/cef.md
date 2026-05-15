@@ -1,10 +1,10 @@
-# CEF Guide (zSTASH)
+# CEF Guide (bagZ)
 
 Last updated: February 18, 2026
 
 ## Purpose
 
-This document is the single entry point for CEF usage in zSTASH: build path, hardening policy, validation gates, and common troubleshooting.
+This document is the single entry point for CEF usage in bagZ: build path, hardening policy, validation gates, and common troubleshooting.
 
 ## Current baseline
 
@@ -12,8 +12,8 @@ This document is the single entry point for CEF usage in zSTASH: build path, har
 - Reproducible build entrypoint: `make tauri-build`
 - Packaging target on macOS: `.app` and `.dmg`
 - Known-good output paths:
-  - `target/release/bundle/macos/zSTASH.app`
-  - `target/release/bundle/dmg/zSTASH_0.2.1_aarch64.dmg`
+  - `target/release/bundle/macos/bagZ.app`
+  - `target/release/bundle/dmg/bagZ_0.2.1_aarch64.dmg`
 
 ## Build and run
 
@@ -28,7 +28,7 @@ This now uses `scripts/tauri-cef-build.sh`, which resolves the pinned `cargo-tau
 ### Launch built app
 
 ```bash
-open -na target/release/bundle/macos/zSTASH.app
+open -na target/release/bundle/macos/bagZ.app
 ```
 
 ## Slim CEF profiles (no CEF rebuild)
@@ -102,9 +102,9 @@ Implemented behavior:
 
 Key implementation files:
 
-- `apps/zstash-app-tauri/src-tauri/src/lib.rs`
-- `apps/zstash-app-tauri/src/App.tsx`
-- `apps/zstash-app-tauri/src/components/ui/input.tsx`
+- `apps/bagz-app-tauri/src-tauri/src/lib.rs`
+- `apps/bagz-app-tauri/src/App.tsx`
+- `apps/bagz-app-tauri/src/components/ui/input.tsx`
 
 ## Upgrading CEF
 
@@ -131,24 +131,24 @@ The CEF version is controlled by the pinned Tauri rev (`tauri-runtime-cef/Cargo.
    curl -sL "https://raw.githubusercontent.com/tauri-apps/tauri/<rev>/packages/api/package.json" | head -5
    ```
 3. Bump `Cargo.toml` `[patch.crates-io]` `tauri` + `tauri-build` to the new rev.
-4. Bump `apps/zstash-app-tauri/package.json` `@tauri-apps/cli` + `@tauri-apps/api`.
+4. Bump `apps/bagz-app-tauri/package.json` `@tauri-apps/cli` + `@tauri-apps/api`.
 5. Refresh locks:
    ```bash
    cargo update -p tauri -p tauri-build
-   cd apps/zstash-app-tauri && bun install
+   cd apps/bagz-app-tauri && bun install
    ```
 6. Rebuild and verify the framework actually landed in the bundle:
    ```bash
    make tauri-build
-   ls "target/release/bundle/macos/zSTASH.app/Contents/Frameworks/"
+   ls "target/release/bundle/macos/bagZ.app/Contents/Frameworks/"
    ```
-   Expect `Chromium Embedded Framework.framework` plus five `zstash-app-tauri Helper*.app` bundles. If `Frameworks/` is missing, see **Troubleshooting: missing CEF framework in bundle** below.
-7. Launch via `open -na target/release/bundle/macos/zSTASH.app` and confirm renderer + GPU helper processes spawn.
+   Expect `Chromium Embedded Framework.framework` plus five `bagz-app-tauri Helper*.app` bundles. If `Frameworks/` is missing, see **Troubleshooting: missing CEF framework in bundle** below.
+7. Launch via `open -na target/release/bundle/macos/bagZ.app` and confirm renderer + GPU helper processes spawn.
 
 ### Known breakages when bumping Tauri
 
-- **Both `wry` and `cef` features enabled → `error[E0252]: webview_version` defined multiple times.** `tauri/src/lib.rs` re-exports `webview_version` from both runtimes. Fix: in `apps/zstash-app-tauri/src-tauri/Cargo.toml` keep `tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }`. Do not add `wry` back.
-- **`AppHandle` has no default `Runtime` when `wry` is off.** `#[default_runtime(crate::Wry, wry)]` only supplies the default when the `wry` feature is enabled. Every function that holds a Tauri handle needs an explicit runtime generic, e.g. `pub fn f<R: Runtime>(app: &AppHandle<R>)`. Same rule applies to `WebviewWindow<R>`, `Window<R>`, `Manager<R>`. Currently only `apps/zstash-app-tauri/src-tauri/src/windows.rs` is affected, but any new handle-taking function will have to follow suit.
+- **Both `wry` and `cef` features enabled → `error[E0252]: webview_version` defined multiple times.** `tauri/src/lib.rs` re-exports `webview_version` from both runtimes. Fix: in `apps/bagz-app-tauri/src-tauri/Cargo.toml` keep `tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }`. Do not add `wry` back.
+- **`AppHandle` has no default `Runtime` when `wry` is off.** `#[default_runtime(crate::Wry, wry)]` only supplies the default when the `wry` feature is enabled. Every function that holds a Tauri handle needs an explicit runtime generic, e.g. `pub fn f<R: Runtime>(app: &AppHandle<R>)`. Same rule applies to `WebviewWindow<R>`, `Window<R>`, `Manager<R>`. Currently only `apps/bagz-app-tauri/src-tauri/src/windows.rs` is affected, but any new handle-taking function will have to follow suit.
 
 ## Common troubleshooting
 
@@ -189,13 +189,13 @@ The exporter reads `CEF_PATH/<version>/archive.json`, sees the version matches, 
 Verify after rebuild:
 
 ```bash
-ls target/release/bundle/macos/zSTASH.app/Contents/Frameworks/
+ls target/release/bundle/macos/bagZ.app/Contents/Frameworks/
 # Chromium Embedded Framework.framework
-# zstash-app-tauri Helper.app
-# zstash-app-tauri Helper (GPU).app
-# zstash-app-tauri Helper (Renderer).app
-# zstash-app-tauri Helper (Plugin).app
-# zstash-app-tauri Helper (Alerts).app
+# bagz-app-tauri Helper.app
+# bagz-app-tauri Helper (GPU).app
+# bagz-app-tauri Helper (Renderer).app
+# bagz-app-tauri Helper (Plugin).app
+# bagz-app-tauri Helper (Alerts).app
 ```
 
 A passing `make tauri-build` is not proof the framework shipped. Always check `Frameworks/` before claiming a build succeeded.
@@ -207,7 +207,7 @@ Default behavior is configured to avoid per-launch keychain prompts using mock k
 If you intentionally want system keychain integration, launch with:
 
 ```bash
-ZSTASH_USE_SYSTEM_KEYCHAIN=1
+BAGZ_USE_SYSTEM_KEYCHAIN=1
 ```
 
 ### Chromium “Save password?” popup
@@ -219,7 +219,7 @@ The fix is policy + frontend hardening:
 
 If this regresses, check:
 
-- `~/Library/Caches/app.zstash.desktop/cef/Default/Preferences`
+- `~/Library/Caches/app.bagz.desktop/cef/Default/Preferences`
 - recent changes in the files listed in **CEF hardening policy**
 
 ## Related docs

@@ -1,9 +1,9 @@
-# Makefile for zSTASH Desktop
+# Makefile for bagZ Desktop
 # Tauri v2 + Rust workspace
 
 .DEFAULT_GOAL := help
 
-TAURI_DIR := apps/zstash-app-tauri
+TAURI_DIR := apps/bagz-app-tauri
 UNAME_S := $(shell uname -s)
 TAURI_FEATURES ?= cef-runtime
 TAURI_BUNDLES ?=
@@ -37,10 +37,10 @@ install: ## Install frontend dependencies
 # ============================================================================
 
 build: ## Build Rust library crates
-	@cargo build --workspace --exclude zstash-app-tauri
+	@cargo build --workspace --exclude bagz-app-tauri
 
 build-release: ## Production release build (libs)
-	@cargo build --release --locked --workspace --exclude zstash-app-tauri
+	@cargo build --release --locked --workspace --exclude bagz-app-tauri
 
 build-frontend: ## Build frontend dist (for Tauri)
 	@cd $(TAURI_DIR) && bun run build
@@ -50,28 +50,28 @@ build-frontend: ## Build frontend dist (for Tauri)
 # ============================================================================
 
 test: ## Run all Rust library tests
-	# `zstash-core` includes async-gated tests (`--features async`). Running it separately keeps the
+	# `bagz-core` includes async-gated tests (`--features async`). Running it separately keeps the
 	# rest of the workspace tests feature-default while still exercising the async code path.
-	@cargo test --workspace --exclude zstash-app-tauri --exclude zstash-core
-	@cargo test -p zstash-core --features async
+	@cargo test --workspace --exclude bagz-app-tauri --exclude bagz-core
+	@cargo test -p bagz-core --features async
 
-test-engine: ## Test zstash-engine crate
-	@cargo test -p zstash-engine
+test-engine: ## Test bagz-engine crate
+	@cargo test -p bagz-engine
 
-test-core: ## Test zstash-core crate
-	@cargo test -p zstash-core --features async
+test-core: ## Test bagz-core crate
+	@cargo test -p bagz-core --features async
 
-test-network: ## Test zstash-network crate
-	@cargo test -p zstash-network
+test-network: ## Test bagz-network crate
+	@cargo test -p bagz-network
 
-test-keystone: ## Test zstash-keystone crate
-	@cargo test -p zstash-keystone
+test-keystone: ## Test bagz-keystone crate
+	@cargo test -p bagz-keystone
 
-test-tor: ## Test zstash-tor crate
-	@cargo test -p zstash-tor
+test-tor: ## Test bagz-tor crate
+	@cargo test -p bagz-tor
 
 test-migrations: ## Run migration tests
-	@cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+	@cargo test -p bagz-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
 # ============================================================================
 # E2E Testing
@@ -81,10 +81,10 @@ test-e2e: install ## Run Playwright E2E tests (starts test bridge automatically)
 	@./scripts/e2e-test.sh
 
 test-bridge-build: ## Build the test bridge server
-	@cargo build -p zstash-app-tauri --features test-bridge
+	@cargo build -p bagz-app-tauri --features test-bridge
 
 test-bridge: test-bridge-build ## Run the test bridge server
-	@cargo run -p zstash-app-tauri --features test-bridge
+	@cargo run -p bagz-app-tauri --features test-bridge
 
 # ============================================================================
 # Lint/Format (Rust)
@@ -97,10 +97,10 @@ fmt-check: ## Check Rust formatting (CI)
 	@cargo fmt --all -- --check
 
 clippy: ## Run clippy lints
-	@cargo clippy --workspace --all-targets --exclude zstash-app-tauri
+	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri
 
 clippy-strict: ## Clippy with warnings as errors
-	@cargo clippy --workspace --all-targets --exclude zstash-app-tauri -- -D warnings
+	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri -- -D warnings
 
 lint: fmt-check clippy ## Run all lints
 
@@ -152,14 +152,14 @@ tauri-build-slim-aggressive: ## Tauri production build using staged AGGRESSIVE s
 # CLI
 # ============================================================================
 
-CLI_RELEASE := ./target/release/zstash
-CLI_DEBUG := ./target/debug/zstash
+CLI_RELEASE := ./target/release/bagz
+CLI_DEBUG := ./target/debug/bagz
 
-cli: ## Build zstash-cli binary (release)
-	@cargo build --release -p zstash-cli
+cli: ## Build bagz-cli binary (release)
+	@cargo build --release -p bagz-cli
 
-cli-dev: ## Build zstash-cli binary (debug)
-	@cargo build -p zstash-cli
+cli-dev: ## Build bagz-cli binary (debug)
+	@cargo build -p bagz-cli
 
 cli-run: cli ## Run CLI with ARGS (e.g., make cli-run ARGS="wallet list")
 	@$(CLI_RELEASE) $(ARGS)
@@ -209,6 +209,6 @@ clean-all: clean clean-frontend ## Clean everything
 # ============================================================================
 
 help: ## Show available make targets
-	@echo "zSTASH Desktop - Makefile targets"
+	@echo "bagZ Desktop - Makefile targets"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'

@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 
-use zstash_core::domain::{TorState, TorStatus};
+use bagz_core::domain::{TorState, TorStatus};
 
 pub fn get_tor_state(conn: &Connection) -> rusqlite::Result<TorState> {
     let mut stmt =

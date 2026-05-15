@@ -15,13 +15,13 @@ We want to isolate the root cause, build a minimal standalone reproduction, and 
 ## Goals
 
 1. Determine which of the two 0.13 changes (aws-lc-rs vs platform-verifier) is the cause in a CEF host.
-2. Produce a minimal Tauri+CEF reproduction project (outside zSTASH's workspace) that an upstream maintainer can clone and run.
+2. Produce a minimal Tauri+CEF reproduction project (outside bagZ's workspace) that an upstream maintainer can clone and run.
 3. Comment on `tauri-apps/tauri#13878` (near-dup, macOS reqwest hang in production builds) with our isolation data + repro link.
 4. File a focused issue on the correct downstream repo (`aws/aws-lc-rs`, `rustls/rustls-platform-verifier`, or `seanmonstar/reqwest`) based on isolation result.
 
 ## Non-goals
 
-- Changing zSTASH's shipped reqwest version. Branch `cef` stays on `0.12` regardless of what we find.
+- Changing bagZ's shipped reqwest version. Branch `cef` stays on `0.12` regardless of what we find.
 - Fixing CEF itself or patching BoringSSL.
 - Opening a PR upfront. We only open a PR if a maintainer explicitly asks, and only as a doc-only change (see Phase D).
 - A full Tauri+CEF example app with frontend framework; repro is plain HTML.
@@ -50,10 +50,10 @@ A1. **Variant "ring + platform-verifier"** (run first unless A0 already answered
      rustls = { version = "0.23", features = ["ring"] }
      rustls-platform-verifier = "0.3"
      ```
-   - Add `rustls::crypto::ring::default_provider().install_default().ok();` at the top of `HttpClient::new_with_transport` in `crates/zstash-network/src/http_client.rs`.
+   - Add `rustls::crypto::ring::default_provider().install_default().ok();` at the top of `HttpClient::new_with_transport` in `crates/bagz-network/src/http_client.rs`.
    - `make tauri-build`, launch, click Settings > Network test, observe within 5s.
    - **Result interpretation:** pass → aws-lc-rs is the culprit. Proceed to Phase B with this variant as the baseline for the "fixed" side. Fail → crypto provider is not the issue; platform-verifier is suspect; proceed to A2.
-   - **Rollback:** `git checkout -- Cargo.toml crates/zstash-network/src/http_client.rs` after test.
+   - **Rollback:** `git checkout -- Cargo.toml crates/bagz-network/src/http_client.rs` after test.
 
 A2. **Variant "aws-lc-rs + webpki-roots"** (only if A1 did not conclude).
    - `reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json"] }`
@@ -68,9 +68,9 @@ A2. **Variant "aws-lc-rs + webpki-roots"** (only if A1 did not conclude).
 
 ### Phase B: Minimal standalone repro (after A)
 
-B1. Create `/tmp/tauri-cef-tls-repro/` via `cargo new`. Standalone crate, NOT inside zSTASH's workspace.
+B1. Create `/tmp/tauri-cef-tls-repro/` via `cargo new`. Standalone crate, NOT inside bagZ's workspace.
 
-B2. Dependencies: `tauri = { git = "...", rev = "562bc592...", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl", "cef"] }`, and the reqwest variant that reproduces. No React. No zstash crates. Plain HTML UI.
+B2. Dependencies: `tauri = { git = "...", rev = "562bc592...", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl", "cef"] }`, and the reqwest variant that reproduces. No React. No bagz crates. Plain HTML UI.
 
 B3. Single Tauri command:
    ```rust
@@ -87,7 +87,7 @@ B4. `index.html` with one button that invokes `fetch` and prints the result. Tar
 
 B5. `cargo tauri build`, launch, click button, confirm hang. If it does not repro minimally, add pieces back one at a time (tauri plugins, second async runtime, etc.) until it does. Each narrowing step is evidence.
 
-B6. Persist the project as a tarball in the zSTASH plans/ directory for attachment. Only push to a public GitHub repo if the upstream issue asks for one.
+B6. Persist the project as a tarball in the bagZ plans/ directory for attachment. Only push to a public GitHub repo if the upstream issue asks for one.
 
 ### Phase C: File upstream
 
@@ -112,7 +112,7 @@ D3. Do not touch `seanmonstar/reqwest#2423`'s default-provider debate. Behavior-
 ## Critical files
 
 - `/Users/bioharz/git/zcash/bagz/bagz-cef-git/Cargo.toml` (line 63, reqwest feature toggle for A1/A2)
-- `/Users/bioharz/git/zcash/bagz/bagz-cef-git/crates/zstash-network/src/http_client.rs` (HttpClient init, add `install_default()` call)
+- `/Users/bioharz/git/zcash/bagz/bagz-cef-git/crates/bagz-network/src/http_client.rs` (HttpClient init, add `install_default()` call)
 - `/Users/bioharz/git/zcash/bagz/bagz-cef-git/Cargo.lock` (inspect after each variant, revert via checkout)
 - (new, throwaway) `/tmp/tauri-cef-tls-repro/` (minimal standalone repro)
 - `/Users/bioharz/git/zcash/bagz/bagz-cef-git/plans/` (store repro tarball here if attached to issue)
@@ -128,8 +128,8 @@ D3. Do not touch `seanmonstar/reqwest#2423`'s default-provider debate. Behavior-
 Per isolation variant:
 1. `cargo audit` stays at 0 errors.
 2. `make tauri-build` exits 0.
-3. `target/release/bundle/macos/zSTASH.app/Contents/Frameworks/` contains `Chromium Embedded Framework.framework` + 5 helper apps.
-4. Launch via `open -na ...zSTASH.app` produces main + helper processes in `pgrep -fa zstash-app-tauri`.
+3. `target/release/bundle/macos/bagZ.app/Contents/Frameworks/` contains `Chromium Embedded Framework.framework` + 5 helper apps.
+4. Launch via `open -na ...bagZ.app` produces main + helper processes in `pgrep -fa bagz-app-tauri`.
 5. Settings > Network test returns HTTP 200 within 5 seconds. Hang > 30s = FAIL.
 
 Per repro project:
@@ -139,4 +139,4 @@ Per repro project:
 
 ## Rollback
 
-All isolation changes are confined to `Cargo.toml` + `crates/zstash-network/src/http_client.rs`. After each variant (pass or fail), `git checkout -- Cargo.toml Cargo.lock crates/zstash-network/src/http_client.rs` restores the known-good commit `8c2813d` state. Branch `cef`'s final state after this plan is unchanged: reqwest 0.12 + rustls-tls, full security-patched Cargo.lock. The minimal repro lives outside the workspace; nothing in the zSTASH tree depends on it.
+All isolation changes are confined to `Cargo.toml` + `crates/bagz-network/src/http_client.rs`. After each variant (pass or fail), `git checkout -- Cargo.toml Cargo.lock crates/bagz-network/src/http_client.rs` restores the known-good commit `8c2813d` state. Branch `cef`'s final state after this plan is unchanged: reqwest 0.12 + rustls-tls, full security-patched Cargo.lock. The minimal repro lives outside the workspace; nothing in the bagZ tree depends on it.

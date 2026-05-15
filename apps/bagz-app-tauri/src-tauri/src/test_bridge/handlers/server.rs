@@ -1,10 +1,10 @@
 //! Server management command handlers.
 
-use zstash_core::ipc::v1::commands::server::{
+use bagz_core::ipc::v1::commands::server::{
     AddServerRequest, AddServerResponse, ListServersRequest, ListServersResponse,
     SetDefaultServerRequest, SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::server_logic;
 use crate::state::AppState;
@@ -14,7 +14,7 @@ pub fn add_server_impl(
     state: &AppState,
     request: AddServerRequest,
 ) -> IpcResult<AddServerResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -33,7 +33,7 @@ pub fn set_default_server_impl(
     state: &AppState,
     request: SetDefaultServerRequest,
 ) -> IpcResult<SetDefaultServerResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -46,7 +46,7 @@ pub fn list_servers_impl(
     state: &AppState,
     request: ListServersRequest,
 ) -> IpcResult<ListServersResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -59,7 +59,7 @@ pub fn test_server_impl(
     state: &AppState,
     request: TestServerRequest,
 ) -> IpcResult<TestServerResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

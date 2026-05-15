@@ -4,8 +4,8 @@ use uuid::Uuid;
 use zcash_protocol::consensus::Parameters as _;
 use zip32::DiversifierIndex;
 
-use zstash_core::domain::{AccountType, AddressInfo, AddressType, Network};
-use zstash_core::errors;
+use bagz_core::domain::{AccountType, AddressInfo, AddressType, Network};
+use bagz_core::errors;
 
 use crate::db::{account_meta, rotation_meta};
 use crate::error::ipc_err;
@@ -182,7 +182,7 @@ pub(crate) fn find_account_uuid(
             continue;
         };
 
-        // Check key_source first (software wallets, zSTASH-tagged imports including HardwareSigner)
+        // Check key_source first (software wallets, bagZ-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)

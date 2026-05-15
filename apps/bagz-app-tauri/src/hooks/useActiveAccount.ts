@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type * as IPC from '../types/ipc';
 
-const storageKey = (walletId: string) => `zstash.activeAccount.${walletId}`;
+const storageKey = (walletId: string) => `bagz.activeAccount.${walletId}`;
 
 export function useActiveAccount(
   walletId: string | null,

@@ -2,7 +2,7 @@ use std::io::{Read as _, Write as _};
 use std::net::TcpListener;
 use std::thread;
 
-use zstash_network::near_intents::NearIntentsClient;
+use bagz_network::near_intents::NearIntentsClient;
 
 fn spawn_mock_1click_tokens_server() -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock server");

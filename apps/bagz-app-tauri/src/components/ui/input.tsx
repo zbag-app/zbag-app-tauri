@@ -10,7 +10,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, ...props }, ref) => {
     const isPassword = type === "password";
     const autoComplete = props.autoComplete ?? (isPassword ? "new-password" : "off");
-    const name = props.name ?? (isPassword ? "zstash-secret" : undefined);
+    const name = props.name ?? (isPassword ? "bagz-secret" : undefined);
     const dataLpIgnore = props["data-lpignore"] ?? (isPassword ? "true" : undefined);
     const dataOnePasswordIgnore = props["data-1p-ignore"] ?? (isPassword ? "true" : undefined);
     return (

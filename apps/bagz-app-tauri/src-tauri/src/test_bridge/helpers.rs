@@ -6,14 +6,14 @@ use std::time::Duration;
 
 use tracing::error;
 
-use zstash_core::errors;
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::errors;
+use bagz_core::ipc::v1::common::IpcResult;
 
 /// Default timeout for server probe to avoid UI blocking when offline.
 const DEFAULT_SERVER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub fn server_probe_timeout() -> Duration {
-    let raw = match std::env::var("ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS") {
+    let raw = match std::env::var("BAGZ_TEST_BRIDGE_PROBE_TIMEOUT_MS") {
         Ok(value) => value,
         Err(_) => return DEFAULT_SERVER_PROBE_TIMEOUT,
     };
@@ -23,7 +23,7 @@ pub fn server_probe_timeout() -> Duration {
         _ => {
             error!(
                 value = raw.as_str(),
-                "invalid ZSTASH_TEST_BRIDGE_PROBE_TIMEOUT_MS; using default"
+                "invalid BAGZ_TEST_BRIDGE_PROBE_TIMEOUT_MS; using default"
             );
             DEFAULT_SERVER_PROBE_TIMEOUT
         }
@@ -46,16 +46,16 @@ where
     }
 }
 
-pub fn to_ipc_error(err: anyhow::Error) -> zstash_core::ipc::v1::common::IpcError {
-    if let Some(engine) = zstash_engine::error::find_engine_ipc_error(&err) {
-        return zstash_core::ipc::v1::common::IpcError {
+pub fn to_ipc_error(err: anyhow::Error) -> bagz_core::ipc::v1::common::IpcError {
+    if let Some(engine) = bagz_engine::error::find_engine_ipc_error(&err) {
+        return bagz_core::ipc::v1::common::IpcError {
             code: engine.code.to_string(),
             message: engine.message.clone(),
             details: engine.details.clone(),
         };
     }
 
-    zstash_core::ipc::v1::common::IpcError {
+    bagz_core::ipc::v1::common::IpcError {
         code: errors::INTERNAL_ERROR.to_string(),
         message: format!("{:#}", err),
         details: None,

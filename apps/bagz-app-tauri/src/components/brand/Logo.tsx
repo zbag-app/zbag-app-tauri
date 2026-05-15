@@ -1,4 +1,4 @@
-import logoSvg from '../../assets/zSTASH_Logo.svg';
+import logoSvg from '../../assets/bagZ_Logo.svg';
 
 interface LogoProps {
   size?: number;
@@ -6,14 +6,14 @@ interface LogoProps {
 }
 
 /**
- * zSTASH brand logo component.
- * Uses the official SVG from zstash-ux brand assets.
+ * bagZ brand logo component.
+ * Uses the official SVG from bagz-ux brand assets.
  */
 export function Logo({ size = 40, className = '' }: LogoProps) {
   return (
     <img
       src={logoSvg}
-      alt="zSTASH"
+      alt="bagZ"
       width={size}
       height={size}
       className={className}

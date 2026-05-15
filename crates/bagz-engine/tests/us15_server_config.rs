@@ -3,11 +3,11 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, ServerInfo};
-use zstash_core::errors;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, ServerInfo};
+use bagz_core::errors;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -77,7 +77,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -96,7 +96,7 @@ fn set_default_server_is_scoped_to_server_network() {
     .expect("create wallet manager");
 
     let before =
-        zstash_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
+        bagz_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_before = before
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)
@@ -113,14 +113,14 @@ fn set_default_server_is_scoped_to_server_network() {
         last_success_at: None,
         validation_error: None,
     };
-    zstash_engine::db::server_meta::insert_server(mgr.app_db().conn(), &new_testnet, now_ms)
+    bagz_engine::db::server_meta::insert_server(mgr.app_db().conn(), &new_testnet, now_ms)
         .expect("insert server");
 
-    zstash_engine::db::server_meta::set_default_server(mgr.app_db_mut().conn_mut(), new_testnet.id)
+    bagz_engine::db::server_meta::set_default_server(mgr.app_db_mut().conn_mut(), new_testnet.id)
         .expect("set default");
 
     let after =
-        zstash_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
+        bagz_engine::db::server_meta::list_servers(mgr.app_db().conn()).expect("list servers");
     let mainnet_default_after = after
         .iter()
         .find(|s| s.network == Network::Mainnet && s.is_default)

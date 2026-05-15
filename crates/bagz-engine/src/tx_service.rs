@@ -15,19 +15,19 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use zstash_core::domain::{
+use bagz_core::domain::{
     MemoInfo, MemoKind, Network, RecipientKind, TransactionInfo, TransactionStatus, TransactionType,
 };
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::keystone::{
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse, SigningRequest, SigningSummary,
 };
-use zstash_core::ipc::v1::commands::transaction::{
+use bagz_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
     TransactionSummary,
 };
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::{ServerFailoverEvent, TransactionChangedEvent};
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::{ServerFailoverEvent, TransactionChangedEvent};
 
 use crate::broadcast::{
     BroadcastErrorClass, classify_broadcast_error_message, is_effective_success_broadcast_error,
@@ -39,7 +39,7 @@ use crate::encryption::Dek;
 use crate::error::{find_engine_ipc_error, ipc_err};
 use crate::reauth::Clock;
 use crate::tokio_runtime::block_on;
-use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
+use bagz_core::permissions::{create_dir_all_secure, write_file_secure};
 
 const PROPOSAL_TTL: Duration = Duration::from_secs(10 * 60);
 const QUEUED_BROADCAST_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -56,7 +56,7 @@ pub struct TxService<C: Clock> {
     /// Pending signing requests: maps signing_request_id to full PCZT with proofs (base64).
     /// Used in the two-PCZT flow for hardware signing.
     pending_signing_requests: HashMap<String, PendingSigningRequest>,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 /// A pending hardware signing request containing the full PCZT with proofs.
@@ -287,11 +287,11 @@ impl<C: Clock> TxService<C> {
         }
     }
 
-    pub fn set_tor_manager(&mut self, tor_manager: Arc<zstash_tor::TorManager>) {
+    pub fn set_tor_manager(&mut self, tor_manager: Arc<bagz_tor::TorManager>) {
         self.tor_manager = Some(tor_manager);
     }
 
-    pub fn tor_manager(&self) -> Option<Arc<zstash_tor::TorManager>> {
+    pub fn tor_manager(&self) -> Option<Arc<bagz_tor::TorManager>> {
         self.tor_manager.as_ref().map(Arc::clone)
     }
 
@@ -884,8 +884,8 @@ impl<C: Clock> TxService<C> {
             let pczt_with_proofs = pczt_prover.finish();
 
             // Store full PCZT with proofs, return redacted version for signer
-            let pczt_full = zstash_keystone::pczt::encode_pczt_full(&pczt_with_proofs);
-            let pczt_for_signer = zstash_keystone::pczt::encode_pczt_for_signer(&pczt_with_proofs);
+            let pczt_full = bagz_keystone::pczt::encode_pczt_full(&pczt_with_proofs);
+            let pczt_for_signer = bagz_keystone::pczt::encode_pczt_for_signer(&pczt_with_proofs);
 
             Ok::<_, anyhow::Error>((proposal, pczt_full, pczt_for_signer))
         }?;
@@ -982,7 +982,7 @@ impl<C: Clock> TxService<C> {
 
         // Decode both PCZTs
         debug!("Decoding stored PCZT with proofs");
-        let pczt_with_proofs = zstash_keystone::pczt::decode_pczt_full(
+        let pczt_with_proofs = bagz_keystone::pczt::decode_pczt_full(
             &pending_request.pczt_with_proofs,
         )
         .map_err(|e| {
@@ -992,14 +992,14 @@ impl<C: Clock> TxService<C> {
 
         debug!("Decoding signed PCZT from hardware wallet");
         let pczt_with_sigs =
-            zstash_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
+            bagz_keystone::pczt::decode_pczt_base64(signed_payload).map_err(|e| {
                 error!("Failed to decode signed payload: {}", e);
                 ipc_err(errors::INVALID_PCZT, format!("invalid signed payload: {e}"))
             })?;
 
         // Combine the two PCZTs (proofs + signatures)
         debug!("Combining proved and signed PCZTs");
-        let pczt = zstash_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(
+        let pczt = bagz_keystone::pczt::combine_pczts(pczt_with_proofs, pczt_with_sigs).map_err(
             |e| {
                 error!("Failed to combine PCZTs: {}", e);
                 ipc_err(
@@ -2615,7 +2615,7 @@ fn resolve_wallet_account_uuid(
         else {
             continue;
         };
-        // Check key_source first (software wallets, zSTASH-tagged imports including HardwareSigner)
+        // Check key_source first (software wallets, bagZ-tagged imports including HardwareSigner)
         if let Some(key_source) = account.source().key_source()
             && crate::account_key_source::parse_account_id_from_key_source(key_source)
                 == Some(account_id)
@@ -2809,11 +2809,11 @@ impl<C: Clock> TxService<C> {
         }
 
         let client = match self.tor_manager.as_ref() {
-            Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
+            Some(tor) => bagz_network::grpc_client::GrpcClient::new_with_tor(
                 grpc_url.to_string(),
                 Arc::clone(tor),
             ),
-            None => zstash_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
+            None => bagz_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
         };
 
         let tx_bytes = tx_bytes.to_vec();
@@ -2968,11 +2968,11 @@ impl<C: Clock> TxService<C> {
 
     fn probe_server_for_failover(&self, grpc_url: &str) -> bool {
         let client = match self.tor_manager.as_ref() {
-            Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
+            Some(tor) => bagz_network::grpc_client::GrpcClient::new_with_tor(
                 grpc_url.to_string(),
                 Arc::clone(tor),
             ),
-            None => zstash_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
+            None => bagz_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
         };
 
         let probe = block_on(async {
@@ -3199,16 +3199,16 @@ mod tests {
     }
 
     fn temp_root(prefix: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp root");
         root
     }
 
     fn set_backup_not_required(app_db: &AppDb, wallet_id: Uuid) {
-        let wallet = zstash_core::domain::WalletInfo {
+        let wallet = bagz_core::domain::WalletInfo {
             id: wallet_id,
             name: "Test Wallet".to_string(),
-            wallet_type: zstash_core::domain::WalletType::Software,
+            wallet_type: bagz_core::domain::WalletType::Software,
             network: Network::Testnet,
             remember_unlock_enabled: false,
             created_at: 0,
@@ -3663,7 +3663,7 @@ mod tests {
             proposal,
             summary: TransactionSummary {
                 recipient: "test".to_string(),
-                recipient_kind: zstash_core::domain::RecipientKind::Orchard,
+                recipient_kind: bagz_core::domain::RecipientKind::Orchard,
                 amount: "0".to_string(),
                 fee: "0".to_string(),
                 memo_present: false,
@@ -3865,10 +3865,10 @@ mod tests {
         crate::db::account_meta::upsert_account(
             app_db.conn(),
             wallet_id,
-            &zstash_core::domain::AccountInfo {
+            &bagz_core::domain::AccountInfo {
                 id: 0,
                 name: "Main".to_string(),
-                account_type: zstash_core::domain::AccountType::Software,
+                account_type: bagz_core::domain::AccountType::Software,
             },
             0,
         )
@@ -4016,7 +4016,7 @@ mod tests {
 
         let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
         assert_eq!(memos.len(), 1);
-        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
+        assert_eq!(memos[0].kind, bagz_core::domain::MemoKind::Text);
         assert_eq!(memos[0].content.as_deref(), Some("Hello, Zcash!"));
         // Size is the raw memo bytes length (without null padding per MemoBytes::as_slice)
         assert_eq!(memos[0].size_bytes, 13);
@@ -4042,7 +4042,7 @@ mod tests {
 
         let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
         assert_eq!(memos.len(), 1);
-        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Empty);
+        assert_eq!(memos[0].kind, bagz_core::domain::MemoKind::Empty);
         assert!(memos[0].content.is_none());
         assert_eq!(memos[0].size_bytes, 0);
     }
@@ -4067,7 +4067,7 @@ mod tests {
 
         let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
         assert_eq!(memos.len(), 1);
-        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Binary);
+        assert_eq!(memos[0].kind, bagz_core::domain::MemoKind::Binary);
         assert!(memos[0].content.as_ref().unwrap().contains("binary"));
         assert_eq!(memos[0].size_bytes, 512);
     }
@@ -4099,7 +4099,7 @@ mod tests {
         let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
         // UNION deduplicates identical memos
         assert_eq!(memos.len(), 1, "identical memos should be deduplicated");
-        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
+        assert_eq!(memos[0].kind, bagz_core::domain::MemoKind::Text);
     }
 
     #[test]
@@ -4154,6 +4154,6 @@ mod tests {
 
         let memos = super::fetch_transaction_memos(&conn, &txid).expect("fetch memos");
         assert_eq!(memos.len(), 1, "NULL memos should be skipped");
-        assert_eq!(memos[0].kind, zstash_core::domain::MemoKind::Text);
+        assert_eq!(memos[0].kind, bagz_core::domain::MemoKind::Text);
     }
 }

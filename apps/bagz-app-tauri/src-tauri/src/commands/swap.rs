@@ -2,23 +2,23 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zstash_core::domain::{SupportedToken, SwapIntent};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::swap::{
+use bagz_core::domain::{SupportedToken, SwapIntent};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::swap::{
     GetSupportedTokensRequest, GetSupportedTokensResponse, GetSwapStatusRequest,
     GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse, RefreshSwapStatusRequest,
     RefreshSwapStatusResponse, RequestSwapQuoteRequest, RequestSwapQuoteResponse,
     ResumePendingSwapsRequest, ResumePendingSwapsResponse, StartSwapRequest, StartSwapResponse,
 };
-use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zstash_request_swap_quote")]
-pub async fn zstash_request_swap_quote(
+#[tauri::command(rename = "bagz_request_swap_quote")]
+pub async fn bagz_request_swap_quote(
     state: State<'_, AppState>,
     request: RequestSwapQuoteRequest,
 ) -> Result<IpcResult<RequestSwapQuoteResponse>, ()> {
@@ -46,7 +46,7 @@ pub async fn zstash_request_swap_quote(
             let wallet = {
                 let mgr = wallet_manager.lock().expect("mutex poisoned");
                 mgr.active_wallet_info().ok_or_else(|| {
-                    zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                    bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
                 })?
             };
 
@@ -77,8 +77,8 @@ pub async fn zstash_request_swap_quote(
     }
 }
 
-#[tauri::command(rename = "zstash_start_swap")]
-pub fn zstash_start_swap(
+#[tauri::command(rename = "bagz_start_swap")]
+pub fn bagz_start_swap(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartSwapRequest,
@@ -95,7 +95,7 @@ pub fn zstash_start_swap(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -110,8 +110,8 @@ pub fn zstash_start_swap(
     })
 }
 
-#[tauri::command(rename = "zstash_get_swap_status")]
-pub fn zstash_get_swap_status(
+#[tauri::command(rename = "bagz_get_swap_status")]
+pub fn bagz_get_swap_status(
     state: State<'_, AppState>,
     request: GetSwapStatusRequest,
 ) -> IpcResult<GetSwapStatusResponse> {
@@ -123,7 +123,7 @@ pub fn zstash_get_swap_status(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -133,8 +133,8 @@ pub fn zstash_get_swap_status(
     })
 }
 
-#[tauri::command(rename = "zstash_list_swaps")]
-pub fn zstash_list_swaps(
+#[tauri::command(rename = "bagz_list_swaps")]
+pub fn bagz_list_swaps(
     state: State<'_, AppState>,
     request: ListSwapsRequest,
 ) -> IpcResult<ListSwapsResponse> {
@@ -146,7 +146,7 @@ pub fn zstash_list_swaps(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 
@@ -154,8 +154,8 @@ pub fn zstash_list_swaps(
     })
 }
 
-#[tauri::command(rename = "zstash_get_supported_tokens")]
-pub async fn zstash_get_supported_tokens(
+#[tauri::command(rename = "bagz_get_supported_tokens")]
+pub async fn bagz_get_supported_tokens(
     state: State<'_, AppState>,
     request: GetSupportedTokensRequest,
 ) -> Result<IpcResult<GetSupportedTokensResponse>, ()> {
@@ -180,7 +180,7 @@ pub async fn zstash_get_supported_tokens(
             })
         }
         Err(e) => Ok(IpcResult::Err {
-            err: zstash_core::ipc::v1::common::IpcError {
+            err: bagz_core::ipc::v1::common::IpcError {
                 code: errors::INTERNAL_ERROR.to_string(),
                 message: e.to_string(),
                 details: None,
@@ -189,8 +189,8 @@ pub async fn zstash_get_supported_tokens(
     }
 }
 
-#[tauri::command(rename = "zstash_refresh_swap_status")]
-pub async fn zstash_refresh_swap_status(
+#[tauri::command(rename = "bagz_refresh_swap_status")]
+pub async fn bagz_refresh_swap_status(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: RefreshSwapStatusRequest,
@@ -211,7 +211,7 @@ pub async fn zstash_refresh_swap_status(
             let wallet = {
                 let mgr = wallet_manager.lock().expect("mutex poisoned");
                 mgr.active_wallet_info().ok_or_else(|| {
-                    zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                    bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
                 })?
             };
 
@@ -231,8 +231,8 @@ pub async fn zstash_refresh_swap_status(
     }
 }
 
-#[tauri::command(rename = "zstash_resume_pending_swaps")]
-pub fn zstash_resume_pending_swaps(
+#[tauri::command(rename = "bagz_resume_pending_swaps")]
+pub fn bagz_resume_pending_swaps(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ResumePendingSwapsRequest,
@@ -249,7 +249,7 @@ pub fn zstash_resume_pending_swaps(
         let wallet = {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
             mgr.active_wallet_info().ok_or_else(|| {
-                zstash_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                bagz_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
             })?
         };
 

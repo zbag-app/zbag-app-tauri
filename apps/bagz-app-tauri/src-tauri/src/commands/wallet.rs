@@ -4,15 +4,15 @@ use anyhow::Context as _;
 use tauri::State;
 use tracing::warn;
 
-use zstash_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
-use zstash_core::ipc::v1::commands::wallet::{
+use bagz_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
+use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
     LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
     ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse,
     ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 use crate::wallet_logic;
@@ -26,8 +26,8 @@ use super::util::map_anyhow;
 /// falling back to a safe default scan start (Sapling activation).
 const BIRTHDAY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-#[tauri::command(rename = "zstash_create_wallet")]
-pub fn zstash_create_wallet(
+#[tauri::command(rename = "bagz_create_wallet")]
+pub fn bagz_create_wallet(
     state: State<'_, AppState>,
     request: CreateWalletRequest,
 ) -> IpcResult<CreateWalletResponse> {
@@ -39,7 +39,7 @@ pub fn zstash_create_wallet(
     let (grpc_url, tor_manager) = {
         let mgr = state.wallet_manager.lock().expect("mutex poisoned");
         let grpc_url =
-            zstash_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
+            bagz_engine::server_resolver::resolve_grpc_url(mgr.app_db(), request.network);
         (grpc_url, Some(state.tor_manager.clone()))
     };
 
@@ -47,7 +47,7 @@ pub fn zstash_create_wallet(
     // This avoids scanning the entire blockchain for a brand new wallet
     let birthday_height = match grpc_url {
         Ok(url) => tauri::async_runtime::block_on(async {
-            let fetch_future = zstash_engine::wallet_manager::fetch_birthday_height_for_new_wallet(
+            let fetch_future = bagz_engine::wallet_manager::fetch_birthday_height_for_new_wallet(
                 &url,
                 tor_manager,
             );
@@ -86,8 +86,8 @@ pub fn zstash_create_wallet(
     })
 }
 
-#[tauri::command(rename = "zstash_list_wallets")]
-pub fn zstash_list_wallets(
+#[tauri::command(rename = "bagz_list_wallets")]
+pub fn bagz_list_wallets(
     state: State<'_, AppState>,
     request: ListWalletsRequest,
 ) -> IpcResult<ListWalletsResponse> {
@@ -98,8 +98,8 @@ pub fn zstash_list_wallets(
     map_anyhow(|| wallet_logic::list_wallets(state.inner()))
 }
 
-#[tauri::command(rename = "zstash_load_wallet")]
-pub fn zstash_load_wallet(
+#[tauri::command(rename = "bagz_load_wallet")]
+pub fn bagz_load_wallet(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: LoadWalletRequest,
@@ -152,8 +152,8 @@ pub fn zstash_load_wallet(
     })
 }
 
-#[tauri::command(rename = "zstash_unlock_wallet")]
-pub fn zstash_unlock_wallet(
+#[tauri::command(rename = "bagz_unlock_wallet")]
+pub fn bagz_unlock_wallet(
     state: State<'_, AppState>,
     request: UnlockWalletRequest,
 ) -> IpcResult<UnlockWalletResponse> {
@@ -177,8 +177,8 @@ pub fn zstash_unlock_wallet(
     })
 }
 
-#[tauri::command(rename = "zstash_lock_wallet")]
-pub fn zstash_lock_wallet(
+#[tauri::command(rename = "bagz_lock_wallet")]
+pub fn bagz_lock_wallet(
     state: State<'_, AppState>,
     request: LockWalletRequest,
 ) -> IpcResult<LockWalletResponse> {
@@ -189,8 +189,8 @@ pub fn zstash_lock_wallet(
     map_anyhow(|| wallet_logic::lock_wallet(state.inner(), request.wallet_id))
 }
 
-#[tauri::command(rename = "zstash_reauth_wallet")]
-pub fn zstash_reauth_wallet(
+#[tauri::command(rename = "bagz_reauth_wallet")]
+pub fn bagz_reauth_wallet(
     state: State<'_, AppState>,
     request: ReauthWalletRequest,
 ) -> IpcResult<ReauthWalletResponse> {
@@ -201,8 +201,8 @@ pub fn zstash_reauth_wallet(
     map_anyhow(|| wallet_logic::reauth_wallet(state.inner(), request))
 }
 
-#[tauri::command(rename = "zstash_view_seed_phrase")]
-pub fn zstash_view_seed_phrase(
+#[tauri::command(rename = "bagz_view_seed_phrase")]
+pub fn bagz_view_seed_phrase(
     state: State<'_, AppState>,
     request: ViewSeedPhraseRequest,
 ) -> IpcResult<ViewSeedPhraseResponse> {
@@ -213,8 +213,8 @@ pub fn zstash_view_seed_phrase(
     map_anyhow(|| wallet_logic::view_seed_phrase(state.inner(), request))
 }
 
-#[tauri::command(rename = "zstash_get_wallet_status")]
-pub fn zstash_get_wallet_status(
+#[tauri::command(rename = "bagz_get_wallet_status")]
+pub fn bagz_get_wallet_status(
     state: State<'_, AppState>,
     request: GetWalletStatusRequest,
 ) -> IpcResult<GetWalletStatusResponse> {
@@ -225,8 +225,8 @@ pub fn zstash_get_wallet_status(
     map_anyhow(|| wallet_logic::get_wallet_status(state.inner(), request.wallet_id))
 }
 
-#[tauri::command(rename = "zstash_logout_wallet")]
-pub fn zstash_logout_wallet(
+#[tauri::command(rename = "bagz_logout_wallet")]
+pub fn bagz_logout_wallet(
     state: State<'_, AppState>,
     request: LogoutWalletRequest,
 ) -> IpcResult<LogoutWalletResponse> {
@@ -250,12 +250,12 @@ pub fn zstash_logout_wallet(
 }
 
 fn load_accounts_for_wallet(
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<Vec<AccountInfo>> {
     let wallet_db_accounts = mgr.list_wallet_db_account_ids(wallet_id)?;
     let meta_accounts =
-        zstash_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
+        bagz_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
             .map_err(|e| anyhow::anyhow!(e))
             .context("failed to load account metadata")?;
 
@@ -285,9 +285,9 @@ fn load_accounts_for_wallet(
 }
 
 fn build_load_wallet_response(
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
-    tx_service: &mut zstash_engine::tx_service::TxService<zstash_engine::reauth::SystemClock>,
+    tx_service: &mut bagz_engine::tx_service::TxService<bagz_engine::reauth::SystemClock>,
 ) -> anyhow::Result<LoadWalletResponse> {
     let (wallet, lock_status) = mgr.load_wallet(wallet_id, tx_service)?;
 
@@ -313,9 +313,9 @@ mod tests {
 
     use uuid::Uuid;
 
-    use zstash_core::domain::Network;
-    use zstash_engine::key_store::KeyStore;
-    use zstash_engine::wallet_manager::WalletManager;
+    use bagz_core::domain::Network;
+    use bagz_engine::key_store::KeyStore;
+    use bagz_engine::wallet_manager::WalletManager;
 
     use super::*;
 
@@ -418,15 +418,15 @@ mod tests {
     }
 
     fn temp_root(prefix: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp root");
         root
     }
 
     #[test]
     fn load_wallet_returns_empty_accounts_when_locked_then_accounts_after_unlock() {
-        use zstash_engine::reauth::SystemClock;
-        use zstash_engine::tx_service::TxService;
+        use bagz_engine::reauth::SystemClock;
+        use bagz_engine::tx_service::TxService;
 
         let root = temp_root("us1_load_wallet_accounts");
         let app_db_path = root.join("app.db");

@@ -9,10 +9,10 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::warn;
 
-use zstash_core::domain::{TorState, TorStatus};
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::TorStatusEvent;
-use zstash_core::permissions::create_dir_all_secure_async;
+use bagz_core::domain::{TorState, TorStatus};
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::TorStatusEvent;
+use bagz_core::permissions::create_dir_all_secure_async;
 
 type BootstrapFuture =
     Pin<Box<dyn Future<Output = Result<zcash_client_backend::tor::Client, String>> + Send>>;

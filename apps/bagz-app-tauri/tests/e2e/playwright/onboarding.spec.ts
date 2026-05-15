@@ -28,7 +28,7 @@ test.afterEach(async ({ request }) => {
     createdWalletId = null;
 
     try {
-      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_stop_sync`, {
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_stop_sync`, {
         data: { request: { schema_version: 1, wallet_id: walletIdToCleanup } },
       });
     } catch (e) {
@@ -40,7 +40,7 @@ test.afterEach(async ({ request }) => {
     }
 
     try {
-      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_logout_wallet`, {
+      await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_logout_wallet`, {
         data: { request: { schema_version: 1, wallet_id: walletIdToCleanup } },
       });
     } catch (e) {
@@ -108,7 +108,7 @@ test.describe('Test Bridge API', () => {
   });
 
   test('can list wallets via test bridge', async ({ request }) => {
-    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_list_wallets`, {
+    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_list_wallets`, {
       data: {
         request: {
           schema_version: 1,
@@ -128,7 +128,7 @@ test.describe('Test Bridge API', () => {
     const walletName = `Test Wallet ${Date.now()}`;
     const password = 'testpassword123';
 
-    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_create_wallet`, {
+    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_create_wallet`, {
       data: {
         request: {
           schema_version: 1,

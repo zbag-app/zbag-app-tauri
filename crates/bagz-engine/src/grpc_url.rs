@@ -1,7 +1,7 @@
 use url::Host;
 use url::Url;
 
-use zstash_core::errors;
+use bagz_core::errors;
 
 use crate::error::ipc_err;
 
@@ -35,7 +35,7 @@ impl GrpcUrlPolicy {
 ///     OS resolver configuration; in unusual environments it may resolve unexpectedly, so don't
 ///     rely on it for security. Prefer explicit loopback IPs for OS-independent guarantees.
 /// - `.onion` addresses are not special-cased; release builds still require `https://`
-///   (intentionally strict; see ZstashApp/zstash#103).
+///   (intentionally strict; see BagzApp/bagz#103).
 ///
 /// # Errors
 ///

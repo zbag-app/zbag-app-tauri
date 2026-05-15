@@ -53,7 +53,7 @@ test.afterEach(async ({ request }) => {
     createdWalletId = null;
 
     try {
-      await invoke(request, 'zstash_stop_sync', {
+      await invoke(request, 'bagz_stop_sync', {
         schema_version: 1,
         wallet_id: walletIdToCleanup,
       });
@@ -66,7 +66,7 @@ test.afterEach(async ({ request }) => {
     }
 
     try {
-      await invoke(request, 'zstash_logout_wallet', {
+      await invoke(request, 'bagz_logout_wallet', {
         schema_version: 1,
         wallet_id: walletIdToCleanup,
       });
@@ -85,7 +85,7 @@ test.describe('Integration flows (test bridge)', () => {
       await invoke<{
         wallet: { id: string };
         seed_phrase: string[];
-      }>(request, 'zstash_create_wallet', {
+      }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -102,7 +102,7 @@ test.describe('Integration flows (test bridge)', () => {
     const challenge = unwrapOk(
       await invoke<{
         challenge: { challenge_id: string; indices: number[] };
-      }>(request, 'zstash_get_backup_challenge', {
+      }>(request, 'bagz_get_backup_challenge', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -114,7 +114,7 @@ test.describe('Integration flows (test bridge)', () => {
     }
 
     const verify = unwrapOk(
-      await invoke<{ verified: boolean }>(request, 'zstash_verify_backup', {
+      await invoke<{ verified: boolean }>(request, 'bagz_verify_backup', {
         schema_version: 1,
         wallet_id: create.wallet.id,
         challenge_id: challenge.challenge.challenge_id,
@@ -127,7 +127,7 @@ test.describe('Integration flows (test bridge)', () => {
     const address = unwrapOk(
       await invoke<{ address: { encoded: string; address_type: string } }>(
         request,
-        'zstash_get_receive_address',
+        'bagz_get_receive_address',
         {
           schema_version: 1,
           account_id: 0,
@@ -147,7 +147,7 @@ test.describe('Integration flows (test bridge)', () => {
     const create = unwrapOk(
       await invoke<{
         wallet: { id: string };
-      }>(request, 'zstash_create_wallet', {
+      }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -160,7 +160,7 @@ test.describe('Integration flows (test bridge)', () => {
     createdWalletId = create.wallet.id;
 
     const locked = unwrapOk(
-      await invoke<{ locked: boolean }>(request, 'zstash_lock_wallet', {
+      await invoke<{ locked: boolean }>(request, 'bagz_lock_wallet', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -169,7 +169,7 @@ test.describe('Integration flows (test bridge)', () => {
     expect(locked.locked).toBe(true);
 
     const unlocked = unwrapOk(
-      await invoke<{ unlocked: boolean }>(request, 'zstash_unlock_wallet', {
+      await invoke<{ unlocked: boolean }>(request, 'bagz_unlock_wallet', {
         schema_version: 1,
         wallet_id: create.wallet.id,
         password,
@@ -187,7 +187,7 @@ test.describe('Integration flows (test bridge)', () => {
           transparent_total: string;
           total: string;
         };
-      }>(request, 'zstash_get_balance', {
+      }>(request, 'bagz_get_balance', {
         schema_version: 1,
         account_id: 0,
       })
@@ -203,7 +203,7 @@ test.describe('Integration flows (test bridge)', () => {
 
     // Create wallet
     const create = unwrapOk(
-      await invoke<{ wallet: { id: string } }>(request, 'zstash_create_wallet', {
+      await invoke<{ wallet: { id: string } }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -217,7 +217,7 @@ test.describe('Integration flows (test bridge)', () => {
     const reauth = unwrapOk(
       await invoke<{ reauth_token: string; expires_at: number }>(
         request,
-        'zstash_reauth_wallet',
+        'bagz_reauth_wallet',
         {
           schema_version: 1,
           wallet_id: create.wallet.id,
@@ -229,7 +229,7 @@ test.describe('Integration flows (test bridge)', () => {
     expect(reauth.reauth_token).toBeTruthy();
 
     // Shield funds - will fail (no transparent balance)
-    const result = await invoke<{ txid: string }>(request, 'zstash_shield_funds', {
+    const result = await invoke<{ txid: string }>(request, 'bagz_shield_funds', {
       schema_version: 1,
       account_id: 0,
       consolidate: false,
@@ -247,7 +247,7 @@ test.describe('Integration flows (test bridge)', () => {
     const password = 'testpassword123';
 
     const create = unwrapOk(
-      await invoke<{ wallet: { id: string } }>(request, 'zstash_create_wallet', {
+      await invoke<{ wallet: { id: string } }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -259,7 +259,7 @@ test.describe('Integration flows (test bridge)', () => {
 
     // Start sync
     const startResult = unwrapOk(
-      await invoke<{ started: boolean }>(request, 'zstash_start_sync', {
+      await invoke<{ started: boolean }>(request, 'bagz_start_sync', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -270,7 +270,7 @@ test.describe('Integration flows (test bridge)', () => {
     const progress = unwrapOk(
       await invoke<{
         progress: { phase: string; progress_percent: number };
-      }>(request, 'zstash_get_sync_progress', {
+      }>(request, 'bagz_get_sync_progress', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -280,7 +280,7 @@ test.describe('Integration flows (test bridge)', () => {
 
     // Stop sync
     const stopResult = unwrapOk(
-      await invoke<{ stopped: boolean }>(request, 'zstash_stop_sync', {
+      await invoke<{ stopped: boolean }>(request, 'bagz_stop_sync', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -289,7 +289,7 @@ test.describe('Integration flows (test bridge)', () => {
 
     // Verify idle
     const afterStop = unwrapOk(
-      await invoke<{ progress: { phase: string } }>(request, 'zstash_get_sync_progress', {
+      await invoke<{ progress: { phase: string } }>(request, 'bagz_get_sync_progress', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -308,7 +308,7 @@ test.describe('Error handling (test bridge)', () => {
     const create = unwrapOk(
       await invoke<{
         wallet: { id: string };
-      }>(request, 'zstash_create_wallet', {
+      }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -322,7 +322,7 @@ test.describe('Error handling (test bridge)', () => {
 
     // Lock the wallet
     const locked = unwrapOk(
-      await invoke<{ locked: boolean }>(request, 'zstash_lock_wallet', {
+      await invoke<{ locked: boolean }>(request, 'bagz_lock_wallet', {
         schema_version: 1,
         wallet_id: create.wallet.id,
       })
@@ -330,7 +330,7 @@ test.describe('Error handling (test bridge)', () => {
     expect(locked.locked).toBe(true);
 
     // Try to unlock with wrong password
-    const result = await invoke<{ unlocked: boolean }>(request, 'zstash_unlock_wallet', {
+    const result = await invoke<{ unlocked: boolean }>(request, 'bagz_unlock_wallet', {
       schema_version: 1,
       wallet_id: create.wallet.id,
       password: wrongPassword,
@@ -351,7 +351,7 @@ test.describe('Error handling (test bridge)', () => {
     const create = unwrapOk(
       await invoke<{
         wallet: { id: string };
-      }>(request, 'zstash_create_wallet', {
+      }>(request, 'bagz_create_wallet', {
         schema_version: 1,
         name: walletName,
         network: 'Testnet',
@@ -366,7 +366,7 @@ test.describe('Error handling (test bridge)', () => {
     // Try to get balance for non-existent account (high index)
     const result = await invoke<{
       balance: { total: string };
-    }>(request, 'zstash_get_balance', {
+    }>(request, 'bagz_get_balance', {
       schema_version: 1,
       account_id: 999,
     });
@@ -375,7 +375,7 @@ test.describe('Error handling (test bridge)', () => {
   });
 
   test('unknown command returns 404', async ({ request }) => {
-    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zstash_nonexistent`, {
+    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_nonexistent`, {
       data: { request: { schema_version: 1 } },
     });
 

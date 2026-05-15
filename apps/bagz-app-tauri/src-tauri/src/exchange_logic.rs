@@ -1,12 +1,12 @@
-use zstash_core::domain::FiatDisplaySettings;
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::exchange_rate::{
+use bagz_core::domain::FiatDisplaySettings;
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::exchange_rate::{
     GetExchangeRateRequest, GetExchangeRateResponse, GetFiatSettingsResponse,
     SetFiatSettingsRequest, SetFiatSettingsResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION};
-use zstash_engine::db::fiat_meta;
-use zstash_engine::error::ipc_err;
+use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION};
+use bagz_engine::db::fiat_meta;
+use bagz_engine::error::ipc_err;
 
 use crate::state::AppState;
 use crate::time_utils::system_time_to_unix_ms;
@@ -111,7 +111,7 @@ pub async fn get_exchange_rate(
                 refresh_cooldown_secs: state.exchange_rate_service.refresh_cooldown_secs() as u32,
             })
         }
-        Err(zstash_network::exchange_rate::ExchangeRateError::RateLimited(secs)) => {
+        Err(bagz_network::exchange_rate::ExchangeRateError::RateLimited(secs)) => {
             let cached = state
                 .exchange_rate_service
                 .get_cached_rate(settings.currency);

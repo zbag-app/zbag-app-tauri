@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Core types and IPC contracts for zSTASH.
+//! Core types and IPC contracts for bagZ.
 
 pub mod domain;
 pub mod errors;

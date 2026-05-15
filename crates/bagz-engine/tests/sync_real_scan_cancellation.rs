@@ -9,15 +9,15 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SyncPhase};
-use zstash_core::errors;
-use zstash_core::ipc::v1::events::SyncProgressEvent;
-use zstash_engine::db::wallet_encryption_meta;
-use zstash_engine::encryption;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::sync_service::SyncService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SyncPhase};
+use bagz_core::errors;
+use bagz_core::ipc::v1::events::SyncProgressEvent;
+use bagz_engine::db::wallet_encryption_meta;
+use bagz_engine::encryption;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::sync_service::SyncService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -87,7 +87,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -152,10 +152,10 @@ fn wait_for_progress_events_to_settle(
 }
 
 #[test]
-#[ignore = "manual long-running test; requires ZSTASH_GRPC_URL testnet endpoint and network access"]
+#[ignore = "manual long-running test; requires BAGZ_GRPC_URL testnet endpoint and network access"]
 fn stop_sync_during_real_scan_workload_stops_progress_and_allows_restart() {
-    let _endpoint = std::env::var("ZSTASH_GRPC_URL")
-        .expect("set ZSTASH_GRPC_URL to a reachable testnet lightwalletd endpoint");
+    let _endpoint = std::env::var("BAGZ_GRPC_URL")
+        .expect("set BAGZ_GRPC_URL to a reachable testnet lightwalletd endpoint");
 
     let root = temp_root("sync_real_scan_cancellation");
     let app_db_path = root.join("app.db");

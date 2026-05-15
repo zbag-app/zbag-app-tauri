@@ -5,9 +5,9 @@ const TEST_BRIDGE_BASE_URL = 'http://127.0.0.1:19816';
 test.describe('Test Bridge Security', () => {
   test('requires confirmation header for sensitive commands', async ({ request }) => {
     const commands = [
-      'zstash_view_seed_phrase',
-      'zstash_restore_wallet',
-      'zstash_confirm_send',
+      'bagz_view_seed_phrase',
+      'bagz_restore_wallet',
+      'bagz_confirm_send',
     ];
 
     for (const command of commands) {
@@ -23,7 +23,7 @@ test.describe('Test Bridge Security', () => {
 
   test('rate limits view_seed_phrase', async ({ request }) => {
     const headers = { 'X-Test-Bridge-Confirm': 'true' };
-    const url = `${TEST_BRIDGE_BASE_URL}/invoke/zstash_view_seed_phrase`;
+    const url = `${TEST_BRIDGE_BASE_URL}/invoke/bagz_view_seed_phrase`;
 
     const first = await request.post(url, { data: { request: {} }, headers });
     expect(first.status()).toBe(400);

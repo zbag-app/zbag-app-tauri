@@ -10,7 +10,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Git commit hash (short form) captured at build time.
 /// Empty string if not available (e.g., not in a git repo).
-pub const GIT_COMMIT: &str = match option_env!("ZSTASH_GIT_COMMIT") {
+pub const GIT_COMMIT: &str = match option_env!("BAGZ_GIT_COMMIT") {
     Some(commit) => commit,
     None => "",
 };
@@ -18,20 +18,20 @@ pub const GIT_COMMIT: &str = match option_env!("ZSTASH_GIT_COMMIT") {
 /// Git describe output captured at build time.
 /// Format: "vX.Y.Z" for exact releases, "vX.Y.Z-N-gHASH" for post-release builds.
 /// Empty string if not available.
-pub const GIT_DESCRIBE: &str = match option_env!("ZSTASH_GIT_DESCRIBE") {
+pub const GIT_DESCRIBE: &str = match option_env!("BAGZ_GIT_DESCRIBE") {
     Some(desc) => desc,
     None => "",
 };
 
 /// Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC").
-pub const BUILD_TIMESTAMP: &str = match option_env!("ZSTASH_BUILD_TIMESTAMP") {
+pub const BUILD_TIMESTAMP: &str = match option_env!("BAGZ_BUILD_TIMESTAMP") {
     Some(ts) => ts,
     None => "",
 };
 
 /// Whether this is a release build (HEAD is exactly on a version tag).
 pub fn is_release() -> bool {
-    option_env!("ZSTASH_IS_RELEASE") == Some("true")
+    option_env!("BAGZ_IS_RELEASE") == Some("true")
 }
 
 /// Full version string for display.

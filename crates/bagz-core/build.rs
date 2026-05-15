@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 
-//! Build script for zstash-core.
+//! Build script for bagz-core.
 //!
 //! Captures build metadata as compile-time environment variables:
-//! - `ZSTASH_GIT_COMMIT`: Short git commit hash
-//! - `ZSTASH_BUILD_TIMESTAMP`: UTC build timestamp
-//! - `ZSTASH_IS_RELEASE`: "true" if HEAD is on a version tag, "false" otherwise
+//! - `BAGZ_GIT_COMMIT`: Short git commit hash
+//! - `BAGZ_BUILD_TIMESTAMP`: UTC build timestamp
+//! - `BAGZ_IS_RELEASE`: "true" if HEAD is on a version tag, "false" otherwise
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,7 +23,7 @@ fn find_git_root(start: &Path) -> Option<PathBuf> {
 fn main() {
     // Capture build timestamp in UTC
     let build_timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
-    println!("cargo:rustc-env=ZSTASH_BUILD_TIMESTAMP={build_timestamp}");
+    println!("cargo:rustc-env=BAGZ_BUILD_TIMESTAMP={build_timestamp}");
 
     // Set up git-related rerun triggers and capture git info
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -75,7 +75,7 @@ fn main() {
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
 
-    println!("cargo:rustc-env=ZSTASH_GIT_COMMIT={git_commit}");
+    println!("cargo:rustc-env=BAGZ_GIT_COMMIT={git_commit}");
 
     // Capture git describe output for version string
     let git_describe = Command::new("git")
@@ -92,7 +92,7 @@ fn main() {
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
 
-    println!("cargo:rustc-env=ZSTASH_GIT_DESCRIBE={git_describe}");
+    println!("cargo:rustc-env=BAGZ_GIT_DESCRIBE={git_describe}");
 
     // Determine if this is a release build (HEAD is exactly on a version tag)
     // `git describe --exact-match --tags HEAD` succeeds only if HEAD is tagged
@@ -103,7 +103,7 @@ fn main() {
         .unwrap_or(false);
 
     println!(
-        "cargo:rustc-env=ZSTASH_IS_RELEASE={}",
+        "cargo:rustc-env=BAGZ_IS_RELEASE={}",
         if is_release { "true" } else { "false" }
     );
 }

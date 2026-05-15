@@ -1,5 +1,5 @@
-use zstash_core::domain::SwapState;
-use zstash_network::near_intents::{RemoteStatus, map_remote_status_to_local_state};
+use bagz_core::domain::SwapState;
+use bagz_network::near_intents::{RemoteStatus, map_remote_status_to_local_state};
 
 #[test]
 fn maps_success_to_confirming() {

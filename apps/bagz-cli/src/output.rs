@@ -3,8 +3,8 @@
 use console::style;
 use serde::Serialize;
 
-use zstash_core::domain::{Balance, Network, SyncProgress, WalletInfo};
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::domain::{Balance, Network, SyncProgress, WalletInfo};
+use bagz_core::sensitive::SensitiveString;
 
 /// Output mode for CLI.
 #[derive(Clone)]
@@ -55,7 +55,7 @@ impl OutputMode {
                 println!();
                 println!(
                     "Create one with: {} wallet create --name <NAME>",
-                    style("zstash").cyan()
+                    style("bagz").cyan()
                 );
                 return;
             }
@@ -129,7 +129,7 @@ impl OutputMode {
             println!();
             println!(
                 "Next step: {} sync {}",
-                style("zstash").cyan(),
+                style("bagz").cyan(),
                 short_uuid(&wallet.id)
             );
         }
@@ -154,7 +154,7 @@ impl OutputMode {
             println!();
             println!(
                 "Next step: {} sync {}",
-                style("zstash").cyan(),
+                style("bagz").cyan(),
                 short_uuid(&wallet.id)
             );
         }

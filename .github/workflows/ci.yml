@@ -49,20 +49,20 @@ jobs:
         with:
           components: clippy
           cache: false
-      - run: cargo clippy --workspace --all-targets --exclude zstash-app-tauri -- -D warnings
+      - run: cargo clippy --workspace --all-targets --exclude bagz-app-tauri -- -D warnings
 
   rust-tests:
     name: Rust Tests
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      ZSTASH_GRPC_URL: https://lwd.testnet.zec.pro
+      BAGZ_GRPC_URL: https://lwd.testnet.zec.pro
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test --workspace --exclude zstash-app-tauri
+      - run: cargo test --workspace --exclude bagz-app-tauri
 
   rust-migrations:
     name: Rust Migration Tests
@@ -74,7 +74,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test -p zstash-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+      - run: cargo test -p bagz-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
   tauri-build-cef:
     name: Tauri Build (CEF)
@@ -119,7 +119,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo build --workspace --release --locked --exclude zstash-app-tauri
+      - run: cargo build --workspace --release --locked --exclude bagz-app-tauri
 
   bun-tests:
     name: Bun Tests
@@ -135,13 +135,13 @@ jobs:
         with:
           bun-version: 1.3.5
       - name: Install dependencies
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: bun install --frozen-lockfile
       - name: bun test
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: bun run test
       - name: bun test:a11y (if present)
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: |
           if node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')); process.exit(p.scripts && p.scripts['test:a11y'] ? 0 : 1)"; then
             bun run test:a11y
@@ -156,7 +156,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set test home
-        run: echo "ZSTASH_TEST_HOME=${{ runner.temp }}/zstash-e2e" >> $GITHUB_ENV
+        run: echo "BAGZ_TEST_HOME=${{ runner.temp }}/bagz-e2e" >> $GITHUB_ENV
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
@@ -165,22 +165,22 @@ jobs:
         with:
           bun-version: 1.3.5
       - name: Install dependencies
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: bun install --frozen-lockfile
       - name: Install Playwright browsers
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: |
           bun --version
           bunx playwright install chromium
       - name: Build test bridge
-        run: cargo build -p zstash-app-tauri --features test-bridge
+        run: cargo build -p bagz-app-tauri --features test-bridge
       - name: Start test bridge
         run: |
-          rm -rf "$ZSTASH_TEST_HOME"
-          mkdir -p "$ZSTASH_TEST_HOME"
-          BRIDGE_LOG="${RUNNER_TEMP}/zstash-test-bridge.log"
-          BRIDGE_PID="${RUNNER_TEMP}/zstash-test-bridge.pid"
-          cargo run -p zstash-app-tauri --features test-bridge > "$BRIDGE_LOG" 2>&1 &
+          rm -rf "$BAGZ_TEST_HOME"
+          mkdir -p "$BAGZ_TEST_HOME"
+          BRIDGE_LOG="${RUNNER_TEMP}/bagz-test-bridge.log"
+          BRIDGE_PID="${RUNNER_TEMP}/bagz-test-bridge.pid"
+          cargo run -p bagz-app-tauri --features test-bridge > "$BRIDGE_LOG" 2>&1 &
           echo $! > "$BRIDGE_PID"
           for i in {1..30}; do
             if ! kill -0 $(cat "$BRIDGE_PID") 2>/dev/null; then
@@ -198,18 +198,18 @@ jobs:
           cat "$BRIDGE_LOG" || true
           exit 1
       - name: Run Playwright tests
-        working-directory: apps/zstash-app-tauri
+        working-directory: apps/bagz-app-tauri
         run: bun run test:e2e
       - name: Upload test bridge log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-bridge-log
-          path: ${{ runner.temp }}/zstash-test-bridge.log
+          path: ${{ runner.temp }}/bagz-test-bridge.log
           retention-days: 7
       - name: Stop test bridge
         if: always()
         run: |
-          if [ -f "${RUNNER_TEMP}/zstash-test-bridge.pid" ]; then
-            kill $(cat "${RUNNER_TEMP}/zstash-test-bridge.pid") || true
+          if [ -f "${RUNNER_TEMP}/bagz-test-bridge.pid" ]; then
+            kill $(cat "${RUNNER_TEMP}/bagz-test-bridge.pid") || true
           fi

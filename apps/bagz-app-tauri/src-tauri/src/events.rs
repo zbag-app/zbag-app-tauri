@@ -1,17 +1,17 @@
 use tauri::Emitter;
-use zstash_core::ipc::v1::events::{
+use bagz_core::ipc::v1::events::{
     BalanceChangedEvent, JobProgressEvent, ServerFailoverEvent, SwapChangedEvent,
     SyncProgressEvent, TorStatusEvent, TransactionChangedEvent, WalletStatusEvent,
 };
 
-pub const CHANNEL_SYNC: &str = "zstash://sync";
-pub const CHANNEL_BALANCE: &str = "zstash://balance";
-pub const CHANNEL_TX: &str = "zstash://tx";
-pub const CHANNEL_SWAP: &str = "zstash://swap";
-pub const CHANNEL_TOR: &str = "zstash://tor";
-pub const CHANNEL_WALLET_STATUS: &str = "zstash://wallet-status";
-pub const CHANNEL_JOB: &str = "zstash://job";
-pub const CHANNEL_SERVER_FAILOVER: &str = "zstash://server-failover";
+pub const CHANNEL_SYNC: &str = "bagz://sync";
+pub const CHANNEL_BALANCE: &str = "bagz://balance";
+pub const CHANNEL_TX: &str = "bagz://tx";
+pub const CHANNEL_SWAP: &str = "bagz://swap";
+pub const CHANNEL_TOR: &str = "bagz://tor";
+pub const CHANNEL_WALLET_STATUS: &str = "bagz://wallet-status";
+pub const CHANNEL_JOB: &str = "bagz://job";
+pub const CHANNEL_SERVER_FAILOVER: &str = "bagz://server-failover";
 
 pub fn emit_sync_progress(
     app: &crate::AppHandle,

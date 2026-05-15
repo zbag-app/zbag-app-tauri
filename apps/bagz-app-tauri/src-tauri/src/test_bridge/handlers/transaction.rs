@@ -1,13 +1,13 @@
 //! Transaction command handlers.
 
 use tracing::warn;
-use zstash_core::ipc::v1::commands::transaction::{
+use bagz_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::ipc::v1::common::IpcResult;
+use bagz_engine::wallet_manager::WalletManager;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -16,7 +16,7 @@ pub fn prepare_send_impl(
     state: &AppState,
     request: PrepareSendRequest,
 ) -> IpcResult<PrepareSendResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -39,7 +39,7 @@ pub fn confirm_send_impl(
     state: &AppState,
     request: ConfirmSendRequest,
 ) -> IpcResult<ConfirmSendResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -61,7 +61,7 @@ pub fn cancel_send_impl(
     state: &AppState,
     request: CancelSendRequest,
 ) -> IpcResult<CancelSendResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -80,7 +80,7 @@ pub fn retry_broadcast_impl(
     state: &AppState,
     request: RetryBroadcastRequest,
 ) -> IpcResult<RetryBroadcastResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -96,7 +96,7 @@ pub fn retry_broadcast_impl(
         };
 
         let txid =
-            zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+            bagz_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
                 task, None, None,
             )?;
         Ok(RetryBroadcastResponse {
@@ -110,7 +110,7 @@ pub fn list_transactions_impl(
     state: &AppState,
     request: ListTransactionsRequest,
 ) -> IpcResult<ListTransactionsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -131,7 +131,7 @@ pub fn shield_funds_impl(
     state: &AppState,
     request: ShieldFundsRequest,
 ) -> IpcResult<ShieldFundsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use rusqlite::Connection;
 use tempfile::TempDir;
 
-use zstash_engine::db::{OpenSqlcipherOptions, open_sqlcipher_db};
-use zstash_engine::encryption::Dek;
-use zstash_engine::sync_service::{
+use bagz_engine::db::{OpenSqlcipherOptions, open_sqlcipher_db};
+use bagz_engine::encryption::Dek;
+use bagz_engine::sync_service::{
     count_txids_needing_memo_enhancement, get_txids_needing_memo_enhancement_batch,
 };
 

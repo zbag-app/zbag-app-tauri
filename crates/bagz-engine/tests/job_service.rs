@@ -10,8 +10,8 @@
 
 use uuid::Uuid;
 
-use zstash_core::domain::{JobProgress, JobState, JobType};
-use zstash_engine::job_service::JobService;
+use bagz_core::domain::{JobProgress, JobState, JobType};
+use bagz_engine::job_service::JobService;
 
 #[test]
 fn job_service_new_creates_empty_state() {

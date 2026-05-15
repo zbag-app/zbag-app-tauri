@@ -1,14 +1,14 @@
 use tauri::State;
 
-use zstash_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
+use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zstash_get_log_location")]
-pub fn zstash_get_log_location(
+#[tauri::command(rename = "bagz_get_log_location")]
+pub fn bagz_get_log_location(
     state: State<'_, AppState>,
     request: GetLogLocationRequest,
 ) -> IpcResult<GetLogLocationResponse> {

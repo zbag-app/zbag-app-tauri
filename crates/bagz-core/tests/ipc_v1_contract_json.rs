@@ -1,19 +1,19 @@
 use serde_json::json;
 
-use zstash_core::domain::{
+use bagz_core::domain::{
     BackupAction, ShieldAction, SupportedToken, SyncPhase, SyncProgress, SyncStatus,
     WalletLockStatus, WalletStatus,
 };
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
-use zstash_core::ipc::v1::commands::balance::GetBalanceResponse;
-use zstash_core::ipc::v1::commands::swap::{GetSupportedTokensRequest, GetSupportedTokensResponse};
-use zstash_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
-use zstash_core::ipc::v1::commands::wallet::{
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::backup::{RestoreWalletRequest, VerifyBackupRequest};
+use bagz_core::ipc::v1::commands::balance::GetBalanceResponse;
+use bagz_core::ipc::v1::commands::swap::{GetSupportedTokensRequest, GetSupportedTokensResponse};
+use bagz_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
+use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
-use zstash_core::version::VersionInfo;
+use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+use bagz_core::version::VersionInfo;
 
 #[test]
 fn schema_version_enforcement() {
@@ -127,17 +127,17 @@ fn sync_progress_retry_in_seconds_is_number_or_absent() {
 fn seed_phrase_only_in_allowed_backend_payloads() {
     let create_wallet = CreateWalletResponse {
         schema_version: SCHEMA_VERSION,
-        wallet: zstash_core::domain::WalletInfo {
+        wallet: bagz_core::domain::WalletInfo {
             id: uuid::Uuid::nil(),
             name: "w".to_string(),
-            wallet_type: zstash_core::domain::WalletType::Software,
-            network: zstash_core::domain::Network::Testnet,
+            wallet_type: bagz_core::domain::WalletType::Software,
+            network: bagz_core::domain::Network::Testnet,
             remember_unlock_enabled: false,
             created_at: 0,
             last_opened_at: None,
         },
         seed_phrase: vec!["abandon".to_string().into(); 24],
-        backup_challenge: zstash_core::ipc::v1::commands::wallet::BackupChallenge {
+        backup_challenge: bagz_core::ipc::v1::commands::wallet::BackupChallenge {
             challenge_id: "c".to_string(),
             indices: vec![1, 2, 3, 4],
             expires_at: 0,
@@ -151,7 +151,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
 
     let get_balance = GetBalanceResponse {
         schema_version: SCHEMA_VERSION,
-        balance: zstash_core::domain::Balance {
+        balance: bagz_core::domain::Balance {
             shielded_spendable: "0".to_string(),
             shielded_pending: "0".to_string(),
             transparent_total: "0".to_string(),
@@ -164,7 +164,7 @@ fn seed_phrase_only_in_allowed_backend_payloads() {
         backup_status: BackupAction::Required,
         sync_status: SyncStatus::Synced,
         shield_status: ShieldAction::None,
-        privacy_posture: zstash_core::domain::PrivacyPosture::Optimal,
+        privacy_posture: bagz_core::domain::PrivacyPosture::Optimal,
     };
 
     let create_json = serde_json::to_string(&create_wallet).unwrap();
@@ -186,7 +186,7 @@ fn ipc_debug_redacts_sensitive_strings() {
     let restore = RestoreWalletRequest {
         schema_version: SCHEMA_VERSION,
         name: "w".to_string(),
-        network: zstash_core::domain::Network::Testnet,
+        network: bagz_core::domain::Network::Testnet,
         password: "pw".into(),
         remember_unlock: false,
         seed_phrase: "this is secret".into(),

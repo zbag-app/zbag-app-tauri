@@ -1,10 +1,10 @@
 //! Exchange rate and fiat settings command handlers.
 
-use zstash_core::ipc::v1::commands::exchange_rate::{
+use bagz_core::ipc::v1::commands::exchange_rate::{
     GetExchangeRateRequest, GetExchangeRateResponse, GetFiatSettingsRequest,
     GetFiatSettingsResponse, SetFiatSettingsRequest, SetFiatSettingsResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::exchange_logic;
 use crate::state::AppState;
@@ -14,7 +14,7 @@ pub fn get_fiat_settings_impl(
     state: &AppState,
     request: GetFiatSettingsRequest,
 ) -> IpcResult<GetFiatSettingsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -27,7 +27,7 @@ pub fn set_fiat_settings_impl(
     state: &AppState,
     request: SetFiatSettingsRequest,
 ) -> IpcResult<SetFiatSettingsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -40,7 +40,7 @@ pub async fn get_exchange_rate_impl(
     state: &AppState,
     request: GetExchangeRateRequest,
 ) -> IpcResult<GetExchangeRateResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

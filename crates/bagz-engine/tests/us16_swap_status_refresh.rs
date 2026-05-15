@@ -13,12 +13,12 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SwapInfo, SwapState, SwapType};
-use zstash_core::errors;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::swap_service::SwapService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SwapInfo, SwapState, SwapType};
+use bagz_core::errors;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::swap_service::SwapService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -88,7 +88,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -275,7 +275,7 @@ fn insert_swap_directly(
     wallet_id: Uuid,
     swap: &SwapInfo,
 ) -> rusqlite::Result<()> {
-    zstash_engine::db::swap_meta::insert_swap(conn, wallet_id, swap)
+    bagz_engine::db::swap_meta::insert_swap(conn, wallet_id, swap)
 }
 
 #[test]
@@ -308,7 +308,7 @@ fn refresh_swap_status_updates_state_from_remote() {
     // Mock server returns SUCCESS status (maps to Confirming, then Completed if tx confirmed)
     // Since we have no confirmed tx, it will stay at Confirming
     let (base_url, server, _) = spawn_mock_status_server("SUCCESS", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -357,7 +357,7 @@ fn refresh_swap_status_is_noop_for_terminal_states() {
 
     // Mock server should NOT receive any requests for terminal state
     let (base_url, server, request_count) = spawn_mock_status_server("SUCCESS", 0);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -409,7 +409,7 @@ fn refresh_swap_status_is_noop_without_deposit_address() {
 
     // Mock server should NOT receive any requests if deposit_address is missing
     let (base_url, server, request_count) = spawn_mock_status_server("SUCCESS", 0);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -453,7 +453,7 @@ fn refresh_swap_status_stores_error_on_api_failure() {
 
     // Mock server returns error
     let (base_url, server) = spawn_mock_error_server(1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -500,7 +500,7 @@ fn refresh_swap_status_is_noop_when_refresh_is_already_inflight() {
 
     let (base_url, server, request_count) =
         spawn_mock_status_server_with_delay("SUCCESS", 1, Duration::from_millis(350));
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -566,7 +566,7 @@ fn refresh_swap_status_clears_stale_last_error_on_success_without_state_change()
     drop(conn);
 
     let (base_url, server, request_count) = spawn_mock_status_server("SUCCESS", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -620,7 +620,7 @@ fn refresh_swap_status_rejects_wrong_wallet() {
     drop(conn);
 
     // No server needed since the request should fail before API call
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -672,7 +672,7 @@ fn resume_pending_swaps_resumes_non_terminal_only() {
     drop(conn);
 
     // No server needed for resume_pending_swaps (it just starts polling tasks)
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -712,7 +712,7 @@ fn resume_pending_swaps_is_idempotent_on_second_call() {
     drop(conn);
 
     // No server needed for resume_pending_swaps (it just starts polling tasks)
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -765,7 +765,7 @@ fn resume_pending_swaps_skips_expired_awaiting_deposit_swaps_only() {
     insert_swap_directly(&conn, wallet.id, &active_swap).expect("insert active swap");
     drop(conn);
 
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -805,7 +805,7 @@ fn resume_pending_swaps_skips_swaps_without_deposit_address() {
     drop(conn);
 
     // No server needed
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -856,7 +856,7 @@ fn resume_pending_swaps_stops_when_active_wallet_changes() {
         .load_wallet_for_test(wallet_a.id)
         .expect("load wallet A");
 
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url("http://localhost:1")
         .expect("near client");
     let swap_service = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

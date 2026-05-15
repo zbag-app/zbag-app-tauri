@@ -27,16 +27,16 @@ use zcash_primitives::block::BlockHash;
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_protocol::consensus::{BlockHeight, BranchId};
 
-use zstash_core::domain::{Balance, Network, SyncPhase, SyncProgress};
-use zstash_core::errors;
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
+use bagz_core::domain::{Balance, Network, SyncPhase, SyncProgress};
+use bagz_core::errors;
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::{BalanceChangedEvent, SyncProgressEvent};
 
 use crate::db::{AppDb, OpenSqlcipherOptions, open_sqlcipher_db};
 use crate::encryption::Dek;
 use crate::error::ipc_err;
 use crate::server_resolver;
-use zstash_core::permissions::{create_dir_all_secure, secure_open_options};
+use bagz_core::permissions::{create_dir_all_secure, secure_open_options};
 
 /// Default batch size for downloading blocks.
 ///
@@ -380,7 +380,7 @@ impl SyncService {
         wallet_db_path: PathBuf,
         wallet_dek: Dek,
         account_ids: Vec<u32>,
-        tor_manager: Option<std::sync::Arc<zstash_tor::TorManager>>,
+        tor_manager: Option<std::sync::Arc<bagz_tor::TorManager>>,
         on_progress: Option<SyncEventHandler>,
         on_balance_changed: Option<BalanceEventHandler>,
     ) -> anyhow::Result<()> {
@@ -442,9 +442,9 @@ impl SyncService {
 
             let client = match tor_manager {
                 Some(ref tor) => {
-                    zstash_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
+                    bagz_network::grpc_client::GrpcClient::new_with_tor(grpc_url, Arc::clone(tor))
                 }
-                None => zstash_network::grpc_client::GrpcClient::new(grpc_url),
+                None => bagz_network::grpc_client::GrpcClient::new(grpc_url),
             };
             let mut balance_db = if on_balance_task.as_ref().is_some() {
                 // Copy DEK bytes for the balance connection (original stays with sync)
@@ -500,13 +500,13 @@ impl SyncService {
                     }
 
                     // If Tor is ready, proceed
-                    if tor_state.status == zstash_core::domain::TorStatus::On {
+                    if tor_state.status == bagz_core::domain::TorStatus::On {
                         tracing::info!(wallet_id = %wallet_id, "Tor connected, starting sync");
                         break;
                     }
 
                     // If Tor is in error state, log and continue (will fail in main loop)
-                    if tor_state.status == zstash_core::domain::TorStatus::Error {
+                    if tor_state.status == bagz_core::domain::TorStatus::Error {
                         tracing::warn!(wallet_id = %wallet_id, error = ?tor_state.last_error, "Tor in error state");
                         break;
                     }
@@ -2205,7 +2205,7 @@ async fn update_birthday_tree_sizes_blocking(
 /// via async network calls, and updates the database on blocking threads.
 async fn backfill_birthday_tree_sizes(
     conn: Connection,
-    client: &zstash_network::grpc_client::GrpcClient,
+    client: &bagz_network::grpc_client::GrpcClient,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<(Connection, anyhow::Result<()>)> {
     // Query birthday heights on blocking thread
@@ -2308,7 +2308,7 @@ fn empty_chain_state(height: BlockHeight) -> ChainState {
 /// For the very first scan from genesis (height 0), empty state is correct.
 /// For incremental syncs, we need the actual tree state for proper witness computation.
 async fn fetch_chain_state(
-    client: &zstash_network::grpc_client::GrpcClient,
+    client: &bagz_network::grpc_client::GrpcClient,
     height: BlockHeight,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<ChainState> {
@@ -2501,7 +2501,7 @@ pub fn get_txids_needing_memo_enhancement_batch(
 /// This is called during the Enhancing phase to populate memo data
 /// for received notes that were scanned from compact blocks.
 async fn enhance_transaction_memo(
-    client: &zstash_network::grpc_client::GrpcClient,
+    client: &bagz_network::grpc_client::GrpcClient,
     wallet_db_path: &Path,
     wallet_dek: &Dek,
     params: &zcash_protocol::consensus::Network,
@@ -2604,7 +2604,7 @@ fn enhance_transaction_memo_blocking(
 
 /// Download blocks with retry and exponential backoff.
 async fn download_blocks_with_retry(
-    client: &zstash_network::grpc_client::GrpcClient,
+    client: &bagz_network::grpc_client::GrpcClient,
     start: BlockHeight,
     end_exclusive: BlockHeight,
     max_retries: u32,

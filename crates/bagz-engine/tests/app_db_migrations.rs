@@ -1,10 +1,10 @@
 mod common;
 
-use zstash_engine::db::{migrations, open_app_db_connection};
+use bagz_engine::db::{migrations, open_app_db_connection};
 
 #[test]
 fn app_db_initial_migration_creates_schema_and_seeds_servers() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("migration should succeed");
 
@@ -61,7 +61,7 @@ fn app_db_initial_migration_creates_schema_and_seeds_servers() {
 
 #[test]
 fn app_db_migration_is_idempotent() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("first migration should succeed");
     migrations::migrate_with_rollback(&db_path).expect("second migration should succeed");
@@ -75,7 +75,7 @@ fn app_db_migration_is_idempotent() {
 
 #[test]
 fn app_db_v2_migration_creates_fiat_settings_table() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("migration should succeed");
 
@@ -126,7 +126,7 @@ fn app_db_v2_migration_creates_fiat_settings_table() {
 
 #[test]
 fn app_db_v2_migration_fiat_settings_schema_correct() {
-    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("zstash_app_db_test");
+    let (db_path, _cleanup) = common::temp_db_path_with_cleanup("bagz_app_db_test");
 
     migrations::migrate_with_rollback(&db_path).expect("migration should succeed");
 

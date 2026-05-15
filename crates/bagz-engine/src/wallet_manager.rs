@@ -13,12 +13,12 @@ use secrecy::SecretVec;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
-use zstash_core::domain::{
+use bagz_core::domain::{
     AccountInfo, AccountType, AddressInfo, AddressType, BackupAction, Balance, Network,
     PrivacyPosture, ShieldAction, SyncPhase, SyncProgress, SyncStatus, WalletInfo,
     WalletLockStatus, WalletStatus, WalletType,
 };
-use zstash_core::errors;
+use bagz_core::errors;
 
 use crate::birthday;
 use crate::db::wallet_encryption_meta::WalletEncryptionMeta;
@@ -35,24 +35,24 @@ use crate::reauth::{ReauthManager, SystemClock};
 use crate::tx_service::{ServerFailoverEventHandler, TxEventHandler, TxService};
 use zcash_client_backend::data_api::{Account as _, WalletRead as _};
 use zcash_protocol::consensus::Parameters as _;
-use zstash_core::ipc::v1::commands::job::{
+use bagz_core::ipc::v1::commands::job::{
     CancelJobResponse, GetJobStatusResponse, ListJobsResponse, StartSendJobResponse,
     StartShieldJobResponse,
 };
-use zstash_core::ipc::v1::commands::keystone::{
+use bagz_core::ipc::v1::commands::keystone::{
     BuildSigningRequestResponse, FinalizeSigningResponse,
 };
-use zstash_core::ipc::v1::commands::transaction::{
+use bagz_core::ipc::v1::commands::transaction::{
     ConfirmSendResponse, ListTransactionsResponse, PrepareSendResponse, ShieldFundsResponse,
     TransactionSummary,
 };
-use zstash_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::WalletStatusEvent;
-use zstash_core::permissions::{
+use bagz_core::ipc::v1::commands::wallet::{BackupChallenge, ReauthPurpose};
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::WalletStatusEvent;
+use bagz_core::permissions::{
     create_dir_all_secure, set_file_permissions, set_sqlite_file_permissions,
 };
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::sensitive::SensitiveString;
 
 use crate::job_service::{JobEventHandler, JobService, SendJobContext, ShieldJobContext};
 
@@ -87,7 +87,7 @@ pub struct RetryBroadcastTask {
     wallet_dek: Dek,
     grpc_url: String,
     app_db_path: PathBuf,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 pub struct ConfirmSendTask {
@@ -101,7 +101,7 @@ pub struct ConfirmSendTask {
         zcash_client_sqlite::ReceivedNoteId,
     >,
     spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 pub struct ShieldFundsTask {
@@ -109,7 +109,7 @@ pub struct ShieldFundsTask {
     account_id: u32,
     consolidate: bool,
     spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 pub struct FinalizeSigningTask {
@@ -118,7 +118,7 @@ pub struct FinalizeSigningTask {
     signed_payload: String,
     pending_pczt_with_proofs: String,
     pending_request_expires_at: SystemTime,
-    tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 #[derive(Debug)]
@@ -673,7 +673,7 @@ impl WalletManager {
         }
 
         // Parse and validate UFVK
-        let parsed = zstash_keystone::ufvk::parse_ufvk(ufvk)
+        let parsed = bagz_keystone::ufvk::parse_ufvk(ufvk)
             .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
 
         let expected_net = zcash_consensus_network(network).network_type();
@@ -1565,7 +1565,7 @@ impl WalletManager {
                 continue;
             };
 
-            // Check key_source first (software wallets, zSTASH-tagged imports including HardwareSigner)
+            // Check key_source first (software wallets, bagZ-tagged imports including HardwareSigner)
             if let Some(key_source) = account.source().key_source()
                 && let Some(account_id) =
                     crate::account_key_source::parse_account_id_from_key_source(key_source)
@@ -1598,7 +1598,7 @@ impl WalletManager {
 
         let (wallet, conn) = self.require_unlocked_wallet_db(wallet_id)?;
 
-        let parsed = zstash_keystone::ufvk::parse_ufvk(ufvk)
+        let parsed = bagz_keystone::ufvk::parse_ufvk(ufvk)
             .map_err(|err| ipc_err(errors::INVALID_UFVK, err.to_string()))?;
 
         let expected_net = zcash_consensus_network(wallet.network).network_type();
@@ -1632,7 +1632,7 @@ impl WalletManager {
             };
 
             // Collect BOTH key_source and key_derivation IDs to avoid any collision.
-            // An account may have both (e.g., Keystone accounts with key_source="zstash:N"
+            // An account may have both (e.g., Keystone accounts with key_source="bagz:N"
             // AND key_derivation.account_index=M where N != M).
             if let Some(key_source) = account.source().key_source()
                 && let Some(id) =
@@ -2396,7 +2396,7 @@ impl WalletManager {
         &mut self,
         proposal_id: &str,
         reauth_token: &str,
-        tor_manager: Option<Arc<zstash_tor::TorManager>>,
+        tor_manager: Option<Arc<bagz_tor::TorManager>>,
         on_progress: Option<JobEventHandler>,
         on_tx_changed: Option<TxEventHandler>,
         tx_service: &mut TxService<SystemClock>,
@@ -2466,7 +2466,7 @@ impl WalletManager {
         account_id: u32,
         consolidate: bool,
         reauth_token: &str,
-        tor_manager: Option<Arc<zstash_tor::TorManager>>,
+        tor_manager: Option<Arc<bagz_tor::TorManager>>,
         on_progress: Option<JobEventHandler>,
         on_tx_changed: Option<TxEventHandler>,
         _tx_service: &mut TxService<SystemClock>,
@@ -3033,7 +3033,7 @@ impl WalletManager {
 
 fn default_wallets_root() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".zstash").join("wallets"))
+    Ok(PathBuf::from(home).join(".bagz").join("wallets"))
 }
 
 fn network_dir_name(network: Network) -> &'static str {
@@ -3152,11 +3152,11 @@ const NEW_WALLET_BIRTHDAY_MARGIN: u32 = 100;
 /// since a new wallet cannot have any funds before its creation.
 pub async fn fetch_birthday_height_for_new_wallet(
     grpc_url: &str,
-    tor_manager: Option<std::sync::Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<std::sync::Arc<bagz_tor::TorManager>>,
 ) -> Option<u32> {
     let client = match tor_manager {
-        Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
-        None => zstash_network::grpc_client::GrpcClient::new(grpc_url),
+        Some(tor) => bagz_network::grpc_client::GrpcClient::new_with_tor(grpc_url, tor),
+        None => bagz_network::grpc_client::GrpcClient::new(grpc_url),
     };
 
     match client.get_latest_block().await {

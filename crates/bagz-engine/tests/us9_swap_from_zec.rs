@@ -6,14 +6,14 @@ use std::thread;
 
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, SwapIntent, SwapType};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::backup_meta;
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::swap_service::SwapService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, SwapIntent, SwapType};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_engine::db::backup_meta;
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::swap_service::SwapService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -83,7 +83,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -261,7 +261,7 @@ fn request_swap_quote_exact_input_rejects_zero_input_amount() {
         .wallet;
 
     // No server needed - request should fail validation before any network call.
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(
         "http://127.0.0.1:1".to_string(),
     )
     .expect("near client");
@@ -314,7 +314,7 @@ fn start_swap_from_zec_requires_privacy_ack() {
 
     // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -353,7 +353,7 @@ fn start_swap_from_zec_requires_reauth_token_when_acknowledged() {
 
     // Only 1 request: quote (dry=false returns deposit address)
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -399,7 +399,7 @@ fn start_swap_from_zec_is_blocked_until_backup_complete() {
     // Only 1 request: quote (dry=false returns deposit address)
     // start_swap should fail with BACKUP_REQUIRED before making any more API calls
     let (base_url, server) = spawn_mock_1click_server("t1fake", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");
@@ -458,7 +458,7 @@ fn start_swap_from_zec_uses_zatoshis_amount_for_wallet_send() {
     // Use a quote response with amountInFormatted = "0.1" to ensure we don't pass formatted
     // amounts into send APIs that require zatoshis (integer).
     let (base_url, server) = spawn_mock_1click_server_decimal_amount("t1fake", 1);
-    let near = zstash_network::near_intents::NearIntentsClient::with_base_url(base_url)
+    let near = bagz_network::near_intents::NearIntentsClient::with_base_url(base_url)
         .expect("near client");
     let swap = SwapService::new_with_near_client(app_db_path, Arc::clone(&mgr), near)
         .expect("create swap service");

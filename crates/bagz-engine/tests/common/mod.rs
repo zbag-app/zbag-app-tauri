@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
-use zstash_core::sensitive::SensitiveString;
+use bagz_core::sensitive::SensitiveString;
 
 fn cleanup_db_files(path: &Path) {
     let _ = std::fs::remove_file(path);

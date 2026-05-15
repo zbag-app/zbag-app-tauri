@@ -43,7 +43,7 @@ pub struct RestoreWalletRequest {
     /// crosses the IPC boundary and exists as plaintext strings on the frontend/JS side.
     pub password: SensitiveString,
     /// DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
-    /// See https://github.com/zstashapp/zstash/issues/45
+    /// See https://github.com/bagzapp/bagz/issues/45
     pub remember_unlock: bool,
     /// The 24-word seed phrase entered by the user.
     ///

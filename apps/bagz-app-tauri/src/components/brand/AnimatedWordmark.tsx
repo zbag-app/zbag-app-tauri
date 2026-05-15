@@ -7,11 +7,11 @@ interface AnimatedWordmarkProps {
   className?: string;
 }
 
-const BRAND_NAME = 'zSTASH';
+const BRAND_NAME = 'bagZ';
 const LETTER_OFFSET_PX = 8;
 
 /**
- * Animated zSTASH wordmark with optional tagline.
+ * Animated bagZ wordmark with optional tagline.
  * Letters animate in with a staggered reveal effect.
  * Respects prefers-reduced-motion accessibility setting.
  */
@@ -30,7 +30,7 @@ export function AnimatedWordmark({ showTagline = false, className = '' }: Animat
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
-      <div className="flex items-baseline" aria-label="zSTASH">
+      <div className="flex items-baseline" aria-label="bagZ">
         {letters.map((letter, index) => (
           <span
             key={`letter-${index}-${letter}`}

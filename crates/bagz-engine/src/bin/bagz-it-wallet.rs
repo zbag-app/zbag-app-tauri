@@ -8,7 +8,7 @@ use zeroize::Zeroize as _;
 use zcash_client_backend::address::Address;
 use zcash_client_backend::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
 use zcash_protocol::consensus::Network as ConsensusNetwork;
-use zstash_core::permissions::create_dir_all_secure;
+use bagz_core::permissions::create_dir_all_secure;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -100,33 +100,33 @@ fn main() -> anyhow::Result<()> {
 fn print_help() {
     eprintln!(
         "\
-zstash-it-wallet: create/load a local integration-test wallet and print its unified address.
+bagz-it-wallet: create/load a local integration-test wallet and print its unified address.
 
 USAGE:
-  cargo run -p zstash-engine --bin zstash-it-wallet -- [OPTIONS]
+  cargo run -p bagz-engine --bin bagz-it-wallet -- [OPTIONS]
 
 OPTIONS:
   --network testnet|mainnet    (default: testnet)
   --account N                 (default: 0)
-  --mnemonic-file PATH        (default: $HOME/.zstash/dev/it-wallet.mnemonic)
+  --mnemonic-file PATH        (default: $HOME/.bagz/dev/it-wallet.mnemonic)
   --force-new                 overwrite mnemonic file
   --print-mnemonic            print mnemonic after address
   -h, --help                  show this help
 
 ENV:
-  ZSTASH_IT_MNEMONIC           if set, used instead of --mnemonic-file
+  BAGZ_IT_MNEMONIC           if set, used instead of --mnemonic-file
 "
     );
 }
 
 fn default_mnemonic_path() -> anyhow::Result<PathBuf> {
     let home = std::env::var_os("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".zstash/dev/it-wallet.mnemonic"))
+    Ok(PathBuf::from(home).join(".bagz/dev/it-wallet.mnemonic"))
 }
 
 fn load_or_create_mnemonic(path: &Path, force_new: bool) -> anyhow::Result<(String, &'static str)> {
-    if let Ok(env_phrase) = std::env::var("ZSTASH_IT_MNEMONIC") {
-        return Ok((env_phrase, "env:ZSTASH_IT_MNEMONIC"));
+    if let Ok(env_phrase) = std::env::var("BAGZ_IT_MNEMONIC") {
+        return Ok((env_phrase, "env:BAGZ_IT_MNEMONIC"));
     }
 
     if !force_new {
@@ -183,7 +183,7 @@ fn parse_mnemonic(phrase: &str) -> anyhow::Result<Mnemonic> {
     let mnemonic =
         Mnemonic::parse_in_normalized(bip39::Language::English, trimmed).map_err(|_e| {
             anyhow::anyhow!(
-                "invalid mnemonic (expected 24 English words); set ZSTASH_IT_MNEMONIC or delete mnemonic file"
+                "invalid mnemonic (expected 24 English words); set BAGZ_IT_MNEMONIC or delete mnemonic file"
             )
         })?;
     if mnemonic.words().count() != 24 {

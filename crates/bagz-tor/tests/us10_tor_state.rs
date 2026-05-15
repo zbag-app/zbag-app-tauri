@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use tempfile::TempDir;
 use tokio::sync::oneshot;
-use zstash_core::domain::{TorState, TorStatus};
-use zstash_tor::{TorManager, TorManagerConfig};
+use bagz_core::domain::{TorState, TorStatus};
+use bagz_tor::{TorManager, TorManagerConfig};
 
 fn new_tor_dir(prefix: &str) -> TempDir {
     // The returned TempDir must outlive any TorManager that uses its path.
@@ -17,7 +17,7 @@ fn new_tor_dir(prefix: &str) -> TempDir {
 
 #[test]
 fn initial_on_state_is_normalized_to_off() {
-    let tor_dir = new_tor_dir("zstash-tor-test-initial-on");
+    let tor_dir = new_tor_dir("bagz-tor-test-initial-on");
     let config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     let manager = TorManager::new(
         config,
@@ -37,7 +37,7 @@ fn initial_on_state_is_normalized_to_off() {
 
 #[test]
 fn initial_disabled_state_is_normalized_to_off() {
-    let tor_dir = new_tor_dir("zstash-tor-test-initial-disabled");
+    let tor_dir = new_tor_dir("bagz-tor-test-initial-disabled");
     let config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     let manager = TorManager::new(
         config,
@@ -58,7 +58,7 @@ fn initial_disabled_state_is_normalized_to_off() {
 
 #[tokio::test]
 async fn state_machine_transitions_to_error_on_bootstrap_failure() {
-    let tor_dir = new_tor_dir("zstash-tor-test-bootstrap-failure");
+    let tor_dir = new_tor_dir("bagz-tor-test-bootstrap-failure");
     let mut config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     config.bootstrap_timeout = Duration::from_secs(1);
     config.bootstrap = Arc::new(|_dir| {
@@ -94,7 +94,7 @@ async fn state_machine_transitions_to_error_on_bootstrap_failure() {
 
 #[tokio::test]
 async fn state_machine_transitions_to_error_on_bootstrap_timeout() {
-    let tor_dir = new_tor_dir("zstash-tor-test-bootstrap-timeout");
+    let tor_dir = new_tor_dir("bagz-tor-test-bootstrap-timeout");
     let mut config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     config.bootstrap_timeout = Duration::from_millis(50);
     config.bootstrap = Arc::new(|_dir| {
@@ -145,7 +145,7 @@ async fn reenable_after_error_restarts_bootstrap_and_clears_last_error() {
         steps
     }));
 
-    let tor_dir = new_tor_dir("zstash-tor-test-reenable-after-error");
+    let tor_dir = new_tor_dir("bagz-tor-test-reenable-after-error");
     let mut config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     config.bootstrap_timeout = Duration::from_secs(1);
     config.bootstrap = {
@@ -217,7 +217,7 @@ async fn reenable_after_error_restarts_bootstrap_and_clears_last_error() {
 
 #[tokio::test]
 async fn state_machine_transitions_to_error_on_tor_dir_create_failure() {
-    let tor_dir = new_tor_dir("zstash-tor-test-tor-dir-create-failure");
+    let tor_dir = new_tor_dir("bagz-tor-test-tor-dir-create-failure");
     let tor_dir_path = tor_dir.path().join("tor-dir-is-a-file");
     std::fs::write(&tor_dir_path, b"not a directory").expect("create tor-dir sentinel file");
 
@@ -262,7 +262,7 @@ async fn disable_during_bootstrap_results_in_off_state() {
     let (ready_tx, ready_rx) = oneshot::channel::<()>();
     let (proceed_tx, proceed_rx) = oneshot::channel::<()>();
 
-    let tor_dir = new_tor_dir("zstash-tor-test-disable-during-bootstrap");
+    let tor_dir = new_tor_dir("bagz-tor-test-disable-during-bootstrap");
     let mut config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     config.bootstrap_timeout = Duration::from_secs(5);
 
@@ -343,7 +343,7 @@ async fn rapid_enable_disable_enable_restarts_bootstrap() {
         steps
     }));
 
-    let tor_dir = new_tor_dir("zstash-tor-test-rapid-toggle");
+    let tor_dir = new_tor_dir("bagz-tor-test-rapid-toggle");
     let mut config = TorManagerConfig::new(tor_dir.path().to_path_buf());
     config.bootstrap_timeout = Duration::from_secs(1);
     config.bootstrap = {

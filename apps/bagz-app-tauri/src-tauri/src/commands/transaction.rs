@@ -3,23 +3,23 @@ use std::time::Instant;
 
 use tauri::State;
 
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::transaction::{
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zstash_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::wallet_manager::WalletManager;
 
 use crate::events;
 use crate::state::AppState;
 
 use super::util::{map_anyhow, to_ipc_error};
 
-#[tauri::command(rename = "zstash_prepare_send")]
-pub fn zstash_prepare_send(
+#[tauri::command(rename = "bagz_prepare_send")]
+pub fn bagz_prepare_send(
     state: State<'_, AppState>,
     request: PrepareSendRequest,
 ) -> IpcResult<PrepareSendResponse> {
@@ -34,7 +34,7 @@ pub fn zstash_prepare_send(
         account_id,
         proposal_id = "-",
         txid = "-",
-        phase = "tauri.zstash_prepare_send.start",
+        phase = "tauri.bagz_prepare_send.start",
         elapsed_ms = 0u128,
         error_code = "none",
         error_message = "",
@@ -60,7 +60,7 @@ pub fn zstash_prepare_send(
                 account_id,
                 proposal_id = %response.proposal_id,
                 txid = "-",
-                phase = "tauri.zstash_prepare_send.success",
+                phase = "tauri.bagz_prepare_send.success",
                 elapsed_ms = started_at.elapsed().as_millis(),
                 error_code = "none",
                 error_message = "",
@@ -78,7 +78,7 @@ pub fn zstash_prepare_send(
                 account_id,
                 proposal_id = "-",
                 txid = "-",
-                phase = "tauri.zstash_prepare_send.error",
+                phase = "tauri.bagz_prepare_send.error",
                 elapsed_ms = started_at.elapsed().as_millis(),
                 error_code = %error_code,
                 error_message = %error_message,
@@ -91,8 +91,8 @@ pub fn zstash_prepare_send(
     }
 }
 
-#[tauri::command(rename = "zstash_confirm_send")]
-pub fn zstash_confirm_send(
+#[tauri::command(rename = "bagz_confirm_send")]
+pub fn bagz_confirm_send(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ConfirmSendRequest,
@@ -114,8 +114,8 @@ pub fn zstash_confirm_send(
     })
 }
 
-#[tauri::command(rename = "zstash_cancel_send")]
-pub fn zstash_cancel_send(
+#[tauri::command(rename = "bagz_cancel_send")]
+pub fn bagz_cancel_send(
     state: State<'_, AppState>,
     request: CancelSendRequest,
 ) -> IpcResult<CancelSendResponse> {
@@ -132,8 +132,8 @@ pub fn zstash_cancel_send(
     })
 }
 
-#[tauri::command(rename = "zstash_retry_broadcast")]
-pub async fn zstash_retry_broadcast(
+#[tauri::command(rename = "bagz_retry_broadcast")]
+pub async fn bagz_retry_broadcast(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: RetryBroadcastRequest,
@@ -181,7 +181,7 @@ pub async fn zstash_retry_broadcast(
 
     let execute_join = tauri::async_runtime::spawn_blocking(move || {
         map_anyhow(|| {
-            let txid = zstash_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
+            let txid = bagz_engine::wallet_manager::WalletManager::execute_prepared_retry_broadcast_task(
                 task,
                 Some(handler),
                 Some(failover_handler),
@@ -205,8 +205,8 @@ pub async fn zstash_retry_broadcast(
     }
 }
 
-#[tauri::command(rename = "zstash_list_transactions")]
-pub fn zstash_list_transactions(
+#[tauri::command(rename = "bagz_list_transactions")]
+pub fn bagz_list_transactions(
     state: State<'_, AppState>,
     request: ListTransactionsRequest,
 ) -> IpcResult<ListTransactionsResponse> {
@@ -225,8 +225,8 @@ pub fn zstash_list_transactions(
     })
 }
 
-#[tauri::command(rename = "zstash_shield_funds")]
-pub fn zstash_shield_funds(
+#[tauri::command(rename = "bagz_shield_funds")]
+pub fn bagz_shield_funds(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: ShieldFundsRequest,

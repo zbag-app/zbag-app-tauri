@@ -1,4 +1,4 @@
-# Traceability: zSTASH Desktop Wallet
+# Traceability: bagZ Desktop Wallet
 
 This document provides an explicit, review-friendly mapping from requirements in `spec.md` to implementation work in `tasks.md`.
 

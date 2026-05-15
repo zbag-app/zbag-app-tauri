@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright configuration for zstash E2E testing.
+ * Playwright configuration for bagz E2E testing.
  *
  * This configuration is designed to work with the test bridge architecture:
  * 1. Test bridge server runs on port 19816 (Rust backend)

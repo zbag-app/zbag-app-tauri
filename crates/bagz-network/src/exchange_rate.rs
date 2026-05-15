@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use thiserror::Error;
 
-use zstash_core::domain::{ExchangeRate, FiatCurrency};
+use bagz_core::domain::{ExchangeRate, FiatCurrency};
 
 use crate::http_client::{HttpClient, HttpClientError};
 use crate::transport::TransportSelector;
@@ -76,7 +76,7 @@ impl ExchangeRateService {
     }
 
     /// Create a new exchange rate service with Tor support.
-    pub fn new_with_tor(tor: Arc<zstash_tor::TorManager>) -> anyhow::Result<Self> {
+    pub fn new_with_tor(tor: Arc<bagz_tor::TorManager>) -> anyhow::Result<Self> {
         Ok(Self {
             client: HttpClient::new_with_tor(tor)?,
             cache: Arc::new(Mutex::new(None)),
@@ -278,7 +278,7 @@ impl ExchangeRateService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zstash_core::domain::{TorState, TorStatus};
+    use bagz_core::domain::{TorState, TorStatus};
 
     #[test]
     fn test_fiat_currency_code() {
@@ -320,9 +320,9 @@ mod tests {
     async fn tor_not_ready_does_not_trigger_rate_limit_cooldown() {
         // Tor enabled but not ready should fail closed. That is a local condition
         // (no request is made), so it must not set the rate-limit timer.
-        let tor_dir = std::env::temp_dir().join("zstash-tor-test");
-        let tor = Arc::new(zstash_tor::TorManager::new(
-            zstash_tor::TorManagerConfig::new(tor_dir),
+        let tor_dir = std::env::temp_dir().join("bagz-tor-test");
+        let tor = Arc::new(bagz_tor::TorManager::new(
+            bagz_tor::TorManagerConfig::new(tor_dir),
             TorState {
                 enabled: true,
                 status: TorStatus::Connecting,

@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::mpsc;
 
-use zstash_network::http_client::HttpClient;
+use bagz_network::http_client::HttpClient;
 
 #[tokio::test]
 async fn direct_requests_include_user_agent_header() {

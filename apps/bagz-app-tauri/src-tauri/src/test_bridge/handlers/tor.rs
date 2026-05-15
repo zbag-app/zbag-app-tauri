@@ -1,11 +1,11 @@
 //! Tor command handlers.
 
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::sync::StartSyncRequest;
-use zstash_core::ipc::v1::commands::tor::{
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::sync::StartSyncRequest;
+use bagz_core::ipc::v1::commands::tor::{
     GetTorStateRequest, GetTorStateResponse, SetTorEnabledRequest, SetTorEnabledResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -17,7 +17,7 @@ pub fn set_tor_enabled_impl(
     state: &AppState,
     request: SetTorEnabledRequest,
 ) -> IpcResult<SetTorEnabledResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -41,16 +41,16 @@ pub fn set_tor_enabled_impl(
             .tor_manager
             .set_enabled(request.enabled)
             .map_err(|e| {
-                zstash_engine::error::ipc_err(errors::TOR_CONNECTION_FAILED, e.to_string())
+                bagz_engine::error::ipc_err(errors::TOR_CONNECTION_FAILED, e.to_string())
             })?;
 
         let updated_at_ms = system_time_to_unix_ms(std::time::SystemTime::now()).map_err(|e| {
-            zstash_engine::error::ipc_err(errors::INTERNAL_ERROR, format!("time error: {e}"))
+            bagz_engine::error::ipc_err(errors::INTERNAL_ERROR, format!("time error: {e}"))
         })?;
 
         {
             let mgr = state.wallet_manager.lock().expect("mutex poisoned");
-            zstash_engine::db::tor_meta::upsert_tor_state(
+            bagz_engine::db::tor_meta::upsert_tor_state(
                 mgr.app_db().conn(),
                 &next_state,
                 updated_at_ms,
@@ -81,7 +81,7 @@ pub fn get_tor_state_impl(
     state: &AppState,
     request: GetTorStateRequest,
 ) -> IpcResult<GetTorStateResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

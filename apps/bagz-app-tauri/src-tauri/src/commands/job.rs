@@ -2,20 +2,20 @@ use std::sync::Arc;
 
 use tauri::State;
 
-use zstash_core::ipc::v1::commands::job::{
+use bagz_core::ipc::v1::commands::job::{
     CancelJobRequest, CancelJobResponse, GetJobStatusRequest, GetJobStatusResponse,
     ListJobsRequest, ListJobsResponse, StartSendJobRequest, StartSendJobResponse,
     StartShieldJobRequest, StartShieldJobResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, ensure_schema_version};
+use bagz_core::ipc::v1::common::{IpcResult, ensure_schema_version};
 
 use crate::events;
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zstash_start_send_job")]
-pub fn zstash_start_send_job(
+#[tauri::command(rename = "bagz_start_send_job")]
+pub fn bagz_start_send_job(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartSendJobRequest,
@@ -50,8 +50,8 @@ pub fn zstash_start_send_job(
     })
 }
 
-#[tauri::command(rename = "zstash_start_shield_job")]
-pub fn zstash_start_shield_job(
+#[tauri::command(rename = "bagz_start_shield_job")]
+pub fn bagz_start_shield_job(
     app: crate::AppHandle,
     state: State<'_, AppState>,
     request: StartShieldJobRequest,
@@ -87,8 +87,8 @@ pub fn zstash_start_shield_job(
     })
 }
 
-#[tauri::command(rename = "zstash_cancel_job")]
-pub fn zstash_cancel_job(
+#[tauri::command(rename = "bagz_cancel_job")]
+pub fn bagz_cancel_job(
     state: State<'_, AppState>,
     request: CancelJobRequest,
 ) -> IpcResult<CancelJobResponse> {
@@ -102,8 +102,8 @@ pub fn zstash_cancel_job(
     })
 }
 
-#[tauri::command(rename = "zstash_get_job_status")]
-pub fn zstash_get_job_status(
+#[tauri::command(rename = "bagz_get_job_status")]
+pub fn bagz_get_job_status(
     state: State<'_, AppState>,
     request: GetJobStatusRequest,
 ) -> IpcResult<GetJobStatusResponse> {
@@ -117,8 +117,8 @@ pub fn zstash_get_job_status(
     })
 }
 
-#[tauri::command(rename = "zstash_list_jobs")]
-pub fn zstash_list_jobs(
+#[tauri::command(rename = "bagz_list_jobs")]
+pub fn bagz_list_jobs(
     state: State<'_, AppState>,
     request: ListJobsRequest,
 ) -> IpcResult<ListJobsResponse> {

@@ -1,6 +1,6 @@
-use zstash_core::errors;
-use zstash_core::ipc::v1::common::{IpcError, IpcResult};
-use zstash_engine::error::find_engine_ipc_error;
+use bagz_core::errors;
+use bagz_core::ipc::v1::common::{IpcError, IpcResult};
+use bagz_engine::error::find_engine_ipc_error;
 
 pub fn map_anyhow<T, F>(f: F) -> IpcResult<T>
 where

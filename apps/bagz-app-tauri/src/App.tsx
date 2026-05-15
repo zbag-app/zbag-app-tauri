@@ -385,7 +385,7 @@ function AppInner() {
           input.setAttribute('data-1p-ignore', 'true');
           input.setAttribute('data-form-type', 'other');
           if (!input.hasAttribute('name') || input.getAttribute('name') === 'password') {
-            input.setAttribute('name', 'zstash-secret');
+            input.setAttribute('name', 'bagz-secret');
           }
           continue;
         }

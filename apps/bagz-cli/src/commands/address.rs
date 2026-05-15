@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 
-use zstash_core::domain::AddressType;
+use bagz_core::domain::AddressType;
 
 use crate::cli_app_state::CliAppState;
 use crate::output::OutputMode;
@@ -60,11 +60,11 @@ pub async fn run(args: AddressArgs, data_dir: &Path, output: &OutputMode) -> Res
     } else {
         let wallets = state.list_wallets()?;
         if wallets.is_empty() {
-            anyhow::bail!("no wallets found - create one with: zstash wallet create --name <NAME>");
+            anyhow::bail!("no wallets found - create one with: bagz wallet create --name <NAME>");
         }
         if wallets.len() > 1 {
             anyhow::bail!(
-                "multiple wallets found - specify one with: zstash address {} --wallet <ID>",
+                "multiple wallets found - specify one with: bagz address {} --wallet <ID>",
                 account_id
             );
         }

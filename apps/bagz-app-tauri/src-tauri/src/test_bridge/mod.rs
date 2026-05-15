@@ -1,7 +1,7 @@
 //! HTTP Test Bridge for E2E Testing
 //!
 //! This module provides an HTTP server that exposes Tauri commands via REST endpoints,
-//! enabling Playwright and Claude Code (via Chrome MCP) to test zstash against the real
+//! enabling Playwright and Claude Code (via Chrome MCP) to test bagz against the real
 //! Rust backend without requiring the Tauri webview.
 //!
 //! **Security:** This server is feature-gated (`test-bridge`) and only binds to
@@ -36,53 +36,53 @@ use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{error, info, warn};
 
-use zstash_core::ipc::v1::commands::address::{
+use bagz_core::ipc::v1::commands::address::{
     GetReceiveAddressRequest, GetReceiveAddressResponse,
 };
-use zstash_core::ipc::v1::commands::backup::{
+use bagz_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
 };
-use zstash_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
-use zstash_core::ipc::v1::commands::exchange_rate::{
+use bagz_core::ipc::v1::commands::balance::{GetBalanceRequest, GetBalanceResponse};
+use bagz_core::ipc::v1::commands::exchange_rate::{
     GetExchangeRateRequest, GetFiatSettingsRequest, GetFiatSettingsResponse,
     SetFiatSettingsRequest, SetFiatSettingsResponse,
 };
-use zstash_core::ipc::v1::commands::keystone::{
+use bagz_core::ipc::v1::commands::keystone::{
     BuildSigningRequestRequest, BuildSigningRequestResponse, CreateKeystoneWalletRequest,
     CreateKeystoneWalletResponse, FinalizeSigningRequest, FinalizeSigningResponse,
     ImportUfvkRequest, ImportUfvkResponse,
 };
-use zstash_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
-use zstash_core::ipc::v1::commands::server::{
+use bagz_core::ipc::v1::commands::logs::{GetLogLocationRequest, GetLogLocationResponse};
+use bagz_core::ipc::v1::commands::server::{
     AddServerRequest, AddServerResponse, ListServersRequest, ListServersResponse,
     SetDefaultServerRequest, SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
-use zstash_core::ipc::v1::commands::swap::{
+use bagz_core::ipc::v1::commands::swap::{
     GetSwapStatusRequest, GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse,
     RequestSwapQuoteRequest, RequestSwapQuoteResponse, StartSwapRequest, StartSwapResponse,
 };
-use zstash_core::ipc::v1::commands::sync::{
+use bagz_core::ipc::v1::commands::sync::{
     GetSyncProgressRequest, GetSyncProgressResponse, StartSyncRequest, StartSyncResponse,
     StopSyncRequest, StopSyncResponse,
 };
-use zstash_core::ipc::v1::commands::tor::{
+use bagz_core::ipc::v1::commands::tor::{
     GetTorStateRequest, GetTorStateResponse, SetTorEnabledRequest, SetTorEnabledResponse,
 };
-use zstash_core::ipc::v1::commands::transaction::{
+use bagz_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
     RetryBroadcastRequest, RetryBroadcastResponse, ShieldFundsRequest, ShieldFundsResponse,
 };
-use zstash_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
-use zstash_core::ipc::v1::commands::wallet::{
+use bagz_core::ipc::v1::commands::version::{GetVersionRequest, GetVersionResponse};
+use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
     LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
     ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse,
     ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 
@@ -110,11 +110,11 @@ const SENSITIVE_CONFIRM_HEADER: &str = "X-Test-Bridge-Confirm";
 const SENSITIVE_CONFIRM_VALUE: &str = "true";
 const SENSITIVE_MIN_INTERVAL: Duration = Duration::from_secs(2);
 const SENSITIVE_COMMANDS: [&str; 3] = [
-    "zstash_view_seed_phrase",
-    "zstash_restore_wallet",
-    "zstash_confirm_send",
+    "bagz_view_seed_phrase",
+    "bagz_restore_wallet",
+    "bagz_confirm_send",
 ];
-const RATE_LIMITED_SENSITIVE_COMMANDS: [&str; 1] = ["zstash_view_seed_phrase"];
+const RATE_LIMITED_SENSITIVE_COMMANDS: [&str; 1] = ["bagz_view_seed_phrase"];
 
 /// Shared state for the test bridge server
 pub struct TestBridgeState {
@@ -184,7 +184,7 @@ fn allowed_origins() -> Vec<HeaderValue> {
 fn parse_allowed_origins() -> Vec<HeaderValue> {
     let mut parsed = Vec::new();
 
-    if let Ok(raw) = std::env::var("ZSTASH_TEST_BRIDGE_ALLOWED_ORIGINS") {
+    if let Ok(raw) = std::env::var("BAGZ_TEST_BRIDGE_ALLOWED_ORIGINS") {
         for origin in raw.split(',') {
             let trimmed = origin.trim();
             if trimmed.is_empty() {
@@ -315,220 +315,220 @@ async fn invoke_command(
 
     match command.as_str() {
         // Wallet commands
-        "zstash_list_wallets" => {
+        "bagz_list_wallets" => {
             dispatch::<ListWalletsRequest, ListWalletsResponse>(&state, body.request, |s, req| {
                 list_wallets_impl(s, req)
             })
         }
-        "zstash_create_wallet" => {
+        "bagz_create_wallet" => {
             dispatch::<CreateWalletRequest, CreateWalletResponse>(&state, body.request, |s, req| {
                 create_wallet_impl(s, req)
             })
         }
-        "zstash_load_wallet" => {
+        "bagz_load_wallet" => {
             dispatch::<LoadWalletRequest, LoadWalletResponse>(&state, body.request, |s, req| {
                 load_wallet_impl(s, req)
             })
         }
-        "zstash_get_wallet_status" => dispatch::<GetWalletStatusRequest, GetWalletStatusResponse>(
+        "bagz_get_wallet_status" => dispatch::<GetWalletStatusRequest, GetWalletStatusResponse>(
             &state,
             body.request,
             get_wallet_status_impl,
         ),
-        "zstash_unlock_wallet" => {
+        "bagz_unlock_wallet" => {
             dispatch::<UnlockWalletRequest, UnlockWalletResponse>(&state, body.request, |s, req| {
                 unlock_wallet_impl(s, req)
             })
         }
-        "zstash_lock_wallet" => {
+        "bagz_lock_wallet" => {
             dispatch::<LockWalletRequest, LockWalletResponse>(&state, body.request, |s, req| {
                 lock_wallet_impl(s, req)
             })
         }
-        "zstash_reauth_wallet" => {
+        "bagz_reauth_wallet" => {
             dispatch::<ReauthWalletRequest, ReauthWalletResponse>(&state, body.request, |s, req| {
                 reauth_wallet_impl(s, req)
             })
         }
-        "zstash_view_seed_phrase" => dispatch::<ViewSeedPhraseRequest, ViewSeedPhraseResponse>(
+        "bagz_view_seed_phrase" => dispatch::<ViewSeedPhraseRequest, ViewSeedPhraseResponse>(
             &state,
             body.request,
             view_seed_phrase_impl,
         ),
-        "zstash_logout_wallet" => {
+        "bagz_logout_wallet" => {
             dispatch::<LogoutWalletRequest, LogoutWalletResponse>(&state, body.request, |s, req| {
                 logout_wallet_impl(s, req)
             })
         }
         // Balance commands
-        "zstash_get_balance" => {
+        "bagz_get_balance" => {
             dispatch::<GetBalanceRequest, GetBalanceResponse>(&state, body.request, |s, req| {
                 get_balance_impl(s, req)
             })
         }
         // Address commands
-        "zstash_get_receive_address" => dispatch::<
+        "bagz_get_receive_address" => dispatch::<
             GetReceiveAddressRequest,
             GetReceiveAddressResponse,
         >(&state, body.request, |s, req| {
             get_receive_address_impl(s, req)
         }),
         // Backup commands
-        "zstash_get_backup_challenge" => dispatch::<
+        "bagz_get_backup_challenge" => dispatch::<
             GetBackupChallengeRequest,
             GetBackupChallengeResponse,
         >(&state, body.request, |s, req| {
             get_backup_challenge_impl(s, req)
         }),
-        "zstash_verify_backup" => {
+        "bagz_verify_backup" => {
             dispatch::<VerifyBackupRequest, VerifyBackupResponse>(&state, body.request, |s, req| {
                 verify_backup_impl(s, req)
             })
         }
-        "zstash_restore_wallet" => dispatch::<RestoreWalletRequest, RestoreWalletResponse>(
+        "bagz_restore_wallet" => dispatch::<RestoreWalletRequest, RestoreWalletResponse>(
             &state,
             body.request,
             restore_wallet_impl,
         ),
         // Transactions commands
-        "zstash_prepare_send" => {
+        "bagz_prepare_send" => {
             dispatch::<PrepareSendRequest, PrepareSendResponse>(&state, body.request, |s, req| {
                 prepare_send_impl(s, req)
             })
         }
-        "zstash_confirm_send" => {
+        "bagz_confirm_send" => {
             dispatch::<ConfirmSendRequest, ConfirmSendResponse>(&state, body.request, |s, req| {
                 confirm_send_impl(s, req)
             })
         }
-        "zstash_cancel_send" => {
+        "bagz_cancel_send" => {
             dispatch::<CancelSendRequest, CancelSendResponse>(&state, body.request, |s, req| {
                 cancel_send_impl(s, req)
             })
         }
-        "zstash_retry_broadcast" => dispatch::<RetryBroadcastRequest, RetryBroadcastResponse>(
+        "bagz_retry_broadcast" => dispatch::<RetryBroadcastRequest, RetryBroadcastResponse>(
             &state,
             body.request,
             retry_broadcast_impl,
         ),
-        "zstash_list_transactions" => {
+        "bagz_list_transactions" => {
             dispatch::<ListTransactionsRequest, ListTransactionsResponse>(
                 &state,
                 body.request,
                 list_transactions_impl,
             )
         }
-        "zstash_shield_funds" => {
+        "bagz_shield_funds" => {
             dispatch::<ShieldFundsRequest, ShieldFundsResponse>(&state, body.request, |s, req| {
                 shield_funds_impl(s, req)
             })
         }
         // Keystone commands
-        "zstash_import_ufvk" => {
+        "bagz_import_ufvk" => {
             dispatch::<ImportUfvkRequest, ImportUfvkResponse>(&state, body.request, |s, req| {
                 import_ufvk_impl(s, req)
             })
         }
-        "zstash_build_signing_request" => dispatch::<
+        "bagz_build_signing_request" => dispatch::<
             BuildSigningRequestRequest,
             BuildSigningRequestResponse,
         >(&state, body.request, |s, req| {
             build_signing_request_impl(s, req)
         }),
-        "zstash_finalize_signing" => dispatch::<FinalizeSigningRequest, FinalizeSigningResponse>(
+        "bagz_finalize_signing" => dispatch::<FinalizeSigningRequest, FinalizeSigningResponse>(
             &state,
             body.request,
             finalize_signing_impl,
         ),
-        "zstash_create_keystone_wallet" => dispatch::<
+        "bagz_create_keystone_wallet" => dispatch::<
             CreateKeystoneWalletRequest,
             CreateKeystoneWalletResponse,
         >(&state, body.request, |s, req| {
             create_keystone_wallet_impl(s, req)
         }),
         // Swap commands
-        "zstash_request_swap_quote" => {
+        "bagz_request_swap_quote" => {
             dispatch::<RequestSwapQuoteRequest, RequestSwapQuoteResponse>(
                 &state,
                 body.request,
                 request_swap_quote_impl,
             )
         }
-        "zstash_start_swap" => {
+        "bagz_start_swap" => {
             dispatch::<StartSwapRequest, StartSwapResponse>(&state, body.request, |s, req| {
                 start_swap_impl(s, req)
             })
         }
-        "zstash_get_swap_status" => dispatch::<GetSwapStatusRequest, GetSwapStatusResponse>(
+        "bagz_get_swap_status" => dispatch::<GetSwapStatusRequest, GetSwapStatusResponse>(
             &state,
             body.request,
             get_swap_status_impl,
         ),
-        "zstash_list_swaps" => {
+        "bagz_list_swaps" => {
             dispatch::<ListSwapsRequest, ListSwapsResponse>(&state, body.request, |s, req| {
                 list_swaps_impl(s, req)
             })
         }
         // Tor commands
-        "zstash_set_tor_enabled" => dispatch::<SetTorEnabledRequest, SetTorEnabledResponse>(
+        "bagz_set_tor_enabled" => dispatch::<SetTorEnabledRequest, SetTorEnabledResponse>(
             &state,
             body.request,
             set_tor_enabled_impl,
         ),
-        "zstash_get_tor_state" => {
+        "bagz_get_tor_state" => {
             dispatch::<GetTorStateRequest, GetTorStateResponse>(&state, body.request, |s, req| {
                 get_tor_state_impl(s, req)
             })
         }
         // Server commands
-        "zstash_add_server" => {
+        "bagz_add_server" => {
             dispatch::<AddServerRequest, AddServerResponse>(&state, body.request, |s, req| {
                 add_server_impl(s, req)
             })
         }
-        "zstash_set_default_server" => {
+        "bagz_set_default_server" => {
             dispatch::<SetDefaultServerRequest, SetDefaultServerResponse>(
                 &state,
                 body.request,
                 set_default_server_impl,
             )
         }
-        "zstash_test_server" => {
+        "bagz_test_server" => {
             dispatch::<TestServerRequest, TestServerResponse>(&state, body.request, |s, req| {
                 test_server_impl(s, req)
             })
         }
-        "zstash_list_servers" => {
+        "bagz_list_servers" => {
             dispatch::<ListServersRequest, ListServersResponse>(&state, body.request, |s, req| {
                 list_servers_impl(s, req)
             })
         }
         // Logs
-        "zstash_get_log_location" => dispatch::<GetLogLocationRequest, GetLogLocationResponse>(
+        "bagz_get_log_location" => dispatch::<GetLogLocationRequest, GetLogLocationResponse>(
             &state,
             body.request,
             get_log_location_impl,
         ),
         // Version
-        "zstash_get_version" => {
+        "bagz_get_version" => {
             dispatch::<GetVersionRequest, GetVersionResponse>(&state, body.request, |s, req| {
                 get_version_impl(s, req)
             })
         }
         // Fiat settings/exchange rate
-        "zstash_get_fiat_settings" => dispatch::<GetFiatSettingsRequest, GetFiatSettingsResponse>(
+        "bagz_get_fiat_settings" => dispatch::<GetFiatSettingsRequest, GetFiatSettingsResponse>(
             &state,
             body.request,
             get_fiat_settings_impl,
         ),
-        "zstash_set_fiat_settings" => dispatch::<SetFiatSettingsRequest, SetFiatSettingsResponse>(
+        "bagz_set_fiat_settings" => dispatch::<SetFiatSettingsRequest, SetFiatSettingsResponse>(
             &state,
             body.request,
             set_fiat_settings_impl,
         ),
         // NOTE: get_exchange_rate_impl is async (fetches rates from external API),
         // so it cannot use the synchronous `dispatch` helper.
-        "zstash_get_exchange_rate" => {
+        "bagz_get_exchange_rate" => {
             let req: GetExchangeRateRequest = match serde_json::from_value(body.request) {
                 Ok(r) => r,
                 Err(e) => {
@@ -545,17 +545,17 @@ async fn invoke_command(
             (StatusCode::OK, Json(result)).into_response()
         }
         // Sync commands
-        "zstash_start_sync" => {
+        "bagz_start_sync" => {
             dispatch::<StartSyncRequest, StartSyncResponse>(&state, body.request, |s, req| {
                 start_sync_impl(s, req)
             })
         }
-        "zstash_stop_sync" => {
+        "bagz_stop_sync" => {
             dispatch::<StopSyncRequest, StopSyncResponse>(&state, body.request, |s, req| {
                 stop_sync_impl(s, req)
             })
         }
-        "zstash_get_sync_progress" => dispatch::<GetSyncProgressRequest, GetSyncProgressResponse>(
+        "bagz_get_sync_progress" => dispatch::<GetSyncProgressRequest, GetSyncProgressResponse>(
             &state,
             body.request,
             get_sync_progress_impl,

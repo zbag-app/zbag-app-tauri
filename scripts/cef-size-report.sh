@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 TOP_N=20
 CEF_DIR="${CEF_DIR:-}"
-APP_BUNDLE="${APP_BUNDLE:-$ROOT/target/release/bundle/macos/zSTASH.app}"
+APP_BUNDLE="${APP_BUNDLE:-$ROOT/target/release/bundle/macos/bagZ.app}"
 DMG_PATH="${DMG_PATH:-}"
 
 usage() {
@@ -14,7 +14,7 @@ Usage: cef-size-report.sh [options]
 
 Options:
   --cef-dir <path>     Explicit CEF version directory
-  --app <path>         Explicit .app path (default: target/release/bundle/macos/zSTASH.app)
+  --app <path>         Explicit .app path (default: target/release/bundle/macos/bagZ.app)
   --dmg <path>         Explicit .dmg path (default: newest under target/release/bundle/dmg)
   --top <n>            Number of top entries/files to print (default: 20)
   -h, --help           Show this help

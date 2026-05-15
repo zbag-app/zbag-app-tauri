@@ -9,7 +9,7 @@ use rand::RngCore;
 use uuid::Uuid;
 use zeroize::{Zeroize, Zeroizing};
 
-use zstash_core::domain::Network;
+use bagz_core::domain::Network;
 
 pub const KDF_ALGORITHM_ARGON2ID: &str = "argon2id";
 pub const KDF_VERSION_V1: u32 = 1;

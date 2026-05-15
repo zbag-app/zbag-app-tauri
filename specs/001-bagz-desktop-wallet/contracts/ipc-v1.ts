@@ -1,8 +1,8 @@
 /**
- * zSTASH Desktop Wallet - IPC Contract v1
+ * bagZ Desktop Wallet - IPC Contract v1
  *
  * TypeScript type definitions for Tauri IPC commands and events.
- * These types MUST match the Rust definitions in zstash-core/src/ipc/v1/
+ * These types MUST match the Rust definitions in bagz-core/src/ipc/v1/
  *
  * @version 1
  */
@@ -953,62 +953,62 @@ export const ErrorCodes = {
 
 export const Commands = {
   // Wallet
-  CREATE_WALLET: 'zstash_create_wallet',
-  LOAD_WALLET: 'zstash_load_wallet',
-  LIST_WALLETS: 'zstash_list_wallets',
-  GET_WALLET_STATUS: 'zstash_get_wallet_status',
-  UNLOCK_WALLET: 'zstash_unlock_wallet',
-  LOCK_WALLET: 'zstash_lock_wallet',
-  REAUTH_WALLET: 'zstash_reauth_wallet',
-  VIEW_SEED_PHRASE: 'zstash_view_seed_phrase',
+  CREATE_WALLET: 'bagz_create_wallet',
+  LOAD_WALLET: 'bagz_load_wallet',
+  LIST_WALLETS: 'bagz_list_wallets',
+  GET_WALLET_STATUS: 'bagz_get_wallet_status',
+  UNLOCK_WALLET: 'bagz_unlock_wallet',
+  LOCK_WALLET: 'bagz_lock_wallet',
+  REAUTH_WALLET: 'bagz_reauth_wallet',
+  VIEW_SEED_PHRASE: 'bagz_view_seed_phrase',
 
   // Address
-  GET_RECEIVE_ADDRESS: 'zstash_get_receive_address',
+  GET_RECEIVE_ADDRESS: 'bagz_get_receive_address',
 
   // Sync
-  START_SYNC: 'zstash_start_sync',
-  STOP_SYNC: 'zstash_stop_sync',
-  GET_SYNC_PROGRESS: 'zstash_get_sync_progress',
+  START_SYNC: 'bagz_start_sync',
+  STOP_SYNC: 'bagz_stop_sync',
+  GET_SYNC_PROGRESS: 'bagz_get_sync_progress',
 
   // Balance
-  GET_BALANCE: 'zstash_get_balance',
+  GET_BALANCE: 'bagz_get_balance',
 
   // Transactions
-  LIST_TRANSACTIONS: 'zstash_list_transactions',
-  PREPARE_SEND: 'zstash_prepare_send',
-  CONFIRM_SEND: 'zstash_confirm_send',
-  CANCEL_SEND: 'zstash_cancel_send',
-  RETRY_BROADCAST: 'zstash_retry_broadcast',
-  SHIELD_FUNDS: 'zstash_shield_funds',
+  LIST_TRANSACTIONS: 'bagz_list_transactions',
+  PREPARE_SEND: 'bagz_prepare_send',
+  CONFIRM_SEND: 'bagz_confirm_send',
+  CANCEL_SEND: 'bagz_cancel_send',
+  RETRY_BROADCAST: 'bagz_retry_broadcast',
+  SHIELD_FUNDS: 'bagz_shield_funds',
 
   // Backup
-  GET_BACKUP_CHALLENGE: 'zstash_get_backup_challenge',
-  VERIFY_BACKUP: 'zstash_verify_backup',
-  RESTORE_WALLET: 'zstash_restore_wallet',
+  GET_BACKUP_CHALLENGE: 'bagz_get_backup_challenge',
+  VERIFY_BACKUP: 'bagz_verify_backup',
+  RESTORE_WALLET: 'bagz_restore_wallet',
 
   // Keystone
-  IMPORT_UFVK: 'zstash_import_ufvk',
-  BUILD_SIGNING_REQUEST: 'zstash_build_signing_request',
-  FINALIZE_SIGNING: 'zstash_finalize_signing',
+  IMPORT_UFVK: 'bagz_import_ufvk',
+  BUILD_SIGNING_REQUEST: 'bagz_build_signing_request',
+  FINALIZE_SIGNING: 'bagz_finalize_signing',
 
   // Swaps
-  REQUEST_SWAP_QUOTE: 'zstash_request_swap_quote',
-  START_SWAP: 'zstash_start_swap',
-  GET_SWAP_STATUS: 'zstash_get_swap_status',
-  LIST_SWAPS: 'zstash_list_swaps',
+  REQUEST_SWAP_QUOTE: 'bagz_request_swap_quote',
+  START_SWAP: 'bagz_start_swap',
+  GET_SWAP_STATUS: 'bagz_get_swap_status',
+  LIST_SWAPS: 'bagz_list_swaps',
 
   // Tor
-  SET_TOR_ENABLED: 'zstash_set_tor_enabled',
-  GET_TOR_STATE: 'zstash_get_tor_state',
+  SET_TOR_ENABLED: 'bagz_set_tor_enabled',
+  GET_TOR_STATE: 'bagz_get_tor_state',
 
   // Servers
-  ADD_SERVER: 'zstash_add_server',
-  SET_DEFAULT_SERVER: 'zstash_set_default_server',
-  TEST_SERVER: 'zstash_test_server',
-  LIST_SERVERS: 'zstash_list_servers',
+  ADD_SERVER: 'bagz_add_server',
+  SET_DEFAULT_SERVER: 'bagz_set_default_server',
+  TEST_SERVER: 'bagz_test_server',
+  LIST_SERVERS: 'bagz_list_servers',
 
   // Logs
-  GET_LOG_LOCATION: 'zstash_get_log_location',
+  GET_LOG_LOCATION: 'bagz_get_log_location',
 } as const;
 
 // ============================================================================
@@ -1016,10 +1016,10 @@ export const Commands = {
 // ============================================================================
 
 export const EventChannels = {
-  SYNC: 'zstash://sync',
-  BALANCE: 'zstash://balance',
-  TRANSACTION: 'zstash://tx',
-  SWAP: 'zstash://swap',
-  TOR: 'zstash://tor',
-  WALLET_STATUS: 'zstash://wallet-status',
+  SYNC: 'bagz://sync',
+  BALANCE: 'bagz://balance',
+  TRANSACTION: 'bagz://tx',
+  SWAP: 'bagz://swap',
+  TOR: 'bagz://tor',
+  WALLET_STATUS: 'bagz://wallet-status',
 } as const;

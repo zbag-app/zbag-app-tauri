@@ -45,7 +45,7 @@ fn cef_runtime_args() -> Vec<(String, Option<String>)> {
     let mut args = Vec::new();
 
     #[cfg(target_os = "macos")]
-    if std::env::var("ZSTASH_USE_SYSTEM_KEYCHAIN").as_deref() != Ok("1") {
+    if std::env::var("BAGZ_USE_SYSTEM_KEYCHAIN").as_deref() != Ok("1") {
         // POC default: avoid per-launch macOS keychain prompts from Chromium safe storage.
         args.push(("--use-mock-keychain".to_string(), None));
     }
@@ -172,69 +172,69 @@ pub fn run() {
     #[cfg(not(feature = "test-bridge"))]
     run_with_invoke_handler(tauri::generate_handler![
         // Wallet
-        commands::wallet::zstash_create_wallet,
-        commands::wallet::zstash_load_wallet,
-        commands::wallet::zstash_list_wallets,
-        commands::wallet::zstash_get_wallet_status,
-        commands::wallet::zstash_unlock_wallet,
-        commands::wallet::zstash_lock_wallet,
-        commands::wallet::zstash_reauth_wallet,
-        commands::wallet::zstash_view_seed_phrase,
-        commands::wallet::zstash_logout_wallet,
+        commands::wallet::bagz_create_wallet,
+        commands::wallet::bagz_load_wallet,
+        commands::wallet::bagz_list_wallets,
+        commands::wallet::bagz_get_wallet_status,
+        commands::wallet::bagz_unlock_wallet,
+        commands::wallet::bagz_lock_wallet,
+        commands::wallet::bagz_reauth_wallet,
+        commands::wallet::bagz_view_seed_phrase,
+        commands::wallet::bagz_logout_wallet,
         // Address
-        commands::address::zstash_get_receive_address,
+        commands::address::bagz_get_receive_address,
         // Sync
-        commands::sync::zstash_start_sync,
-        commands::sync::zstash_stop_sync,
-        commands::sync::zstash_get_sync_progress,
+        commands::sync::bagz_start_sync,
+        commands::sync::bagz_stop_sync,
+        commands::sync::bagz_get_sync_progress,
         // Balance
-        commands::balance::zstash_get_balance,
+        commands::balance::bagz_get_balance,
         // Transactions
-        commands::transaction::zstash_list_transactions,
-        commands::transaction::zstash_prepare_send,
-        commands::transaction::zstash_confirm_send,
-        commands::transaction::zstash_cancel_send,
-        commands::transaction::zstash_retry_broadcast,
-        commands::transaction::zstash_shield_funds,
+        commands::transaction::bagz_list_transactions,
+        commands::transaction::bagz_prepare_send,
+        commands::transaction::bagz_confirm_send,
+        commands::transaction::bagz_cancel_send,
+        commands::transaction::bagz_retry_broadcast,
+        commands::transaction::bagz_shield_funds,
         // Jobs (async operations)
-        commands::job::zstash_start_send_job,
-        commands::job::zstash_start_shield_job,
-        commands::job::zstash_cancel_job,
-        commands::job::zstash_get_job_status,
-        commands::job::zstash_list_jobs,
+        commands::job::bagz_start_send_job,
+        commands::job::bagz_start_shield_job,
+        commands::job::bagz_cancel_job,
+        commands::job::bagz_get_job_status,
+        commands::job::bagz_list_jobs,
         // Backup
-        commands::backup::zstash_get_backup_challenge,
-        commands::backup::zstash_verify_backup,
-        commands::backup::zstash_restore_wallet,
+        commands::backup::bagz_get_backup_challenge,
+        commands::backup::bagz_verify_backup,
+        commands::backup::bagz_restore_wallet,
         // Keystone
-        commands::keystone::zstash_import_ufvk,
-        commands::keystone::zstash_build_signing_request,
-        commands::keystone::zstash_finalize_signing,
-        commands::keystone::zstash_create_keystone_wallet,
+        commands::keystone::bagz_import_ufvk,
+        commands::keystone::bagz_build_signing_request,
+        commands::keystone::bagz_finalize_signing,
+        commands::keystone::bagz_create_keystone_wallet,
         // Swaps
-        commands::swap::zstash_request_swap_quote,
-        commands::swap::zstash_start_swap,
-        commands::swap::zstash_get_swap_status,
-        commands::swap::zstash_list_swaps,
-        commands::swap::zstash_get_supported_tokens,
-        commands::swap::zstash_refresh_swap_status,
-        commands::swap::zstash_resume_pending_swaps,
+        commands::swap::bagz_request_swap_quote,
+        commands::swap::bagz_start_swap,
+        commands::swap::bagz_get_swap_status,
+        commands::swap::bagz_list_swaps,
+        commands::swap::bagz_get_supported_tokens,
+        commands::swap::bagz_refresh_swap_status,
+        commands::swap::bagz_resume_pending_swaps,
         // Tor
-        commands::tor::zstash_set_tor_enabled,
-        commands::tor::zstash_get_tor_state,
+        commands::tor::bagz_set_tor_enabled,
+        commands::tor::bagz_get_tor_state,
         // Logs
-        commands::logs::zstash_get_log_location,
+        commands::logs::bagz_get_log_location,
         // Servers
-        commands::server::zstash_add_server,
-        commands::server::zstash_set_default_server,
-        commands::server::zstash_test_server,
-        commands::server::zstash_list_servers,
+        commands::server::bagz_add_server,
+        commands::server::bagz_set_default_server,
+        commands::server::bagz_test_server,
+        commands::server::bagz_list_servers,
         // Version
-        commands::version::zstash_get_version,
+        commands::version::bagz_get_version,
         // Exchange Rate
-        commands::exchange_rate::zstash_get_fiat_settings,
-        commands::exchange_rate::zstash_set_fiat_settings,
-        commands::exchange_rate::zstash_get_exchange_rate,
+        commands::exchange_rate::bagz_get_fiat_settings,
+        commands::exchange_rate::bagz_set_fiat_settings,
+        commands::exchange_rate::bagz_get_exchange_rate,
     ]);
 }
 
@@ -244,17 +244,17 @@ where
     F: Fn(tauri::ipc::Invoke<AppRuntime>) -> bool + Send + Sync + 'static,
 {
     // Install ring before AppState, network, Tor, or any TLS use.
-    zstash_network::install_ring_crypto_provider();
+    bagz_network::install_ring_crypto_provider();
 
     let state = state::AppState::new().expect("failed to initialize application state");
 
     // Log version at startup
-    let version_info = zstash_core::version::VersionInfo::current();
+    let version_info = bagz_core::version::VersionInfo::current();
     tracing::info!(
         version = %version_info.version,
         git_commit = version_info.git_commit.as_deref().unwrap_or("release"),
         build_timestamp = %version_info.build_timestamp,
-        "zSTASH Desktop starting"
+        "bagZ Desktop starting"
     );
 
     let context = tauri::generate_context!();
@@ -331,7 +331,7 @@ where
 pub fn run_test_bridge_only() {
     use std::sync::Arc;
 
-    println!("Starting zstash in test-bridge mode...");
+    println!("Starting bagz in test-bridge mode...");
 
     let state = Arc::new(state::AppState::new().expect("failed to initialize application state"));
 

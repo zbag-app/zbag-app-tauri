@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use zstash_core::permissions::create_dir_all_secure;
+use bagz_core::permissions::create_dir_all_secure;
 
 mod cli_app_state;
 mod commands;
@@ -16,8 +16,8 @@ mod progress;
 use output::OutputMode;
 
 #[derive(Parser)]
-#[command(name = "zstash")]
-#[command(author, version, about = "zSTASH Zcash wallet CLI")]
+#[command(name = "bagz")]
+#[command(author, version, about = "bagZ Zcash wallet CLI")]
 #[command(propagate_version = true)]
 struct Cli {
     /// Output in JSON format (for scripting/agent use)
@@ -28,8 +28,8 @@ struct Cli {
     #[arg(long, global = true)]
     tor: bool,
 
-    /// Custom data directory (default: ~/.zstash)
-    #[arg(long, global = true, env = "ZSTASH_DATA_DIR")]
+    /// Custom data directory (default: ~/.bagz)
+    #[arg(long, global = true, env = "BAGZ_DATA_DIR")]
     data_dir: Option<PathBuf>,
 
     /// Verbose output (repeat for more: -v, -vv, -vvv)
@@ -110,7 +110,7 @@ async fn run_command(cli: Cli) -> Result<()> {
 fn default_data_dir() -> PathBuf {
     dirs::home_dir()
         .expect("HOME directory not found")
-        .join(".zstash")
+        .join(".bagz")
 }
 
 fn init_logging(verbosity: u8) {

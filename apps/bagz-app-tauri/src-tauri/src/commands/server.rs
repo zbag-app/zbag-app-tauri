@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use tauri::State;
 
-use zstash_core::ipc::v1::commands::server::{
+use bagz_core::ipc::v1::commands::server::{
     AddServerRequest, AddServerResponse, ListServersRequest, ListServersResponse,
     SetDefaultServerRequest, SetDefaultServerResponse, TestServerRequest, TestServerResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, ensure_schema_version};
+use bagz_core::ipc::v1::common::{IpcResult, ensure_schema_version};
 
 use crate::server_logic;
 use crate::state::AppState;
@@ -19,8 +19,8 @@ use super::util::map_anyhow;
 /// UI responsive when the endpoint is unreachable.
 const SERVER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
-#[tauri::command(rename = "zstash_add_server")]
-pub fn zstash_add_server(
+#[tauri::command(rename = "bagz_add_server")]
+pub fn bagz_add_server(
     state: State<'_, AppState>,
     request: AddServerRequest,
 ) -> IpcResult<AddServerResponse> {
@@ -37,8 +37,8 @@ pub fn zstash_add_server(
     })
 }
 
-#[tauri::command(rename = "zstash_set_default_server")]
-pub fn zstash_set_default_server(
+#[tauri::command(rename = "bagz_set_default_server")]
+pub fn bagz_set_default_server(
     state: State<'_, AppState>,
     request: SetDefaultServerRequest,
 ) -> IpcResult<SetDefaultServerResponse> {
@@ -49,8 +49,8 @@ pub fn zstash_set_default_server(
     map_anyhow(|| server_logic::set_default_server(state.inner(), request))
 }
 
-#[tauri::command(rename = "zstash_list_servers")]
-pub fn zstash_list_servers(
+#[tauri::command(rename = "bagz_list_servers")]
+pub fn bagz_list_servers(
     state: State<'_, AppState>,
     request: ListServersRequest,
 ) -> IpcResult<ListServersResponse> {
@@ -61,8 +61,8 @@ pub fn zstash_list_servers(
     map_anyhow(|| server_logic::list_servers(state.inner()))
 }
 
-#[tauri::command(rename = "zstash_test_server")]
-pub fn zstash_test_server(
+#[tauri::command(rename = "bagz_test_server")]
+pub fn bagz_test_server(
     state: State<'_, AppState>,
     request: TestServerRequest,
 ) -> IpcResult<TestServerResponse> {

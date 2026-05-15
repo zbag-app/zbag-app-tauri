@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use anyhow::Context as _;
 use tracing::warn;
 
-use zstash_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
-use zstash_core::ipc::v1::commands::wallet::{
+use bagz_core::domain::{AccountInfo, AccountType, SyncPhase, SyncProgress, WalletLockStatus};
+use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusResponse, ListWalletsResponse,
     LoadWalletResponse, LockWalletResponse, LogoutWalletResponse, ReauthWalletRequest,
     ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse, ViewSeedPhraseRequest,
     ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
 
 use crate::state::AppState;
 use crate::time_utils::system_time_to_unix_ms;
@@ -29,7 +29,7 @@ fn idle_sync_progress() -> SyncProgress {
 
 fn stop_sync_for_wallet(
     state: &AppState,
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) {
     mgr.observe_sync_stop_requested(wallet_id);
@@ -39,7 +39,7 @@ fn stop_sync_for_wallet(
 
 fn stop_previous_wallet_sync(
     state: &AppState,
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) {
     if let Some(prev_wallet_id) = mgr.active_wallet_info().map(|w| w.id)
@@ -172,12 +172,12 @@ pub fn view_seed_phrase(
 }
 
 fn load_accounts_for_wallet(
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
 ) -> anyhow::Result<Vec<AccountInfo>> {
     let wallet_db_accounts = mgr.list_wallet_db_account_ids(wallet_id)?;
     let meta_accounts =
-        zstash_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
+        bagz_engine::db::account_meta::list_accounts(mgr.app_db().conn(), wallet_id)
             .map_err(|e| anyhow::anyhow!(e))
             .context("failed to load account metadata")?;
 
@@ -207,9 +207,9 @@ fn load_accounts_for_wallet(
 }
 
 fn build_load_wallet_response(
-    mgr: &mut zstash_engine::wallet_manager::WalletManager,
+    mgr: &mut bagz_engine::wallet_manager::WalletManager,
     wallet_id: uuid::Uuid,
-    tx_service: &mut zstash_engine::tx_service::TxService<zstash_engine::reauth::SystemClock>,
+    tx_service: &mut bagz_engine::tx_service::TxService<bagz_engine::reauth::SystemClock>,
 ) -> anyhow::Result<LoadWalletResponse> {
     let (wallet, lock_status) = mgr.load_wallet(wallet_id, tx_service)?;
 
@@ -235,9 +235,9 @@ mod tests {
 
     use uuid::Uuid;
 
-    use zstash_core::domain::{Network, WalletLockStatus};
-    use zstash_engine::key_store::KeyStore;
-    use zstash_engine::wallet_manager::WalletManager;
+    use bagz_core::domain::{Network, WalletLockStatus};
+    use bagz_engine::key_store::KeyStore;
+    use bagz_engine::wallet_manager::WalletManager;
 
     type StoreKey = (Uuid, u8);
     type Store = HashMap<StoreKey, Vec<u8>>;
@@ -338,15 +338,15 @@ mod tests {
     }
 
     fn temp_root(prefix: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp root");
         root
     }
 
     #[test]
     fn load_wallet_returns_empty_accounts_when_locked_then_accounts_after_unlock() {
-        use zstash_engine::reauth::SystemClock;
-        use zstash_engine::tx_service::TxService;
+        use bagz_engine::reauth::SystemClock;
+        use bagz_engine::tx_service::TxService;
 
         let root = temp_root("us1_load_wallet_accounts");
         let app_db_path = root.join("app.db");

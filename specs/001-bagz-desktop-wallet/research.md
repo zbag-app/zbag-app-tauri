@@ -1,6 +1,6 @@
-# Research: zSTASH Desktop Wallet
+# Research: bagZ Desktop Wallet
 
-**Branch**: `001-zstash-desktop-wallet`
+**Branch**: `001-bagz-desktop-wallet`
 **Status**: Complete
 **Purpose**: Resolve unknowns from Technical Context and establish best practices for key dependencies
 
@@ -81,7 +81,7 @@
   - `defuse_asset_identifier_out` - Target asset (e.g., "zcash:mainnet:native")
   - `exact_amount_in` or `exact_amount_out` - Amount specification
   - `dry=true` for quote-only without commitment
-- **Swap sequence (zSTASH integration)**:
+- **Swap sequence (bagZ integration)**:
   1. **Quote**: UI calls `RequestSwapQuote`; backend calls `GET /v0/quote?dry=true` and returns `SwapQuote` + `quote_id`.
   2. **StartSwap / deposit intent**: UI calls `StartSwap(quote_id)`; backend calls `POST /v0/deposit/submit` to create/register the swap and obtain deposit instructions (e.g., `deposit_address`, optional `depositMemo`, and a provider `remote_id`). If `depositMemo` is provided, persist it and surface it to the UI via `SwapInfo.deposit_memo`.
   3. **AwaitingDeposit**: backend persists the swap and returns `SwapInfo` populated with deposit details for UI to render as a QR.
@@ -136,7 +136,7 @@
 - Wails: Rejected for less mature ecosystem
 
 **Implementation Notes**:
-- Command prefix: `zstash_` for all Tauri commands
+- Command prefix: `bagz_` for all Tauri commands
 - Event channels: `sync`, `balance`, `tx`, `swap`, `tor`, `wallet-status`
 - Schema versioning: `schema_version: u32` field in all payloads
 - Error format: `{ code: string, message: string, details?: object }`
@@ -291,7 +291,7 @@
 **Development Configuration**:
 - Default testnet: `https://lwd.testnet.zec.pro` (team lightwalletd + Zebra, TLS on 443)
 - SSL via reverse proxy recommended for production-like testing
-- Development/CI only: `ZSTASH_GRPC_URL` may override the default lightwalletd endpoint for developer workflows and CI. Production builds should rely on persisted server configuration (FR-052 through FR-055) and MUST NOT silently override user-selected servers via environment variables.
+- Development/CI only: `BAGZ_GRPC_URL` may override the default lightwalletd endpoint for developer workflows and CI. Production builds should rely on persisted server configuration (FR-052 through FR-055) and MUST NOT silently override user-selected servers via environment variables.
 
 **Connection validation**:
 - Call `GetLightdInfo` before saving server config
@@ -318,7 +318,7 @@
 - syslog integration: Rejected as not portable across platforms
 
 **Implementation Notes**:
-- Log location: `~/.zstash/logs/zstash.YYYY-MM-DD.log` (daily rotation, retention policy enforced)
+- Log location: `~/.bagz/logs/bagz.YYYY-MM-DD.log` (daily rotation, retention policy enforced)
 - Use tracing-appender's RollingFileAppender with daily rotation
 - Keep 7 days of logs by default
 - Log levels: ERROR/WARN always, INFO for operations, DEBUG via RUST_LOG
@@ -331,9 +331,9 @@
 **Decision**: No remote telemetry or crash reporting.
 
 **Audit summary**:
-- **Tauri config** (`apps/zstash-app-tauri/src-tauri/tauri.conf.json`): No crash reporter configuration; no remote telemetry settings.
-- **Tauri plugins** (`apps/zstash-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` (no telemetry/crash plugins).
-- **Frontend deps** (`apps/zstash-app-tauri/package.json`): No analytics/crash SDK dependencies (e.g., Sentry, PostHog, Segment, Amplitude).
+- **Tauri config** (`apps/bagz-app-tauri/src-tauri/tauri.conf.json`): No crash reporter configuration; no remote telemetry settings.
+- **Tauri plugins** (`apps/bagz-app-tauri/src-tauri/Cargo.toml`): Only `tauri-plugin-opener` (no telemetry/crash plugins).
+- **Frontend deps** (`apps/bagz-app-tauri/package.json`): No analytics/crash SDK dependencies (e.g., Sentry, PostHog, Segment, Amplitude).
 - **Rust deps** (`Cargo.toml`, `Cargo.lock`): No telemetry/crash crates (e.g., `sentry`, `bugsnag`, `rollbar`).
 
 **Enforcement**:
@@ -392,7 +392,7 @@ We use Rust edition 2024 because:
 3. **Production-proven**: Stable since Rust 1.85.0, used in Zcash infrastructure
 4. **Future-ready**: Prepared for generators and better async ergonomics
 
-zSTASH pins and enforces Rust **1.92.0** (edition 2024) via `rust-toolchain.toml` and the workspace `rust-version` to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
+bagZ pins and enforces Rust **1.92.0** (edition 2024) via `rust-toolchain.toml` and the workspace `rust-version` to align with librustzcash/Zashi. If this minimum changes, update `rust-toolchain.toml`, the workspace `rust-version`, and CI together.
 
 Key migration considerations:
 - RPIT lifetime capture has new semantics (may need `use<..>` bounds)

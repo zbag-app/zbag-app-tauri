@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::install_ring_crypto_provider;
 use crate::transport::{SelectedTransport, TransportConfig, TransportError, TransportSelector};
 
-const DEFAULT_USER_AGENT: &str = concat!("zstash/", env!("CARGO_PKG_VERSION"));
+const DEFAULT_USER_AGENT: &str = concat!("bagz/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Clone)]
 pub struct JsonResponse {
@@ -31,7 +31,7 @@ impl HttpClient {
         Self::new_with_transport(TransportSelector::new(TransportConfig::default()))
     }
 
-    pub fn new_with_tor(tor: std::sync::Arc<zstash_tor::TorManager>) -> anyhow::Result<Self> {
+    pub fn new_with_tor(tor: std::sync::Arc<bagz_tor::TorManager>) -> anyhow::Result<Self> {
         Self::new_with_transport(TransportSelector::with_tor(TransportConfig::default(), tor))
     }
 

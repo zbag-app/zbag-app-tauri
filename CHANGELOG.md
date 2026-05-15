@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to zSTASH will be documented in this file.
+All notable changes to bagZ will be documented in this file.
 
 ## [0.2.3] - 2026-02-14
 
@@ -307,7 +307,7 @@ All notable changes to zSTASH will be documented in this file.
 
 ### Miscellaneous
 
-- Integrate zSTASH brand assets from zstash-ux (#72)
+- Integrate bagZ brand assets from bagz-ux (#72)
 
 - Align desktop app design with website brand (#92) (#93)
 

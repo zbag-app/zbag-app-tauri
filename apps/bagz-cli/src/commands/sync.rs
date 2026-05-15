@@ -9,8 +9,8 @@ use std::time::Instant;
 use anyhow::Result;
 use clap::Args;
 
-use zstash_core::domain::SyncPhase;
-use zstash_core::ipc::v1::events::SyncProgressEvent;
+use bagz_core::domain::SyncPhase;
+use bagz_core::ipc::v1::events::SyncProgressEvent;
 
 use crate::cli_app_state::{CliAppState, network_dir_name};
 use crate::output::OutputMode;

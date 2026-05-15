@@ -1,12 +1,12 @@
 //! Keystone hardware wallet command handlers.
 
-use zstash_core::ipc::v1::commands::keystone::{
+use bagz_core::ipc::v1::commands::keystone::{
     BuildSigningRequestRequest, BuildSigningRequestResponse, CreateKeystoneWalletRequest,
     CreateKeystoneWalletResponse, FinalizeSigningRequest, FinalizeSigningResponse,
     ImportUfvkRequest, ImportUfvkResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::ipc::v1::common::IpcResult;
+use bagz_engine::wallet_manager::WalletManager;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -15,7 +15,7 @@ pub fn import_ufvk_impl(
     state: &AppState,
     request: ImportUfvkRequest,
 ) -> IpcResult<ImportUfvkResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -41,7 +41,7 @@ pub fn build_signing_request_impl(
     state: &AppState,
     request: BuildSigningRequestRequest,
 ) -> IpcResult<BuildSigningRequestResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -64,7 +64,7 @@ pub fn finalize_signing_impl(
     state: &AppState,
     request: FinalizeSigningRequest,
 ) -> IpcResult<FinalizeSigningResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -88,7 +88,7 @@ pub fn create_keystone_wallet_impl(
     state: &AppState,
     request: CreateKeystoneWalletRequest,
 ) -> IpcResult<CreateKeystoneWalletResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

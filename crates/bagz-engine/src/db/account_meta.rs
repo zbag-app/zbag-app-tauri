@@ -1,7 +1,7 @@
 use rusqlite::{Connection, params};
 use uuid::Uuid;
 
-use zstash_core::domain::{AccountInfo, AccountType};
+use bagz_core::domain::{AccountInfo, AccountType};
 
 pub fn upsert_account(
     conn: &Connection,

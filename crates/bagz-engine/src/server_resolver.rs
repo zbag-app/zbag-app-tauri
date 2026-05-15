@@ -1,12 +1,12 @@
 use anyhow::Context as _;
 
-use zstash_core::domain::Network;
+use bagz_core::domain::Network;
 
 use crate::db;
 
 pub fn resolve_grpc_url(app_db: &db::AppDb, network: Network) -> anyhow::Result<String> {
     let dev_override = if cfg!(debug_assertions) {
-        std::env::var("ZSTASH_GRPC_URL").ok()
+        std::env::var("BAGZ_GRPC_URL").ok()
     } else {
         None
     };
@@ -29,7 +29,7 @@ pub fn resolve_grpc_url_with_dev_override(
     {
         let override_url = raw_url.trim();
         if !override_url.is_empty() {
-            crate::grpc_url::validate_grpc_url(override_url).context("invalid ZSTASH_GRPC_URL")?;
+            crate::grpc_url::validate_grpc_url(override_url).context("invalid BAGZ_GRPC_URL")?;
             return Ok(override_url.to_string());
         }
     }

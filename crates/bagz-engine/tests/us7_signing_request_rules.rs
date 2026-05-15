@@ -4,14 +4,14 @@ use std::time::{Duration, SystemTime};
 
 use uuid::Uuid;
 
-use zstash_core::domain::{AddressType, Network};
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::wallet::ReauthPurpose;
-use zstash_engine::db::{backup_meta, wallet_meta};
-use zstash_engine::error::find_engine_ipc_error;
-use zstash_engine::key_store::KeyStore;
-use zstash_engine::tx_service::TxService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{AddressType, Network};
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::wallet::ReauthPurpose;
+use bagz_engine::db::{backup_meta, wallet_meta};
+use bagz_engine::error::find_engine_ipc_error;
+use bagz_engine::key_store::KeyStore;
+use bagz_engine::tx_service::TxService;
+use bagz_engine::wallet_manager::WalletManager;
 
 #[derive(Debug, Default, Clone)]
 struct TestKeyStore {
@@ -81,7 +81,7 @@ impl KeyStore for TestKeyStore {
 }
 
 fn temp_root(prefix: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!("zstash_{prefix}_{}", Uuid::new_v4()));
+    let root = std::env::temp_dir().join(format!("bagz_{prefix}_{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root).expect("create temp root");
     root
 }
@@ -214,7 +214,7 @@ fn prepare_finalize_signing_task_keeps_request_when_wallet_db_preflight_fails() 
         Box::new(TestKeyStore::default()),
     )
     .expect("create wallet manager");
-    let mut tx_service = TxService::new(zstash_engine::reauth::SystemClock);
+    let mut tx_service = TxService::new(bagz_engine::reauth::SystemClock);
 
     let wallet = mgr
         .create_wallet(

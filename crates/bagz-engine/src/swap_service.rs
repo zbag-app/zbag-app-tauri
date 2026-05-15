@@ -9,17 +9,17 @@ use rusqlite::Connection;
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use zstash_core::domain::{
+use bagz_core::domain::{
     AccountType, Network, SwapInfo, SwapIntent, SwapMode, SwapQuote, SwapState, SwapType,
 };
-use zstash_core::errors;
-use zstash_core::ipc::v1::commands::swap::{
+use bagz_core::errors;
+use bagz_core::ipc::v1::commands::swap::{
     GetSwapStatusResponse, ListSwapsResponse, RefreshSwapStatusResponse, RequestSwapQuoteResponse,
     ResumePendingSwapsResponse, StartSwapResponse,
 };
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::SwapChangedEvent;
-use zstash_network::near_intents::AppFee;
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::SwapChangedEvent;
+use bagz_network::near_intents::AppFee;
 
 use crate::db::{account_meta, open_app_db_connection, swap_meta};
 use crate::error::ipc_err;
@@ -36,7 +36,7 @@ const NEAR_STATUS_TIMEOUT_SECS: u64 = 15;
 #[derive(Clone)]
 pub struct SwapService {
     app_db_path: PathBuf,
-    near: zstash_network::near_intents::NearIntentsClient,
+    near: bagz_network::near_intents::NearIntentsClient,
     state: Arc<Mutex<State>>,
     wallet_manager: Arc<Mutex<WalletManager>>,
     tx_service: Arc<Mutex<TxService<SystemClock>>>,
@@ -115,9 +115,9 @@ fn next_state_from_remote_status(
     wallet_manager: &Arc<Mutex<WalletManager>>,
     wallet_id: Uuid,
     swap: &SwapInfo,
-    remote_status: &zstash_network::near_intents::RemoteStatus,
+    remote_status: &bagz_network::near_intents::RemoteStatus,
 ) -> SwapState {
-    let mapped = zstash_network::near_intents::map_remote_status_to_local_state(remote_status);
+    let mapped = bagz_network::near_intents::map_remote_status_to_local_state(remote_status);
     if mapped == SwapState::Confirming && has_confirmed_zcash_tx(wallet_manager, wallet_id, swap) {
         SwapState::Completed
     } else {
@@ -194,14 +194,14 @@ impl SwapService {
             app_db_path,
             wallet_manager,
             tx_service,
-            zstash_network::near_intents::NearIntentsClient::new()?,
+            bagz_network::near_intents::NearIntentsClient::new()?,
         )
     }
 
     pub fn new_with_near_client(
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
-        near: zstash_network::near_intents::NearIntentsClient,
+        near: bagz_network::near_intents::NearIntentsClient,
     ) -> anyhow::Result<Self> {
         let tx_service = Arc::new(Mutex::new(TxService::new(SystemClock)));
         Self::new_with_near_client_and_tx(app_db_path, wallet_manager, tx_service, near)
@@ -211,7 +211,7 @@ impl SwapService {
         app_db_path: PathBuf,
         wallet_manager: Arc<Mutex<WalletManager>>,
         tx_service: Arc<Mutex<TxService<SystemClock>>>,
-        near: zstash_network::near_intents::NearIntentsClient,
+        near: bagz_network::near_intents::NearIntentsClient,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             app_db_path,
@@ -298,7 +298,7 @@ impl SwapService {
                     return Ok(decimals);
                 }
                 return Err(match err {
-                    zstash_network::near_intents::NearIntentsError::TorNotReady => {
+                    bagz_network::near_intents::NearIntentsError::TorNotReady => {
                         ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
                     }
                     _ => ipc_err(
@@ -419,7 +419,7 @@ impl SwapService {
         // Development phase: disable app fees until quote reliability is stable.
         // Set APP_FEE_BPS > 0 to re-enable affiliate fee collection.
         const APP_FEE_BPS: u32 = 0;
-        const AFFILIATE_RECIPIENT: &str = "zstash.near";
+        const AFFILIATE_RECIPIENT: &str = "bagz.near";
 
         let app_fees = if APP_FEE_BPS == 0 {
             None
@@ -439,14 +439,14 @@ impl SwapService {
         );
 
         // Use dry=false to get deposit address directly (like Zashi)
-        let req = zstash_network::near_intents::QuoteRequest {
+        let req = bagz_network::near_intents::QuoteRequest {
             origin_asset: intent.input_asset.clone(),
             destination_asset: intent.output_asset.clone(),
             amount: amount_smallest,
             swap_type: swap_type_str.to_string(),
             slippage_tolerance: 100, // 1%
             quote_waiting_time_ms: Some(3000),
-            referral: Some("zstash".to_string()),
+            referral: Some("bagz".to_string()),
             app_fees,
             deposit_type: "ORIGIN_CHAIN".to_string(),
             refund_to,
@@ -458,7 +458,7 @@ impl SwapService {
         };
 
         let map_quote_error = |e| match e {
-            zstash_network::near_intents::NearIntentsError::TorNotReady => {
+            bagz_network::near_intents::NearIntentsError::TorNotReady => {
                 ipc_err(errors::TOR_NOT_READY, "Tor is enabled but not ready")
             }
             _ => ipc_err(errors::SWAP_FAILED, format!("failed to fetch quote: {e}")),
@@ -734,7 +734,7 @@ impl SwapService {
         };
 
         // Notify the API about the deposit (optional but helps speed up detection)
-        let submit_req = zstash_network::near_intents::DepositSubmitRequest {
+        let submit_req = bagz_network::near_intents::DepositSubmitRequest {
             tx_hash: txid,
             deposit_address,
         };
@@ -847,7 +847,7 @@ impl SwapService {
             match tokio::time::timeout(
                 Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
                 self.near
-                    .get_status(zstash_network::near_intents::StatusRequest {
+                    .get_status(bagz_network::near_intents::StatusRequest {
                         deposit_address,
                         deposit_memo: swap.deposit_memo.clone(),
                     }),
@@ -855,7 +855,7 @@ impl SwapService {
             .await
             {
                 Ok(res) => res,
-                Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
+                Err(_) => Err(bagz_network::near_intents::NearIntentsError::Transport(
                     format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
                 )),
             }
@@ -1003,7 +1003,7 @@ impl SwapService {
 
                     let status_res = match tokio::time::timeout(
                         Duration::from_secs(NEAR_STATUS_TIMEOUT_SECS),
-                        near.get_status(zstash_network::near_intents::StatusRequest {
+                        near.get_status(bagz_network::near_intents::StatusRequest {
                             deposit_address,
                             deposit_memo: swap.deposit_memo.clone(),
                         }),
@@ -1011,7 +1011,7 @@ impl SwapService {
                     .await
                     {
                         Ok(res) => res,
-                        Err(_) => Err(zstash_network::near_intents::NearIntentsError::Transport(
+                        Err(_) => Err(bagz_network::near_intents::NearIntentsError::Transport(
                             format!("timeout after {NEAR_STATUS_TIMEOUT_SECS}s"),
                         )),
                     };
@@ -1049,7 +1049,7 @@ impl SwapService {
                                 break;
                             }
                         }
-                        Err(zstash_network::near_intents::NearIntentsError::RateLimited {
+                        Err(bagz_network::near_intents::NearIntentsError::RateLimited {
                             retry_after,
                         }) => {
                             backoff = retry_after

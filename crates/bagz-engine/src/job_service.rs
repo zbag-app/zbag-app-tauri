@@ -16,10 +16,10 @@ use uuid::Uuid;
 
 use zcash_client_backend::data_api::Account as _;
 
-use zstash_core::domain::{JobId, JobProgress, JobState, JobType, Network};
-use zstash_core::ipc::v1::common::SCHEMA_VERSION;
-use zstash_core::ipc::v1::events::{JobProgressEvent, TransactionChangedEvent};
-use zstash_core::permissions::{create_dir_all_secure, write_file_secure};
+use bagz_core::domain::{JobId, JobProgress, JobState, JobType, Network};
+use bagz_core::ipc::v1::common::SCHEMA_VERSION;
+use bagz_core::ipc::v1::events::{JobProgressEvent, TransactionChangedEvent};
+use bagz_core::permissions::{create_dir_all_secure, write_file_secure};
 
 use crate::broadcast::{
     classify_broadcast_error_message, is_effective_success_broadcast_error,
@@ -76,7 +76,7 @@ pub struct SendJobContext {
     pub proposal_id: String,
     pub account_id: u32,
     pub spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
-    pub tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    pub tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 /// Context needed to execute a shield job.
@@ -98,7 +98,7 @@ pub struct ShieldJobContext {
     /// in addition to shielding transparent funds. Currently not implemented.
     pub consolidate: bool,
     pub spending_key: zcash_client_backend::keys::UnifiedSpendingKey,
-    pub tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    pub tor_manager: Option<Arc<bagz_tor::TorManager>>,
 }
 
 impl JobService {
@@ -588,7 +588,7 @@ async fn run_send_job(
 
     // Emit transaction changed event
     if let Some(handler) = on_tx_changed.as_ref() {
-        use zstash_core::domain::{TransactionInfo, TransactionStatus, TransactionType};
+        use bagz_core::domain::{TransactionInfo, TransactionStatus, TransactionType};
         let now_ms = chrono::Utc::now().timestamp_millis();
         let status = if broadcast_error.is_some() {
             TransactionStatus::Failed
@@ -757,7 +757,7 @@ async fn run_shield_job(
 
     // Emit transaction changed event
     if let Some(handler) = on_tx_changed.as_ref() {
-        use zstash_core::domain::{TransactionInfo, TransactionStatus, TransactionType};
+        use bagz_core::domain::{TransactionInfo, TransactionStatus, TransactionType};
         let now_ms = chrono::Utc::now().timestamp_millis();
         let status = if broadcast_error.is_some() {
             TransactionStatus::Failed
@@ -1202,14 +1202,14 @@ fn open_wallet_db_for_job(
 async fn broadcast_transaction(
     grpc_url: &str,
     tx_bytes: &[u8],
-    tor_manager: Option<&Arc<zstash_tor::TorManager>>,
+    tor_manager: Option<&Arc<bagz_tor::TorManager>>,
 ) -> anyhow::Result<()> {
     let client = match tor_manager {
-        Some(tor) => zstash_network::grpc_client::GrpcClient::new_with_tor(
+        Some(tor) => bagz_network::grpc_client::GrpcClient::new_with_tor(
             grpc_url.to_string(),
             Arc::clone(tor),
         ),
-        None => zstash_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
+        None => bagz_network::grpc_client::GrpcClient::new(grpc_url.to_string()),
     };
 
     send_with_timeout(client.send_transaction(tx_bytes.to_vec())).await

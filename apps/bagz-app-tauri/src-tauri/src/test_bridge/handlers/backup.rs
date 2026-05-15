@@ -1,11 +1,11 @@
 //! Backup and restore command handlers.
 
 use tracing::warn;
-use zstash_core::ipc::v1::commands::backup::{
+use bagz_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -14,7 +14,7 @@ pub fn get_backup_challenge_impl(
     state: &AppState,
     request: GetBackupChallengeRequest,
 ) -> IpcResult<GetBackupChallengeResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -25,7 +25,7 @@ pub fn get_backup_challenge_impl(
         let challenge = mgr.get_backup_challenge(request.wallet_id)?;
         Ok(GetBackupChallengeResponse {
             schema_version: SCHEMA_VERSION,
-            challenge: zstash_core::ipc::v1::commands::backup::BackupChallenge {
+            challenge: bagz_core::ipc::v1::commands::backup::BackupChallenge {
                 challenge_id: challenge.challenge_id,
                 indices: challenge.indices,
                 expires_at: challenge.expires_at,
@@ -38,8 +38,8 @@ pub fn verify_backup_impl(
     state: &AppState,
     request: VerifyBackupRequest,
 ) -> IpcResult<VerifyBackupResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
-    use zstash_core::sensitive::SensitiveString;
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::sensitive::SensitiveString;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -61,7 +61,7 @@ pub fn restore_wallet_impl(
     state: &AppState,
     request: RestoreWalletRequest,
 ) -> IpcResult<RestoreWalletResponse> {
-    use zstash_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
+    use bagz_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
 
     let RestoreWalletRequest {
         schema_version,

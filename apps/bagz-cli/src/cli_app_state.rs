@@ -11,12 +11,12 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use uuid::Uuid;
 
-use zstash_core::domain::{Network, WalletInfo, WalletLockStatus};
-use zstash_core::permissions::create_dir_all_secure;
-use zstash_engine::reauth::SystemClock;
-use zstash_engine::sync_service::SyncService;
-use zstash_engine::tx_service::TxService;
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::domain::{Network, WalletInfo, WalletLockStatus};
+use bagz_core::permissions::create_dir_all_secure;
+use bagz_engine::reauth::SystemClock;
+use bagz_engine::sync_service::SyncService;
+use bagz_engine::tx_service::TxService;
+use bagz_engine::wallet_manager::WalletManager;
 
 use crate::file_key_store::FileKeyStore;
 
@@ -25,7 +25,7 @@ pub struct CliAppState {
     pub wallet_manager: Arc<Mutex<WalletManager>>,
     pub tx_service: Arc<Mutex<TxService<SystemClock>>>,
     pub sync_service: SyncService,
-    pub tor_manager: Option<Arc<zstash_tor::TorManager>>,
+    pub tor_manager: Option<Arc<bagz_tor::TorManager>>,
     #[allow(dead_code)]
     data_dir: PathBuf,
 }
@@ -55,11 +55,11 @@ impl CliAppState {
         let tor_manager = if enable_tor {
             let tor_dir = data_dir.join("tor");
             let tor_state =
-                zstash_engine::db::tor_meta::get_tor_state(wallet_manager.app_db().conn())
+                bagz_engine::db::tor_meta::get_tor_state(wallet_manager.app_db().conn())
                     .map_err(|e| anyhow::anyhow!(e))?;
 
-            let manager = Arc::new(zstash_tor::TorManager::new(
-                zstash_tor::TorManagerConfig::new(tor_dir),
+            let manager = Arc::new(bagz_tor::TorManager::new(
+                bagz_tor::TorManagerConfig::new(tor_dir),
                 tor_state,
             ));
             tx_service.set_tor_manager(Arc::clone(&manager));

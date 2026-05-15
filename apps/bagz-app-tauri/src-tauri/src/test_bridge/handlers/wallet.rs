@@ -1,14 +1,14 @@
 //! Wallet-related command handlers.
 
 use tracing::warn;
-use zstash_core::ipc::v1::commands::wallet::{
+use bagz_core::ipc::v1::commands::wallet::{
     CreateWalletRequest, CreateWalletResponse, GetWalletStatusRequest, GetWalletStatusResponse,
     ListWalletsRequest, ListWalletsResponse, LoadWalletRequest, LoadWalletResponse,
     LockWalletRequest, LockWalletResponse, LogoutWalletRequest, LogoutWalletResponse,
     ReauthWalletRequest, ReauthWalletResponse, UnlockWalletRequest, UnlockWalletResponse,
     ViewSeedPhraseRequest, ViewSeedPhraseResponse,
 };
-use zstash_core::ipc::v1::common::IpcResult;
+use bagz_core::ipc::v1::common::IpcResult;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;
@@ -18,7 +18,7 @@ pub fn list_wallets_impl(
     state: &AppState,
     request: ListWalletsRequest,
 ) -> IpcResult<ListWalletsResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -31,7 +31,7 @@ pub fn create_wallet_impl(
     state: &AppState,
     request: CreateWalletRequest,
 ) -> IpcResult<CreateWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -52,7 +52,7 @@ pub fn load_wallet_impl(
     state: &AppState,
     request: LoadWalletRequest,
 ) -> IpcResult<LoadWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -65,7 +65,7 @@ pub fn get_wallet_status_impl(
     state: &AppState,
     request: GetWalletStatusRequest,
 ) -> IpcResult<GetWalletStatusResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -78,7 +78,7 @@ pub fn unlock_wallet_impl(
     state: &AppState,
     request: UnlockWalletRequest,
 ) -> IpcResult<UnlockWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -91,7 +91,7 @@ pub fn lock_wallet_impl(
     state: &AppState,
     request: LockWalletRequest,
 ) -> IpcResult<LockWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -104,7 +104,7 @@ pub fn logout_wallet_impl(
     state: &AppState,
     request: LogoutWalletRequest,
 ) -> IpcResult<LogoutWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -117,7 +117,7 @@ pub fn reauth_wallet_impl(
     state: &AppState,
     request: ReauthWalletRequest,
 ) -> IpcResult<ReauthWalletResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };
@@ -130,7 +130,7 @@ pub fn view_seed_phrase_impl(
     state: &AppState,
     request: ViewSeedPhraseRequest,
 ) -> IpcResult<ViewSeedPhraseResponse> {
-    use zstash_core::ipc::v1::common::ensure_schema_version;
+    use bagz_core::ipc::v1::common::ensure_schema_version;
 
     warn!("view_seed_phrase called - sensitive endpoint accessed");
 

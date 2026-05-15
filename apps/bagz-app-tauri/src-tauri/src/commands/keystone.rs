@@ -1,19 +1,19 @@
 use tauri::State;
 
-use zstash_core::ipc::v1::commands::keystone::{
+use bagz_core::ipc::v1::commands::keystone::{
     BuildSigningRequestRequest, BuildSigningRequestResponse, CreateKeystoneWalletRequest,
     CreateKeystoneWalletResponse, FinalizeSigningRequest, FinalizeSigningResponse,
     ImportUfvkRequest, ImportUfvkResponse,
 };
-use zstash_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
-use zstash_engine::wallet_manager::WalletManager;
+use bagz_core::ipc::v1::common::{IpcResult, SCHEMA_VERSION, ensure_schema_version};
+use bagz_engine::wallet_manager::WalletManager;
 
 use crate::state::AppState;
 
 use super::util::map_anyhow;
 
-#[tauri::command(rename = "zstash_import_ufvk")]
-pub fn zstash_import_ufvk(
+#[tauri::command(rename = "bagz_import_ufvk")]
+pub fn bagz_import_ufvk(
     state: State<'_, AppState>,
     request: ImportUfvkRequest,
 ) -> IpcResult<ImportUfvkResponse> {
@@ -37,8 +37,8 @@ pub fn zstash_import_ufvk(
     })
 }
 
-#[tauri::command(rename = "zstash_build_signing_request")]
-pub fn zstash_build_signing_request(
+#[tauri::command(rename = "bagz_build_signing_request")]
+pub fn bagz_build_signing_request(
     state: State<'_, AppState>,
     request: BuildSigningRequestRequest,
 ) -> IpcResult<BuildSigningRequestResponse> {
@@ -59,8 +59,8 @@ pub fn zstash_build_signing_request(
     })
 }
 
-#[tauri::command(rename = "zstash_finalize_signing")]
-pub fn zstash_finalize_signing(
+#[tauri::command(rename = "bagz_finalize_signing")]
+pub fn bagz_finalize_signing(
     state: State<'_, AppState>,
     request: FinalizeSigningRequest,
 ) -> IpcResult<FinalizeSigningResponse> {
@@ -82,8 +82,8 @@ pub fn zstash_finalize_signing(
     })
 }
 
-#[tauri::command(rename = "zstash_create_keystone_wallet")]
-pub fn zstash_create_keystone_wallet(
+#[tauri::command(rename = "bagz_create_keystone_wallet")]
+pub fn bagz_create_keystone_wallet(
     state: State<'_, AppState>,
     request: CreateKeystoneWalletRequest,
 ) -> IpcResult<CreateKeystoneWalletResponse> {
