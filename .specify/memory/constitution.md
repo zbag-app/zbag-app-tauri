@@ -131,6 +131,7 @@ Before merging work that touches wallet, signing, networking, or persistence, co
 - [ ] Secrets cannot reach the UI
 - [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
+- [ ] CEF remains an offline renderer with no non-loopback traffic, per NFR-002.a
 - [ ] Transparent funds still cannot be used for payments; transparent inputs are only permitted for explicit shielding transactions (transparent -> shielded)
 - [ ] Sending to transparent recipients requires explicit privacy acknowledgement
 - [ ] Tor mode cannot silently downgrade

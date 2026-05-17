@@ -19,7 +19,7 @@ endif
         test test-engine test-core test-network test-keystone test-tor test-migrations \
         test-e2e test-bridge test-bridge-build \
         fmt fmt-check clippy clippy-strict lint \
-        pre-commit check audit check-telemetry \
+        pre-commit check audit check-telemetry check-cef-network-hardening check-cef-args cef-smoketest-selftest cef-smoketest \
         dev tauri-build cef-audit cef-stage-safe cef-stage-aggressive tauri-build-slim-safe tauri-build-slim-aggressive \
         cli cli-dev cli-run cli-wallet-list cli-wallet-create cli-sync cli-balance cli-address \
         changelog changelog-unreleased \
@@ -108,15 +108,21 @@ lint: fmt-check clippy ## Run all lints
 # Pre-commit/CI
 # ============================================================================
 
-pre-commit: fmt clippy ## Pre-commit checks (formats and lints)
+pre-commit: fmt clippy check-telemetry check-cef-network-hardening check-cef-args cef-smoketest-selftest ## Pre-commit checks (formats, lints, and local guardrails)
 
-check: fmt-check clippy-strict test ## CI-like checks (no mutations)
+check: fmt-check clippy-strict check-telemetry check-cef-network-hardening check-cef-args cef-smoketest-selftest test ## CI-like checks (no mutations)
 
 audit: ## Security audit
 	@cargo audit
 
 check-telemetry: ## Check for telemetry code
 	@./scripts/check-no-telemetry.sh
+
+check-cef-network-hardening: ## Check CEF browser network hardening guardrails
+	@./scripts/check-cef-network-hardening.sh
+
+check-cef-args: ## Test parsed CEF runtime arguments
+	@cargo test -p bagz-app-tauri --features cef-runtime --test cef_runtime_args
 
 # ============================================================================
 # Tauri
@@ -128,6 +134,13 @@ dev: ## Full Tauri development
 # Default CI=true avoids macOS DMG bundling detach/unmount flakiness (create-dmg can fail with EBUSY); override with CI=false if needed.
 tauri-build: ## Tauri production build
 	@CI=$${CI:-true} TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
+
+cef-smoketest-selftest: ## Run CEF network smoke parser fixtures
+	@BAGZ_SMOKE_SELFTEST=1 ./scripts/cef-network-smoketest.sh
+
+# Requires a prebuilt bundle at target/release/bundle/macos/bagZ.app.
+cef-smoketest: ## Run CEF network smoke against an existing packaged app
+	@./scripts/cef-network-smoketest.sh
 
 cef-audit: ## Report CEF + bundle sizes and largest payload entries
 	@./scripts/cef-size-report.sh

@@ -88,13 +88,20 @@ The release readiness path is:
 2. `make test`
 3. `make pre-commit`
 4. `make tauri-build`
+5. `make cef-smoketest`
 
-All four must pass for CEF release confidence.
+`make cef-smoketest` requires the packaged macOS bundle produced by `make tauri-build`. CI runs it inside the existing `tauri-build-cef` job after the bundle is built.
 
 ## CEF hardening policy
 
 Implemented behavior:
 
+- Run CEF with a per-launch temp cache, not a durable Chromium profile
+- Run CEF in incognito mode
+- Remove the legacy persistent CEF cache and stale temp CEF caches on startup; remove the current temp cache after normal exit
+- Disable Chromium background networking, component updater, domain reliability, sync, field trials, metrics upload paths, and first-run/default-browser flows
+- Disable Chromium DNS-over-HTTPS and map all CEF hostname resolution to `0.0.0.0` except localhost-style hosts used by Tauri/dev IPC
+- Disable browser services in CEF profile preferences: Safe Browsing, search suggestions, network prediction, spell service, translation, sign-in, Privacy Sandbox, and WebRTC non-proxied UDP
 - Disable Chromium password-save UX
 - Disable default browser-like context menu behavior in app UI
 - Keep drag/movable-element behavior locked down in UI
@@ -105,16 +112,19 @@ Key implementation files:
 - `apps/bagz-app-tauri/src-tauri/src/lib.rs`
 - `apps/bagz-app-tauri/src/App.tsx`
 - `apps/bagz-app-tauri/src/components/ui/input.tsx`
+- `scripts/check-cef-network-hardening.sh`
+- `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs`
+- `scripts/cef-network-smoketest.sh`
 
 ## Upgrading CEF
 
 Current pin (branch `cef`):
 
-- Tauri `feat/cef` rev: `562bc592b337de417aa48e72034c7816cfb4c142`
-- `cef` + `cef-dll-sys`: `146.4.1+146.0.9`
-- `tauri` crate: `2.10.3`
-- `@tauri-apps/api`: `2.10.1`
-- `@tauri-apps/cli`: `2.10.1`
+- Tauri `feat/cef` rev: `6fd733b2d6255d358e88ad19cb15dc7d22b293ac`
+- `cef` + `cef-dll-sys`: Tauri-pinned `148.0.0+147.0.10`
+- `tauri` crate: `2.11.1`
+- `@tauri-apps/api`: `2.11.0`
+- `@tauri-apps/cli`: `2.11.1`
 
 The CEF version is controlled by the pinned Tauri rev (`tauri-runtime-cef/Cargo.toml` contains `cef = "=<version>"`). Do not bump `cef` directly.
 
@@ -224,5 +234,6 @@ If this regresses, check:
 
 ## Related docs
 
+- `docs/cef-network-hardening.md`
 - `docs/cef-password-hardening.md`
 - `docs/cef-reproducibility-and-gates.md`

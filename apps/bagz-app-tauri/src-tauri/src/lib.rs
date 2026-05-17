@@ -17,19 +17,11 @@ pub mod time_utils;
 pub mod wallet_logic;
 pub mod windows;
 
-#[cfg(all(
-    not(feature = "test-bridge"),
-    feature = "cef-runtime",
-    target_os = "macos"
-))]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use serde_json::{Map, Value};
 #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use std::sync::Arc;
-#[cfg(all(
-    not(feature = "test-bridge"),
-    feature = "cef-runtime",
-    target_os = "macos"
-))]
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use std::{fs, path::PathBuf};
 #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
 use tauri::Manager;
@@ -38,49 +30,211 @@ use tauri::Manager;
 type AppRuntime = tauri::Cef;
 
 #[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
-fn cef_runtime_args() -> Vec<(String, Option<String>)> {
+pub const CEF_DISABLED_FEATURES: &str = concat!(
+    "AutofillActorMode,",
+    "AutofillServerCommunication,",
+    "AsyncDns,",
+    "DnsOverHttpsUpgrade,",
+    "EnableMediaRouter,",
+    "GlicActorUi,",
+    "LensOverlay,",
+    "LiveTranslate,",
+    "MediaRouter,",
+    "OptimizationGuideModelExecution,",
+    "OptimizationGuideOnDeviceModel,",
+    "OptimizationHints,",
+    "PrivacySandboxSettings4,",
+    "Translate,",
+    "UseDnsHttpsSvcb"
+);
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+pub const CEF_HOST_RESOLVER_RULES: &str = concat!(
+    "MAP * 0.0.0.0,",
+    "EXCLUDE localhost,",
+    "EXCLUDE 127.0.0.1,",
+    "EXCLUDE ::1,",
+    "EXCLUDE *.localhost,",
+    "EXCLUDE ipc.localhost,",
+    "EXCLUDE tauri.localhost"
+);
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn cef_switch(name: &str) -> (String, Option<String>) {
+    (format!("--{name}"), None)
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn cef_switch_value(name: &str, value: &str) -> (String, Option<String>) {
+    (format!("--{name}"), Some(value.to_string()))
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+pub fn cef_runtime_args() -> Vec<(String, Option<String>)> {
     let mut args = Vec::new();
 
     #[cfg(target_os = "macos")]
     if std::env::var("BAGZ_USE_SYSTEM_KEYCHAIN").as_deref() != Ok("1") {
         // POC default: avoid per-launch macOS keychain prompts from Chromium safe storage.
-        args.push(("--use-mock-keychain".to_string(), None));
+        args.push(cef_switch("use-mock-keychain"));
     }
 
-    // Keep Chromium credential UI disabled so wallet auth remains app-controlled.
-    args.push(("--disable-save-password-bubble".to_string(), None));
+    // Treat CEF as an offline renderer. All wallet networking belongs to Rust.
+    // CEF_HARDENING_SWITCHES_BEGIN
+    for switch in [
+        "disable-background-networking",
+        "disable-breakpad",
+        "disable-component-extensions-with-background-pages",
+        "disable-component-update",
+        "disable-default-apps",
+        "disable-domain-reliability",
+        "disable-extensions",
+        "disable-field-trial-config",
+        "disable-notifications",
+        "disable-print-preview",
+        "disable-save-password-bubble",
+        "disable-speech-api",
+        "disable-sync",
+        "disable-sync-invalidation-optimizations",
+        "incognito",
+        "metrics-recording-only",
+        "no-default-browser-check",
+        "no-first-run",
+        "no-pings",
+    ] {
+        args.push(cef_switch(switch));
+    }
+    // CEF_HARDENING_SWITCHES_END
+
+    // CEF_HARDENING_VALUED_ARGS_BEGIN
+    args.push(cef_switch_value("disable-features", CEF_DISABLED_FEATURES));
+    args.push(cef_switch_value("dns-over-https-mode", "off"));
+    args.push(cef_switch_value("dns-over-https-templates", ""));
+    args.push(cef_switch_value(
+        "host-resolver-rules",
+        CEF_HOST_RESOLVER_RULES,
+    ));
+    args.push(cef_switch_value(
+        "webrtc-ip-handling-policy",
+        "disable_non_proxied_udp",
+    ));
+    // CEF_HARDENING_VALUED_ARGS_END
 
     args
 }
 
-#[cfg(all(
-    not(feature = "test-bridge"),
-    feature = "cef-runtime",
-    target_os = "macos"
-))]
-fn cef_preferences_path(bundle_identifier: &str) -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    Some(
-        PathBuf::from(home)
-            .join("Library")
-            .join("Caches")
-            .join(bundle_identifier)
-            .join("cef")
-            .join("Default")
-            .join("Preferences"),
-    )
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn default_cef_cache_path(bundle_identifier: &str) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME")?;
+        return Some(
+            PathBuf::from(home)
+                .join("Library")
+                .join("Caches")
+                .join(bundle_identifier)
+                .join("cef"),
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let local_app_data = std::env::var_os("LOCALAPPDATA")?;
+        return Some(
+            PathBuf::from(local_app_data)
+                .join(bundle_identifier)
+                .join("cef"),
+        );
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        let base = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))?;
+        Some(base.join(bundle_identifier).join("cef"))
+    }
 }
 
-#[cfg(all(
-    not(feature = "test-bridge"),
-    feature = "cef-runtime",
-    target_os = "macos"
-))]
-fn enforce_cef_password_policy(bundle_identifier: &str) {
-    let Some(preferences_path) = cef_preferences_path(bundle_identifier) else {
-        tracing::warn!("failed to locate HOME when applying CEF password policy");
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn cef_runtime_cache_path(bundle_identifier: &str) -> PathBuf {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    std::env::temp_dir().join("bagz-cef").join(format!(
+        "{bundle_identifier}-{}-{stamp}",
+        std::process::id()
+    ))
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn purge_legacy_cef_cache(bundle_identifier: &str, runtime_cache_path: &PathBuf) {
+    let Some(default_cache_path) = default_cef_cache_path(bundle_identifier) else {
+        tracing::warn!("failed to locate default CEF cache path");
         return;
     };
+
+    if default_cache_path == *runtime_cache_path || !default_cache_path.exists() {
+        return;
+    }
+
+    if let Err(error) = fs::remove_dir_all(&default_cache_path) {
+        tracing::warn!(
+            path = %default_cache_path.display(),
+            ?error,
+            "failed to remove legacy persistent CEF cache"
+        );
+    }
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn purge_stale_temp_cef_caches(bundle_identifier: &str, runtime_cache_path: &PathBuf) {
+    let temp_cef_root = std::env::temp_dir().join("bagz-cef");
+    let Ok(entries) = fs::read_dir(&temp_cef_root) else {
+        return;
+    };
+    let prefix = format!("{bundle_identifier}-");
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == *runtime_cache_path {
+            continue;
+        }
+
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with(&prefix) {
+            continue;
+        }
+
+        if let Err(error) = fs::remove_dir_all(&path) {
+            tracing::warn!(
+                path = %path.display(),
+                ?error,
+                "failed to remove stale temp CEF cache"
+            );
+        }
+    }
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn object_entry<'a>(object: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
+    let value = object
+        .entry(key.to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !value.is_object() {
+        *value = Value::Object(Map::new());
+    }
+    value
+        .as_object_mut()
+        .expect("CEF preference entry should be an object")
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn enforce_cef_browser_policy(cache_path: &PathBuf) {
+    let preferences_path = cache_path.join("Default").join("Preferences");
 
     if let Some(parent) = preferences_path.parent() {
         if let Err(error) = fs::create_dir_all(parent) {
@@ -107,33 +261,103 @@ fn enforce_cef_password_policy(bundle_identifier: &str) {
     let root_obj = root
         .as_object_mut()
         .expect("root should always be an object");
+
+    // CEF_HARDENING_PREFS_BEGIN
+    for stale_key in [
+        "account_tracker_service_last_update",
+        "commerce_daily_metrics_last_update_time",
+        "domain_diversity",
+        "enterprise_profile_guid",
+        "gaia_cookie",
+        "gcm",
+        "google",
+        "invalidation",
+        "media_router",
+        "optimization_guide",
+        "segmentation_platform",
+        "webauthn",
+    ] {
+        root_obj.remove(stale_key);
+    }
+
     root_obj.insert("credentials_enable_service".to_string(), Value::Bool(false));
+    root_obj.insert("enable_do_not_track".to_string(), Value::Bool(true));
+    root_obj.insert(
+        "default_apps_install_state".to_string(),
+        Value::Number(3.into()),
+    );
 
-    let profile = root_obj
-        .entry("profile".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !profile.is_object() {
-        *profile = Value::Object(Map::new());
-    }
-    if let Some(profile_obj) = profile.as_object_mut() {
-        profile_obj.insert("password_manager_enabled".to_string(), Value::Bool(false));
-        profile_obj.insert(
-            "password_manager_leak_detection".to_string(),
-            Value::Bool(false),
-        );
-    }
+    object_entry(root_obj, "alternate_error_pages")
+        .insert("enabled".to_string(), Value::Bool(false));
 
-    let autofill = root_obj
-        .entry("autofill".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !autofill.is_object() {
-        *autofill = Value::Object(Map::new());
-    }
-    if let Some(autofill_obj) = autofill.as_object_mut() {
-        autofill_obj.insert("enabled".to_string(), Value::Bool(false));
-        autofill_obj.insert("profile_enabled".to_string(), Value::Bool(false));
-        autofill_obj.insert("credit_card_enabled".to_string(), Value::Bool(false));
-    }
+    let autofill_obj = object_entry(root_obj, "autofill");
+    autofill_obj.insert("enabled".to_string(), Value::Bool(false));
+    autofill_obj.insert("profile_enabled".to_string(), Value::Bool(false));
+    autofill_obj.insert("credit_card_enabled".to_string(), Value::Bool(false));
+
+    object_entry(root_obj, "browser")
+        .insert("enable_spellchecking".to_string(), Value::Bool(false));
+
+    let dns_over_https_obj = object_entry(root_obj, "dns_over_https");
+    dns_over_https_obj.insert("mode".to_string(), Value::String("off".to_string()));
+    dns_over_https_obj.insert("templates".to_string(), Value::String(String::new()));
+    dns_over_https_obj.insert(
+        "automatic_mode_fallback_to_doh".to_string(),
+        Value::Bool(false),
+    );
+
+    object_entry(root_obj, "net").insert(
+        "network_prediction_options".to_string(),
+        Value::Number(2.into()),
+    );
+
+    let privacy_sandbox_obj = object_entry(root_obj, "privacy_sandbox");
+    privacy_sandbox_obj.insert("first_party_sets_enabled".to_string(), Value::Bool(false));
+    let privacy_sandbox_m1_obj = object_entry(privacy_sandbox_obj, "m1");
+    privacy_sandbox_m1_obj.insert("topics_enabled".to_string(), Value::Bool(false));
+    privacy_sandbox_m1_obj.insert("fledge_enabled".to_string(), Value::Bool(false));
+    privacy_sandbox_m1_obj.insert("ad_measurement_enabled".to_string(), Value::Bool(false));
+
+    let profile_obj = object_entry(root_obj, "profile");
+    profile_obj.insert("password_manager_enabled".to_string(), Value::Bool(false));
+    profile_obj.insert(
+        "password_manager_leak_detection".to_string(),
+        Value::Bool(false),
+    );
+    profile_obj.insert(
+        "network_prediction_options".to_string(),
+        Value::Number(2.into()),
+    );
+
+    let safebrowsing_obj = object_entry(root_obj, "safebrowsing");
+    safebrowsing_obj.insert("enabled".to_string(), Value::Bool(false));
+    safebrowsing_obj.insert("enhanced".to_string(), Value::Bool(false));
+    safebrowsing_obj.insert("scout_reporting_enabled".to_string(), Value::Bool(false));
+    safebrowsing_obj.insert(
+        "scout_reporting_enabled_when_deprecated".to_string(),
+        Value::Bool(false),
+    );
+    safebrowsing_obj.insert("deep_scanning_enabled".to_string(), Value::Bool(false));
+    safebrowsing_obj.insert("surveys_enabled".to_string(), Value::Bool(false));
+
+    object_entry(root_obj, "search").insert("suggest_enabled".to_string(), Value::Bool(false));
+    object_entry(root_obj, "signin").insert("allowed".to_string(), Value::Bool(false));
+
+    let spellcheck_obj = object_entry(root_obj, "spellcheck");
+    spellcheck_obj.insert("dictionaries".to_string(), Value::Array(Vec::new()));
+    spellcheck_obj.insert("use_spelling_service".to_string(), Value::Bool(false));
+
+    object_entry(root_obj, "sync").insert("requested".to_string(), Value::Bool(false));
+    object_entry(root_obj, "translate").insert("enabled".to_string(), Value::Bool(false));
+
+    let webrtc_obj = object_entry(root_obj, "webrtc");
+    webrtc_obj.insert(
+        "ip_handling_policy".to_string(),
+        Value::String("disable_non_proxied_udp".to_string()),
+    );
+    webrtc_obj.insert("multiple_routes_enabled".to_string(), Value::Bool(false));
+    webrtc_obj.insert("nonproxied_udp_enabled".to_string(), Value::Bool(false));
+    // CEF_HARDENING_PREFS_END
 
     match serde_json::to_string(&root) {
         Ok(serialized) => {
@@ -141,7 +365,7 @@ fn enforce_cef_password_policy(bundle_identifier: &str) {
                 tracing::warn!(
                     path = %preferences_path.display(),
                     ?error,
-                    "failed to write CEF password policy preferences"
+                    "failed to write CEF browser policy preferences"
                 );
             }
         }
@@ -149,7 +373,7 @@ fn enforce_cef_password_policy(bundle_identifier: &str) {
             tracing::warn!(
                 path = %preferences_path.display(),
                 ?error,
-                "failed to serialize CEF password policy preferences"
+                "failed to serialize CEF browser policy preferences"
             );
         }
     }
@@ -257,7 +481,19 @@ where
     let context = tauri::generate_context!();
 
     #[cfg(all(feature = "cef-runtime", target_os = "macos"))]
-    enforce_cef_password_policy(context.config().identifier.as_str());
+    let bundle_identifier = context.config().identifier.as_str();
+    #[cfg(all(feature = "cef-runtime", not(target_os = "macos")))]
+    let bundle_identifier = context.config().identifier.as_str();
+
+    #[cfg(feature = "cef-runtime")]
+    let cef_cache_path = cef_runtime_cache_path(bundle_identifier);
+
+    #[cfg(feature = "cef-runtime")]
+    {
+        purge_legacy_cef_cache(bundle_identifier, &cef_cache_path);
+        purge_stale_temp_cef_caches(bundle_identifier, &cef_cache_path);
+        enforce_cef_browser_policy(&cef_cache_path);
+    }
 
     let builder = tauri::Builder::<AppRuntime>::default();
 
@@ -265,13 +501,15 @@ where
     let builder = {
         let cef_args = cef_runtime_args();
         if cef_args.is_empty() {
-            builder
+            builder.root_cache_path(&cef_cache_path)
         } else {
-            builder.command_line_args(cef_args)
+            builder
+                .root_cache_path(&cef_cache_path)
+                .command_line_args(cef_args)
         }
     };
 
-    builder
+    let run_result = builder
         .manage(state)
         .menu(menu::build_menu)
         .on_menu_event(|app, event| menu::handle_menu_event(app, &event))
@@ -285,6 +523,31 @@ where
             let _tokio_guard = match &runtime_handle {
                 tauri::async_runtime::RuntimeHandle::Tokio(handle) => handle.enter(),
             };
+
+            #[cfg(feature = "cef-runtime")]
+            if std::env::var("BAGZ_HEADLESS_SMOKE").is_ok() {
+                let duration_secs = std::env::var("BAGZ_SMOKE_DURATION_SECS")
+                    .ok()
+                    .and_then(|raw| raw.parse::<u64>().ok())
+                    .filter(|duration| *duration > 0)
+                    .unwrap_or(15);
+
+                if let Ok(path) = std::env::var("BAGZ_SMOKE_READY_FILE") {
+                    if let Err(error) = fs::write(&path, "1") {
+                        tracing::warn!(
+                            path = %path,
+                            ?error,
+                            "failed to write CEF smoke ready sentinel"
+                        );
+                    }
+                }
+
+                let smoke_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(duration_secs)).await;
+                    smoke_app.exit(0);
+                });
+            }
 
             if let Err(err) = state.tor_manager.start_if_enabled() {
                 tracing::warn!(error = ?err, "failed to start Tor on app launch");
@@ -316,8 +579,18 @@ where
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(invoke_handler)
-        .run(context)
-        .expect("error while running tauri application");
+        .run(context);
+
+    #[cfg(feature = "cef-runtime")]
+    if let Err(error) = fs::remove_dir_all(&cef_cache_path) {
+        tracing::warn!(
+            path = %cef_cache_path.display(),
+            ?error,
+            "failed to remove temp CEF cache"
+        );
+    }
+
+    run_result.expect("error while running tauri application");
 }
 
 /// Run the test bridge HTTP server only (no Tauri webview).

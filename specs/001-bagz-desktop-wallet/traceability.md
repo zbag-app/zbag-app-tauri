@@ -26,6 +26,7 @@ This document provides an explicit, review-friendly mapping from requirements in
 |---|---|
 | **NFR-001** Local logs only | T060, T207, T208, T209 |
 | **NFR-002** No telemetry/crash reporting | T209a, T209b |
+| **NFR-002.a** CEF emits no non-loopback traffic | `scripts/check-cef-network-hardening.sh`; `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs`; `scripts/cef-network-smoketest.sh` |
 | **NFR-003** User-accessible log location | T061, T208, T209 |
 | **NFR-004** Log rotation | T060 |
 | **NFR-005** Keyboard navigation | T058, T202, T204 |

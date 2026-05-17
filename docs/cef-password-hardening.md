@@ -1,7 +1,7 @@
 # CEF Password Manager Hardening (macOS)
 
 ## Scope
-This document captures the CEF hardening applied to prevent browser-style credential prompts in bagZ while keeping CEF startup stable on macOS.
+This document captures the CEF hardening applied to prevent browser-style credential prompts in bagZ while keeping CEF startup stable on macOS. General CEF network hardening is covered in `docs/cef-network-hardening.md`.
 
 ## Implemented controls
 
@@ -9,7 +9,7 @@ This document captures the CEF hardening applied to prevent browser-style creden
 File: `apps/bagz-app-tauri/src-tauri/src/lib.rs`
 
 - `--use-mock-keychain` is used by default on macOS (unless `BAGZ_USE_SYSTEM_KEYCHAIN=1`).
-- `--disable-save-password-bubble` is enabled.
+- `--disable-save-password-bubble` is enabled as part of the broader offline CEF switch set.
 
 These are the stable runtime flags verified not to reintroduce `CrBrowserMain` startup crashes.
 
@@ -18,7 +18,7 @@ File: `apps/bagz-app-tauri/src-tauri/src/lib.rs`
 
 Before launching Tauri/CEF, the app writes CEF profile preferences at:
 
-- `~/Library/Caches/<bundle_identifier>/cef/Default/Preferences`
+- `<per-launch temp CEF cache>/Default/Preferences`
 
 The following values are enforced:
 
@@ -54,5 +54,5 @@ Added client-side hardening for all forms/inputs:
 
 ## Notes
 
-- Aggressive `--disable-features=...` bundles were intentionally avoided because they caused startup instability in this environment.
-- Policy-level preference enforcement plus frontend hardening provided a stable fix path.
+- Earlier aggressive `--disable-features=...` bundles caused startup instability in this environment. The current CEF network-hardening set is guarded by static checks, parsed-argument tests, and a packaged-app smoke test.
+- Policy-level preference enforcement plus frontend hardening remains the password-manager-specific fix path.
