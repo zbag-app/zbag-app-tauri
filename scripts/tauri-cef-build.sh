@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT/apps/zstash-app-tauri"
+APP_DIR="$ROOT/apps/bagz-app-tauri"
 TAURI_MANIFEST="$APP_DIR/src-tauri/Cargo.toml"
 LOCKFILE="$ROOT/Cargo.lock"
 CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"

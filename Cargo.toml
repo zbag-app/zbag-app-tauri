@@ -1,30 +1,30 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/zstash-core",
-  "crates/zstash-engine",
-  "crates/zstash-network",
-  "crates/zstash-keystone",
-  "crates/zstash-tor",
-  "apps/zstash-app-tauri/src-tauri",
-  "apps/zstash-cli",
+  "crates/bagz-core",
+  "crates/bagz-engine",
+  "crates/bagz-network",
+  "crates/bagz-keystone",
+  "crates/bagz-tor",
+  "apps/bagz-app-tauri/src-tauri",
+  "apps/bagz-cli",
 ]
 
 [workspace.package]
 version = "0.2.2"
 edition = "2024"
 rust-version = "1.92.0"
-license = "MIT"
-repository = "https://github.com/zstash/zstash-desktop"
+license-file = "LICENSE"
+repository = "https://github.com/bagzwallet/bagz-cef-git"
 
 [workspace.dependencies]
 # Zcash libraries (aligned with librustzcash/Zashi)
-zcash_client_backend = { version = "0.21", features = ["orchard", "transparent-inputs", "pczt", "tor", "lightwalletd-tonic-tls-webpki-roots", "unstable"] }
-zcash_client_sqlite = { version = "0.19", features = ["orchard", "transparent-inputs", "serde", "unstable"] }
-zcash_primitives = { version = "0.26" }
-zcash_proofs = { version = "0.26", features = ["bundled-prover"], default-features = false }
-zcash_protocol = { version = "0.7" }
-zcash_transparent = "0.6.3"
+zcash_client_backend = { version = "0.22", features = ["orchard", "transparent-inputs", "pczt", "tor", "lightwalletd-tonic-tls-webpki-roots", "unstable"] }
+zcash_client_sqlite = { version = "0.20", features = ["orchard", "transparent-inputs", "serde", "unstable"] }
+zcash_primitives = { version = "0.27" }
+zcash_proofs = { version = "0.27", features = ["bundled-prover"], default-features = false }
+zcash_protocol = { version = "0.8" }
+zcash_transparent = "0.7"
 
 # Modules relocated from zcash_primitives in 0.20+
 zip32 = "0.2"
@@ -52,12 +52,13 @@ serde_json = "1"
 # Encoding
 base64 = "0.22"
 hex = "0.4"
-pczt = "0.5"
-orchard = "0.11"
+pczt = "0.6"
+orchard = "0.13"
 
 # gRPC
 tonic = "0.14"
 prost = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 
 # HTTP
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
@@ -90,8 +91,8 @@ tempfile = "3"
 
 [patch.crates-io]
 # CEF POC pin: keep Tauri Rust crates on a single feat/cef snapshot.
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "562bc592b337de417aa48e72034c7816cfb4c142" }
-tauri-build = { git = "https://github.com/tauri-apps/tauri", rev = "562bc592b337de417aa48e72034c7816cfb4c142" }
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "6fd733b2d6255d358e88ad19cb15dc7d22b293ac" }
+tauri-build = { git = "https://github.com/tauri-apps/tauri", rev = "6fd733b2d6255d358e88ad19cb15dc7d22b293ac" }
 
 [profile.release]
 strip = "symbols"

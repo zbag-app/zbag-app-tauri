@@ -1,4 +1,4 @@
-# Contributing to zSTASH
+# Contributing to bagZ
 
 ## Development Setup
 

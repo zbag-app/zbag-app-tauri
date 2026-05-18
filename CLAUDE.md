@@ -1,4 +1,4 @@
-# zSTASH Desktop
+# bagZ Desktop
 
 ## Overview
 Tauri v2 Zcash wallet (Rust backend + React frontend).
@@ -24,7 +24,17 @@ make build-frontend # Required before full workspace
 make dev            # Full Tauri development
 ```
 
-Override lightwalletd: `ZSTASH_GRPC_URL`. Run `make help` for all targets.
+Override lightwalletd: `BAGZ_GRPC_URL`. Run `make help` for all targets.
+
+## CEF Network Hardening
+
+CEF is an offline renderer in bagZ. Do not regress the no-network policy without updating all three guardrails:
+
+- `scripts/check-cef-network-hardening.sh` for static pre-commit checks
+- `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs` for parsed runtime arguments
+- `scripts/cef-network-smoketest.sh` for packaged-app socket smoke testing
+
+Editing `cef_runtime_args`, `CEF_DISABLED_FEATURES`, or `CEF_HOST_RESOLVER_RULES` requires updating the matching `EXPECTED_*` constants in the integration test. The runtime smoke uses `BAGZ_GRPC_URL=https://127.0.0.1:1` and isolated `HOME`/`XDG_*` directories so it exercises CEF cold start without a real wallet profile.
 
 ## Version Control
 
@@ -38,9 +48,9 @@ Standard git workflow. Common commands:
 
 ### Git Worktrees
 
-**Always create new worktrees one level up** in `/Users/bioharz/git/zstashapp/`:
+**Always create new worktrees one level up** in `/Users/bioharz/git/bagzapp/`:
 ```bash
-git worktree add ../zstash-issue-<N> -b fix/description
+git worktree add ../bagz-issue-<N> -b fix/description
 ```
 
 **Important:**
@@ -52,35 +62,35 @@ git worktree add ../zstash-issue-<N> -b fix/description
 
 ```
 crates/
-  zstash-core/      # Types, IPC, errors
-  zstash-engine/    # Wallet ops, sync, tx
-  zstash-network/   # gRPC, Tor transport
-  zstash-keystone/  # Hardware wallet (PCZT)
-  zstash-tor/       # Arti client
+  bagz-core/      # Types, IPC, errors
+  bagz-engine/    # Wallet ops, sync, tx
+  bagz-network/   # gRPC, Tor transport
+  bagz-keystone/  # Hardware wallet (PCZT)
+  bagz-tor/       # Arti client
 
-apps/zstash-app-tauri/
+apps/bagz-app-tauri/
   src-tauri/       # Tauri commands
   src/             # React UI
 ```
 
 ### Key Files
 
-- `crates/zstash-engine/src/wallet_manager.rs` - Wallet lifecycle
-- `crates/zstash-engine/src/sync_service.rs` - Blockchain sync
-- `crates/zstash-engine/src/tx_service.rs` - Transaction building/broadcast
-- `crates/zstash-core/src/ipc/` - IPC types
-- `apps/zstash-app-tauri/src/services/ipc.ts` - Frontend IPC client
+- `crates/bagz-engine/src/wallet_manager.rs` - Wallet lifecycle
+- `crates/bagz-engine/src/sync_service.rs` - Blockchain sync
+- `crates/bagz-engine/src/tx_service.rs` - Transaction building/broadcast
+- `crates/bagz-core/src/ipc/` - IPC types
+- `apps/bagz-app-tauri/src/services/ipc.ts` - Frontend IPC client
 
 ### Adding Tauri Commands
 
-Register commands in BOTH `apps/zstash-app-tauri/src-tauri/src/lib.rs` and
-`apps/zstash-app-tauri/src-tauri/src/main.rs`.
+Register commands in BOTH `apps/bagz-app-tauri/src-tauri/src/lib.rs` and
+`apps/bagz-app-tauri/src-tauri/src/main.rs`.
 
 Update:
-- `apps/zstash-app-tauri/src-tauri/src/lib.rs`: `commands::wallet::zstash_xxx`
-- `apps/zstash-app-tauri/src-tauri/src/main.rs`: `zstash_app_tauri_lib::commands::wallet::zstash_xxx`
-- `crates/zstash-core/src/ipc/v1/commands/` - Request/Response types
-- `apps/zstash-app-tauri/src/types/ipc.ts` + `apps/zstash-app-tauri/src/services/ipc.ts`
+- `apps/bagz-app-tauri/src-tauri/src/lib.rs`: `commands::wallet::bagz_xxx`
+- `apps/bagz-app-tauri/src-tauri/src/main.rs`: `bagz_app_tauri_lib::commands::wallet::bagz_xxx`
+- `crates/bagz-core/src/ipc/v1/commands/` - Request/Response types
+- `apps/bagz-app-tauri/src/types/ipc.ts` + `apps/bagz-app-tauri/src/services/ipc.ts`
 
 ## Toolchain
 

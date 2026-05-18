@@ -1,6 +1,6 @@
 # Versioning Policy
 
-zSTASH Desktop follows [Semantic Versioning 2.0.0](https://semver.org/).
+bagZ Desktop follows [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## Version Format
 
@@ -38,25 +38,25 @@ The following files reference the version and must stay in sync:
 | File | Field |
 |------|-------|
 | `Cargo.toml` | `[workspace.package].version` |
-| `apps/zstash-app-tauri/src-tauri/tauri.conf.json` | `version` |
-| `apps/zstash-app-tauri/package.json` | `version` |
+| `apps/bagz-app-tauri/src-tauri/tauri.conf.json` | `version` |
+| `apps/bagz-app-tauri/package.json` | `version` |
 
 ## Versioned Components
 
 ### Rust Crates
-- `zstash-core`
-- `zstash-engine`
-- `zstash-network`
-- `zstash-keystone`
-- `zstash-tor`
-- `zstash-app-tauri`
-- `zstash-cli`
+- `bagz-core`
+- `bagz-engine`
+- `bagz-network`
+- `bagz-keystone`
+- `bagz-tor`
+- `bagz-app-tauri`
+- `bagz-cli`
 
 ### Frontend
-- `apps/zstash-app-tauri/package.json`
+- `apps/bagz-app-tauri/package.json`
 
 ### Tauri App
-- `apps/zstash-app-tauri/src-tauri/tauri.conf.json`
+- `apps/bagz-app-tauri/src-tauri/tauri.conf.json`
 
 ## Release Process
 
@@ -76,7 +76,7 @@ The version is surfaced in:
 
 Example log entry:
 ```
-INFO zSTASH Desktop starting version=0.1.0 git_commit=abc1234
+INFO bagZ Desktop starting version=0.1.0 git_commit=abc1234
 ```
 
 ## Git Commit Hash

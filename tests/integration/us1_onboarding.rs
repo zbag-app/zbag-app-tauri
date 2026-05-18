@@ -11,7 +11,7 @@
 //! - Locked LoadWalletResponse returns accounts=[]
 //! - Unlock + re-LoadWallet returns accounts.length >= 1
 //!
-//! See `crates/zstash-engine/tests/us1_backup_challenge.rs` for the executable unit coverage.
+//! See `crates/bagz-engine/tests/us1_backup_challenge.rs` for the executable unit coverage.
 
 #[test]
 fn placeholder() {

@@ -1,0 +1,50 @@
+[package]
+name = "bagz-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+
+[features]
+temporary-debug-logging = []
+
+[dependencies]
+anyhow.workspace = true
+argon2.workspace = true
+base64.workspace = true
+bip39.workspace = true
+hex.workspace = true
+chacha20poly1305.workspace = true
+chrono.workspace = true
+rand.workspace = true
+rusqlite.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+keyring.workspace = true
+url.workspace = true
+zip32.workspace = true
+zcash_proofs.workspace = true
+prost.workspace = true
+bagz-core = { path = "../bagz-core" }
+bagz-keystone = { path = "../bagz-keystone" }
+bagz-network = { path = "../bagz-network" }
+bagz-tor = { path = "../bagz-tor" }
+zcash_client_backend.workspace = true
+zcash_client_sqlite.workspace = true
+zcash_primitives.workspace = true
+zcash_protocol.workspace = true
+zcash_transparent.workspace = true
+pczt.workspace = true
+orchard.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

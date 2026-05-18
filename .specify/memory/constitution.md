@@ -23,13 +23,13 @@ Source document: (formerly) detailed constitution (removed; this file is canonic
 	==================
 -->
 
-# zSTASH Desktop Constitution
+# bagZ Desktop Constitution
 
 ## Preamble
 
-This document defines the non-negotiable principles governing zSTASH Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
+This document defines the non-negotiable principles governing bagZ Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
 
-This file is the canonical constitution for zSTASH Desktop.
+This file is the canonical constitution for bagZ Desktop.
 
 ## Core Principles
 
@@ -118,7 +118,7 @@ Significant changes MUST be documented with problem, options considered, chosen 
 Application logs MUST support structured, redacted, and rotated file output.
 
 **Enforceable rules:**
-- Log files MUST be written to `~/.zstash/logs/` with daily rotation (e.g., `zstash.YYYY-MM-DD.log`)
+- Log files MUST be written to `~/.bagz/logs/` with daily rotation (e.g., `bagz.YYYY-MM-DD.log`)
 - Log retention MUST be limited (default: 7 days)
 - Secrets (mnemonics, seeds, spending keys, raw payloads, full memos) MUST be redacted in all log output
 - Log levels MUST be configurable via `RUST_LOG` environment variable
@@ -131,6 +131,7 @@ Before merging work that touches wallet, signing, networking, or persistence, co
 - [ ] Secrets cannot reach the UI
 - [ ] Mnemonic flows follow permitted patterns (create, backup verify, restore, view seed) with no UI persistence or logging; "View seed phrase" requires manual wallet-password re-authentication
 - [ ] Logs remain redacted
+- [ ] CEF remains an offline renderer with no non-loopback traffic, per NFR-002.a
 - [ ] Transparent funds still cannot be used for payments; transparent inputs are only permitted for explicit shielding transactions (transparent -> shielded)
 - [ ] Sending to transparent recipients requires explicit privacy acknowledgement
 - [ ] Tor mode cannot silently downgrade
@@ -161,12 +162,12 @@ This constitution follows semantic versioning:
 
 ### Reference Documents
 
-- **Feature specification**: `specs/001-zstash-desktop-wallet/spec.md`
-- **Implementation plan**: `specs/001-zstash-desktop-wallet/plan.md`
-- **Data model**: `specs/001-zstash-desktop-wallet/data-model.md`
-- **Research**: `specs/001-zstash-desktop-wallet/research.md`
-- **Quickstart**: `specs/001-zstash-desktop-wallet/quickstart.md`
-- **Tasks**: `specs/001-zstash-desktop-wallet/tasks.md`
+- **Feature specification**: `specs/001-bagz-desktop-wallet/spec.md`
+- **Implementation plan**: `specs/001-bagz-desktop-wallet/plan.md`
+- **Data model**: `specs/001-bagz-desktop-wallet/data-model.md`
+- **Research**: `specs/001-bagz-desktop-wallet/research.md`
+- **Quickstart**: `specs/001-bagz-desktop-wallet/quickstart.md`
+- **Tasks**: `specs/001-bagz-desktop-wallet/tasks.md`
 
 ## Security Reporting and Incident Response
 

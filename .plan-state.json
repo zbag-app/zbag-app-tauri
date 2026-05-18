@@ -1,0 +1,29 @@
+{
+  "branch": "overnight/bagz-rebrand-refresh-20260515",
+  "started_at": "2026-05-14T22:50:43Z",
+  "baseline_sha": "8ca30485809b4f7bf7b07f8c9d2f7c78fb3b280e",
+  "completed_tiers": [
+    "0-setup",
+    "0a-baseline-clippy",
+    "1-license-polyform-shield",
+    "2-ring-provider-fix",
+    "3-ring-provider-regression-test",
+    "4a-tauri-cef-rev-bump",
+    "4b-js-minor-bumps",
+    "5-rust-transitive-patch-updates",
+    "6-zcash-crate-bumps",
+    "7-aggressive-transitive-update",
+    "8-vite-8",
+    "9-cargo-audit",
+    "10-rebrand-directories",
+    "11-rebrand-cargo-packages",
+    "12-rebrand-code-docs-ipc-env",
+    "13-ipc-env-runtime-audit",
+    "14-rebrand-assets-and-bundle-metadata",
+    "15-full-rust-validation",
+    "16-cef-build-and-bridge-e2e",
+    "17-packaged-app-smoke"
+  ],
+  "current_tier": "complete",
+  "last_green_sha": "8be0203812738b8ead2511b9f1f31d5bf7a1eef7"
+}

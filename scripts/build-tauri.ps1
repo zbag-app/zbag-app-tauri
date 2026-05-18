@@ -1,4 +1,4 @@
-# Build script for zSTASH on Windows
+# Build script for bagZ on Windows
 # Sets OpenSSL environment variables and runs the Tauri build
 
 $ErrorActionPreference = "Stop"
@@ -46,7 +46,7 @@ try {
 
     # Verify we're in the correct directory
     if (-not (Test-Path "Makefile")) {
-        Write-Host "ERROR: Makefile not found. Run this script from the zstash repository root." -ForegroundColor Red
+        Write-Host "ERROR: Makefile not found. Run this script from the bagz repository root." -ForegroundColor Red
         exit 1
     }
 
@@ -69,7 +69,7 @@ try {
         $env:OPENSSL_INCLUDE_DIR = "$env:OPENSSL_DIR\include"
     }
 
-    Write-Host "=== zSTASH Windows Build ===" -ForegroundColor Cyan
+    Write-Host "=== bagZ Windows Build ===" -ForegroundColor Cyan
     Write-Host "OPENSSL_DIR: $env:OPENSSL_DIR"
     Write-Host "OPENSSL_LIB_DIR: $env:OPENSSL_LIB_DIR"
     Write-Host ""
@@ -113,7 +113,7 @@ try {
         Write-Host "=== Build Successful ===" -ForegroundColor Green
 
         # Find actual build outputs
-        $exePath = "target\release\zstash-app-tauri.exe"
+        $exePath = "target\release\bagz-app-tauri.exe"
         if (Test-Path $exePath) {
             Write-Host "Executable: $exePath"
         }

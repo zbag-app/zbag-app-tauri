@@ -1,0 +1,55 @@
+[package]
+name = "bagz-app-tauri"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish = false
+description = "bagZ Desktop Wallet (Tauri)"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "bagz_app_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+bagz-core = { path = "../../../crates/bagz-core" }
+bagz-engine = { path = "../../../crates/bagz-engine" }
+bagz-network = { path = "../../../crates/bagz-network" }
+bagz-keystone = { path = "../../../crates/bagz-keystone" }
+bagz-tor = { path = "../../../crates/bagz-tor" }
+
+tauri = { version = "2", default-features = false, features = ["compression", "common-controls-v6", "dynamic-acl"] }
+tauri-plugin-opener = "2"
+
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+reqwest.workspace = true
+
+# Test bridge dependencies (optional)
+axum = { version = "0.8", optional = true }
+tower = { version = "0.5", optional = true }
+tower-http = { version = "0.6", features = ["cors", "limit"], optional = true }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+# Build this app against Tauri's experimental CEF runtime.
+cef-runtime = ["tauri/cef"]
+# Enable HTTP test bridge for E2E testing (Playwright/Chrome MCP).
+# The production app still uses the `cef-runtime` feature; `tauri/wry` is only
+# needed so the non-CEF bridge build can type-check Tauri command handlers.
+test-bridge = ["dep:axum", "dep:tower", "dep:tower-http", "tauri/wry"]

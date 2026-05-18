@@ -4,7 +4,7 @@ Final state after two sessions of isolation work. Investigation is effectively d
 
 ## One-line outcome
 
-When zSTASH's Tauri-CEF build uses `reqwest 0.13`'s default `rustls` feature, it implicitly makes `aws-lc-rs` the process-wide `rustls::crypto::CryptoProvider`. `tonic 0.14`'s later TLS handshake picks up `aws-lc-rs` and deadlocks inside a process that also statically links CEF's bundled Chromium BoringSSL. Installing `ring` as the default provider at startup (and using `reqwest`'s `rustls-no-provider` feature) resolves it. Manual end-to-end testing of the fix against the real wallet (sync, Settings network, Tor) passes.
+When bagZ's Tauri-CEF build uses `reqwest 0.13`'s default `rustls` feature, it implicitly makes `aws-lc-rs` the process-wide `rustls::crypto::CryptoProvider`. `tonic 0.14`'s later TLS handshake picks up `aws-lc-rs` and deadlocks inside a process that also statically links CEF's bundled Chromium BoringSSL. Installing `ring` as the default provider at startup (and using `reqwest`'s `rustls-no-provider` feature) resolves it. Manual end-to-end testing of the fix against the real wallet (sync, Settings network, Tor) passes.
 
 ## Shipping state vs scratch state
 
@@ -18,8 +18,8 @@ Diff stat against `8c2813d`:
 ```
 Cargo.lock                                 | 345 +++++++----------------------
 Cargo.toml                                 |   2 +-
-apps/zstash-app-tauri/src-tauri/Cargo.toml |   2 +
-apps/zstash-app-tauri/src-tauri/src/lib.rs |   6 +
+apps/bagz-app-tauri/src-tauri/Cargo.toml |   2 +
+apps/bagz-app-tauri/src-tauri/src/lib.rs |   6 +
 ```
 
 1. `Cargo.toml:63` (workspace):
@@ -28,14 +28,14 @@ apps/zstash-app-tauri/src-tauri/src/lib.rs |   6 +
    ```
    (was `0.12` with `["json", "rustls-tls"]`)
 
-2. `apps/zstash-app-tauri/src-tauri/Cargo.toml`:
+2. `apps/bagz-app-tauri/src-tauri/Cargo.toml`:
    ```toml
    reqwest.workspace = true
    rustls = { version = "0.23", features = ["ring"] }
    ```
    `reqwest.workspace = true` was added so this crate can depend on it; the Tauri app previously didn't list reqwest directly. `rustls` is added only to call `install_default()`.
 
-3. `apps/zstash-app-tauri/src-tauri/src/lib.rs` at the top of `run_with_invoke_handler` (before `state::AppState::new()`):
+3. `apps/bagz-app-tauri/src-tauri/src/lib.rs` at the top of `run_with_invoke_handler` (before `state::AppState::new()`):
    ```rust
    // Install ring as rustls default CryptoProvider before any TLS use.
    // Reqwest 0.13 is configured with `rustls-no-provider`; both reqwest and tonic
@@ -48,7 +48,7 @@ apps/zstash-app-tauri/src-tauri/src/lib.rs |   6 +
 
 ## How the fix was validated
 
-### Phase A: isolation inside the zSTASH app
+### Phase A: isolation inside the bagZ app
 
 - **A0** (reqwest 0.13 default `rustls` feature, no explicit provider install): reproduced the hang exactly as reported (sync stuck, Settings > Network test never returns). Startup probe showed reqwest's own HTTPS call succeeded (`200 OK` in 741 ms); a `sample(1)` of the main process during the hang showed all tokio workers parked, no active TLS stack. Conclusion: `aws-lc-rs` works for reqwest but breaks the later tonic handshake.
 - **A1** (reqwest 0.13 `rustls-no-provider` + `rustls::crypto::ring::default_provider().install_default()`): startup probe ran reqwest → tonic (`GrpcClient::probe_server("https://zec.rocks:443")`) → reqwest. All three succeeded in under 1 s total. Manual testing of the real wallet (sync to tip, Settings, Tor toggle, network test) passed.
@@ -56,7 +56,7 @@ apps/zstash-app-tauri/src-tauri/src/lib.rs |   6 +
 
 ### Phase B: minimal standalone repro
 
-Project at `/tmp/tauri-cef-tls-repro/` (also packaged in `plans/tauri-cef-tls-repro.tar.gz`). Tauri v2 CEF, no React, no zSTASH code. Auto-probe in the `.setup` hook runs one reqwest GET + one tonic connect, logs to `/tmp/repro-probe.log`. Two feature variants:
+Project at `/tmp/tauri-cef-tls-repro/` (also packaged in `plans/tauri-cef-tls-repro.tar.gz`). Tauri v2 CEF, no React, no bagZ code. Auto-probe in the `.setup` hook runs one reqwest GET + one tonic connect, logs to `/tmp/repro-probe.log`. Two feature variants:
 
 - **Broken** (`cargo tauri build --features cef-runtime --bundles app`): `aws-lc-rs` is the implicit default provider. reqwest succeeds ~400 ms; tonic never completes. Waited 90 s, no `tonic ok`, no `tonic err`, no `tonic TIMEOUT`. The `tokio::time::timeout(25s)` inside the probe cannot preempt the handshake, which means it is blocked in a synchronous FFI call that never yields. Strong signature for the `aws-lc-rs`/CEF BoringSSL collision hypothesis.
 - **Fixed** (`cargo tauri build --features cef-runtime,install-ring --bundles app`): same code path with `rustls::crypto::ring::default_provider().install_default()` at startup. reqwest ~600 ms, tonic ~600 ms, both complete.
@@ -84,7 +84,7 @@ Repro tarball (`plans/tauri-cef-tls-repro.tar.gz`) not attached to either filing
    - Scope of commit: workspace `Cargo.toml`, app `Cargo.toml`, `lib.rs`, `Cargo.lock`.
    - Constitution check: no secrets/signing/network-ACL/IPC-version changes; safe under the CLAUDE.md merge gate.
 2. **Post Phase C?** Needs your go-ahead. Drafts are ready to `gh issue comment` and `gh issue create` verbatim.
-3. **Discard scratch branch?** If keeping 0.12 as shipping, `git checkout -- Cargo.toml Cargo.lock apps/zstash-app-tauri/src-tauri/Cargo.toml apps/zstash-app-tauri/src-tauri/src/lib.rs` and `git branch -D repro/reqwest-0.13-hang` once any documentation you want to keep has been committed.
+3. **Discard scratch branch?** If keeping 0.12 as shipping, `git checkout -- Cargo.toml Cargo.lock apps/bagz-app-tauri/src-tauri/Cargo.toml apps/bagz-app-tauri/src-tauri/src/lib.rs` and `git branch -D repro/reqwest-0.13-hang` once any documentation you want to keep has been committed.
 
 ## Artifacts
 
@@ -93,11 +93,11 @@ Repro tarball (`plans/tauri-cef-tls-repro.tar.gz`) not attached to either filing
 - `plans/phase-c-draft.md`: upstream filing drafts.
 - `plans/tauri-cef-tls-repro.tar.gz` (~64 KB): standalone minimal repro. Extracts to `tauri-cef-tls-repro/`.
 - `/tmp/tauri-cef-tls-repro/`: working copy of the minimal repro (outside workspace).
-- `/tmp/zstash-tauri-build-clean.log`: last clean zstash build log (1m 57s, `8c2813d` + A1 edits, no probe code).
+- `/tmp/bagz-tauri-build-clean.log`: last clean bagz build log (1m 57s, `8c2813d` + A1 edits, no probe code).
 - `/tmp/repro-build-broken-v4.log`, `/tmp/repro-build-fixed-v2.log`: repro build logs.
 - `/tmp/repro-probe.log`: most recent repro probe output (overwritten per launch).
-- `/Users/bioharz/.zstash/logs/zstash.2026-04-23`: zSTASH app log. Contains `ZSTASH-REPRO:` probe lines from A0/A1 runs (probe code has since been stripped from `lib.rs`).
-- Stack samples (stripped release binary, Rust frames unreadable): `/tmp/zstash-sample-main-a0.txt`, `/tmp/zstash-sample-main-a0-v2.txt`.
+- `/Users/bioharz/.bagz/logs/bagz.2026-04-23`: bagZ app log. Contains `BAGZ-REPRO:` probe lines from A0/A1 runs (probe code has since been stripped from `lib.rs`).
+- Stack samples (stripped release binary, Rust frames unreadable): `/tmp/bagz-sample-main-a0.txt`, `/tmp/bagz-sample-main-a0-v2.txt`.
 
 ## How to resume if interrupted mid-Phase-C
 
