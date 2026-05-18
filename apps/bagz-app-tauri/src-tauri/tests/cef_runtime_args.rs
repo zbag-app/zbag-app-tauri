@@ -57,9 +57,13 @@ fn normalized_key(key: &str) -> &str {
 }
 
 fn arg_value(args: &[(String, Option<String>)], name: &str) -> Option<Option<String>> {
-    args.iter()
-        .find(|(key, _)| normalized_key(key) == name)
-        .map(|(_, value)| value.clone())
+    let mut iter = args.iter().filter(|(key, _)| normalized_key(key) == name);
+    let first = iter.next();
+    assert!(
+        iter.next().is_none(),
+        "CEF switch {name} appears more than once in cef_runtime_args"
+    );
+    first.map(|(_, value)| value.clone())
 }
 
 fn comma_set(raw: &str) -> BTreeSet<&str> {
@@ -78,6 +82,19 @@ fn required_switches_present() {
             arg_value(&args, expected),
             Some(None),
             "missing no-value CEF switch: {expected}"
+        );
+    }
+}
+
+#[test]
+fn no_duplicate_switches() {
+    let args = cef_runtime_args();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for (key, _) in &args {
+        let normalized = normalized_key(key).to_string();
+        assert!(
+            seen.insert(normalized.clone()),
+            "duplicate CEF switch detected: {normalized}"
         );
     }
 }

@@ -252,6 +252,34 @@ run_fixture() {
   esac
 }
 
+filter_live_pids() {
+  local csv="$1"
+  local live=()
+  local pid
+  local pids
+  IFS=',' read -ra pids <<<"$csv"
+  for pid in "${pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      live+=("$pid")
+    fi
+  done
+  (IFS=,; printf '%s\n' "${live[*]}")
+}
+
+run_filter_live_pids_fixture() {
+  local label="$1"
+  local expected="$2"
+  local input="$3"
+  local got
+  got="$(filter_live_pids "$input")"
+  if [[ "$got" == "$expected" ]]; then
+    log "PASS: filter_live_pids fixture $label"
+  else
+    log "FAIL: filter_live_pids fixture $label expected=$expected got=$got"
+    return 1
+  fi
+}
+
 run_selftest() {
   RUN_LOG="$(mktemp "${TMPDIR:-/tmp}/bagz-cef-smoketest-selftest.XXXXXX")"
   log "running CEF network smoke parser self-test"
@@ -261,6 +289,13 @@ run_selftest() {
   run_fixture zero-listener fail
   run_fixture external-connected fail
   run_fixture loopback-connected pass
+
+  sleep 0.01 &
+  local dead_pid=$!
+  wait "$dead_pid" 2>/dev/null || true
+  run_filter_live_pids_fixture all-live "$$" "$$"
+  run_filter_live_pids_fixture mixed "$$" "$$,$dead_pid"
+  run_filter_live_pids_fixture all-dead "" "$dead_pid"
 
   log "PASS: CEF network smoke parser self-test"
 }
@@ -274,16 +309,48 @@ sample_sockets() {
     return 0
   fi
 
-  local output
+  local raw_file="$SMOKE_ROOT/lsof.raw.$sample"
+  local stderr_file="$SMOKE_ROOT/lsof.stderr.$sample"
+  local status
+
   set +e
-  output="$(lsof -nP -a -p "$pid_csv" -iTCP -iUDP -F pcPTn0 2>/dev/null | tr '\0' '\n')"
+  lsof -nP -a -p "$pid_csv" -iTCP -iUDP -F pcPTn0 >"$raw_file" 2>"$stderr_file"
+  status=$?
   set -e
+
+  if [[ "$status" -ne 0 && -s "$stderr_file" ]]; then
+    local live_csv
+    live_csv="$(filter_live_pids "$pid_csv")"
+    if [[ -z "$live_csv" ]]; then
+      rm -f "$raw_file" "$stderr_file"
+      return 0
+    fi
+    if [[ "$live_csv" != "$pid_csv" ]]; then
+      set +e
+      lsof -nP -a -p "$live_csv" -iTCP -iUDP -F pcPTn0 >"$raw_file" 2>"$stderr_file"
+      status=$?
+      set -e
+    fi
+    if [[ "$status" -ne 0 && -s "$stderr_file" ]]; then
+      log "ERROR: lsof instrumentation failed sample=$sample status=$status stderr=$(tr '\n' ' ' <"$stderr_file")"
+      rm -f "$raw_file" "$stderr_file"
+      return 2
+    fi
+  fi
+
+  local output
+  output="$(tr '\0' '\n' <"$raw_file")"
+  rm -f "$raw_file" "$stderr_file"
 
   if [[ -z "$output" ]]; then
     return 0
   fi
 
+  local classify_rc
+  set +e
   classify_lsof_fields "$sample" <<<"$output"
+  classify_rc=$?
+  return "$classify_rc"
 }
 
 bundle_executable() {
@@ -320,11 +387,19 @@ bundle_executable() {
 
 sampler_loop() {
   local sample=0
+  local rc
 
   while kill -0 "$APP_PID" 2>/dev/null; do
     sample=$((sample + 1))
-    if ! sample_sockets "sample-$sample"; then
+    if sample_sockets "sample-$sample"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    if [[ "$rc" -eq 1 ]]; then
       touch "$SMOKE_ROOT/network-failure"
+    elif [[ "$rc" -eq 2 ]]; then
+      touch "$SMOKE_ROOT/instrumentation-failure"
     fi
     sleep 1
   done
@@ -399,6 +474,9 @@ run_smoke() {
   app_status=$?
   set -e
 
+  local app_elapsed
+  app_elapsed=$(($(date +%s) - start_ts))
+
   kill "$WATCHDOG_PID" 2>/dev/null || true
   WATCHDOG_PID=""
   wait "$SAMPLER_PID" 2>/dev/null || true
@@ -420,16 +498,20 @@ run_smoke() {
     log "FAIL: app exited before CEF smoke setup wrote readiness sentinel status=$app_status elapsed=${elapsed}s"
     return 2
   fi
-  if (( elapsed < lower_bound )); then
-    log "FAIL: app exited too early status=$app_status elapsed=${elapsed}s expected_min=${lower_bound}s"
+  if (( app_elapsed < lower_bound )); then
+    log "FAIL: app exited too early status=$app_status app_elapsed=${app_elapsed}s total_elapsed=${elapsed}s expected_min=${lower_bound}s"
     return 2
   fi
-  if (( elapsed > upper_bound )); then
-    log "FAIL: app exited too late status=$app_status elapsed=${elapsed}s expected_max=${upper_bound}s"
+  if (( app_elapsed > upper_bound )); then
+    log "FAIL: app exited too late status=$app_status app_elapsed=${app_elapsed}s total_elapsed=${elapsed}s expected_max=${upper_bound}s"
     return 2
   fi
   if (( app_status != 0 )); then
     log "FAIL: app exited non-zero status=$app_status elapsed=${elapsed}s"
+    return 2
+  fi
+  if [[ -f "$SMOKE_ROOT/instrumentation-failure" ]]; then
+    log "FAIL: lsof failed during sampling"
     return 2
   fi
   if [[ -f "$SMOKE_ROOT/network-failure" ]]; then

@@ -195,6 +195,8 @@ fn purge_stale_temp_cef_caches(bundle_identifier: &str, runtime_cache_path: &Pat
         return;
     };
     let prefix = format!("{bundle_identifier}-");
+    let now = std::time::SystemTime::now();
+    let min_age = std::time::Duration::from_secs(60);
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -209,6 +211,32 @@ fn purge_stale_temp_cef_caches(bundle_identifier: &str, runtime_cache_path: &Pat
             continue;
         }
 
+        let remainder = &name[prefix.len()..];
+        let pid_alive = remainder
+            .split_once('-')
+            .and_then(|(pid_str, _)| pid_str.parse::<u32>().ok())
+            .map(is_process_alive)
+            .unwrap_or(false);
+        if pid_alive {
+            continue;
+        }
+
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+        let modified = match metadata.modified() {
+            Ok(modified) => modified,
+            Err(_) => continue,
+        };
+        let age = match now.duration_since(modified) {
+            Ok(age) => age,
+            Err(_) => continue,
+        };
+        if age < min_age {
+            continue;
+        }
+
         if let Err(error) = fs::remove_dir_all(&path) {
             tracing::warn!(
                 path = %path.display(),
@@ -216,6 +244,26 @@ fn purge_stale_temp_cef_caches(bundle_identifier: &str, runtime_cache_path: &Pat
                 "failed to remove stale temp CEF cache"
             );
         }
+    }
+}
+
+#[cfg(all(not(feature = "test-bridge"), feature = "cef-runtime"))]
+fn is_process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        std::process::Command::new("/bin/kill")
+            .args(["-0", &pid.to_string()])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(true)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        true
     }
 }
 
