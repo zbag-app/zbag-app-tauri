@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="${1:-$ROOT/target/release/bundle/macos/bagZ.app}"
 SMOKE_DURATION_SECS="${BAGZ_SMOKE_DURATION_SECS:-15}"
+LSOF_TIMEOUT_SECS="${BAGZ_LSOF_TIMEOUT_SECS:-3}"
 SMOKE_LOG="${RUNNER_TEMP:-/tmp}/bagz-cef-smoketest.log"
 SMOKE_ROOT=""
 RUN_LOG=""
@@ -14,6 +15,10 @@ COPIED=0
 
 if ! [[ "$SMOKE_DURATION_SECS" =~ ^[0-9]+$ ]] || [[ "$SMOKE_DURATION_SECS" -eq 0 ]]; then
   echo "error: BAGZ_SMOKE_DURATION_SECS must be a positive integer" >&2
+  exit 2
+fi
+if ! [[ "$LSOF_TIMEOUT_SECS" =~ ^[0-9]+$ ]] || [[ "$LSOF_TIMEOUT_SECS" -eq 0 ]]; then
+  echo "error: BAGZ_LSOF_TIMEOUT_SECS must be a positive integer" >&2
   exit 2
 fi
 
@@ -280,6 +285,74 @@ run_filter_live_pids_fixture() {
   fi
 }
 
+run_sample_sockets_fixture() {
+  local label="$1"
+  local expected_rc="$2"
+  local stub_script="$3"
+
+  local fixture_timeout=""
+  if [[ -n "${BAGZ_LSOF_TIMEOUT_SECS_FIXTURE:-}" ]]; then
+    if ! [[ "$BAGZ_LSOF_TIMEOUT_SECS_FIXTURE" =~ ^[0-9]+$ ]] \
+       || [[ "$BAGZ_LSOF_TIMEOUT_SECS_FIXTURE" -eq 0 ]]; then
+      log "FAIL: fixture $label has invalid BAGZ_LSOF_TIMEOUT_SECS_FIXTURE=$BAGZ_LSOF_TIMEOUT_SECS_FIXTURE"
+      return 1
+    fi
+    fixture_timeout="$BAGZ_LSOF_TIMEOUT_SECS_FIXTURE"
+  fi
+
+  local stub_dir
+  stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/bagz-stub.XXXXXX")"
+  printf '%s\n' "$stub_script" >"$stub_dir/lsof"
+  chmod +x "$stub_dir/lsof"
+
+  local prior_path="$PATH"
+  local prior_app_pid="${APP_PID:-}"
+  local prior_smoke_root="${SMOKE_ROOT:-}"
+  local prior_lsof_timeout="$LSOF_TIMEOUT_SECS"
+  PATH="$stub_dir:$PATH"
+  APP_PID=$$
+  SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bagz-smoke-fixture.XXXXXX")"
+  if [[ -n "$fixture_timeout" ]]; then
+    LSOF_TIMEOUT_SECS="$fixture_timeout"
+  fi
+
+  local prior_enumerate_def=""
+  if [[ -n "${BAGZ_FIXTURE_FAKE_DEAD_DESCENDANT:-}" ]]; then
+    prior_enumerate_def="$(declare -f enumerate_descendants)"
+    enumerate_descendants() {
+      printf '%s\n' "$1"
+      printf '%s\n' "$BAGZ_FIXTURE_FAKE_DEAD_DESCENDANT"
+    }
+  fi
+
+  export BAGZ_FIXTURE_STATE_DIR="$SMOKE_ROOT"
+
+  local got_rc
+  if sample_sockets "fixture-$label"; then
+    got_rc=0
+  else
+    got_rc=$?
+  fi
+
+  unset BAGZ_FIXTURE_STATE_DIR
+  if [[ -n "$prior_enumerate_def" ]]; then
+    unset -f enumerate_descendants
+    eval "$prior_enumerate_def"
+  fi
+  rm -rf "$SMOKE_ROOT" "$stub_dir"
+  PATH="$prior_path"
+  APP_PID="$prior_app_pid"
+  SMOKE_ROOT="$prior_smoke_root"
+  LSOF_TIMEOUT_SECS="$prior_lsof_timeout"
+
+  if [[ "$got_rc" -eq "$expected_rc" ]]; then
+    log "PASS: sample_sockets fixture $label (rc=$got_rc)"
+    return 0
+  fi
+  log "FAIL: sample_sockets fixture $label expected=$expected_rc got=$got_rc"
+  return 1
+}
+
 run_selftest() {
   RUN_LOG="$(mktemp "${TMPDIR:-/tmp}/bagz-cef-smoketest-selftest.XXXXXX")"
   log "running CEF network smoke parser self-test"
@@ -297,7 +370,87 @@ run_selftest() {
   run_filter_live_pids_fixture mixed "$$" "$$,$dead_pid"
   run_filter_live_pids_fixture all-dead "" "$dead_pid"
 
+  run_sample_sockets_fixture evidence-with-nonzero-status 1 '#!/usr/bin/env bash
+printf "p1234\0cbagZ\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->142.250.190.78:443\0"
+echo "lsof: synthetic stderr about a dead PID" >&2
+exit 1'
+
+  run_sample_sockets_fixture clean-with-nonzero-status-no-race 2 '#!/usr/bin/env bash
+printf "p1234\0cbagZ\0PTCP\0TST=LISTEN\0n127.0.0.1:7777\0"
+echo "lsof: synthetic generic error" >&2
+exit 1'
+
+  BAGZ_LSOF_TIMEOUT_SECS_FIXTURE=1 \
+    run_sample_sockets_fixture timeout-no-evidence 2 '#!/usr/bin/env bash
+exec sleep 30'
+
+  BAGZ_LSOF_TIMEOUT_SECS_FIXTURE=1 \
+    run_sample_sockets_fixture timeout-with-evidence 1 '#!/usr/bin/env bash
+printf "p1234\0cbagZ\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->142.250.190.78:443\0"
+exec sleep 30'
+
+  local dead_descendant_pid
+  dead_descendant_pid="$(
+    (:) &
+    pid=$!
+    wait "$pid" 2>/dev/null || true
+    printf '%s' "$pid"
+  )"
+  BAGZ_FIXTURE_FAKE_DEAD_DESCENDANT="$dead_descendant_pid" \
+    run_sample_sockets_fixture retry-benign-no-matching-files 0 '#!/usr/bin/env bash
+counter_file="$BAGZ_FIXTURE_STATE_DIR/lsof-calls"
+count=$(cat "$counter_file" 2>/dev/null || echo 0)
+echo $((count + 1)) >"$counter_file"
+if [[ "$count" -eq 0 ]]; then
+  printf "p1234\0cbagZ\0PTCP\0TST=LISTEN\0n127.0.0.1:7777\0"
+  echo "lsof: synthetic stderr forcing race retry" >&2
+  exit 1
+else
+  exit 1
+fi'
+
   log "PASS: CEF network smoke parser self-test"
+}
+
+run_lsof_with_timeout() {
+  local timeout_secs="$1"
+  local pids="$2"
+  local raw="$3"
+  local stderr_path="$4"
+  local timeout_sentinel="$5"
+
+  rm -f "$timeout_sentinel"
+
+  lsof -nP -a -p "$pids" -iTCP -iUDP -F pcPTn0 >"$raw" 2>"$stderr_path" &
+  local lsof_pid=$!
+
+  (
+    waited=0
+    while [[ "$waited" -lt "$timeout_secs" ]]; do
+      sleep 1
+      waited=$((waited + 1))
+      if ! kill -0 "$lsof_pid" 2>/dev/null; then
+        exit 0
+      fi
+    done
+    touch "$timeout_sentinel"
+    kill -TERM "$lsof_pid" 2>/dev/null || true
+    sleep 1
+    kill -KILL "$lsof_pid" 2>/dev/null || true
+  ) &
+  local killer_pid=$!
+
+  local status
+  if wait "$lsof_pid"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  kill "$killer_pid" 2>/dev/null || true
+  wait "$killer_pid" 2>/dev/null || true
+
+  return "$status"
 }
 
 sample_sockets() {
@@ -311,46 +464,111 @@ sample_sockets() {
 
   local raw_file="$SMOKE_ROOT/lsof.raw.$sample"
   local stderr_file="$SMOKE_ROOT/lsof.stderr.$sample"
+  local timeout_sentinel="$SMOKE_ROOT/lsof.timedout.$sample"
   local status
 
-  set +e
-  lsof -nP -a -p "$pid_csv" -iTCP -iUDP -F pcPTn0 >"$raw_file" 2>"$stderr_file"
-  status=$?
-  set -e
-
-  if [[ "$status" -ne 0 && -s "$stderr_file" ]]; then
-    local live_csv
-    live_csv="$(filter_live_pids "$pid_csv")"
-    if [[ -z "$live_csv" ]]; then
-      rm -f "$raw_file" "$stderr_file"
-      return 0
-    fi
-    if [[ "$live_csv" != "$pid_csv" ]]; then
-      set +e
-      lsof -nP -a -p "$live_csv" -iTCP -iUDP -F pcPTn0 >"$raw_file" 2>"$stderr_file"
-      status=$?
-      set -e
-    fi
-    if [[ "$status" -ne 0 && -s "$stderr_file" ]]; then
-      log "ERROR: lsof instrumentation failed sample=$sample status=$status stderr=$(tr '\n' ' ' <"$stderr_file")"
-      rm -f "$raw_file" "$stderr_file"
-      return 2
-    fi
+  if run_lsof_with_timeout "$LSOF_TIMEOUT_SECS" \
+       "$pid_csv" "$raw_file" "$stderr_file" "$timeout_sentinel"; then
+    status=0
+  else
+    status=$?
   fi
 
-  local output
-  output="$(tr '\0' '\n' <"$raw_file")"
-  rm -f "$raw_file" "$stderr_file"
+  local classify_rc=0
+  if [[ -s "$raw_file" ]]; then
+    local output
+    output="$(tr '\0' '\n' <"$raw_file")"
+    if [[ -n "$output" ]]; then
+      if classify_lsof_fields "$sample" <<<"$output"; then
+        classify_rc=0
+      else
+        classify_rc=$?
+      fi
+    fi
+  fi
+  if [[ "$classify_rc" -eq 1 ]]; then
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
+    return 1
+  fi
 
-  if [[ -z "$output" ]]; then
+  if [[ -f "$timeout_sentinel" ]]; then
+    log "ERROR: lsof timed out sample=$sample timeout=${LSOF_TIMEOUT_SECS}s"
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
+    return 2
+  fi
+  if [[ "$status" -eq 0 ]]; then
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
+    return 0
+  fi
+  if [[ ! -s "$stderr_file" ]]; then
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
     return 0
   fi
 
-  local classify_rc
-  set +e
-  classify_lsof_fields "$sample" <<<"$output"
-  classify_rc=$?
-  return "$classify_rc"
+  local live_csv
+  live_csv="$(filter_live_pids "$pid_csv")"
+  if [[ -z "$live_csv" ]]; then
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
+    return 0
+  fi
+  if [[ "$live_csv" == "$pid_csv" ]]; then
+    log "ERROR: lsof instrumentation failed sample=$sample status=$status stderr=$(tr '\n' ' ' <"$stderr_file")"
+    rm -f "$raw_file" "$stderr_file" "$timeout_sentinel"
+    return 2
+  fi
+
+  local retry_raw="$SMOKE_ROOT/lsof.retry.raw.$sample"
+  local retry_stderr="$SMOKE_ROOT/lsof.retry.stderr.$sample"
+  local retry_timeout_sentinel="$SMOKE_ROOT/lsof.retry.timedout.$sample"
+  local retry_status
+
+  if run_lsof_with_timeout "$LSOF_TIMEOUT_SECS" \
+       "$live_csv" "$retry_raw" "$retry_stderr" "$retry_timeout_sentinel"; then
+    retry_status=0
+  else
+    retry_status=$?
+  fi
+
+  local retry_classify_rc=0
+  if [[ -s "$retry_raw" ]]; then
+    local retry_output
+    retry_output="$(tr '\0' '\n' <"$retry_raw")"
+    if [[ -n "$retry_output" ]]; then
+      if classify_lsof_fields "$sample" <<<"$retry_output"; then
+        retry_classify_rc=0
+      else
+        retry_classify_rc=$?
+      fi
+    fi
+  fi
+
+  local retry_timed_out=0
+  if [[ -f "$retry_timeout_sentinel" ]]; then
+    retry_timed_out=1
+  fi
+  local retry_stderr_empty=1
+  if [[ -s "$retry_stderr" ]]; then
+    retry_stderr_empty=0
+  fi
+
+  rm -f "$raw_file" "$stderr_file" "$timeout_sentinel" \
+        "$retry_raw" "$retry_stderr" "$retry_timeout_sentinel"
+
+  if [[ "$retry_classify_rc" -eq 1 ]]; then
+    return 1
+  fi
+  if [[ "$retry_timed_out" -eq 1 ]]; then
+    log "ERROR: lsof timed out (retry) sample=$sample"
+    return 2
+  fi
+  if [[ "$retry_status" -eq 0 ]]; then
+    return 0
+  fi
+  if [[ "$retry_stderr_empty" -eq 1 ]]; then
+    return 0
+  fi
+  log "ERROR: lsof instrumentation failed (retry) sample=$sample status=$retry_status"
+  return 2
 }
 
 bundle_executable() {
