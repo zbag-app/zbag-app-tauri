@@ -388,7 +388,7 @@ Prepared -> Pending -> Confirmed
 **Observability**
 - **NFR-001**: System MUST write application logs to local filesystem only
 - **NFR-002**: System MUST NOT transmit any telemetry, crash reports, or usage data to external servers
-- **NFR-002.a**: CEF MUST NOT emit any non-loopback network traffic during normal operation. This is enforced by deny-all `--host-resolver-rules`, disabled background services and DoH, ephemeral per-launch cache and browser-preferences hardening, and a CI runtime smoketest asserting zero non-loopback sockets for 15 seconds after cold start. Verified by `scripts/check-cef-network-hardening.sh`, `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs`, and `scripts/cef-network-smoketest.sh`.
+- **NFR-002.a**: CEF MUST NOT emit any non-loopback network traffic during normal operation. This is enforced by deny-all `--host-resolver-rules`, disabled background services and DoH, ephemeral per-launch cache and browser-preferences hardening, and a CI runtime smoketest asserting zero non-loopback sockets for 15 seconds after cold start. Verified by `scripts/check-cef-network-hardening.sh`, `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs`, and `cargo xtask cef-smoketest`.
 - **NFR-003**: System MUST provide user-accessible log location for manual sharing during support requests
 - **NFR-004**: System MUST include log rotation to prevent unbounded disk usage
 

@@ -32,7 +32,7 @@ CEF is an offline renderer in bagZ. Do not regress the no-network policy without
 
 - `scripts/check-cef-network-hardening.sh` for static pre-commit checks
 - `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs` for parsed runtime arguments
-- `scripts/cef-network-smoketest.sh` for packaged-app socket smoke testing
+- `cargo xtask cef-smoketest` for packaged-app socket smoke testing
 
 Editing `cef_runtime_args`, `CEF_DISABLED_FEATURES`, or `CEF_HOST_RESOLVER_RULES` requires updating the matching `EXPECTED_*` constants in the integration test. The runtime smoke uses `BAGZ_GRPC_URL=https://127.0.0.1:1` and isolated `HOME`/`XDG_*` directories so it exercises CEF cold start without a real wallet profile.
 

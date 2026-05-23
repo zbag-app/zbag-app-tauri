@@ -37,10 +37,10 @@ install: ## Install frontend dependencies
 # ============================================================================
 
 build: ## Build Rust library crates
-	@cargo build --workspace --exclude bagz-app-tauri
+	@cargo build --workspace --exclude bagz-app-tauri --exclude bagz-xtask
 
 build-release: ## Production release build (libs)
-	@cargo build --release --locked --workspace --exclude bagz-app-tauri
+	@cargo build --release --locked --workspace --exclude bagz-app-tauri --exclude bagz-xtask
 
 build-frontend: ## Build frontend dist (for Tauri)
 	@cd $(TAURI_DIR) && bun run build
@@ -52,7 +52,7 @@ build-frontend: ## Build frontend dist (for Tauri)
 test: ## Run all Rust library tests
 	# `bagz-core` includes async-gated tests (`--features async`). Running it separately keeps the
 	# rest of the workspace tests feature-default while still exercising the async code path.
-	@cargo test --workspace --exclude bagz-app-tauri --exclude bagz-core
+	@cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask --exclude bagz-core
 	@cargo test -p bagz-core --features async
 
 test-engine: ## Test bagz-engine crate
@@ -97,10 +97,10 @@ fmt-check: ## Check Rust formatting (CI)
 	@cargo fmt --all -- --check
 
 clippy: ## Run clippy lints
-	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri
+	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask
 
 clippy-strict: ## Clippy with warnings as errors
-	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri -- -D warnings
+	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask -- -D warnings
 
 lint: fmt-check clippy ## Run all lints
 
@@ -136,11 +136,11 @@ tauri-build: ## Tauri production build
 	@CI=$${CI:-true} TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
 
 cef-smoketest-selftest: ## Run CEF network smoke parser fixtures
-	@BAGZ_SMOKE_SELFTEST=1 ./scripts/cef-network-smoketest.sh
+	@cargo run -p bagz-xtask --quiet -- cef-smoketest --selftest
 
 # Requires a prebuilt bundle at target/release/bundle/macos/bagZ.app.
 cef-smoketest: ## Run CEF network smoke against an existing packaged app
-	@./scripts/cef-network-smoketest.sh
+	@cargo run -p bagz-xtask --quiet -- cef-smoketest
 
 cef-audit: ## Report CEF + bundle sizes and largest payload entries
 	@./scripts/cef-size-report.sh

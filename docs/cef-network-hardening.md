@@ -38,4 +38,4 @@ Guardrails:
 
 - Layer 1: `scripts/check-cef-network-hardening.sh` verifies static anchors in `lib.rs` and rejects obvious forbidden switches or known Chromium service hostnames under `src-tauri`.
 - Layer 2: `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs` asserts on the parsed `Vec<(String, Option<String>)>` that Tauri receives.
-- Layer 3: `scripts/cef-network-smoketest.sh` launches the packaged app with isolated state, waits for the `.setup()` sentinel, and fails on any non-loopback TCP/UDP listener or peer observed in the app/helper process tree.
+- Layer 3: `cargo xtask cef-smoketest` launches the packaged app with isolated state, waits for the `.setup()` sentinel, and fails on any non-loopback TCP/UDP listener or peer observed in the app/helper process tree.

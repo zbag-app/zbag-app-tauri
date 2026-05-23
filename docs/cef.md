@@ -114,7 +114,7 @@ Key implementation files:
 - `apps/bagz-app-tauri/src/components/ui/input.tsx`
 - `scripts/check-cef-network-hardening.sh`
 - `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs`
-- `scripts/cef-network-smoketest.sh`
+- `xtask/src/cmd/cef_smoketest/`
 
 ## Upgrading CEF
 

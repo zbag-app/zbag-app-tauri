@@ -30,8 +30,11 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
       - run: ./scripts/check-cef-network-hardening.sh
-      - run: BAGZ_SMOKE_SELFTEST=1 ./scripts/cef-network-smoketest.sh
+      - run: cargo run -p bagz-xtask -- cef-smoketest --selftest
 
   cef-args-tests:
     name: CEF Args Tests
@@ -69,7 +72,20 @@ jobs:
         with:
           components: clippy
           cache: false
-      - run: cargo clippy --workspace --all-targets --exclude bagz-app-tauri -- -D warnings
+      - run: cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask -- -D warnings
+
+  rust-xtask:
+    name: Rust Xtask
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy
+          cache: false
+      - run: cargo build -p bagz-xtask
+      - run: cargo clippy -p bagz-xtask --all-targets -- -D warnings
+      - run: cargo test -p bagz-xtask
 
   rust-tests:
     name: Rust Tests
@@ -82,7 +98,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test --workspace --exclude bagz-app-tauri
+      - run: cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask
 
   rust-migrations:
     name: Rust Migration Tests
@@ -99,7 +115,7 @@ jobs:
   tauri-build-cef:
     name: Tauri Build (CEF)
     runs-on: self-hosted
-    needs: [telemetry-guard, cef-network-hardening, cef-args-tests, rust-tests, rust-clippy, rust-migrations, bun-tests]
+    needs: [telemetry-guard, cef-network-hardening, cef-args-tests, rust-tests, rust-clippy, rust-xtask, rust-migrations, bun-tests]
     timeout-minutes: 40
     env:
       CARGO_BUILD_JOBS: "16"
@@ -118,7 +134,7 @@ jobs:
         run: make tauri-build
       - name: CEF network smoke
         if: runner.os == 'macOS'
-        run: ./scripts/cef-network-smoketest.sh
+        run: cargo run -p bagz-xtask -- cef-smoketest
       - name: Upload CEF network smoke log
         if: always()
         uses: actions/upload-artifact@v4
@@ -150,7 +166,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo build --workspace --release --locked --exclude bagz-app-tauri
+      - run: cargo build --workspace --release --locked --exclude bagz-app-tauri --exclude bagz-xtask
 
   bun-tests:
     name: Bun Tests

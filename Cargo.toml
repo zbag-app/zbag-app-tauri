@@ -8,6 +8,7 @@ members = [
   "crates/bagz-tor",
   "apps/bagz-app-tauri/src-tauri",
   "apps/bagz-cli",
+  "xtask",
 ]
 
 [workspace.package]

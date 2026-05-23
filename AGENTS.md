@@ -13,8 +13,8 @@
 
 - Rust toolchain is pinned in `rust-toolchain.toml` (Rust `1.92.0`, includes `rustfmt` + `clippy`).
 - Prefer Makefile targets (run `make help` for all targets): `make build`, `make test`, `make fmt`, `make clippy`, `make pre-commit`, `make install`, `make build-frontend`, `make dev`, `make tauri-build`.
-- Rust (direct): `cargo build --workspace --exclude bagz-app-tauri` and `cargo test --workspace --exclude bagz-app-tauri` (or scope: `cargo test -p bagz-engine`).
-- Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude bagz-app-tauri`.
+- Rust (direct): `cargo build --workspace --exclude bagz-app-tauri --exclude bagz-xtask` and `cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask` (or scope: `cargo test -p bagz-engine`).
+- Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask`.
 - Frontend (direct): `cd apps/bagz-app-tauri && bun install && bun run dev`.
 - Desktop app (direct): `cd apps/bagz-app-tauri && bun run tauri dev` (bundle: `bun run tauri build`).
 

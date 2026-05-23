@@ -1,0 +1,19 @@
+[package]
+name = "bagz-xtask"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap = { version = "4", features = ["derive", "env"] }
+ctrlc = { version = "3", features = ["termination"] }
+plist = "1"
+tempfile.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
