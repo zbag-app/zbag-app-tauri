@@ -2,6 +2,17 @@
 
 A desktop-first privacy-by-design Zcash wallet with hardware wallet support and integrated DEX functionality.
 
+## Release Track
+
+This repository contains the current **Tauri alpha**. It is published for source
+access, review, and self-builds, but this alpha track is not the actively
+maintained product track and **no prebuilt app binaries are provided here**.
+Build from source with `just install` and `just app-build`.
+
+The next maintained beta is the Flutter redesign. That beta is planned to ship
+prebuilt releases, including properly signed macOS builds and best-effort
+Windows builds/signing when ready.
+
 ## Overview
 
 zbag Desktop provides a privacy-focused Zcash experience built on strong security principles:
@@ -10,6 +21,32 @@ zbag Desktop provides a privacy-focused Zcash experience built on strong securit
 - **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and are never persisted or logged by the UI
 - **Fail-closed Tor** - Network anonymization that blocks rather than silently downgrades
 - **Air-gapped signing** - Keystone hardware wallet support via QR codes
+
+## Screenshots
+
+Tauri alpha screenshots are hosted as GitHub release assets rather than stored
+in the source repository history. Wallet addresses, QR codes, transaction
+identifiers, and balances were redacted before upload.
+
+| Wallet selection | Unlock |
+| --- | --- |
+| <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-wallet-select.webp" width="420" alt="Wallet selection"> | <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-unlock.webp" width="420" alt="Unlock wallet"> |
+
+| Home | Send |
+| --- | --- |
+| <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-home.webp" width="420" alt="Home dashboard"> | <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-send.webp" width="420" alt="Send flow"> |
+
+| Receive | Swap to ZEC |
+| --- | --- |
+| <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-receive.webp" width="420" alt="Receive flow"> | <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-swap-to-zec.webp" width="420" alt="Swap to ZEC"> |
+
+| Swap from ZEC | Activity |
+| --- | --- |
+| <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-swap-from-zec.webp" width="420" alt="Swap from ZEC"> | <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-activity.webp" width="420" alt="Activity"> |
+
+| Servers | Settings |
+| --- | --- |
+| <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-servers.webp" width="420" alt="Server settings"> | <img src="https://github.com/zbag-app/zbag-app-tauri/releases/download/docs-screenshots-2026-07-01/alpha-settings.webp" width="420" alt="Settings"> |
 
 ## Architecture
 
@@ -46,7 +83,7 @@ apps/
 
 ## Status
 
-**Phase**: Active development (Tauri desktop app and CLI implementations)
+**Phase**: Tauri alpha, source-build only
 
 Platform targets: macOS, Windows, Linux
 
