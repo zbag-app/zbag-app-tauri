@@ -1,28 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg id="zbag_Wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 243" role="img" aria-labelledby="zbag-wordmark-title">
+<svg id="zbag-wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 240" role="img" aria-labelledby="zbag-wordmark-title">
   <title id="zbag-wordmark-title">zbag</title>
-  <defs>
-    <linearGradient id="zbag-wordmark-z" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f5f5f7"/>
-      <stop offset="0.45" stop-color="#ffd84d"/>
-      <stop offset="1" stop-color="#ff8000"/>
-    </linearGradient>
-  </defs>
-  <rect width="576" height="243" fill="none"/>
-  <text
-    x="40"
-    y="162"
-    fill="#f5f5f7"
-    font-family="Syne, Inter, Arial, sans-serif"
-    font-size="128"
-    font-weight="800"
-  >bag</text>
-  <text
-    x="318"
-    y="162"
-    fill="url(#zbag-wordmark-z)"
-    font-family="Syne, Inter, Arial, sans-serif"
-    font-size="132"
-    font-weight="800"
-  >Z</text>
+  <rect width="720" height="240" fill="none"/>
+  <g transform="translate(34 34) scale(0.168)">
+    <rect width="1024" height="1024" rx="176" fill="#111113"/>
+    <path d="M276 238h472v126L466 660h292v126H266V660l282-296H276z" fill="#F0531C"/>
+    <path d="M336 292h306L362 584" fill="none" stroke="#6EDDFF" stroke-width="34" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M658 728h-276" fill="none" stroke="#F5F5F5" stroke-width="34" stroke-linecap="square"/>
+  </g>
+  <text x="236" y="151" fill="#F5F5F5" font-family="Syne, system-ui, sans-serif" font-size="104" font-weight="800">zbag</text>
+  <rect x="236" y="174" width="256" height="8" fill="#F0531C"/>
+  <rect x="504" y="174" width="54" height="8" fill="#6EDDFF"/>
 </svg>
