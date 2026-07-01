@@ -134,7 +134,10 @@ See [docs/E2E_TESTING.md](docs/E2E_TESTING.md) for architecture details, CI work
 
 ## License
 
-Zbag is source-available under the PolyForm Shield License 1.0.0. It is not open-source software.
+zbag is source-available under FSL-1.1-ALv2. See [`LICENSE`](./LICENSE) and
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for the current license,
+future Apache-2.0 conversion terms, dependency notices, and historical
+provenance.
 
 ## Security
 

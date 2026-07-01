@@ -58,11 +58,15 @@ the runtime payload.
 ## Historical Lineage
 
 zbag's Rust wallet core and desktop application history were carried forward
-from earlier projects by the same author:
+from earlier author-owned project lines:
 
-- **zstash** - the original line, licensed **MIT**.
-- **zbag / zbag** - the successor line, licensed under the
+- **zkoi / Zkore Desktop** - the earliest author-owned line visible in git
+  history.
+- **zstash** - the successor line, licensed **MIT**.
+- **bagZ / bagz** - the successor line, licensed under the
   **PolyForm Shield License 1.0.0**.
+- **zbag** - the current line, licensed under **FSL-1.1-ALv2** by
+  **Quellkern e.U.** (Reza Shokri).
 
 The following statements record the provenance and licensing transition:
 
@@ -70,11 +74,12 @@ The following statements record the provenance and licensing transition:
    by Reza Shokri (GitHub: devdotbo), except for third-party dependencies and
    explicitly attributed third-party code.
 
-2. **Historical licenses are preserved.** Commits made under zstash (MIT) and
-   zbag / zbag (PolyForm Shield 1.0.0) remain available under the licenses they
-   were originally released under. Nothing in zbag's relicensing retroactively
-   changes the terms under which those historical versions were distributed.
-   The git history is intentionally preserved so this lineage stays visible.
+2. **Historical licenses are preserved.** Commits made under the zkoi/Zkore,
+   zstash (MIT), and bagZ/bagz (PolyForm Shield 1.0.0) lines remain available
+   under the licenses they were originally released under. Nothing in zbag's
+   relicensing retroactively changes the terms under which those historical
+   versions were distributed. The git history is intentionally preserved so
+   this lineage stays visible.
 
 3. **FSL applies going forward.** From the zbag line onward, the Software is
    made available under **FSL-1.1-ALv2** by **Quellkern e.U.** (Reza Shokri).
