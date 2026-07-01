@@ -1,13 +1,21 @@
-# zbag Desktop
+<p align="center">
+  <img src="apps/zbag-app-tauri/src/assets/zbag_Wordmark.svg" width="260" alt="zbag">
+</p>
+
+# zbag Desktop (Tauri Alpha Archive)
+
+> **Archived:** This repository is a public source archive of the zbag Tauri
+> alpha. It is no longer the maintained product track and is succeeded by the
+> Flutter redesign/beta track.
 
 A desktop-first privacy-by-design Zcash wallet with hardware wallet support and integrated DEX functionality.
 
 ## Release Track
 
-This repository contains the current **Tauri alpha**. It is published for source
-access, review, and self-builds, but this alpha track is not the actively
-maintained product track and **no prebuilt app binaries are provided here**.
-Build from source with `just install` and `just app-build`.
+This repository contains the archived **Tauri alpha**. It is published for
+source access, review, and self-builds, but this alpha track is no longer the
+actively maintained product track and **no prebuilt app binaries are provided
+here**. Build from source with `just install` and `just app-build`.
 
 The next maintained beta is the Flutter redesign. That beta is planned to ship
 prebuilt releases, including properly signed macOS builds and best-effort
@@ -83,7 +91,7 @@ apps/
 
 ## Status
 
-**Phase**: Tauri alpha, source-build only
+**Phase**: Archived Tauri alpha, source-build only
 
 Platform targets: macOS, Windows, Linux
 
