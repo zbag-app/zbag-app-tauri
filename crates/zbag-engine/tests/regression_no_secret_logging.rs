@@ -146,10 +146,10 @@ fn regression_no_secret_logging() {
         .finish();
 
     tracing::subscriber::with_default(subscriber, || {
-        let password = "pw-SECRET-12345";
-        let memo = "memo-SECRET-12345";
+        let password = "test password fixture";
+        let memo = "test memo fixture";
         let full_address = "u1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
-        let signed_payload = "signed-payload-SECRET-12345";
+        let signed_payload = "test signed payload fixture";
         let restore_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
 
         tracing::info!(memo = %zbag_engine::logging::redact_memo(memo));
@@ -275,9 +275,9 @@ fn regression_no_secret_logging() {
 
     // Secrets must never appear verbatim in logs.
     for secret in [
-        "pw-SECRET-12345",
-        "memo-SECRET-12345",
-        "signed-payload-SECRET-12345",
+        "test password fixture",
+        "test memo fixture",
+        "test signed payload fixture",
         "u1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
     ] {
