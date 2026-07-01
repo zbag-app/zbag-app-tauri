@@ -19,7 +19,7 @@ pub fn promote_selftest_env<F>(args: &mut cli::CefSmoketestArgs, get_env: F)
 where
     F: Fn(&str) -> Option<String>,
 {
-    if !args.selftest && get_env("BAGZ_SMOKE_SELFTEST").as_deref() == Some("1") {
+    if !args.selftest && get_env("ZBAG_SMOKE_SELFTEST").as_deref() == Some("1") {
         args.selftest = true;
     }
 }

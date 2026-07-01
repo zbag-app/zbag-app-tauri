@@ -2,10 +2,10 @@
 
 ## Project Structure & Module Organization
 
-- `crates/`: Rust workspace libraries (`bagz-core`, `bagz-engine`, `bagz-network`, `bagz-keystone`, `bagz-tor`).
-- `apps/bagz-app-tauri/`: Tauri desktop shell + React/TypeScript UI (`src/` for UI, `src-tauri/` for the app backend).
-- `apps/bagz-cli/`: Command-line interface.
-- `specs/`: Source-of-truth wallet specifications (start at `specs/001-bagz-desktop-wallet/`).
+- `crates/`: Rust workspace libraries (`zbag-core`, `zbag-engine`, `zbag-network`, `zbag-keystone`, `zbag-tor`).
+- `apps/zbag-app-tauri/`: Tauri desktop shell + React/TypeScript UI (`src/` for UI, `src-tauri/` for the app backend).
+- `apps/zbag-cli/`: Command-line interface.
+- `specs/`: Source-of-truth wallet specifications (start at `specs/001-zbag-desktop-wallet/`).
 - `.specify/memory/constitution.md`: Non-negotiable security and product principles.
 - `tests/`: Spec-kit scaffolds for future integration/e2e coverage.
 
@@ -13,20 +13,20 @@
 
 - Rust toolchain is pinned in `rust-toolchain.toml` (Rust `1.92.0`, includes `rustfmt` + `clippy`).
 - Prefer Makefile targets (run `make help` for all targets): `make build`, `make test`, `make fmt`, `make clippy`, `make pre-commit`, `make install`, `make build-frontend`, `make dev`, `make tauri-build`.
-- Rust (direct): `cargo build --workspace --exclude bagz-app-tauri --exclude bagz-xtask` and `cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask` (or scope: `cargo test -p bagz-engine`).
-- Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask`.
-- Frontend (direct): `cd apps/bagz-app-tauri && bun install && bun run dev`.
-- Desktop app (direct): `cd apps/bagz-app-tauri && bun run tauri dev` (bundle: `bun run tauri build`).
+- Rust (direct): `cargo build --workspace --exclude zbag-app-tauri --exclude zbag-xtask` and `cargo test --workspace --exclude zbag-app-tauri --exclude zbag-xtask` (or scope: `cargo test -p zbag-engine`).
+- Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude zbag-app-tauri --exclude zbag-xtask`.
+- Frontend (direct): `cd apps/zbag-app-tauri && bun install && bun run dev`.
+- Desktop app (direct): `cd apps/zbag-app-tauri && bun run tauri dev` (bundle: `bun run tauri build`).
 
 ## Coding Style & Naming Conventions
 
 - Rust: rely on `rustfmt`; prefer `thiserror` for library error types and `anyhow` at application boundaries.
-- TypeScript/React: `PascalCase.tsx` components, `useX` hooks, and keep UI-facing types aligned with `crates/bagz-core`.
+- TypeScript/React: `PascalCase.tsx` components, `useX` hooks, and keep UI-facing types aligned with `crates/zbag-core`.
 - Naming pattern: user-story work commonly uses `US<N>:` in commits and `us<N>_*.rs` in tests.
 
 ## Testing Guidelines
 
-- Primary executable coverage is in `crates/*/tests/*.rs` (example: `crates/bagz-engine/tests/us4_restore.rs`).
+- Primary executable coverage is in `crates/*/tests/*.rs` (example: `crates/zbag-engine/tests/us4_restore.rs`).
 - `tests/e2e/*.spec.ts` and `tests/integration/*.rs` are scaffolds (some are skipped/not wired); keep them in sync with specs, but don’t rely on them yet.
 
 ## Commit & Pull Request Guidelines
@@ -68,12 +68,12 @@ Standard git workflow.
 - Logs must be redacted (no seeds/keys/memos); Tor must fail closed (no silent downgrade).
 - Shielded-by-default; transparent funds/inputs are for shielding only.
 - Keep IPC contracts typed/versioned; ensure migrations are tested when touching persistence or IPC versions.
-- Dev-only overrides live in `.env.development` (e.g. `BAGZ_GRPC_URL`, `RUST_LOG`); release behavior must not silently depend on environment variables.
+- Dev-only overrides live in `.env.development` (e.g. `ZBAG_GRPC_URL`, `RUST_LOG`); release behavior must not silently depend on environment variables.
 
 ## Agent-Specific Notes (Codex)
 
 - Project skills live in `.codex/skills/`; if a task matches a skill, read its `SKILL.md` and follow it.
-- For new Tauri commands: register in BOTH `apps/bagz-app-tauri/src-tauri/src/lib.rs` and `apps/bagz-app-tauri/src-tauri/src/main.rs`, then update `crates/bagz-core/src/ipc/v1/commands/` plus `apps/bagz-app-tauri/src/types/ipc.ts` and `apps/bagz-app-tauri/src/services/ipc.ts`.
+- For new Tauri commands: register in BOTH `apps/zbag-app-tauri/src-tauri/src/lib.rs` and `apps/zbag-app-tauri/src-tauri/src/main.rs`, then update `crates/zbag-core/src/ipc/v1/commands/` plus `apps/zbag-app-tauri/src/types/ipc.ts` and `apps/zbag-app-tauri/src/services/ipc.ts`.
 
 ## Done Criteria
 

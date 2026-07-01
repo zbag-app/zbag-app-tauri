@@ -1,4 +1,4 @@
-# bagZ Desktop
+# zbag Desktop
 
 ## Overview
 Tauri v2 Zcash wallet (Rust backend + React frontend).
@@ -24,17 +24,17 @@ make build-frontend # Required before full workspace
 make dev            # Full Tauri development
 ```
 
-Override lightwalletd: `BAGZ_GRPC_URL`. Run `make help` for all targets.
+Override lightwalletd: `ZBAG_GRPC_URL`. Run `make help` for all targets.
 
 ## CEF Network Hardening
 
-CEF is an offline renderer in bagZ. Do not regress the no-network policy without updating all three guardrails:
+CEF is an offline renderer in zbag. Do not regress the no-network policy without updating all three guardrails:
 
 - `scripts/check-cef-network-hardening.sh` for static pre-commit checks
-- `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs` for parsed runtime arguments
+- `apps/zbag-app-tauri/src-tauri/tests/cef_runtime_args.rs` for parsed runtime arguments
 - `cargo xtask cef-smoketest` for packaged-app socket smoke testing
 
-Editing `cef_runtime_args`, `CEF_DISABLED_FEATURES`, or `CEF_HOST_RESOLVER_RULES` requires updating the matching `EXPECTED_*` constants in the integration test. The runtime smoke uses `BAGZ_GRPC_URL=https://127.0.0.1:1` and isolated `HOME`/`XDG_*` directories so it exercises CEF cold start without a real wallet profile.
+Editing `cef_runtime_args`, `CEF_DISABLED_FEATURES`, or `CEF_HOST_RESOLVER_RULES` requires updating the matching `EXPECTED_*` constants in the integration test. The runtime smoke uses `ZBAG_GRPC_URL=https://127.0.0.1:1` and isolated `HOME`/`XDG_*` directories so it exercises CEF cold start without a real wallet profile.
 
 ## Version Control
 
@@ -48,9 +48,9 @@ Standard git workflow. Common commands:
 
 ### Git Worktrees
 
-**Always create new worktrees one level up** in `/Users/bioharz/git/bagzapp/`:
+**Always create new worktrees one level up** from this checkout:
 ```bash
-git worktree add ../bagz-issue-<N> -b fix/description
+git worktree add ../zbag-issue-<N> -b fix/description
 ```
 
 **Important:**
@@ -62,35 +62,35 @@ git worktree add ../bagz-issue-<N> -b fix/description
 
 ```
 crates/
-  bagz-core/      # Types, IPC, errors
-  bagz-engine/    # Wallet ops, sync, tx
-  bagz-network/   # gRPC, Tor transport
-  bagz-keystone/  # Hardware wallet (PCZT)
-  bagz-tor/       # Arti client
+  zbag-core/      # Types, IPC, errors
+  zbag-engine/    # Wallet ops, sync, tx
+  zbag-network/   # gRPC, Tor transport
+  zbag-keystone/  # Hardware wallet (PCZT)
+  zbag-tor/       # Arti client
 
-apps/bagz-app-tauri/
+apps/zbag-app-tauri/
   src-tauri/       # Tauri commands
   src/             # React UI
 ```
 
 ### Key Files
 
-- `crates/bagz-engine/src/wallet_manager.rs` - Wallet lifecycle
-- `crates/bagz-engine/src/sync_service.rs` - Blockchain sync
-- `crates/bagz-engine/src/tx_service.rs` - Transaction building/broadcast
-- `crates/bagz-core/src/ipc/` - IPC types
-- `apps/bagz-app-tauri/src/services/ipc.ts` - Frontend IPC client
+- `crates/zbag-engine/src/wallet_manager.rs` - Wallet lifecycle
+- `crates/zbag-engine/src/sync_service.rs` - Blockchain sync
+- `crates/zbag-engine/src/tx_service.rs` - Transaction building/broadcast
+- `crates/zbag-core/src/ipc/` - IPC types
+- `apps/zbag-app-tauri/src/services/ipc.ts` - Frontend IPC client
 
 ### Adding Tauri Commands
 
-Register commands in BOTH `apps/bagz-app-tauri/src-tauri/src/lib.rs` and
-`apps/bagz-app-tauri/src-tauri/src/main.rs`.
+Register commands in BOTH `apps/zbag-app-tauri/src-tauri/src/lib.rs` and
+`apps/zbag-app-tauri/src-tauri/src/main.rs`.
 
 Update:
-- `apps/bagz-app-tauri/src-tauri/src/lib.rs`: `commands::wallet::bagz_xxx`
-- `apps/bagz-app-tauri/src-tauri/src/main.rs`: `bagz_app_tauri_lib::commands::wallet::bagz_xxx`
-- `crates/bagz-core/src/ipc/v1/commands/` - Request/Response types
-- `apps/bagz-app-tauri/src/types/ipc.ts` + `apps/bagz-app-tauri/src/services/ipc.ts`
+- `apps/zbag-app-tauri/src-tauri/src/lib.rs`: `commands::wallet::zbag_xxx`
+- `apps/zbag-app-tauri/src-tauri/src/main.rs`: `zbag_app_tauri_lib::commands::wallet::zbag_xxx`
+- `crates/zbag-core/src/ipc/v1/commands/` - Request/Response types
+- `apps/zbag-app-tauri/src/types/ipc.ts` + `apps/zbag-app-tauri/src/services/ipc.ts`
 
 ## Toolchain
 

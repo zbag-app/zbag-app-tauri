@@ -1,6 +1,6 @@
 # E2E Testing with Test Bridge
 
-This document describes the test bridge architecture and Playwright E2E testing setup for bagz.
+This document describes the test bridge architecture and Playwright E2E testing setup for zbag.
 
 ## Overview
 
@@ -12,7 +12,7 @@ The test bridge is a feature-gated HTTP server that exposes Tauri IPC commands o
 
 > **WARNING:** The test bridge is for development and CI testing only.
 > - **Never use production wallets or real seed phrases**
-> - Test data is ephemeral (stored in `BAGZ_TEST_HOME`)
+> - Test data is ephemeral (stored in `ZBAG_TEST_HOME`)
 > - All wallet operations including `view_seed_phrase` are exposed over HTTP
 > - Always use dedicated test/regtest seed phrases
 
@@ -53,15 +53,15 @@ For development and debugging, you can run each component separately:
 
 ```bash
 # Terminal 1: Start the Rust test bridge with isolated data directory
-export BAGZ_TEST_HOME="$(mktemp -d)"
-cargo run -p bagz-app-tauri --features test-bridge
+export ZBAG_TEST_HOME="$(mktemp -d)"
+cargo run -p zbag-app-tauri --features test-bridge
 
 # Terminal 2: Start the Vite dev server with test bridge transport
-cd apps/bagz-app-tauri
+cd apps/zbag-app-tauri
 VITE_TEST_BRIDGE=true bun run dev
 
 # Terminal 3: Run Playwright tests
-cd apps/bagz-app-tauri
+cd apps/zbag-app-tauri
 bunx playwright install chromium  # First time only
 bun run test:e2e
 ```
@@ -83,29 +83,29 @@ bun run test:e2e
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BAGZ_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Required in test-bridge mode; empty or whitespace-only values are rejected. |
+| `ZBAG_TEST_HOME` | `mktemp -d` | Isolated data directory for test wallets. Required in test-bridge mode; empty or whitespace-only values are rejected. |
 | `VITE_TEST_BRIDGE` | `false` | Enables HTTP transport in frontend |
 | `VITE_TEST_BRIDGE_TIMEOUT` | `10000` | Request timeout in ms (useful for slow CI runners) |
-| `BAGZ_TEST_BRIDGE_ALLOWED_ORIGINS` | `http://localhost:1420,http://127.0.0.1:1420` | Comma-separated list of allowed browser origins for the test bridge CORS policy. |
-| `BAGZ_TEST_BRIDGE_PROBE_TIMEOUT_MS` | `15000` | Timeout in ms for the test bridge server probe to lightwalletd. |
+| `ZBAG_TEST_BRIDGE_ALLOWED_ORIGINS` | `http://localhost:1420,http://127.0.0.1:1420` | Comma-separated list of allowed browser origins for the test bridge CORS policy. |
+| `ZBAG_TEST_BRIDGE_PROBE_TIMEOUT_MS` | `15000` | Timeout in ms for the test bridge server probe to lightwalletd. |
 
-### Test Isolation with BAGZ_TEST_HOME
+### Test Isolation with ZBAG_TEST_HOME
 
-The `BAGZ_TEST_HOME` environment variable redirects all wallet data to an isolated directory, preventing tests from polluting real user data. In test-bridge mode, it must be set to a non-empty path. When set:
+The `ZBAG_TEST_HOME` environment variable redirects all wallet data to an isolated directory, preventing tests from polluting real user data. In test-bridge mode, it must be set to a non-empty path. When set:
 
-- App database is created at `$BAGZ_TEST_HOME/bagz.sqlite`
-- Wallet databases are stored under `$BAGZ_TEST_HOME/wallets/`
-- Logs go to `$BAGZ_TEST_HOME/logs/`
+- App database is created at `$ZBAG_TEST_HOME/zbag.sqlite`
+- Wallet databases are stored under `$ZBAG_TEST_HOME/wallets/`
+- Logs go to `$ZBAG_TEST_HOME/logs/`
 
 The `scripts/e2e-test.sh` script automatically:
-1. Creates a temporary directory for `BAGZ_TEST_HOME`
+1. Creates a temporary directory for `ZBAG_TEST_HOME`
 2. Cleans it up after tests complete
 
-If `BAGZ_TEST_HOME` is present but empty/whitespace, the script exits with an error. When `VITE_TEST_BRIDGE=true` is set, a non-empty `BAGZ_TEST_HOME` is required.
+If `ZBAG_TEST_HOME` is present but empty/whitespace, the script exits with an error. When `VITE_TEST_BRIDGE=true` is set, a non-empty `ZBAG_TEST_HOME` is required.
 
 To reset test data between manual runs:
 ```bash
-rm -rf "$BAGZ_TEST_HOME"
+rm -rf "$ZBAG_TEST_HOME"
 ```
 
 ## Test Bridge API
@@ -136,7 +136,7 @@ The `test_bridge` flag confirms you're hitting the HTTP bridge.
 ### Example: List Wallets
 
 ```bash
-curl -X POST http://127.0.0.1:19816/invoke/bagz_list_wallets \
+curl -X POST http://127.0.0.1:19816/invoke/zbag_list_wallets \
   -H "Content-Type: application/json" \
   -d '{"request":{"schema_version":1}}'
 ```
@@ -144,14 +144,14 @@ curl -X POST http://127.0.0.1:19816/invoke/bagz_list_wallets \
 ### Sensitive Endpoints
 
 The following endpoints require an explicit confirmation header:
-- `bagz_view_seed_phrase`
-- `bagz_restore_wallet`
-- `bagz_confirm_send`
+- `zbag_view_seed_phrase`
+- `zbag_restore_wallet`
+- `zbag_confirm_send`
 
 Example:
 
 ```bash
-curl -X POST http://127.0.0.1:19816/invoke/bagz_view_seed_phrase \
+curl -X POST http://127.0.0.1:19816/invoke/zbag_view_seed_phrase \
   -H "Content-Type: application/json" \
   -H "X-Test-Bridge-Confirm: true" \
   -d '{"request":{"schema_version":1,"wallet_id":"...","reauth_token":"..."}}'
@@ -167,7 +167,7 @@ All Tauri IPC commands are available via the test bridge. See `src-tauri/src/tes
 
 The `playwright-e2e` job in `.github/workflows/ci.yml`:
 
-1. Sets `BAGZ_TEST_HOME` to an isolated directory
+1. Sets `ZBAG_TEST_HOME` to an isolated directory
 2. Builds the test bridge with `--features test-bridge`
 3. Starts the test bridge in background
 4. Waits for health check to pass
@@ -181,7 +181,7 @@ Key CI configuration:
 
 ## Writing Tests
 
-Tests live in `apps/bagz-app-tauri/tests/e2e/playwright/`.
+Tests live in `apps/zbag-app-tauri/tests/e2e/playwright/`.
 
 ### Test Structure
 
@@ -197,7 +197,7 @@ test.describe('Feature Name', () => {
     await expect(page.getByRole('heading', { name: 'Create Wallet' })).toBeVisible();
 
     // Direct API call via test bridge
-    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/bagz_list_wallets`, {
+    const response = await request.post(`${TEST_BRIDGE_BASE_URL}/invoke/zbag_list_wallets`, {
       data: { request: { schema_version: 1 } },
     });
     expect(response.ok()).toBeTruthy();
@@ -242,7 +242,7 @@ bun run test:e2e:ui
 
 When running manually, the test bridge outputs logs to stdout. For more verbose output:
 ```bash
-RUST_LOG=debug cargo run -p bagz-app-tauri --features test-bridge
+RUST_LOG=debug cargo run -p zbag-app-tauri --features test-bridge
 ```
 
 In CI, test bridge logs are uploaded as artifacts on failure.
@@ -274,7 +274,7 @@ The test bridge needs to compile on first run. Subsequent runs use cached builds
 make test-bridge-build
 ```
 
-If individual IPC calls time out, increase `VITE_TEST_BRIDGE_TIMEOUT`. This is separate from the Playwright web server timeout configured in `apps/bagz-app-tauri/playwright.config.ts`.
+If individual IPC calls time out, increase `VITE_TEST_BRIDGE_TIMEOUT`. This is separate from the Playwright web server timeout configured in `apps/zbag-app-tauri/playwright.config.ts`.
 
 ### Frontend can't connect to test bridge
 
@@ -287,18 +287,18 @@ Ensure `VITE_TEST_BRIDGE=true` is set when starting the Vite dev server.
 
 ### CORS errors in browser console
 
-The test bridge defaults to allowing `http://localhost:1420` and `http://127.0.0.1:1420`. If your Vite dev server uses a different origin, set `BAGZ_TEST_BRIDGE_ALLOWED_ORIGINS` to a comma-separated list of allowed origins.
+The test bridge defaults to allowing `http://localhost:1420` and `http://127.0.0.1:1420`. If your Vite dev server uses a different origin, set `ZBAG_TEST_BRIDGE_ALLOWED_ORIGINS` to a comma-separated list of allowed origins.
 
 ### Tests fail with "wallet not found"
 
 Tests may be running against stale data. Reset the test home:
 ```bash
-rm -rf "$BAGZ_TEST_HOME"
+rm -rf "$ZBAG_TEST_HOME"
 ```
 
 Or ensure a fresh temp directory is created:
 ```bash
-export BAGZ_TEST_HOME="$(mktemp -d)"
+export ZBAG_TEST_HOME="$(mktemp -d)"
 ```
 
 ## Make Targets

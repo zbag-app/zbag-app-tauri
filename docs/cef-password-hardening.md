@@ -1,20 +1,20 @@
 # CEF Password Manager Hardening (macOS)
 
 ## Scope
-This document captures the CEF hardening applied to prevent browser-style credential prompts in bagZ while keeping CEF startup stable on macOS. General CEF network hardening is covered in `docs/cef-network-hardening.md`.
+This document captures the CEF hardening applied to prevent browser-style credential prompts in zbag while keeping CEF startup stable on macOS. General CEF network hardening is covered in `docs/cef-network-hardening.md`.
 
 ## Implemented controls
 
 ### 1. Runtime CEF arguments
-File: `apps/bagz-app-tauri/src-tauri/src/lib.rs`
+File: `apps/zbag-app-tauri/src-tauri/src/lib.rs`
 
-- `--use-mock-keychain` is used by default on macOS (unless `BAGZ_USE_SYSTEM_KEYCHAIN=1`).
+- `--use-mock-keychain` is used by default on macOS (unless `ZBAG_USE_SYSTEM_KEYCHAIN=1`).
 - `--disable-save-password-bubble` is enabled as part of the broader offline CEF switch set.
 
 These are the stable runtime flags verified not to reintroduce `CrBrowserMain` startup crashes.
 
 ### 2. Profile-level password/autofill policy
-File: `apps/bagz-app-tauri/src-tauri/src/lib.rs`
+File: `apps/zbag-app-tauri/src-tauri/src/lib.rs`
 
 Before launching Tauri/CEF, the app writes CEF profile preferences at:
 
@@ -34,8 +34,8 @@ This disables Chromium password manager behavior at the profile preference level
 ### 3. Frontend field hardening
 Files:
 
-- `apps/bagz-app-tauri/src/App.tsx`
-- `apps/bagz-app-tauri/src/components/ui/input.tsx`
+- `apps/zbag-app-tauri/src/App.tsx`
+- `apps/zbag-app-tauri/src/components/ui/input.tsx`
 
 Added client-side hardening for all forms/inputs:
 
@@ -47,7 +47,7 @@ Added client-side hardening for all forms/inputs:
 ## Validation performed
 
 - `bun run build` (frontend)
-- `cargo check --manifest-path apps/bagz-app-tauri/src-tauri/Cargo.toml --features cef-runtime`
+- `cargo check --manifest-path apps/zbag-app-tauri/src-tauri/Cargo.toml --features cef-runtime`
 - CEF `.app` build via pinned Tauri CLI command
 - Launch verification of built app process and helper processes
 - User confirmation that password prompt issue is fixed

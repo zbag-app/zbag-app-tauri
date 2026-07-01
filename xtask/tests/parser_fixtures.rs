@@ -1,4 +1,4 @@
-use bagz_xtask::cmd::cef_smoketest::parser::{
+use zbag_xtask::cmd::cef_smoketest::parser::{
     classify_lsof_fields, endpoint_host, fixture_stream, is_loopback_host,
 };
 

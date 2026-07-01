@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="zbag_Wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 243" role="img" aria-labelledby="zbag-wordmark-title">
+  <title id="zbag-wordmark-title">zbag</title>
+  <defs>
+    <linearGradient id="zbag-wordmark-z" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f5f7"/>
+      <stop offset="0.45" stop-color="#ffd84d"/>
+      <stop offset="1" stop-color="#ff8000"/>
+    </linearGradient>
+  </defs>
+  <rect width="576" height="243" fill="none"/>
+  <text
+    x="40"
+    y="162"
+    fill="#f5f5f7"
+    font-family="Syne, Inter, Arial, sans-serif"
+    font-size="128"
+    font-weight="800"
+  >bag</text>
+  <text
+    x="318"
+    y="162"
+    fill="url(#zbag-wordmark-z)"
+    font-family="Syne, Inter, Arial, sans-serif"
+    font-size="132"
+    font-weight="800"
+  >Z</text>
+</svg>

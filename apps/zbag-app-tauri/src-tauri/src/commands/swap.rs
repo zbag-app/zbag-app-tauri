@@ -1,0 +1,260 @@
+use std::sync::Arc;
+
+use tauri::{Runtime, State};
+
+use zbag_core::domain::{SupportedToken, SwapIntent};
+use zbag_core::errors;
+use zbag_core::ipc::v1::commands::swap::{
+    GetSupportedTokensRequest, GetSupportedTokensResponse, GetSwapStatusRequest,
+    GetSwapStatusResponse, ListSwapsRequest, ListSwapsResponse, RefreshSwapStatusRequest,
+    RefreshSwapStatusResponse, RequestSwapQuoteRequest, RequestSwapQuoteResponse,
+    ResumePendingSwapsRequest, ResumePendingSwapsResponse, StartSwapRequest, StartSwapResponse,
+};
+use zbag_core::ipc::v1::common::{IpcError, IpcResult, SCHEMA_VERSION, ensure_schema_version};
+
+use crate::events;
+use crate::state::AppState;
+
+use super::util::map_anyhow;
+
+#[tauri::command(rename = "zbag_request_swap_quote")]
+pub async fn zbag_request_swap_quote(
+    state: State<'_, AppState>,
+    request: RequestSwapQuoteRequest,
+) -> Result<IpcResult<RequestSwapQuoteResponse>, ()> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return Ok(IpcResult::Err { err });
+    }
+
+    let wallet_manager = Arc::clone(&state.wallet_manager);
+    let swap_service = state.swap_service.clone();
+
+    let RequestSwapQuoteRequest {
+        swap_type,
+        swap_mode,
+        input_asset,
+        input_amount,
+        output_asset,
+        output_amount,
+        destination_address,
+        refund_address,
+        ..
+    } = request;
+
+    let join = tauri::async_runtime::spawn_blocking(move || {
+        map_anyhow(|| {
+            let wallet = {
+                let mgr = wallet_manager.lock().expect("mutex poisoned");
+                mgr.active_wallet_info().ok_or_else(|| {
+                    zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                })?
+            };
+
+            let intent = SwapIntent {
+                swap_type,
+                swap_mode,
+                input_asset,
+                input_amount,
+                output_asset,
+                output_amount,
+                destination_address,
+                refund_address,
+            };
+
+            swap_service.request_swap_quote(wallet.id, wallet.network, intent)
+        })
+    });
+
+    match join.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(IpcResult::Err {
+            err: IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: "internal error".to_string(),
+                details: None,
+            },
+        }),
+    }
+}
+
+#[tauri::command(rename = "zbag_start_swap")]
+pub fn zbag_start_swap<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+    request: StartSwapRequest,
+) -> IpcResult<StartSwapResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_swap_changed(&app, event);
+    });
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state.swap_service.start_swap(
+            wallet.id,
+            wallet.network,
+            &request.quote_id,
+            request.allow_transparent_interaction,
+            request.reauth_token.as_deref(),
+            Some(handler),
+        )
+    })
+}
+
+#[tauri::command(rename = "zbag_get_swap_status")]
+pub fn zbag_get_swap_status(
+    state: State<'_, AppState>,
+    request: GetSwapStatusRequest,
+) -> IpcResult<GetSwapStatusResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state
+            .swap_service
+            .get_swap_status(wallet.id, request.swap_id)
+    })
+}
+
+#[tauri::command(rename = "zbag_list_swaps")]
+pub fn zbag_list_swaps(
+    state: State<'_, AppState>,
+    request: ListSwapsRequest,
+) -> IpcResult<ListSwapsResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state.swap_service.list_swaps(wallet.id)
+    })
+}
+
+#[tauri::command(rename = "zbag_get_supported_tokens")]
+pub async fn zbag_get_supported_tokens(
+    state: State<'_, AppState>,
+    request: GetSupportedTokensRequest,
+) -> Result<IpcResult<GetSupportedTokensResponse>, ()> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return Ok(IpcResult::Err { err });
+    }
+
+    let near_client = state.near_client.clone();
+
+    let result = near_client.get_supported_tokens().await;
+
+    match result {
+        Ok(tokens) => {
+            let supported_tokens: Vec<SupportedToken> =
+                tokens.into_iter().map(Into::into).collect();
+
+            Ok(IpcResult::Ok {
+                ok: GetSupportedTokensResponse {
+                    schema_version: SCHEMA_VERSION,
+                    tokens: supported_tokens,
+                },
+            })
+        }
+        Err(e) => Ok(IpcResult::Err {
+            err: zbag_core::ipc::v1::common::IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: e.to_string(),
+                details: None,
+            },
+        }),
+    }
+}
+
+#[tauri::command(rename = "zbag_refresh_swap_status")]
+pub async fn zbag_refresh_swap_status<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+    request: RefreshSwapStatusRequest,
+) -> Result<IpcResult<RefreshSwapStatusResponse>, ()> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return Ok(IpcResult::Err { err });
+    }
+
+    let wallet_manager = Arc::clone(&state.wallet_manager);
+    let swap_service = state.swap_service.clone();
+    let swap_id = request.swap_id;
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_swap_changed(&app, event);
+    });
+
+    let join = tauri::async_runtime::spawn_blocking(move || {
+        map_anyhow(|| {
+            let wallet = {
+                let mgr = wallet_manager.lock().expect("mutex poisoned");
+                mgr.active_wallet_info().ok_or_else(|| {
+                    zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+                })?
+            };
+
+            swap_service.refresh_swap_status(wallet.id, swap_id, Some(handler))
+        })
+    });
+
+    match join.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(IpcResult::Err {
+            err: IpcError {
+                code: errors::INTERNAL_ERROR.to_string(),
+                message: "internal error".to_string(),
+                details: None,
+            },
+        }),
+    }
+}
+
+#[tauri::command(rename = "zbag_resume_pending_swaps")]
+pub fn zbag_resume_pending_swaps<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, AppState>,
+    request: ResumePendingSwapsRequest,
+) -> IpcResult<ResumePendingSwapsResponse> {
+    if let Err(err) = ensure_schema_version(request.schema_version) {
+        return IpcResult::Err { err };
+    }
+
+    let handler = Arc::new(move |event| {
+        let _ = events::emit_swap_changed(&app, event);
+    });
+
+    map_anyhow(|| {
+        let wallet = {
+            let mgr = state.wallet_manager.lock().expect("mutex poisoned");
+            mgr.active_wallet_info().ok_or_else(|| {
+                zbag_engine::error::ipc_err(errors::WALLET_NOT_FOUND, "wallet not loaded")
+            })?
+        };
+
+        state
+            .swap_service
+            .resume_pending_swaps(wallet.id, Some(handler))
+    })
+}

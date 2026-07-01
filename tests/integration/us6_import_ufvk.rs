@@ -10,7 +10,7 @@
 //! - Active-account switching between Software and HardwareSigner accounts updates balance/address views
 //! - Watch-only spend attempts trigger signing flow (US7)
 //!
-//! See `crates/bagz-keystone/tests/us6_ufvk.rs` and `crates/bagz-engine/tests/us6_import_ufvk.rs`
+//! See `crates/zbag-keystone/tests/us6_ufvk.rs` and `crates/zbag-engine/tests/us6_import_ufvk.rs`
 //! for executable unit coverage.
 
 #[test]

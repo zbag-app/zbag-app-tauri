@@ -1,0 +1,18 @@
+[package]
+name = "zbag-tor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zbag-core = { path = "../zbag-core", features = ["async"] }
+zcash_client_backend.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -34,7 +34,7 @@ jobs:
         with:
           cache: false
       - run: ./scripts/check-cef-network-hardening.sh
-      - run: cargo run -p bagz-xtask -- cef-smoketest --selftest
+      - run: cargo run -p zbag-xtask -- cef-smoketest --selftest
 
   cef-args-tests:
     name: CEF Args Tests
@@ -46,7 +46,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test -p bagz-app-tauri --features cef-runtime --test cef_runtime_args
+      - run: cargo test -p zbag-app-tauri --features cef-runtime --test cef_runtime_args
 
   rust-audit:
     name: Rust Audit
@@ -72,7 +72,7 @@ jobs:
         with:
           components: clippy
           cache: false
-      - run: cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask -- -D warnings
+      - run: cargo clippy --workspace --all-targets --exclude zbag-app-tauri --exclude zbag-xtask -- -D warnings
 
   rust-xtask:
     name: Rust Xtask
@@ -83,22 +83,22 @@ jobs:
         with:
           components: clippy
           cache: false
-      - run: cargo build -p bagz-xtask
-      - run: cargo clippy -p bagz-xtask --all-targets -- -D warnings
-      - run: cargo test -p bagz-xtask
+      - run: cargo build -p zbag-xtask
+      - run: cargo clippy -p zbag-xtask --all-targets -- -D warnings
+      - run: cargo test -p zbag-xtask
 
   rust-tests:
     name: Rust Tests
     runs-on: self-hosted
     env:
       CARGO_BUILD_JOBS: "16"
-      BAGZ_GRPC_URL: https://testnet.zec.rocks
+      ZBAG_GRPC_URL: https://testnet.zec.rocks
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask
+      - run: cargo test --workspace --exclude zbag-app-tauri --exclude zbag-xtask
 
   rust-migrations:
     name: Rust Migration Tests
@@ -110,7 +110,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo test -p bagz-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+      - run: cargo test -p zbag-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
   tauri-build-cef:
     name: Tauri Build (CEF)
@@ -134,13 +134,13 @@ jobs:
         run: make tauri-build
       - name: CEF network smoke
         if: runner.os == 'macOS'
-        run: cargo run -p bagz-xtask -- cef-smoketest
+        run: cargo run -p zbag-xtask -- cef-smoketest
       - name: Upload CEF network smoke log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cef-network-smoketest-log
-          path: ${{ runner.temp }}/bagz-cef-smoketest.log
+          path: ${{ runner.temp }}/zbag-cef-smoketest.log
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload Tauri bundles
@@ -166,7 +166,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: false
-      - run: cargo build --workspace --release --locked --exclude bagz-app-tauri --exclude bagz-xtask
+      - run: cargo build --workspace --release --locked --exclude zbag-app-tauri --exclude zbag-xtask
 
   bun-tests:
     name: Bun Tests
@@ -182,13 +182,13 @@ jobs:
         with:
           bun-version: 1.3.5
       - name: Install dependencies
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: bun install --frozen-lockfile
       - name: bun test
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: bun run test
       - name: bun test:a11y (if present)
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: |
           if node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')); process.exit(p.scripts && p.scripts['test:a11y'] ? 0 : 1)"; then
             bun run test:a11y
@@ -203,7 +203,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set test home
-        run: echo "BAGZ_TEST_HOME=${{ runner.temp }}/bagz-e2e" >> $GITHUB_ENV
+        run: echo "ZBAG_TEST_HOME=${{ runner.temp }}/zbag-e2e" >> $GITHUB_ENV
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy, rustfmt
@@ -212,22 +212,22 @@ jobs:
         with:
           bun-version: 1.3.5
       - name: Install dependencies
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: bun install --frozen-lockfile
       - name: Install Playwright browsers
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: |
           bun --version
           bunx playwright install chromium
       - name: Build test bridge
-        run: cargo build -p bagz-app-tauri --features test-bridge
+        run: cargo build -p zbag-app-tauri --features test-bridge
       - name: Start test bridge
         run: |
-          rm -rf "$BAGZ_TEST_HOME"
-          mkdir -p "$BAGZ_TEST_HOME"
-          BRIDGE_LOG="${RUNNER_TEMP}/bagz-test-bridge.log"
-          BRIDGE_PID="${RUNNER_TEMP}/bagz-test-bridge.pid"
-          cargo run -p bagz-app-tauri --features test-bridge > "$BRIDGE_LOG" 2>&1 &
+          rm -rf "$ZBAG_TEST_HOME"
+          mkdir -p "$ZBAG_TEST_HOME"
+          BRIDGE_LOG="${RUNNER_TEMP}/zbag-test-bridge.log"
+          BRIDGE_PID="${RUNNER_TEMP}/zbag-test-bridge.pid"
+          cargo run -p zbag-app-tauri --features test-bridge > "$BRIDGE_LOG" 2>&1 &
           echo $! > "$BRIDGE_PID"
           for i in {1..30}; do
             if ! kill -0 $(cat "$BRIDGE_PID") 2>/dev/null; then
@@ -245,18 +245,18 @@ jobs:
           cat "$BRIDGE_LOG" || true
           exit 1
       - name: Run Playwright tests
-        working-directory: apps/bagz-app-tauri
+        working-directory: apps/zbag-app-tauri
         run: bun run test:e2e
       - name: Upload test bridge log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-bridge-log
-          path: ${{ runner.temp }}/bagz-test-bridge.log
+          path: ${{ runner.temp }}/zbag-test-bridge.log
           retention-days: 7
       - name: Stop test bridge
         if: always()
         run: |
-          if [ -f "${RUNNER_TEMP}/bagz-test-bridge.pid" ]; then
-            kill $(cat "${RUNNER_TEMP}/bagz-test-bridge.pid") || true
+          if [ -f "${RUNNER_TEMP}/zbag-test-bridge.pid" ]; then
+            kill $(cat "${RUNNER_TEMP}/zbag-test-bridge.pid") || true
           fi

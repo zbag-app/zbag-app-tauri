@@ -61,7 +61,7 @@ zbag's Rust wallet core and desktop application history were carried forward
 from earlier projects by the same author:
 
 - **zstash** - the original line, licensed **MIT**.
-- **bagz / bagZ** - the successor line, licensed under the
+- **zbag / zbag** - the successor line, licensed under the
   **PolyForm Shield License 1.0.0**.
 
 The following statements record the provenance and licensing transition:
@@ -71,7 +71,7 @@ The following statements record the provenance and licensing transition:
    explicitly attributed third-party code.
 
 2. **Historical licenses are preserved.** Commits made under zstash (MIT) and
-   bagz / bagZ (PolyForm Shield 1.0.0) remain available under the licenses they
+   zbag / zbag (PolyForm Shield 1.0.0) remain available under the licenses they
    were originally released under. Nothing in zbag's relicensing retroactively
    changes the terms under which those historical versions were distributed.
    The git history is intentionally preserved so this lineage stays visible.

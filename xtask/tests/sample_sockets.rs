@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use bagz_xtask::cmd::cef_smoketest::lsof::{FakeLsof, LsofOutput};
-use bagz_xtask::cmd::cef_smoketest::parser::fixture_stream;
-use bagz_xtask::cmd::cef_smoketest::process::FakeProcessEnumerator;
-use bagz_xtask::cmd::cef_smoketest::sampler::{SampleOutcome, sample_once};
+use zbag_xtask::cmd::cef_smoketest::lsof::{FakeLsof, LsofOutput};
+use zbag_xtask::cmd::cef_smoketest::parser::fixture_stream;
+use zbag_xtask::cmd::cef_smoketest::process::FakeProcessEnumerator;
+use zbag_xtask::cmd::cef_smoketest::sampler::{SampleOutcome, sample_once};
 
 #[test]
 fn evidence_with_nonzero_status_is_policy_failure() {

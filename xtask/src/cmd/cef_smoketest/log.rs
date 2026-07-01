@@ -72,7 +72,7 @@ where
     }
 
     let base = get_env("RUNNER_TEMP").unwrap_or_else(|| "/tmp".to_string());
-    PathBuf::from(base).join("bagz-cef-smoketest.log")
+    PathBuf::from(base).join("zbag-cef-smoketest.log")
 }
 
 #[cfg(test)]
@@ -82,12 +82,12 @@ mod tests {
     #[test]
     fn resolves_runner_temp_artifact_path() {
         let path = resolve_artifact_path(None, |key| {
-            (key == "RUNNER_TEMP").then(|| "/tmp/bagz-runner".to_string())
+            (key == "RUNNER_TEMP").then(|| "/tmp/zbag-runner".to_string())
         });
 
         assert_eq!(
             path,
-            std::path::PathBuf::from("/tmp/bagz-runner/bagz-cef-smoketest.log")
+            std::path::PathBuf::from("/tmp/zbag-runner/zbag-cef-smoketest.log")
         );
     }
 

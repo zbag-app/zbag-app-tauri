@@ -1,2 +1,2 @@
 [alias]
-xtask = "run --package bagz-xtask --"
+xtask = "run --package zbag-xtask --"

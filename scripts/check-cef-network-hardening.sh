@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC_TAURI="$ROOT/apps/bagz-app-tauri/src-tauri"
+SRC_TAURI="$ROOT/apps/zbag-app-tauri/src-tauri"
 LIB_RS="$SRC_TAURI/src/lib.rs"
 
 if ! command -v rg >/dev/null 2>&1; then

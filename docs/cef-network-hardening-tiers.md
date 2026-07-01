@@ -81,7 +81,7 @@ Add an explicit `--user-data-dir=<cef_runtime_cache_path>` only if smoke evidenc
 3. Minimum viable network block: keep `--host-resolver-rules`, DoH off, per-launch cache, and prefs. Rebuild and validate again.
 4. Cache and prefs only: use only as a temporary diagnostic state, never as a release candidate, because Chromium hostname resolution is no longer deny-all.
 
-For each peel-back step, rebuild the packaged app, launch cold with isolated state, and confirm no Google, Cloudflare, OpenDNS, YouTube, or other Chromium service hosts appear in the bagZ process tree.
+For each peel-back step, rebuild the packaged app, launch cold with isolated state, and confirm no Google, Cloudflare, OpenDNS, YouTube, or other Chromium service hosts appear in the zbag process tree.
 
 ## Upstream Stability Fixes
 

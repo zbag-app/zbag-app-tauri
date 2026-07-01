@@ -2,15 +2,15 @@
 
 ## Incident
 
-After moving the desktop shell to Tauri CEF, Chromium browser services appeared in macOS network tooling under the bagZ process tree. Observed domains included Google service/update/sign-in hosts, Google APIs, GVT/YouTube/domain-reliability hosts, Cloudflare DoH, and OpenDNS DoH.
+After moving the desktop shell to Tauri CEF, Chromium browser services appeared in macOS network tooling under the zbag process tree. Observed domains included Google service/update/sign-in hosts, Google APIs, GVT/YouTube/domain-reliability hosts, Cloudflare DoH, and OpenDNS DoH.
 
 This was introduced by the CEF runtime path. The wallet backend did not intentionally call these domains; they came from Chromium default browser behavior that was not disabled by the earlier password-manager-only CEF hardening.
 
 ## Policy
 
-CEF is an offline renderer in bagZ. Wallet networking belongs to the Rust backend, where Tor and fail-closed behavior are enforced.
+CEF is an offline renderer in zbag. Wallet networking belongs to the Rust backend, where Tor and fail-closed behavior are enforced.
 
-Runtime controls in `apps/bagz-app-tauri/src-tauri/src/lib.rs`:
+Runtime controls in `apps/zbag-app-tauri/src-tauri/src/lib.rs`:
 
 - CEF uses a per-launch temp cache instead of a durable Chromium profile.
 - CEF runs in incognito mode.
@@ -32,10 +32,10 @@ make tauri-build
 make cef-smoketest
 ```
 
-The first three targets are included in `make pre-commit` and `make check`. `make cef-smoketest` requires a prebuilt packaged app at `target/release/bundle/macos/bagZ.app` and is run in CI immediately after the CEF Tauri build on macOS runners.
+The first three targets are included in `make pre-commit` and `make check`. `make cef-smoketest` requires a prebuilt packaged app at `target/release/bundle/macos/zbag.app` and is run in CI immediately after the CEF Tauri build on macOS runners.
 
 Guardrails:
 
 - Layer 1: `scripts/check-cef-network-hardening.sh` verifies static anchors in `lib.rs` and rejects obvious forbidden switches or known Chromium service hostnames under `src-tauri`.
-- Layer 2: `apps/bagz-app-tauri/src-tauri/tests/cef_runtime_args.rs` asserts on the parsed `Vec<(String, Option<String>)>` that Tauri receives.
+- Layer 2: `apps/zbag-app-tauri/src-tauri/tests/cef_runtime_args.rs` asserts on the parsed `Vec<(String, Option<String>)>` that Tauri receives.
 - Layer 3: `cargo xtask cef-smoketest` launches the packaged app with isolated state, waits for the `.setup()` sentinel, and fails on any non-loopback TCP/UDP listener or peer observed in the app/helper process tree.

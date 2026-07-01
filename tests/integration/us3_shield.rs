@@ -11,7 +11,7 @@
 //! - Shield and consolidate sweep-all semantics + batching
 //! - Fee deducted from transparent inputs + insufficient-fee UX surface
 //!
-//! See `crates/bagz-engine/tests/us3_shielding.rs` for the executable unit coverage.
+//! See `crates/zbag-engine/tests/us3_shielding.rs` for the executable unit coverage.
 
 #[test]
 fn placeholder() {

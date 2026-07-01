@@ -1,9 +1,9 @@
-# Makefile for bagZ Desktop
+# Makefile for zbag Desktop
 # Tauri v2 + Rust workspace
 
 .DEFAULT_GOAL := help
 
-TAURI_DIR := apps/bagz-app-tauri
+TAURI_DIR := apps/zbag-app-tauri
 UNAME_S := $(shell uname -s)
 TAURI_FEATURES ?= cef-runtime
 TAURI_BUNDLES ?=
@@ -37,10 +37,10 @@ install: ## Install frontend dependencies
 # ============================================================================
 
 build: ## Build Rust library crates
-	@cargo build --workspace --exclude bagz-app-tauri --exclude bagz-xtask
+	@cargo build --workspace --exclude zbag-app-tauri --exclude zbag-xtask
 
 build-release: ## Production release build (libs)
-	@cargo build --release --locked --workspace --exclude bagz-app-tauri --exclude bagz-xtask
+	@cargo build --release --locked --workspace --exclude zbag-app-tauri --exclude zbag-xtask
 
 build-frontend: ## Build frontend dist (for Tauri)
 	@cd $(TAURI_DIR) && bun run build
@@ -50,28 +50,28 @@ build-frontend: ## Build frontend dist (for Tauri)
 # ============================================================================
 
 test: ## Run all Rust library tests
-	# `bagz-core` includes async-gated tests (`--features async`). Running it separately keeps the
+	# `zbag-core` includes async-gated tests (`--features async`). Running it separately keeps the
 	# rest of the workspace tests feature-default while still exercising the async code path.
-	@cargo test --workspace --exclude bagz-app-tauri --exclude bagz-xtask --exclude bagz-core
-	@cargo test -p bagz-core --features async
+	@cargo test --workspace --exclude zbag-app-tauri --exclude zbag-xtask --exclude zbag-core
+	@cargo test -p zbag-core --features async
 
-test-engine: ## Test bagz-engine crate
-	@cargo test -p bagz-engine
+test-engine: ## Test zbag-engine crate
+	@cargo test -p zbag-engine
 
-test-core: ## Test bagz-core crate
-	@cargo test -p bagz-core --features async
+test-core: ## Test zbag-core crate
+	@cargo test -p zbag-core --features async
 
-test-network: ## Test bagz-network crate
-	@cargo test -p bagz-network
+test-network: ## Test zbag-network crate
+	@cargo test -p zbag-network
 
-test-keystone: ## Test bagz-keystone crate
-	@cargo test -p bagz-keystone
+test-keystone: ## Test zbag-keystone crate
+	@cargo test -p zbag-keystone
 
-test-tor: ## Test bagz-tor crate
-	@cargo test -p bagz-tor
+test-tor: ## Test zbag-tor crate
+	@cargo test -p zbag-tor
 
 test-migrations: ## Run migration tests
-	@cargo test -p bagz-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
+	@cargo test -p zbag-engine --test app_db_migrations --test wallet_db_encryption_and_migrations
 
 # ============================================================================
 # E2E Testing
@@ -81,10 +81,10 @@ test-e2e: install ## Run Playwright E2E tests (starts test bridge automatically)
 	@./scripts/e2e-test.sh
 
 test-bridge-build: ## Build the test bridge server
-	@cargo build -p bagz-app-tauri --features test-bridge
+	@cargo build -p zbag-app-tauri --features test-bridge
 
 test-bridge: test-bridge-build ## Run the test bridge server
-	@cargo run -p bagz-app-tauri --features test-bridge
+	@cargo run -p zbag-app-tauri --features test-bridge
 
 # ============================================================================
 # Lint/Format (Rust)
@@ -97,10 +97,10 @@ fmt-check: ## Check Rust formatting (CI)
 	@cargo fmt --all -- --check
 
 clippy: ## Run clippy lints
-	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask
+	@cargo clippy --workspace --all-targets --exclude zbag-app-tauri --exclude zbag-xtask
 
 clippy-strict: ## Clippy with warnings as errors
-	@cargo clippy --workspace --all-targets --exclude bagz-app-tauri --exclude bagz-xtask -- -D warnings
+	@cargo clippy --workspace --all-targets --exclude zbag-app-tauri --exclude zbag-xtask -- -D warnings
 
 lint: fmt-check clippy ## Run all lints
 
@@ -122,7 +122,7 @@ check-cef-network-hardening: ## Check CEF browser network hardening guardrails
 	@./scripts/check-cef-network-hardening.sh
 
 check-cef-args: ## Test parsed CEF runtime arguments
-	@cargo test -p bagz-app-tauri --features cef-runtime --test cef_runtime_args
+	@cargo test -p zbag-app-tauri --features cef-runtime --test cef_runtime_args
 
 # ============================================================================
 # Tauri
@@ -136,11 +136,11 @@ tauri-build: ## Tauri production build
 	@CI=$${CI:-true} TAURI_FEATURES="$(TAURI_FEATURES)" TAURI_BUNDLES="$(TAURI_BUNDLES)" ./scripts/tauri-cef-build.sh
 
 cef-smoketest-selftest: ## Run CEF network smoke parser fixtures
-	@cargo run -p bagz-xtask --quiet -- cef-smoketest --selftest
+	@cargo run -p zbag-xtask --quiet -- cef-smoketest --selftest
 
-# Requires a prebuilt bundle at target/release/bundle/macos/bagZ.app.
+# Requires a prebuilt bundle at target/release/bundle/macos/zbag.app.
 cef-smoketest: ## Run CEF network smoke against an existing packaged app
-	@cargo run -p bagz-xtask --quiet -- cef-smoketest
+	@cargo run -p zbag-xtask --quiet -- cef-smoketest
 
 cef-audit: ## Report CEF + bundle sizes and largest payload entries
 	@./scripts/cef-size-report.sh
@@ -165,14 +165,14 @@ tauri-build-slim-aggressive: ## Tauri production build using staged AGGRESSIVE s
 # CLI
 # ============================================================================
 
-CLI_RELEASE := ./target/release/bagz
-CLI_DEBUG := ./target/debug/bagz
+CLI_RELEASE := ./target/release/zbag
+CLI_DEBUG := ./target/debug/zbag
 
-cli: ## Build bagz-cli binary (release)
-	@cargo build --release -p bagz-cli
+cli: ## Build zbag-cli binary (release)
+	@cargo build --release -p zbag-cli
 
-cli-dev: ## Build bagz-cli binary (debug)
-	@cargo build -p bagz-cli
+cli-dev: ## Build zbag-cli binary (debug)
+	@cargo build -p zbag-cli
 
 cli-run: cli ## Run CLI with ARGS (e.g., make cli-run ARGS="wallet list")
 	@$(CLI_RELEASE) $(ARGS)
@@ -222,6 +222,6 @@ clean-all: clean clean-frontend ## Clean everything
 # ============================================================================
 
 help: ## Show available make targets
-	@echo "bagZ Desktop - Makefile targets"
+	@echo "zbag Desktop - Makefile targets"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'

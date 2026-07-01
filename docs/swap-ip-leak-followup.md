@@ -2,7 +2,7 @@
 
 ## Context
 
-The swap subsystem uses `crates/bagz-network/src/near_intents.rs`, whose default base URL is `https://1click.chaindefuser.com`. Requesting a quote, initiating a swap, and polling swap status contact that third-party service.
+The swap subsystem uses `crates/zbag-network/src/near_intents.rs`, whose default base URL is `https://1click.chaindefuser.com`. Requesting a quote, initiating a swap, and polling swap status contact that third-party service.
 
 The existing Tor toggle and Tor state surface are the correct network controls. When Tor is off, swap calls are direct and the user's IP address is visible to 1Click.
 

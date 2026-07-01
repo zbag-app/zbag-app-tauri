@@ -1,0 +1,68 @@
+[package]
+name = "zbag-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+description = "CLI for zbag Zcash wallet"
+
+[[bin]]
+name = "zbag"
+path = "src/main.rs"
+
+[dependencies]
+# zbag crates
+zbag-core = { path = "../../crates/zbag-core" }
+zbag-engine = { path = "../../crates/zbag-engine" }
+zbag-network = { path = "../../crates/zbag-network" }
+zbag-tor = { path = "../../crates/zbag-tor" }
+
+# CLI framework
+clap = { version = "4", features = ["derive", "env"] }
+
+# Password input
+rpassword = "7"
+
+# Progress display
+indicatif = { version = "0.17", features = ["tokio"] }
+
+# Console output
+console = "0.15"
+
+# Async runtime
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Zeroization
+zeroize = { workspace = true }
+
+# Encoding
+base64 = { workspace = true }
+
+# Protocol helpers
+prost = { workspace = true }
+zcash_protocol = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Database (for direct queries if needed)
+rusqlite = { workspace = true }
+
+# Home directory
+dirs = "6"

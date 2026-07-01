@@ -60,7 +60,7 @@ pub fn run_smoke(
     let app_bundle = args
         .app
         .clone()
-        .unwrap_or_else(|| PathBuf::from("target/release/bundle/macos/bagZ.app"));
+        .unwrap_or_else(|| PathBuf::from("target/release/bundle/macos/zbag.app"));
     let Some(app_exe) = bundle::resolve_executable(&app_bundle) else {
         log.write(&format!(
             "error: bundled app executable not found in: {}/Contents/MacOS",
@@ -70,7 +70,7 @@ pub fn run_smoke(
     };
 
     let smoke_root = match tempfile::Builder::new()
-        .prefix("bagz-cef-smoketest.")
+        .prefix("zbag-cef-smoketest.")
         .tempdir()
     {
         Ok(dir) => dir,
@@ -365,19 +365,19 @@ pub fn smoke_env(root: &Path, duration_secs: NonZeroU32) -> BTreeMap<String, Str
         ),
         ("TMPDIR".to_string(), root.join("tmp").display().to_string()),
         (
-            "BAGZ_GRPC_URL".to_string(),
+            "ZBAG_GRPC_URL".to_string(),
             "https://127.0.0.1:1".to_string(),
         ),
-        ("BAGZ_HEADLESS_SMOKE".to_string(), "1".to_string()),
+        ("ZBAG_HEADLESS_SMOKE".to_string(), "1".to_string()),
         (
-            "BAGZ_SMOKE_DURATION_SECS".to_string(),
+            "ZBAG_SMOKE_DURATION_SECS".to_string(),
             duration_secs.get().to_string(),
         ),
         (
-            "BAGZ_SMOKE_READY_FILE".to_string(),
+            "ZBAG_SMOKE_READY_FILE".to_string(),
             root.join("smoke-ready").display().to_string(),
         ),
-        ("BAGZ_USE_SYSTEM_KEYCHAIN".to_string(), "0".to_string()),
+        ("ZBAG_USE_SYSTEM_KEYCHAIN".to_string(), "0".to_string()),
     ])
 }
 
@@ -418,18 +418,18 @@ mod tests {
     #[test]
     fn smoke_env_preserves_app_isolation_contract() {
         let duration = NonZeroU32::new(15).expect("non-zero");
-        let env = smoke_env(std::path::Path::new("/tmp/bagz-smoke"), duration);
+        let env = smoke_env(std::path::Path::new("/tmp/zbag-smoke"), duration);
 
-        assert_eq!(env["BAGZ_GRPC_URL"], "https://127.0.0.1:1");
-        assert_eq!(env["BAGZ_HEADLESS_SMOKE"], "1");
-        assert_eq!(env["BAGZ_USE_SYSTEM_KEYCHAIN"], "0");
-        assert_eq!(env["BAGZ_SMOKE_DURATION_SECS"], "15");
-        assert_eq!(env["BAGZ_SMOKE_READY_FILE"], "/tmp/bagz-smoke/smoke-ready");
-        assert_eq!(env["HOME"], "/tmp/bagz-smoke/home");
-        assert_eq!(env["XDG_CACHE_HOME"], "/tmp/bagz-smoke/cache");
-        assert_eq!(env["XDG_CONFIG_HOME"], "/tmp/bagz-smoke/config");
-        assert_eq!(env["XDG_DATA_HOME"], "/tmp/bagz-smoke/data");
-        assert_eq!(env["XDG_STATE_HOME"], "/tmp/bagz-smoke/state");
-        assert_eq!(env["TMPDIR"], "/tmp/bagz-smoke/tmp");
+        assert_eq!(env["ZBAG_GRPC_URL"], "https://127.0.0.1:1");
+        assert_eq!(env["ZBAG_HEADLESS_SMOKE"], "1");
+        assert_eq!(env["ZBAG_USE_SYSTEM_KEYCHAIN"], "0");
+        assert_eq!(env["ZBAG_SMOKE_DURATION_SECS"], "15");
+        assert_eq!(env["ZBAG_SMOKE_READY_FILE"], "/tmp/zbag-smoke/smoke-ready");
+        assert_eq!(env["HOME"], "/tmp/zbag-smoke/home");
+        assert_eq!(env["XDG_CACHE_HOME"], "/tmp/zbag-smoke/cache");
+        assert_eq!(env["XDG_CONFIG_HOME"], "/tmp/zbag-smoke/config");
+        assert_eq!(env["XDG_DATA_HOME"], "/tmp/zbag-smoke/data");
+        assert_eq!(env["XDG_STATE_HOME"], "/tmp/zbag-smoke/state");
+        assert_eq!(env["TMPDIR"], "/tmp/zbag-smoke/tmp");
     }
 }

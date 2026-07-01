@@ -1,10 +1,10 @@
-# bagZ Desktop
+# zbag Desktop
 
 A desktop-first privacy-by-design Zcash wallet with hardware wallet support and integrated DEX functionality.
 
 ## Overview
 
-bagZ Desktop provides a privacy-focused Zcash experience built on strong security principles:
+zbag Desktop provides a privacy-focused Zcash experience built on strong security principles:
 
 - **Shielded spending** - Transparent funds must be shielded before use; sending to transparent recipients is allowed only with explicit acknowledgement
 - **Secrets stay in Rust** - Spending keys never reach the UI layer; seed phrases are only displayed/entered in explicitly permitted flows (create, backup verify, restore, view seed) and are never persisted or logged by the UI
@@ -22,15 +22,15 @@ bagZ Desktop provides a privacy-focused Zcash experience built on strong securit
 
 ```
 crates/
-  bagz-core/       # Domain types and IPC contracts
-  bagz-engine/     # Wallet operations (librustzcash wrapper)
-  bagz-network/    # gRPC/HTTP clients, Tor transport
-  bagz-keystone/   # Hardware wallet integration
-  bagz-tor/        # Embedded Arti Tor client
+  zbag-core/       # Domain types and IPC contracts
+  zbag-engine/     # Wallet operations (librustzcash wrapper)
+  zbag-network/    # gRPC/HTTP clients, Tor transport
+  zbag-keystone/   # Hardware wallet integration
+  zbag-tor/        # Embedded Arti Tor client
 
 apps/
-  bagz-app-tauri/  # Tauri shell + React frontend
-  bagz-cli/        # Command-line interface
+  zbag-app-tauri/  # Tauri shell + React frontend
+  zbag-cli/        # Command-line interface
 ```
 
 ## Key Features
@@ -55,11 +55,11 @@ Platform targets: macOS, Windows, Linux
 | Document | Description |
 |----------|-------------|
 | [Constitution](.specify/memory/constitution.md) | Non-negotiable principles governing development |
-| [Feature Specification](specs/001-bagz-desktop-wallet/spec.md) | User stories and requirements |
-| [Implementation Plan](specs/001-bagz-desktop-wallet/plan.md) | Architecture and project structure |
-| [Data Model](specs/001-bagz-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
-| [Research](specs/001-bagz-desktop-wallet/research.md) | Technology decisions and rationale |
-| [Quickstart](specs/001-bagz-desktop-wallet/quickstart.md) | Developer setup guide |
+| [Feature Specification](specs/001-zbag-desktop-wallet/spec.md) | User stories and requirements |
+| [Implementation Plan](specs/001-zbag-desktop-wallet/plan.md) | Architecture and project structure |
+| [Data Model](specs/001-zbag-desktop-wallet/data-model.md) | Entities, relationships, and database schema |
+| [Research](specs/001-zbag-desktop-wallet/research.md) | Technology decisions and rationale |
+| [Quickstart](specs/001-zbag-desktop-wallet/quickstart.md) | Developer setup guide |
 | [E2E Testing](docs/E2E_TESTING.md) | Test bridge architecture and Playwright setup |
 
 ## Core Dependencies
@@ -86,17 +86,17 @@ A Makefile is provided for common development tasks:
 
 Run `make help` for all available targets.
 
-See [Quickstart](specs/001-bagz-desktop-wallet/quickstart.md) for full setup instructions.
+See [Quickstart](specs/001-zbag-desktop-wallet/quickstart.md) for full setup instructions.
 
 ### Temporary Send Debugging
 
 For deeper send/broadcast diagnostics (including terminal output), set:
 
 ```bash
-export BAGZ_TEMP_DEBUG=1
+export ZBAG_TEMP_DEBUG=1
 ```
 
-This is disabled by default. When enabled, bagZ adds extra timed send/broadcast debug events and mirrors logs to stderr.
+This is disabled by default. When enabled, zbag adds extra timed send/broadcast debug events and mirrors logs to stderr.
 
 ## E2E Testing (Test Bridge)
 
@@ -109,30 +109,30 @@ Quickstart:
 
 ```bash
 # Terminal 1: start the Rust test bridge with an isolated data directory
-export BAGZ_TEST_HOME="$(mktemp -d)"
-cargo run -p bagz-app-tauri --features test-bridge
+export ZBAG_TEST_HOME="$(mktemp -d)"
+cargo run -p zbag-app-tauri --features test-bridge
 
 # Terminal 2: start the Vite dev server with the test bridge transport
-cd apps/bagz-app-tauri
+cd apps/zbag-app-tauri
 VITE_TEST_BRIDGE=true bun run dev
 
 # Terminal 3: install Playwright (first time) and run E2E tests
-cd apps/bagz-app-tauri
+cd apps/zbag-app-tauri
 bunx playwright install chromium
 bun run test:e2e
 ```
 
-To reset test data between runs, remove the directory in `BAGZ_TEST_HOME`. In test-bridge mode, `BAGZ_TEST_HOME` must be set to a non-empty path; empty or whitespace-only values are rejected.
+To reset test data between runs, remove the directory in `ZBAG_TEST_HOME`. In test-bridge mode, `ZBAG_TEST_HOME` must be set to a non-empty path; empty or whitespace-only values are rejected.
 
 See [docs/E2E_TESTING.md](docs/E2E_TESTING.md) for architecture details, CI workflow, and troubleshooting.
 
 ## Requirements
 
-- Platform-specific dependencies (see [Quickstart](specs/001-bagz-desktop-wallet/quickstart.md))
+- Platform-specific dependencies (see [Quickstart](specs/001-zbag-desktop-wallet/quickstart.md))
 
 ## License
 
-Bagz is source-available under the PolyForm Shield License 1.0.0. It is not open-source software.
+Zbag is source-available under the PolyForm Shield License 1.0.0. It is not open-source software.
 
 ## Security
 

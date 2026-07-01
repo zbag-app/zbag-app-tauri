@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# E2E Test Runner for bagz
+# E2E Test Runner for zbag
 #
 # This script orchestrates the full E2E test flow:
 # 1. Build the test bridge (Rust backend with HTTP server)
@@ -19,7 +19,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-APP_DIR="$PROJECT_ROOT/apps/bagz-app-tauri"
+APP_DIR="$PROJECT_ROOT/apps/zbag-app-tauri"
 
 TEST_BRIDGE_PORT=19816
 TEST_BRIDGE_PID=""
@@ -49,23 +49,23 @@ is_blank() {
 
 # Use isolated test home directory to avoid polluting real data directory
 # Track whether we created the directory (to avoid deleting user-provided directories)
-if [ -n "${BAGZ_TEST_HOME+x}" ] && is_blank "$BAGZ_TEST_HOME"; then
-    log_error "BAGZ_TEST_HOME is set but empty or whitespace; please unset it or provide a valid path."
+if [ -n "${ZBAG_TEST_HOME+x}" ] && is_blank "$ZBAG_TEST_HOME"; then
+    log_error "ZBAG_TEST_HOME is set but empty or whitespace; please unset it or provide a valid path."
     exit 1
 fi
 
-if [ "${VITE_TEST_BRIDGE:-}" = "true" ] && is_blank "${BAGZ_TEST_HOME:-}"; then
-    log_error "VITE_TEST_BRIDGE=true requires BAGZ_TEST_HOME to be set to a non-empty path."
+if [ "${VITE_TEST_BRIDGE:-}" = "true" ] && is_blank "${ZBAG_TEST_HOME:-}"; then
+    log_error "VITE_TEST_BRIDGE=true requires ZBAG_TEST_HOME to be set to a non-empty path."
     exit 1
 fi
 
-if is_blank "${BAGZ_TEST_HOME:-}"; then
-    export BAGZ_TEST_HOME="$(mktemp -d /tmp/bagz-e2e.XXXXXX)"
+if is_blank "${ZBAG_TEST_HOME:-}"; then
+    export ZBAG_TEST_HOME="$(mktemp -d /tmp/zbag-e2e.XXXXXX)"
     TEST_HOME_CREATED="1"
 else
     TEST_HOME_CREATED=""
 fi
-echo "Using test home: $BAGZ_TEST_HOME"
+echo "Using test home: $ZBAG_TEST_HOME"
 
 cleanup() {
     if [ -n "$TEST_BRIDGE_PID" ]; then
@@ -74,9 +74,9 @@ cleanup() {
         wait "$TEST_BRIDGE_PID" 2>/dev/null || true
     fi
     # Clean up test home directory (only if we created it)
-    if [ -n "$TEST_HOME_CREATED" ] && [ -n "$BAGZ_TEST_HOME" ] && [ -d "$BAGZ_TEST_HOME" ]; then
-        log_info "Cleaning up test home: $BAGZ_TEST_HOME"
-        rm -rf "$BAGZ_TEST_HOME"
+    if [ -n "$TEST_HOME_CREATED" ] && [ -n "$ZBAG_TEST_HOME" ] && [ -d "$ZBAG_TEST_HOME" ]; then
+        log_info "Cleaning up test home: $ZBAG_TEST_HOME"
+        rm -rf "$ZBAG_TEST_HOME"
     fi
 }
 
@@ -147,11 +147,11 @@ main() {
 
         # Build the test bridge
         log_info "Building test bridge..."
-        cargo build -p bagz-app-tauri --features test-bridge
+        cargo build -p zbag-app-tauri --features test-bridge
 
         # Start the test bridge in the background
         log_info "Starting test bridge..."
-        cargo run -p bagz-app-tauri --features test-bridge &
+        cargo run -p zbag-app-tauri --features test-bridge &
         TEST_BRIDGE_PID=$!
 
         # Wait for the test bridge to be ready

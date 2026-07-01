@@ -1,11 +1,11 @@
-# git-cliff configuration for bagZ
+# git-cliff configuration for zbag
 # https://git-cliff.org/docs/configuration
 
 [changelog]
 header = """
 # Changelog
 
-All notable changes to bagZ will be documented in this file.
+All notable changes to zbag will be documented in this file.
 
 """
 body = """

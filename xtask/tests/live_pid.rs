@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use bagz_xtask::cmd::cef_smoketest::process::filter_live_pids;
+use zbag_xtask::cmd::cef_smoketest::process::filter_live_pids;
 
 #[test]
 fn filter_live_pids_all_live() {

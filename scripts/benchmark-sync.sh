@@ -17,13 +17,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # CLI binary path (prefer release build)
-CLI="${ROOT_DIR}/target/release/bagz"
+CLI="${ROOT_DIR}/target/release/zbag"
 if [[ ! -x "$CLI" ]]; then
-    CLI="${ROOT_DIR}/target/debug/bagz"
+    CLI="${ROOT_DIR}/target/debug/zbag"
 fi
 
 # Benchmark data directory (isolated from user wallets)
-BENCHMARK_DATA_DIR="${HOME}/.bagz-benchmark"
+BENCHMARK_DATA_DIR="${HOME}/.zbag-benchmark"
 
 # Test mnemonic (all-zeros entropy - safe for testnet only)
 TESTNET_TEST_MNEMONIC="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
@@ -215,7 +215,7 @@ generate_seed_phrase() {
     (
         set -euo pipefail
         local tmp_dir out seed
-        tmp_dir="$(mktemp -d -t bagz-seedgen.XXXXXX)"
+        tmp_dir="$(mktemp -d -t zbag-seedgen.XXXXXX)"
         trap 'rm -rf "$tmp_dir"' EXIT
 
         # wallet create outputs the seed phrase; keep it in-memory only and never print it.
@@ -358,7 +358,7 @@ format_duration() {
 # ==============================================================================
 
 if [[ ! -x "$CLI" ]]; then
-    die "bagz CLI binary not found. Run 'make cli' first."
+    die "zbag CLI binary not found. Run 'make cli' first."
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -440,7 +440,7 @@ run_benchmark() {
     local start_time end_time sync_duration
     start_time=$(date +%s)
 
-    progress_log_file="$(mktemp -t bagz-sync-progress.XXXXXX)"
+    progress_log_file="$(mktemp -t zbag-sync-progress.XXXXXX)"
     trap 'rm -f "$progress_log_file"' RETURN
 
     # Sync command blocks until complete. Always enable progress logging so we can
@@ -534,7 +534,7 @@ run_benchmark() {
 # ==============================================================================
 
 echo ""
-echo "bagZ Sync Benchmark"
+echo "zbag Sync Benchmark"
 echo "===================="
 log "Using CLI: $CLI"
 log "Data directory: $BENCHMARK_DATA_DIR"

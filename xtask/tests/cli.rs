@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use clap::Parser;
 
-use bagz_xtask::cli::{CefSmoketestArgs, Cli};
-use bagz_xtask::promote_selftest_env;
+use zbag_xtask::cli::{CefSmoketestArgs, Cli};
+use zbag_xtask::promote_selftest_env;
 
 #[test]
 fn clap_parse_errors_exit_two() {

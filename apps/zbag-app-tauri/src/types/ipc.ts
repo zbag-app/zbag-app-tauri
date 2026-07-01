@@ -1,0 +1,1392 @@
+/**
+ * zbag Desktop Wallet - IPC Contract v1
+ *
+ * TypeScript type definitions for Tauri IPC commands and events.
+ * These types MUST match the Rust definitions in zbag-core/src/ipc/v1/
+ *
+ * @version 1
+ */
+
+// ============================================================================
+// Common Types
+// ============================================================================
+
+/** Schema version for all IPC payloads */
+export const SCHEMA_VERSION = 1;
+
+/** Base payload with version */
+export interface VersionedPayload {
+  schema_version: number;
+}
+
+/** Standard error response */
+export interface IpcError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+/** Result type for IPC commands */
+export type IpcResult<T> = { ok: T } | { err: IpcError };
+
+/**
+ * Unix epoch timestamp in milliseconds (UTC).
+ *
+ * NOTE: All timestamp fields in this IPC contract use milliseconds unless explicitly stated otherwise.
+ */
+export type UnixTimestampMs = number;
+
+// ============================================================================
+// Wallet Types
+// ============================================================================
+
+// `Software`: Wallet with mnemonic seed stored locally. Supports full spend capability.
+// `WatchOnly`: Wallet created from a UFVK (e.g., Keystone hardware wallet). No local seed;
+// spending requires external signing device.
+export type WalletType = 'Software' | 'WatchOnly';
+export type Network = 'Mainnet' | 'Testnet';
+
+// In v1, Keystone UFVK import creates `HardwareSigner` accounts (watch-only; spend via signing flow).
+// `WatchOnly` account type is reserved for future generic viewing-key accounts and MUST NOT be created in v1.
+export type AccountType = 'Software' | 'WatchOnly' | 'HardwareSigner';
+export type WalletLockStatus = 'Locked' | 'Unlocked';
+
+export interface WalletInfo {
+  id: string;
+  name: string;
+  wallet_type: WalletType;
+  network: Network;
+  /**
+   * DISABLED: Keychain biometric auto-unlock is disabled. Always `false`.
+   * See SECURITY.md for rationale
+   */
+  remember_unlock_enabled: boolean;
+  created_at: UnixTimestampMs;
+  last_opened_at: UnixTimestampMs | null;
+}
+
+export interface AccountInfo {
+  id: number;
+  name: string;
+  account_type: AccountType;
+}
+
+// ============================================================================
+// Balance Types
+// ============================================================================
+
+/** Amount in zatoshis (1 ZEC = 100,000,000 zatoshis) */
+export type Zatoshis = string;
+
+export interface Balance {
+  shielded_spendable: Zatoshis;
+  shielded_pending: Zatoshis;
+  transparent_total: Zatoshis;
+  total: Zatoshis;
+}
+
+// ============================================================================
+// Address Types
+// ============================================================================
+
+export type AddressType = 'ShieldedOnly' | 'Transparent';
+
+export interface AddressInfo {
+  encoded: string;
+  address_type: AddressType;
+  /** Diversifier index as string to avoid JS number overflow for u64 values */
+  diversifier_index: string;
+}
+
+// ============================================================================
+// Transaction Types
+// ============================================================================
+
+export type TransactionType = 'Send' | 'Receive' | 'Shield' | 'Consolidate';
+export type TransactionStatus = 'Pending' | 'Confirmed' | 'Expired' | 'Failed';
+export type RecipientKind = 'Orchard' | 'Sapling' | 'Transparent';
+
+/** The kind of memo content */
+export type MemoKind = 'Text' | 'Binary' | 'Empty';
+
+/** Structured memo information for transaction display */
+export interface MemoInfo {
+  /** The kind of memo content */
+  kind: MemoKind;
+  /** The memo content as a string. For Text memos, this is the UTF-8 text.
+   * For Binary memos, this is a description like "[binary: 512 bytes]".
+   * For Empty memos, this is null. */
+  content: string | null;
+  /** The size of the memo in bytes (0-512) */
+  size_bytes: number;
+}
+
+export interface TransactionInfo {
+  txid: string;
+  /** Wallet-local account index (ZIP-32) */
+  account_id: number;
+  tx_type: TransactionType;
+  value: Zatoshis;
+  fee: Zatoshis;
+  /** Number of unique memos for this transaction (deduplicated across sent/received notes) */
+  memo_count: number;
+  /** Structured memo information for display */
+  memos: MemoInfo[];
+  status: TransactionStatus;
+  /** Last error message for failed/queued broadcasts (user-safe, redacted) */
+  last_error: string | null;
+  /** True if user can retry broadcasting this tx (i.e., signed bytes were queued after a broadcast failure) */
+  can_retry_broadcast: boolean;
+  mined_height: number | null;
+  created_at: UnixTimestampMs;
+  confirmed_at: UnixTimestampMs | null;
+}
+
+// ============================================================================
+// Sync Types
+// ============================================================================
+
+export type SyncPhase =
+  | 'Idle'
+  | 'Preparing'
+  | 'Downloading'
+  | 'Scanning'
+  | 'Enhancing'
+  | 'CatchingUp'
+  /** Network is unreachable; sync is retrying with exponential backoff. */
+  | 'Offline'
+  /** Sync encountered a local error (DB, scan); retrying with backoff. */
+  | 'Error';
+
+export interface SyncProgress {
+  phase: SyncPhase;
+  scan_frontier_height: number;
+  wallet_tip_height: number;
+  progress_percent: number;
+  eta_seconds: number | null;
+  /** Seconds until the next retry attempt (populated when phase is Offline or Error). */
+  retry_in_seconds?: number;
+  /** User-safe, high-level error message (populated when phase is Error). */
+  error_message?: string;
+}
+
+// ============================================================================
+// Swap Types
+// ============================================================================
+
+export type SwapType = 'ToZec' | 'FromZec';
+
+/**
+ * Swap mode determines whether the amount specified is the input or output.
+ * - ExactInput: User specifies the input amount, receives whatever output the swap yields.
+ * - ExactOutput: User specifies the desired output amount (CrossPay), pays whatever input is required.
+ */
+export type SwapMode = 'ExactInput' | 'ExactOutput';
+
+export type SwapState =
+  | 'Draft'
+  | 'AwaitingDeposit'
+  | 'Pending'
+  | 'Confirming'
+  | 'Completed'
+  | 'Refunded'
+  | 'Failed';
+
+export interface SwapInfo {
+  id: string;
+  remote_id: string | null;
+  swap_type: SwapType;
+  input_asset: string;
+  input_amount: string;
+  output_asset: string;
+  output_amount: string | null;
+  deposit_address: string | null;
+  deposit_memo: string | null;
+  destination_address: string | null;
+  refund_address: string | null;
+  state: SwapState;
+  deadline: UnixTimestampMs | null;
+  last_error: string | null;
+  created_at: UnixTimestampMs;
+  updated_at: UnixTimestampMs;
+}
+
+export interface SwapQuote {
+  input_asset: string;
+  /** Input amount in smallest units (e.g., wei for ETH, zatoshis for ZEC) */
+  input_amount: string;
+  /** Human-readable input amount (from API's amountInFormatted) */
+  input_amount_formatted: string;
+  output_asset: string;
+  /** Output amount in smallest units */
+  output_amount: string;
+  /** Human-readable output amount (from API's amountOutFormatted) */
+  output_amount_formatted: string;
+  /** Minimum output amount in smallest units (accounting for slippage) */
+  min_output_amount: string;
+  /** Deadline as milliseconds since epoch */
+  deadline: UnixTimestampMs;
+  /** Estimated time for swap completion in seconds */
+  time_estimate_secs: number;
+  /** Deposit address (present when dry=false) */
+  deposit_address: string | null;
+  /** Deposit memo (present when deposit requires a memo) */
+  deposit_memo: string | null;
+  /** Correlation ID for tracking the quote */
+  correlation_id: string;
+  /** App/affiliate fee in basis points (1 bps = 0.01%). 50 bps = 0.50%. */
+  app_fee_bps: number | null;
+}
+
+/** Supported token for swaps from the 1Click API */
+export interface SupportedToken {
+  /** Asset ID (e.g., "nep141:wrap.near") */
+  asset_id: string;
+  /** Token symbol (e.g., "NEAR") */
+  symbol: string;
+  /** Chain identifier (e.g., "near", "eth", "sol") */
+  chain: string;
+  /** Token decimals */
+  decimals: number;
+  /** USD price (may be null/zero) */
+  usd_price: number | null;
+  /** Token icon URL (optional) */
+  icon: string | null;
+}
+
+// ============================================================================
+// Tor Types
+// ============================================================================
+
+export type TorStatus = 'Off' | 'Connecting' | 'On' | 'Error';
+
+export interface TorState {
+  enabled: boolean;
+  status: TorStatus;
+  last_error: string | null;
+}
+
+// ============================================================================
+// Exchange Rate Types
+// ============================================================================
+
+export type FiatCurrency = 'USD' | 'EUR' | 'GBP' | 'CHF' | 'CAD' | 'AUD' | 'JPY';
+
+export const FIAT_CURRENCIES: FiatCurrency[] = ['USD', 'EUR', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY'];
+
+export const FIAT_CURRENCY_SYMBOLS: Record<FiatCurrency, string> = {
+  USD: '$',
+  EUR: '\u20AC',
+  GBP: '\u00A3',
+  CHF: 'CHF',
+  CAD: 'C$',
+  AUD: 'A$',
+  JPY: '\u00A5',
+};
+
+export interface ExchangeRate {
+  currency: FiatCurrency;
+  /** Price of 1 ZEC in the fiat currency */
+  price: number;
+  /** When this rate was fetched (Unix timestamp in milliseconds) */
+  fetched_at_ms: UnixTimestampMs;
+}
+
+export interface FiatDisplaySettings {
+  enabled: boolean;
+  currency: FiatCurrency;
+  privacy_acknowledged: boolean;
+}
+
+// ============================================================================
+// Wallet Status Types
+// ============================================================================
+
+/** NOTE: Rust serde serializes unit enum variants as strings (e.g. "Required"). */
+export type BackupAction = 'Required' | 'Complete';
+export type SyncStatus =
+  | 'Synced'
+  | { Syncing: { progress_percent: number } }
+  /** Network unreachable; retrying with exponential backoff. Cached funds remain visible. */
+  | { Offline: { retry_in_seconds: number } }
+  | { Error: { message: string } };
+export type ShieldAction =
+  | 'None'
+  | { Available: { amount: Zatoshis } }
+  | 'InProgress';
+export type PrivacyPosture = 'Optimal' | 'NeedsAction';
+
+export interface WalletStatus {
+  lock_status: WalletLockStatus;
+  backup_status: BackupAction;
+  sync_status: SyncStatus;
+  shield_status: ShieldAction;
+  privacy_posture: PrivacyPosture;
+}
+
+// ============================================================================
+// Job Types (Async Operations)
+// ============================================================================
+
+/** Type of job operation */
+export type JobType = 'Send' | 'Shield';
+
+/** Current state of a job */
+export type JobState = 'Queued' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
+
+/** Phase within a transaction job for granular progress reporting */
+export type JobPhase = 'Preparing' | 'Proving' | 'Broadcasting' | 'Done';
+
+/** Progress information for a background job */
+export interface JobProgress {
+  /** Job identifier */
+  job_id: string;
+  /** Type of operation */
+  job_type: JobType;
+  /** Current state */
+  state: JobState;
+  /** Current phase within the operation */
+  phase: JobPhase;
+  /** Progress percentage (0-100), if determinable */
+  progress_percent: number | null;
+  /** Transaction ID once known (after proving, before or after broadcast) */
+  txid: string | null;
+  /** Error message if the job failed */
+  error: string | null;
+  /** Whether the job can be cancelled in its current state */
+  can_cancel: boolean;
+}
+
+// ============================================================================
+// Backup Types
+// ============================================================================
+
+export interface BackupChallenge {
+  /** Opaque challenge identifier */
+  challenge_id: string;
+  /** Seed word indices requested for verification (exactly 4; 1..=24, 1-based word numbers) */
+  indices: number[];
+  /** Challenge expiry timestamp */
+  expires_at: UnixTimestampMs;
+}
+
+// ============================================================================
+// Re-auth Types
+// ============================================================================
+
+export type ReauthPurpose = 'Spend' | 'ViewSeedPhrase';
+
+// ============================================================================
+// Server Types
+// ============================================================================
+
+export interface ServerInfo {
+  id: string;
+  name: string;
+  grpc_url: string;
+  network: Network;
+  is_default: boolean;
+  last_success_at: UnixTimestampMs | null;
+  /** Validation error message if the URL is invalid, `null` if valid. */
+  validation_error?: string | null;
+}
+
+// ============================================================================
+// Keystone Types
+// ============================================================================
+
+export interface SigningRequest {
+  /** Unique ID for this signing request, needed to finalize with the correct PCZT proofs */
+  signing_request_id: string;
+  /** Base64-encoded PCZT payload (redacted for signer, proofs stored server-side) */
+  pczt_payload: string;
+  /** QR frames for animated display */
+  qr_frames: string[];
+  /** Transaction summary for verification */
+  summary: SigningSummary;
+}
+
+export interface SigningSummary {
+  recipient: string;
+  recipient_kind: RecipientKind;
+  amount: Zatoshis;
+  fee: Zatoshis;
+  memo_present: boolean;
+  tx_type: TransactionType;
+}
+
+export interface SignedResponse {
+  /** Base64-encoded signed PCZT payload */
+  signed_payload: string;
+}
+
+// ============================================================================
+// Command Requests
+// ============================================================================
+
+/**
+ * Create a new wallet.
+ *
+ * On success, this sets the created wallet as the active wallet (equivalent to `LoadWallet`).
+ */
+export interface CreateWalletRequest extends VersionedPayload {
+  name: string;
+  network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /**
+   * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+   * See SECURITY.md for rationale
+   */
+  remember_unlock: boolean;
+}
+
+/**
+ * Load an existing wallet and set it as the active wallet for account-scoped requests/events.
+ *
+ * Loading MAY attempt OS keychain auto-unlock (if enabled for the wallet). `LoadWalletResponse.lock_status`
+ * reflects the post-attempt state.
+ *
+ * Accounts are available only when the encrypted wallet DB is unlocked:
+ * - If `lock_status` is `Locked`, `LoadWalletResponse.accounts` MUST be an empty array.
+ * - After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+ */
+export interface LoadWalletRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** List all wallets */
+export interface ListWalletsRequest extends VersionedPayload {}
+
+/** Get wallet status for status widget */
+export interface GetWalletStatusRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Unlock an encrypted wallet DB (read-only operations still require unlock) */
+export interface UnlockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  /**
+   * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+   * See SECURITY.md for rationale
+   */
+  remember_unlock: boolean;
+}
+
+/** Lock a wallet (drops decrypted material from memory) */
+export interface LockWalletRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/**
+ * Re-authenticate for a sensitive action (per-action; OS keychain must not satisfy).
+ * Returns a short-lived token that can be used to authorize exactly one action.
+ */
+export interface ReauthWalletRequest extends VersionedPayload {
+  wallet_id: string;
+  password: string;
+  purpose: ReauthPurpose;
+}
+
+/** View seed phrase (requires re-auth token with purpose ViewSeedPhrase) */
+export interface ViewSeedPhraseRequest extends VersionedPayload {
+  wallet_id: string;
+  reauth_token: string;
+}
+
+/** Logout wallet */
+export interface LogoutWalletRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/**
+ * Account-scoped requests (those with account_id) operate on the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * account_id values are wallet-local to the active wallet.
+ */
+/** Get fresh shielded receive address */
+export interface GetReceiveAddressRequest extends VersionedPayload {
+  account_id: number;
+  address_type: AddressType;
+}
+
+/** Start wallet sync */
+export interface StartSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Stop wallet sync */
+export interface StopSyncRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Get current sync progress snapshot */
+export interface GetSyncProgressRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Get wallet balance */
+export interface GetBalanceRequest extends VersionedPayload {
+  account_id: number;
+}
+
+/** List transactions */
+export interface ListTransactionsRequest extends VersionedPayload {
+  account_id: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Prepare a send transaction (software wallet flow).
+ * Returns a proposal that can be confirmed. Transaction bytes stay in backend.
+ */
+export interface PrepareSendRequest extends VersionedPayload {
+  account_id: number;
+  /** Recipient address (UA, Sapling, Orchard, or Transparent) */
+  recipient: string;
+  amount: Zatoshis;
+  memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
+}
+
+/**
+ * Confirm and broadcast a prepared send transaction.
+ * The proposal_id references the transaction prepared in the backend.
+ */
+export interface ConfirmSendRequest extends VersionedPayload {
+  /** Proposal ID from PrepareSendResponse */
+  proposal_id: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/**
+ * Cancel a prepared send transaction (optional, proposals expire automatically).
+ */
+export interface CancelSendRequest extends VersionedPayload {
+  proposal_id: string;
+}
+
+/**
+ * Retry broadcasting a previously-signed transaction that was queued after a broadcast failure.
+ * Requires explicit user action and manual re-auth.
+ */
+export interface RetryBroadcastRequest extends VersionedPayload {
+  txid: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Shield transparent funds */
+export interface ShieldFundsRequest extends VersionedPayload {
+  account_id: number;
+  consolidate: boolean;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Get a fresh backend-generated backup challenge */
+export interface GetBackupChallengeRequest extends VersionedPayload {
+  wallet_id: string;
+}
+
+/** Verify backup words */
+export interface VerifyBackupRequest extends VersionedPayload {
+  wallet_id: string;
+  /** Challenge ID issued by the backend (prevents UI-controlled verification) */
+  challenge_id: string;
+  /** Map of word index (1-24) to word */
+  word_challenges: Record<number, string>;
+}
+
+/**
+ * Restore wallet from seed.
+ *
+ * On success, this sets the restored wallet as the active wallet (equivalent to `LoadWallet`).
+ */
+export interface RestoreWalletRequest extends VersionedPayload {
+  name: string;
+  network: Network;
+  /** Wallet password used to encrypt spend-capable secrets and wallet DB at rest */
+  password: string;
+  /**
+   * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+   * See SECURITY.md for rationale
+   */
+  remember_unlock: boolean;
+  seed_phrase: string;
+  /** Approximate date of first transaction (unix timestamp, ms) */
+  birthday_date: UnixTimestampMs | null;
+}
+
+/** Import UFVK (Keystone) to create a HardwareSigner account (watch-only; spends via signing flow) within an existing software wallet */
+export interface ImportUfvkRequest extends VersionedPayload {
+  wallet_id: string;
+  ufvk: string;
+  name: string;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
+}
+
+/** Build unsigned signing request for Keystone */
+export interface BuildSigningRequestRequest extends VersionedPayload {
+  account_id: number;
+  recipient: string;
+  amount: Zatoshis;
+  memo: string | null;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the recipient resolves to a transparent receiver (t-addr or UA with only transparent receiver).
+   */
+  allow_transparent_recipient: boolean;
+}
+
+/** Finalize signed response from Keystone */
+export interface FinalizeSigningRequest extends VersionedPayload {
+  /** The signing_request_id returned from build_signing_request */
+  signing_request_id: string;
+  signed_payload: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+// ============================================================================
+// Job Command Requests
+// ============================================================================
+
+/** Start a send transaction as a background job */
+export interface StartSendJobRequest extends VersionedPayload {
+  /** Proposal ID from PrepareSendResponse */
+  proposal_id: string;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Start a shield operation as a background job */
+export interface StartShieldJobRequest extends VersionedPayload {
+  account_id: number;
+  consolidate: boolean;
+  /** Re-auth token (purpose: Spend) */
+  reauth_token: string;
+}
+
+/** Cancel a running job */
+export interface CancelJobRequest extends VersionedPayload {
+  job_id: string;
+}
+
+/** Get the current status of a job */
+export interface GetJobStatusRequest extends VersionedPayload {
+  job_id: string;
+}
+
+/** List all active jobs */
+export interface ListJobsRequest extends VersionedPayload {}
+
+/** Request swap quote */
+export interface RequestSwapQuoteRequest extends VersionedPayload {
+  swap_type: SwapType;
+  /**
+   * Swap mode: ExactInput (default) or ExactOutput (CrossPay).
+   * When ExactOutput, the output_amount field specifies the desired output.
+   */
+  swap_mode?: SwapMode;
+  input_asset: string;
+  /** Input amount (required for ExactInput mode, ignored for ExactOutput). */
+  input_amount: string;
+  output_asset: string;
+  /** Output amount (required for ExactOutput/CrossPay mode, ignored for ExactInput). */
+  output_amount?: string;
+  destination_address: string | null;
+  refund_address: string | null;
+}
+
+/** Start swap from quote */
+export interface StartSwapRequest extends VersionedPayload {
+  quote_id: string;
+  /**
+   * Required acknowledgement for privacy downgrades.
+   * Must be true when the swap requires transparent interaction (for example, a transparent recipient,
+   * transparent refund path, or generating/using a transparent address).
+   */
+  allow_transparent_interaction: boolean;
+  /**
+   * Re-auth token (purpose: Spend).
+   * Required when the quote results in a ZEC spend (e.g. swap-from-ZEC).
+   */
+  reauth_token: string | null;
+}
+
+/** Get swap status */
+export interface GetSwapStatusRequest extends VersionedPayload {
+  swap_id: string;
+}
+
+/** Refresh swap status from remote API */
+export interface RefreshSwapStatusRequest extends VersionedPayload {
+  swap_id: string;
+}
+
+/**
+ * List swaps for the currently active wallet only.
+ *
+ * Note: SwapInfo does not include a wallet_id, so this call is wallet-scoped.
+ */
+export interface ListSwapsRequest extends VersionedPayload {}
+
+/** Get supported tokens for swaps from the 1Click API */
+export interface GetSupportedTokensRequest extends VersionedPayload {}
+
+/** Resume polling for pending swaps */
+export interface ResumePendingSwapsRequest extends VersionedPayload {}
+
+/** Set Tor enabled */
+export interface SetTorEnabledRequest extends VersionedPayload {
+  enabled: boolean;
+}
+
+/** Get current Tor state */
+export interface GetTorStateRequest extends VersionedPayload {}
+
+/**
+ * Add a custom lightwalletd server configuration.
+ *
+ * The backend MUST probe `grpc_url` to determine and persist the server's `network` (see ServerInfo.network).
+ * Probing MUST also validate required server capabilities for v1, including CompactTxStreamer mempool support for FR-013 (`GetMempoolStream` MUST be supported; reject `UNIMPLEMENTED`).
+ * If probing fails, the request MUST fail rather than guessing.
+ */
+export interface AddServerRequest extends VersionedPayload {
+  name: string;
+  grpc_url: string;
+}
+
+/** Set default server */
+export interface SetDefaultServerRequest extends VersionedPayload {
+  server_id: string;
+}
+
+/** Test server connection */
+export interface TestServerRequest extends VersionedPayload {
+  server_id: string;
+}
+
+/**
+ * List all configured servers (Mainnet + Testnet).
+ *
+ * UI SHOULD filter by the active wallet's network when presenting selectable servers.
+ */
+export interface ListServersRequest extends VersionedPayload {}
+
+/** Get log file location for support */
+export interface GetLogLocationRequest extends VersionedPayload {}
+
+export interface GetLogLocationResponse extends VersionedPayload {
+  /** Directory containing log files */
+  log_directory: string;
+  /** Current log file path */
+  current_log_file: string;
+}
+
+/** Get application version information */
+export interface GetVersionRequest extends VersionedPayload {}
+
+/** Version information */
+export interface VersionInfo {
+  /** SemVer version string (e.g., "0.1.0") */
+  version: string;
+  /** Short git commit hash (e.g., "abc1234"), null for release builds */
+  git_commit: string | null;
+  /** Git describe output (e.g., "v0.1.0-3-gabc1234"), null if not available */
+  git_describe: string | null;
+  /** Build timestamp in UTC (e.g., "2026-01-22 14:30:00 UTC") */
+  build_timestamp: string;
+  /** Full version string for display (e.g., "0.1.0" or "0.1.0-3-gabc1234") */
+  full_version: string;
+}
+
+export interface GetVersionResponse extends VersionedPayload {
+  version_info: VersionInfo;
+}
+
+// ============================================================================
+// Exchange Rate Command Requests/Responses
+// ============================================================================
+
+/** Get fiat display settings */
+export interface GetFiatSettingsRequest extends VersionedPayload {}
+
+export interface GetFiatSettingsResponse extends VersionedPayload {
+  settings: FiatDisplaySettings;
+}
+
+/** Set fiat display settings */
+export interface SetFiatSettingsRequest extends VersionedPayload {
+  enabled: boolean;
+  currency: FiatCurrency;
+  /** Required when enabling fiat display */
+  privacy_acknowledged: boolean;
+}
+
+export interface SetFiatSettingsResponse extends VersionedPayload {
+  settings: FiatDisplaySettings;
+}
+
+/** Get exchange rate */
+export interface GetExchangeRateRequest extends VersionedPayload {
+  /** Force refresh even if cached rate is not stale */
+  force_refresh?: boolean;
+}
+
+export interface GetExchangeRateResponse extends VersionedPayload {
+  rate: ExchangeRate | null;
+  is_stale: boolean;
+  fiat_enabled: boolean;
+  /** Seconds until next refresh is allowed (0 if allowed now) */
+  refresh_cooldown_secs: number;
+}
+
+// ============================================================================
+// Command Responses
+// ============================================================================
+
+export interface CreateWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  /** Seed phrase words (24 words) - returned on create (and via ViewSeedPhrase) */
+  seed_phrase: string[];
+  /** Initial backend-generated backup challenge */
+  backup_challenge: BackupChallenge;
+}
+
+export interface UnlockWalletResponse extends VersionedPayload {
+  unlocked: boolean;
+}
+
+export interface LockWalletResponse extends VersionedPayload {
+  locked: boolean;
+}
+
+export interface ReauthWalletResponse extends VersionedPayload {
+  reauth_token: string;
+  /** Token expiry timestamp (v1: expires_at = issued_at + 120 seconds) */
+  expires_at: UnixTimestampMs;
+}
+
+export interface ViewSeedPhraseResponse extends VersionedPayload {
+  seed_phrase: string[];
+}
+
+export interface LogoutWalletResponse extends VersionedPayload {
+  success: boolean;
+}
+
+export interface LoadWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  lock_status: WalletLockStatus;
+
+  /**
+   * Accounts are available only when the wallet DB is unlocked.
+   * If `lock_status` is `Locked`, this MUST be an empty array.
+   * After a successful `UnlockWallet`, the UI SHOULD call `LoadWallet` again to obtain `accounts`.
+   */
+  accounts: AccountInfo[];
+}
+
+export interface ListWalletsResponse extends VersionedPayload {
+  wallets: WalletInfo[];
+}
+
+export interface GetReceiveAddressResponse extends VersionedPayload {
+  address: AddressInfo;
+}
+
+export interface StartSyncResponse extends VersionedPayload {
+  started: boolean;
+}
+
+export interface StopSyncResponse extends VersionedPayload {
+  stopped: boolean;
+}
+
+export interface GetSyncProgressResponse extends VersionedPayload {
+  progress: SyncProgress;
+}
+
+export interface GetBalanceResponse extends VersionedPayload {
+  balance: Balance;
+}
+
+export interface ListTransactionsResponse extends VersionedPayload {
+  transactions: TransactionInfo[];
+  total_count: number;
+}
+
+/**
+ * Response from PrepareSend. Contains proposal details for user review.
+ * Transaction bytes are held in backend memory, not sent to UI.
+ */
+export interface PrepareSendResponse extends VersionedPayload {
+  /** Unique proposal identifier (backend-side reference) */
+  proposal_id: string;
+  /** Fee for the transaction */
+  fee: Zatoshis;
+  /** Summary for user verification */
+  summary: TransactionSummary;
+  /** Proposal expiration timestamp (v1: proposals auto-expire after 10 minutes) */
+  expires_at: UnixTimestampMs;
+}
+
+/** Transaction summary for user verification before confirming */
+export interface TransactionSummary {
+  recipient: string;
+  recipient_kind: RecipientKind;
+  amount: Zatoshis;
+  fee: Zatoshis;
+  memo_present: boolean;
+  total_spend: Zatoshis;
+}
+
+export interface ConfirmSendResponse extends VersionedPayload {
+  txid: string;
+}
+
+export interface CancelSendResponse extends VersionedPayload {
+  cancelled: boolean;
+}
+
+export interface RetryBroadcastResponse extends VersionedPayload {
+  txid: string;
+}
+
+export interface ShieldFundsResponse extends VersionedPayload {
+  /**
+   * Txid of the shielding transaction created by this call.
+   *
+   * Note: Shielding may batch into multiple transactions when the transparent input
+   * set is too large to fit in a single transaction; in that case this `txid`
+   * refers to the first transaction in the batch. Additional shielding txids are
+   * observable via `tx.changed` events and `ListTransactions`.
+   */
+  txid: string;
+  /** Fee (zatoshis) for the transaction identified by `txid` */
+  fee: Zatoshis;
+}
+
+export interface VerifyBackupResponse extends VersionedPayload {
+  verified: boolean;
+}
+
+export interface GetBackupChallengeResponse extends VersionedPayload {
+  challenge: BackupChallenge;
+}
+
+export interface RestoreWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  birthday_height: number;
+}
+
+export interface ImportUfvkResponse extends VersionedPayload {
+  account: AccountInfo;
+}
+
+export interface BuildSigningRequestResponse extends VersionedPayload {
+  signing_request: SigningRequest;
+}
+
+export interface FinalizeSigningResponse extends VersionedPayload {
+  txid: string;
+}
+
+/**
+ * Create a standalone Keystone hardware wallet from a UFVK.
+ *
+ * Unlike software wallets, this does NOT generate a mnemonic.
+ * The UFVK provides view-only access; spending requires Keystone signing.
+ */
+export interface CreateKeystoneWalletRequest extends VersionedPayload {
+  name: string;
+  network: Network;
+  password: string;
+  /**
+   * DISABLED: Keychain biometric auto-unlock is disabled. Always pass `false`.
+   * See SECURITY.md for rationale
+   */
+  remember_unlock: boolean;
+  ufvk: string;
+  /** Optional birthday height for faster sync. If omitted, defaults to Sapling activation height (slower). */
+  birthday_height?: number;
+  /** 32-byte seed fingerprint as hex string (from Keystone QR) */
+  seed_fingerprint: string | null;
+  /** ZIP-32 account index (from Keystone QR) */
+  zip32_account_index: number | null;
+}
+
+export interface CreateKeystoneWalletResponse extends VersionedPayload {
+  wallet: WalletInfo;
+  account: AccountInfo;
+}
+
+export interface RequestSwapQuoteResponse extends VersionedPayload {
+  quote_id: string;
+  quote: SwapQuote;
+}
+
+export interface StartSwapResponse extends VersionedPayload {
+  swap: SwapInfo;
+}
+
+export interface GetSwapStatusResponse extends VersionedPayload {
+  swap: SwapInfo;
+}
+
+export interface RefreshSwapStatusResponse extends VersionedPayload {
+  swap: SwapInfo;
+}
+
+export interface ResumePendingSwapsResponse extends VersionedPayload {
+  resumed_count: number;
+}
+
+export interface SetTorEnabledResponse extends VersionedPayload {
+  state: TorState;
+}
+
+export interface AddServerResponse extends VersionedPayload {
+  server: ServerInfo;
+}
+
+/**
+ * Note: if the stored server configuration is invalid (e.g. malformed `grpc_url`), the backend
+ * returns an IPC error rather than `{ success: false }`.
+ */
+export interface SetDefaultServerResponse extends VersionedPayload {
+  success: boolean;
+}
+
+/**
+ * Health-check response.
+ *
+ * Invalid stored configuration is reported as `success: false` with an `error` message (instead of
+ * failing the IPC call).
+ */
+export interface TestServerResponse extends VersionedPayload {
+  success: boolean;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export interface GetWalletStatusResponse extends VersionedPayload {
+  status: WalletStatus;
+}
+
+export interface GetTorStateResponse extends VersionedPayload {
+  state: TorState;
+}
+
+export interface ListServersResponse extends VersionedPayload {
+  servers: ServerInfo[];
+}
+
+export interface ListSwapsResponse extends VersionedPayload {
+  swaps: SwapInfo[];
+}
+
+export interface GetSupportedTokensResponse extends VersionedPayload {
+  tokens: SupportedToken[];
+}
+
+// ============================================================================
+// Job Command Responses
+// ============================================================================
+
+/** Response when a send job is started */
+export interface StartSendJobResponse extends VersionedPayload {
+  /** Unique job identifier for tracking progress */
+  job_id: string;
+}
+
+/** Response when a shield job is started */
+export interface StartShieldJobResponse extends VersionedPayload {
+  /** Unique job identifier for tracking progress */
+  job_id: string;
+}
+
+/** Response when cancelling a job */
+export interface CancelJobResponse extends VersionedPayload {
+  /** True if the job was cancelled, false if it could not be cancelled */
+  cancelled: boolean;
+}
+
+/** Response with current job status */
+export interface GetJobStatusResponse extends VersionedPayload {
+  progress: JobProgress;
+}
+
+/** Response listing all active jobs */
+export interface ListJobsResponse extends VersionedPayload {
+  jobs: JobProgress[];
+}
+
+// ============================================================================
+// Events
+// ============================================================================
+
+/**
+ * Events are emitted for the currently active wallet.
+ *
+ * The active wallet is set by:
+ * - `LoadWallet`
+ * - `CreateWallet` (on success)
+ * - `RestoreWallet` (on success)
+ *
+ * Any account_id values are wallet-local to the active wallet.
+ */
+/** Sync progress update */
+export interface SyncProgressEvent extends VersionedPayload {
+  event: 'sync.progress';
+  progress: SyncProgress;
+}
+
+/** Balance changed */
+export interface BalanceChangedEvent extends VersionedPayload {
+  event: 'balance.changed';
+  account_id: number;
+  balance: Balance;
+}
+
+/** Transaction state changed */
+export interface TransactionChangedEvent extends VersionedPayload {
+  event: 'tx.changed';
+  transaction: TransactionInfo;
+}
+
+/** Swap state changed */
+export interface SwapChangedEvent extends VersionedPayload {
+  event: 'swap.changed';
+  swap: SwapInfo;
+}
+
+/** Tor status changed */
+export interface TorStatusEvent extends VersionedPayload {
+  event: 'tor.status';
+  state: TorState;
+}
+
+/** Wallet status changed */
+export interface WalletStatusEvent extends VersionedPayload {
+  event: 'wallet.status';
+  status: WalletStatus;
+}
+
+/** Job progress changed */
+export interface JobProgressEvent extends VersionedPayload {
+  event: 'job.progress';
+  progress: JobProgress;
+}
+
+/** Server failover occurred during send/broadcast retries */
+export interface ServerFailoverEvent extends VersionedPayload {
+  event: 'server.failover';
+  network: Network;
+  from_server_id: string;
+  from_server_name: string;
+  from_grpc_url: string;
+  to_server_id: string;
+  to_server_name: string;
+  to_grpc_url: string;
+  reason: string;
+}
+
+export type IpcEvent =
+  | SyncProgressEvent
+  | BalanceChangedEvent
+  | TransactionChangedEvent
+  | SwapChangedEvent
+  | TorStatusEvent
+  | WalletStatusEvent
+  | JobProgressEvent
+  | ServerFailoverEvent;
+
+// ============================================================================
+// Error Codes
+// ============================================================================
+
+export const ErrorCodes = {
+  // Wallet errors
+  WALLET_NOT_FOUND: 'E1001',
+  WALLET_LOCKED: 'E1002',
+  WALLET_ALREADY_EXISTS: 'E1003',
+  INVALID_SEED_PHRASE: 'E1004',
+  BACKUP_REQUIRED: 'E1005',
+  BACKUP_CHALLENGE_INVALID: 'E1006',
+  BACKUP_CHALLENGE_EXPIRED: 'E1007',
+  INVALID_WALLET_PASSWORD: 'E1008',
+  REAUTH_REQUIRED: 'E1009',
+  REAUTH_TOKEN_INVALID: 'E1010',
+  REAUTH_TOKEN_EXPIRED: 'E1011',
+  BACKUP_CHALLENGE_TOO_MANY_ATTEMPTS: 'E1012',
+
+  // Account errors
+  ACCOUNT_NOT_FOUND: 'E2001',
+  WATCH_ONLY_CANNOT_SPEND: 'E2002',
+
+  // Transaction errors
+  INSUFFICIENT_FUNDS: 'E3001',
+  INVALID_RECIPIENT: 'E3002',
+  TRANSPARENT_SPEND_BLOCKED: 'E3003',
+  TRANSACTION_FAILED: 'E3004',
+  MEMO_TOO_LONG: 'E3005',
+  PROPOSAL_NOT_FOUND: 'E3006',
+  PROPOSAL_EXPIRED: 'E3007',
+  QUEUED_BROADCAST_NOT_FOUND: 'E3008',
+  QUEUED_BROADCAST_EXPIRED: 'E3009',
+  PRIVACY_ACK_REQUIRED: 'E3010',
+  MEMO_NOT_ALLOWED: 'E3011',
+  JOB_NOT_FOUND: 'E3012',
+
+  // Sync errors
+  SYNC_IN_PROGRESS: 'E4001',
+  SERVER_UNAVAILABLE: 'E4002',
+  SYNC_FAILED: 'E4003',
+
+  // Keystone errors
+  INVALID_UFVK: 'E5001',
+  INVALID_PCZT: 'E5002',
+  SIGNING_FAILED: 'E5003',
+
+  // Swap errors
+  QUOTE_EXPIRED: 'E6001',
+  SWAP_FAILED: 'E6002',
+  INVALID_ASSET: 'E6003',
+  SWAP_UNSUPPORTED_NETWORK: 'E6004',
+
+  // Tor errors
+  TOR_NOT_READY: 'E7001',
+  TOR_CONNECTION_FAILED: 'E7002',
+
+  // Exchange rate errors
+  EXCHANGE_RATE_DISABLED: 'E8001',
+  EXCHANGE_RATE_FETCH_FAILED: 'E8002',
+  EXCHANGE_RATE_RATE_LIMITED: 'E8003',
+  EXCHANGE_RATE_PRIVACY_ACK_REQUIRED: 'E8004',
+
+  // Watch-only wallet errors
+  WATCH_ONLY_NO_SEED: 'E9010',
+  WATCH_ONLY_NO_BACKUP: 'E9011',
+  WATCH_ONLY_CANNOT_SHIELD: 'E9012',
+
+  // General errors
+  INVALID_REQUEST: 'E9001',
+  INTERNAL_ERROR: 'E9002',
+  SCHEMA_VERSION_MISMATCH: 'E9003',
+} as const;
+
+// ============================================================================
+// Command Names (for Tauri invoke)
+// ============================================================================
+
+export const Commands = {
+  // Wallet
+  CREATE_WALLET: 'zbag_create_wallet',
+  LOAD_WALLET: 'zbag_load_wallet',
+  LIST_WALLETS: 'zbag_list_wallets',
+  GET_WALLET_STATUS: 'zbag_get_wallet_status',
+  UNLOCK_WALLET: 'zbag_unlock_wallet',
+  LOCK_WALLET: 'zbag_lock_wallet',
+  REAUTH_WALLET: 'zbag_reauth_wallet',
+  VIEW_SEED_PHRASE: 'zbag_view_seed_phrase',
+  LOGOUT_WALLET: 'zbag_logout_wallet',
+
+  // Address
+  GET_RECEIVE_ADDRESS: 'zbag_get_receive_address',
+
+  // Sync
+  START_SYNC: 'zbag_start_sync',
+  STOP_SYNC: 'zbag_stop_sync',
+  GET_SYNC_PROGRESS: 'zbag_get_sync_progress',
+
+  // Balance
+  GET_BALANCE: 'zbag_get_balance',
+
+  // Transactions
+  LIST_TRANSACTIONS: 'zbag_list_transactions',
+  PREPARE_SEND: 'zbag_prepare_send',
+  CONFIRM_SEND: 'zbag_confirm_send',
+  CANCEL_SEND: 'zbag_cancel_send',
+  RETRY_BROADCAST: 'zbag_retry_broadcast',
+  SHIELD_FUNDS: 'zbag_shield_funds',
+
+  // Backup
+  GET_BACKUP_CHALLENGE: 'zbag_get_backup_challenge',
+  VERIFY_BACKUP: 'zbag_verify_backup',
+  RESTORE_WALLET: 'zbag_restore_wallet',
+
+  // Keystone
+  IMPORT_UFVK: 'zbag_import_ufvk',
+  BUILD_SIGNING_REQUEST: 'zbag_build_signing_request',
+  FINALIZE_SIGNING: 'zbag_finalize_signing',
+  CREATE_KEYSTONE_WALLET: 'zbag_create_keystone_wallet',
+
+  // Swaps
+  REQUEST_SWAP_QUOTE: 'zbag_request_swap_quote',
+  START_SWAP: 'zbag_start_swap',
+  GET_SWAP_STATUS: 'zbag_get_swap_status',
+  LIST_SWAPS: 'zbag_list_swaps',
+  GET_SUPPORTED_TOKENS: 'zbag_get_supported_tokens',
+  REFRESH_SWAP_STATUS: 'zbag_refresh_swap_status',
+  RESUME_PENDING_SWAPS: 'zbag_resume_pending_swaps',
+
+  // Tor
+  SET_TOR_ENABLED: 'zbag_set_tor_enabled',
+  GET_TOR_STATE: 'zbag_get_tor_state',
+
+  // Servers
+  ADD_SERVER: 'zbag_add_server',
+  SET_DEFAULT_SERVER: 'zbag_set_default_server',
+  TEST_SERVER: 'zbag_test_server',
+  LIST_SERVERS: 'zbag_list_servers',
+
+  // Logs
+  GET_LOG_LOCATION: 'zbag_get_log_location',
+
+  // Version
+  GET_VERSION: 'zbag_get_version',
+
+  // Exchange Rate
+  GET_FIAT_SETTINGS: 'zbag_get_fiat_settings',
+  SET_FIAT_SETTINGS: 'zbag_set_fiat_settings',
+  GET_EXCHANGE_RATE: 'zbag_get_exchange_rate',
+  // Jobs (async operations)
+  START_SEND_JOB: 'zbag_start_send_job',
+  START_SHIELD_JOB: 'zbag_start_shield_job',
+  CANCEL_JOB: 'zbag_cancel_job',
+  GET_JOB_STATUS: 'zbag_get_job_status',
+  LIST_JOBS: 'zbag_list_jobs',
+} as const;
+
+// ============================================================================
+// Event Channels (for Tauri listen)
+// ============================================================================
+
+export const EventChannels = {
+  SYNC: 'zbag://sync',
+  BALANCE: 'zbag://balance',
+  TRANSACTION: 'zbag://tx',
+  SWAP: 'zbag://swap',
+  TOR: 'zbag://tor',
+  WALLET_STATUS: 'zbag://wallet-status',
+  JOB: 'zbag://job',
+  SERVER_FAILOVER: 'zbag://server-failover',
+} as const;

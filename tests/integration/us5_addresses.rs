@@ -10,7 +10,7 @@
 //! - Returned AddressInfo.address_type matches request
 //! - Labeling/UX in Receive page reflects shielded vs transparent
 //!
-//! See `crates/bagz-engine/tests/us5_address_rotation.rs` for the executable unit coverage.
+//! See `crates/zbag-engine/tests/us5_address_rotation.rs` for the executable unit coverage.
 
 #[test]
 fn placeholder() {

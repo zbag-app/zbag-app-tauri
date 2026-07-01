@@ -11,10 +11,10 @@ fi
 PATTERN='(\\bsentry\\b|@sentry|sentry\\.io|SENTRY_DSN|\\bposthog\\b|POSTHOG|\\bamplitude\\b|\\bsegment\\b|\\bmixpanel\\b|\\bdatadog\\b|\\bnewrelic\\b|\\bbugsnag\\b|\\brollbar\\b|\\bappcenter\\b|\\bcrashlytics\\b)'
 
 TARGETS=(
-  "$ROOT/apps/bagz-app-tauri/src"
-  "$ROOT/apps/bagz-app-tauri/src-tauri"
-  "$ROOT/apps/bagz-app-tauri/package.json"
-  "$ROOT/apps/bagz-app-tauri/bun.lock"
+  "$ROOT/apps/zbag-app-tauri/src"
+  "$ROOT/apps/zbag-app-tauri/src-tauri"
+  "$ROOT/apps/zbag-app-tauri/package.json"
+  "$ROOT/apps/zbag-app-tauri/bun.lock"
   "$ROOT/crates"
   "$ROOT/Cargo.toml"
   "$ROOT/Cargo.lock"

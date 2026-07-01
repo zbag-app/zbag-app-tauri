@@ -23,13 +23,13 @@ Source document: (formerly) detailed constitution (removed; this file is canonic
 	==================
 -->
 
-# bagZ Desktop Constitution
+# zbag Desktop Constitution
 
 ## Preamble
 
-This document defines the non-negotiable principles governing bagZ Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
+This document defines the non-negotiable principles governing zbag Desktop development. If a feature, refactor, or integration conflicts with these principles, it does not ship until the conflict is resolved or this constitution is amended.
 
-This file is the canonical constitution for bagZ Desktop.
+This file is the canonical constitution for zbag Desktop.
 
 ## Core Principles
 
@@ -118,7 +118,7 @@ Significant changes MUST be documented with problem, options considered, chosen 
 Application logs MUST support structured, redacted, and rotated file output.
 
 **Enforceable rules:**
-- Log files MUST be written to `~/.bagz/logs/` with daily rotation (e.g., `bagz.YYYY-MM-DD.log`)
+- Log files MUST be written to `~/.zbag/logs/` with daily rotation (e.g., `zbag.YYYY-MM-DD.log`)
 - Log retention MUST be limited (default: 7 days)
 - Secrets (mnemonics, seeds, spending keys, raw payloads, full memos) MUST be redacted in all log output
 - Log levels MUST be configurable via `RUST_LOG` environment variable
@@ -162,12 +162,12 @@ This constitution follows semantic versioning:
 
 ### Reference Documents
 
-- **Feature specification**: `specs/001-bagz-desktop-wallet/spec.md`
-- **Implementation plan**: `specs/001-bagz-desktop-wallet/plan.md`
-- **Data model**: `specs/001-bagz-desktop-wallet/data-model.md`
-- **Research**: `specs/001-bagz-desktop-wallet/research.md`
-- **Quickstart**: `specs/001-bagz-desktop-wallet/quickstart.md`
-- **Tasks**: `specs/001-bagz-desktop-wallet/tasks.md`
+- **Feature specification**: `specs/001-zbag-desktop-wallet/spec.md`
+- **Implementation plan**: `specs/001-zbag-desktop-wallet/plan.md`
+- **Data model**: `specs/001-zbag-desktop-wallet/data-model.md`
+- **Research**: `specs/001-zbag-desktop-wallet/research.md`
+- **Quickstart**: `specs/001-zbag-desktop-wallet/quickstart.md`
+- **Tasks**: `specs/001-zbag-desktop-wallet/tasks.md`
 
 ## Security Reporting and Incident Response
 

@@ -636,183 +636,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bagz-app-tauri"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "axum",
- "bagz-core",
- "bagz-engine",
- "bagz-keystone",
- "bagz-network",
- "bagz-tor",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "bagz-cli"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "bagz-core",
- "bagz-engine",
- "bagz-network",
- "bagz-tor",
- "base64 0.22.1",
- "chrono",
- "clap",
- "console 0.15.11",
- "dirs",
- "indicatif 0.17.11",
- "prost",
- "rpassword",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zcash_protocol",
- "zeroize",
-]
-
-[[package]]
-name = "bagz-core"
-version = "0.2.2"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "uuid",
- "zeroize",
-]
-
-[[package]]
-name = "bagz-engine"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "argon2",
- "bagz-core",
- "bagz-keystone",
- "bagz-network",
- "bagz-tor",
- "base64 0.22.1",
- "bip39",
- "chacha20poly1305",
- "chrono",
- "hex",
- "keyring",
- "orchard",
- "pczt",
- "prost",
- "rand 0.8.6",
- "rusqlite",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "uuid",
- "zcash_client_backend",
- "zcash_client_sqlite",
- "zcash_primitives",
- "zcash_proofs",
- "zcash_protocol",
- "zcash_transparent",
- "zeroize",
- "zip32",
-]
-
-[[package]]
-name = "bagz-keystone"
-version = "0.2.2"
-dependencies = [
- "base64 0.22.1",
- "pczt",
- "thiserror 2.0.18",
- "tracing",
- "zcash_client_backend",
- "zcash_protocol",
- "zip32",
-]
-
-[[package]]
-name = "bagz-network"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "bagz-core",
- "bagz-tor",
- "bytes",
- "chrono",
- "http",
- "http-body-util",
- "parking_lot",
- "prost",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tonic",
- "tracing",
- "zcash_client_backend",
- "zcash_primitives",
- "zcash_protocol",
-]
-
-[[package]]
-name = "bagz-tor"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "bagz-core",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "zcash_client_backend",
-]
-
-[[package]]
-name = "bagz-xtask"
-version = "0.2.2"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "ctrlc",
- "plist",
- "tempfile",
- "thiserror 2.0.18",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10925,6 +10748,183 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "synstructure",
+]
+
+[[package]]
+name = "zbag-app-tauri"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zbag-core",
+ "zbag-engine",
+ "zbag-keystone",
+ "zbag-network",
+ "zbag-tor",
+]
+
+[[package]]
+name = "zbag-cli"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "console 0.15.11",
+ "dirs",
+ "indicatif 0.17.11",
+ "prost",
+ "rpassword",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zbag-core",
+ "zbag-engine",
+ "zbag-network",
+ "zbag-tor",
+ "zcash_protocol",
+ "zeroize",
+]
+
+[[package]]
+name = "zbag-core"
+version = "0.2.2"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "zbag-engine"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "base64 0.22.1",
+ "bip39",
+ "chacha20poly1305",
+ "chrono",
+ "hex",
+ "keyring",
+ "orchard",
+ "pczt",
+ "prost",
+ "rand 0.8.6",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "zbag-core",
+ "zbag-keystone",
+ "zbag-network",
+ "zbag-tor",
+ "zcash_client_backend",
+ "zcash_client_sqlite",
+ "zcash_primitives",
+ "zcash_proofs",
+ "zcash_protocol",
+ "zcash_transparent",
+ "zeroize",
+ "zip32",
+]
+
+[[package]]
+name = "zbag-keystone"
+version = "0.2.2"
+dependencies = [
+ "base64 0.22.1",
+ "pczt",
+ "thiserror 2.0.18",
+ "tracing",
+ "zcash_client_backend",
+ "zcash_protocol",
+ "zip32",
+]
+
+[[package]]
+name = "zbag-network"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "http",
+ "http-body-util",
+ "parking_lot",
+ "prost",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tonic",
+ "tracing",
+ "zbag-core",
+ "zbag-tor",
+ "zcash_client_backend",
+ "zcash_primitives",
+ "zcash_protocol",
+]
+
+[[package]]
+name = "zbag-tor"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "zbag-core",
+ "zcash_client_backend",
+]
+
+[[package]]
+name = "zbag-xtask"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "ctrlc",
+ "plist",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

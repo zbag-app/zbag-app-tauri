@@ -136,15 +136,15 @@ pub fn classify_lsof_fields(sample: &str, raw_fields: &[u8]) -> Vec<SocketViolat
 
 pub fn fixture_stream(name: &str) -> Option<Vec<u8>> {
     let stream = match name {
-        "loopback-listener" => b"p1234\0cbagZ\0PTCP\0TST=LISTEN\0n127.0.0.1:7777\0".as_slice(),
-        "wildcard-listener" => b"p1234\0cbagZ\0PTCP\0TST=LISTEN\0n*:7777\0".as_slice(),
-        "zero-listener" => b"p1234\0cbagZ\0PTCP\0TST=LISTEN\0n0.0.0.0:7777\0".as_slice(),
+        "loopback-listener" => b"p1234\0czbag\0PTCP\0TST=LISTEN\0n127.0.0.1:7777\0".as_slice(),
+        "wildcard-listener" => b"p1234\0czbag\0PTCP\0TST=LISTEN\0n*:7777\0".as_slice(),
+        "zero-listener" => b"p1234\0czbag\0PTCP\0TST=LISTEN\0n0.0.0.0:7777\0".as_slice(),
         "external-connected" => {
-            b"p1234\0cbagZ\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->142.250.190.78:443\0"
+            b"p1234\0czbag\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->142.250.190.78:443\0"
                 .as_slice()
         }
         "loopback-connected" => {
-            b"p1234\0cbagZ\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->127.0.0.1:7777\0".as_slice()
+            b"p1234\0czbag\0PTCP\0TST=ESTABLISHED\0n127.0.0.1:54321->127.0.0.1:7777\0".as_slice()
         }
         _ => return None,
     };
