@@ -1,114 +1,96 @@
-# Contributing to bagZ
+# Contributing to zbag
+
+Thank you for your interest in zbag, a privacy-first Zcash wallet. This
+release track keeps the current Rust + Tauri/CEF + React desktop application
+buildable while the main product line migrates to Flutter.
+
+## Licensing and the DCO
+
+zbag is licensed under **FSL-1.1-ALv2**. See [`LICENSE`](./LICENSE) for the
+full text.
+
+Contributions are **inbound = outbound**: when you contribute, you license your
+contribution under the same FSL-1.1-ALv2 terms that cover the project, including
+the same automatic Apache-2.0 future grant.
+
+We use the **Developer Certificate of Origin (DCO)**, not a CLA. To sign off,
+certify the [DCO](https://developercertificate.org/) by adding a
+`Signed-off-by` line to every commit:
+
+```text
+Signed-off-by: Your Name <you@example.com>
+```
+
+`git commit -s` adds this automatically. The name and email should be your real
+identity and match your commit author.
 
 ## Development Setup
 
-See [CLAUDE.md](./CLAUDE.md) for build instructions and architecture overview.
+Use the `just` recipes as the stable developer interface:
+
+```bash
+just build
+just test
+just fmt
+just clippy
+just app-build
+just verify
+```
+
+The legacy Makefile remains available for lower-level targets while this Tauri
+release track is maintained.
 
 ## Version Control
 
-This project uses standard **git** for version control.
+This project uses standard **git**.
 
-### Common Workflows
-
-**View status and changes:**
 ```bash
-git status     # Working copy status
-git log        # Commit history
-git diff       # Uncommitted changes
+git status
+git diff
+git switch -c fix/description
+git commit -s -m "fix: description"
+git pull --rebase
 ```
 
-**Create commits:**
-```bash
-git add <files>             # Stage changes
-git commit -m "message"     # Create commit
-```
-
-**Work with branches:**
-```bash
-git checkout -b my-branch   # Create and switch to branch
-git push -u origin my-branch # Push branch to remote
-```
-
-**Update from remote:**
-```bash
-git pull --rebase           # Update and rebase local changes
-git fetch                   # Fetch without merging
-```
-
-**Undo mistakes:**
-```bash
-git stash                   # Temporarily store changes
-git stash pop               # Restore stashed changes
-git reset HEAD~1            # Undo last commit (keep changes)
-```
+Use `--force-with-lease` rather than `--force` when rewriting a branch you have
+already pushed.
 
 ## Commit Messages
 
-Follow existing patterns:
-- `US<N>: ...` - User story work
-- `docs: ...` - Documentation
-- `chore: ...` - Maintenance
-- `fix: ...` - Bug fixes
+Follow the existing Conventional Commit patterns:
 
-## Pull Requests
+- `US<N>: ...` - user-story work
+- `docs: ...` - documentation
+- `chore: ...` - maintenance
+- `fix: ...` - bug fixes
+- `feat: ...` - new features
 
-1. Create a branch: `git checkout -b fix/description`
-2. Make changes and commit: `git commit -m "fix: description"`
-3. Push: `git push -u origin fix/description`
-4. Open PR on GitHub linking relevant issue
+Every new commit must carry a DCO sign-off.
 
 ## Code Quality
 
-Before submitting:
-```bash
-make pre-commit   # Format + lint
-make test         # Run tests
-make tauri-build  # Full build verification
-```
-
-## Testing CI Locally
-
-Use [act](https://github.com/nektos/act) to run GitHub Actions workflows locally before pushing.
-
-### Installation
+Before submitting, run:
 
 ```bash
-brew install act    # macOS
-# See https://github.com/nektos/act#installation for other platforms
+just verify
 ```
 
-### Running Workflows
-
-The CI uses `self-hosted` runners, so specify an image:
+For targeted work, use the narrower recipes first:
 
 ```bash
-# Run the bun-tests job (fastest for frontend changes)
-act -j bun-tests -P self-hosted=catthehacker/ubuntu:act-22.04
-
-# Run individual Rust jobs
-act -j rust-tests -P self-hosted=catthehacker/ubuntu:rust-22.04
-act -j rust-clippy -P self-hosted=catthehacker/ubuntu:rust-22.04
-act -j rust-audit -P self-hosted=catthehacker/ubuntu:rust-22.04
-act -j rust-migrations -P self-hosted=catthehacker/ubuntu:rust-22.04
-
-# Dry run (validate workflow syntax without executing)
-act -n
+just fmt
+just clippy
+just test
+just app-build
 ```
 
-**Image notes:**
-- `rust-22.04`: Has Rust 1.x, clippy, rustfmt pre-installed (~2GB)
-- `act-22.04`: Base Ubuntu image (~1GB) - Bun 1.3.5 installed via workflow action
-- First run downloads container images; subsequent runs use cached images
+## Security and Conduct
 
-### Requirements
+- Never commit secrets, keys, wallets, or private `.env` files.
+- Do not report security vulnerabilities through public issues or PRs; follow
+  [`SECURITY.md`](./SECURITY.md).
+- Preserve the project guardrails: wallet secrets stay in Rust, shielded funds
+  are preferred, Tor fail-closed behavior must not regress, and logs must stay
+  redacted.
 
-- Docker must be running
-- First run downloads container images (~2GB)
-
-### Limitations
-
-- **Memory**: Rust compilation requires significant memory (~8GB+). If `act` exits with code 137 (OOM killed), increase Docker memory limits or reduce parallelism with `--env CARGO_BUILD_JOBS=4`
-- Some GitHub-specific features (caching, artifacts) may not work identically
-- For quick syntax validation, use `actionlint` instead: `brew install actionlint && actionlint`
-
-See [AGENTS.md](./AGENTS.md) for detailed guidelines.
+See [`AGENTS.md`](./AGENTS.md) for detailed contributor and agent guidelines.
