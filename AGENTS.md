@@ -12,7 +12,8 @@
 ## Build, Test, and Development Commands
 
 - Rust toolchain is pinned in `rust-toolchain.toml` (Rust `1.92.0`, includes `rustfmt` + `clippy`).
-- Prefer Makefile targets (run `make help` for all targets): `make build`, `make test`, `make fmt`, `make clippy`, `make pre-commit`, `make install`, `make build-frontend`, `make dev`, `make tauri-build`.
+- Prefer `just` recipes (run `just --list` for all recipes): `just build`, `just test`, `just fmt`, `just clippy`, `just pre-commit`, `just install`, `just frontend-build`, `just app-dev`, `just app-build`, `just verify`.
+- The Makefile remains the lower-level backend for legacy and CI targets; run `make help` when you need the full target list.
 - Rust (direct): `cargo build --workspace --exclude zbag-app-tauri --exclude zbag-xtask` and `cargo test --workspace --exclude zbag-app-tauri --exclude zbag-xtask` (or scope: `cargo test -p zbag-engine`).
 - Format + lint (direct): `cargo fmt --all` and `cargo clippy --workspace --all-targets --exclude zbag-app-tauri --exclude zbag-xtask`.
 - Frontend (direct): `cd apps/zbag-app-tauri && bun install && bun run dev`.
@@ -38,12 +39,12 @@
 
 Uses [git-cliff](https://git-cliff.org/) for automated changelog generation from conventional commits.
 
-- `make changelog` - Regenerate CHANGELOG.md from git history
-- `make changelog-unreleased` - Preview unreleased changes
+- `just changelog` - Regenerate CHANGELOG.md from git history
+- `just changelog-unreleased` - Preview unreleased changes
 - Config: `cliff.toml`
 
 **Releasing a version:**
-1. `make changelog`
+1. `just changelog`
 2. `git add CHANGELOG.md && git commit -m "chore: update changelog for vX.Y.Z"`
 3. `git tag vX.Y.Z`
 4. `git push && git push origin --tags`
@@ -78,8 +79,8 @@ Standard git workflow.
 ## Done Criteria
 
 Work is not complete until:
-1. All tests pass (`make test`)
-2. Pre-commit checks pass (`make pre-commit`)
-3. Full Tauri build succeeds (`make tauri-build`)
+1. All tests pass (`just test`)
+2. Pre-commit checks pass (`just pre-commit`)
+3. Full Tauri build succeeds (`just app-build`)
 
-Do not consider a task finished until `make tauri-build` completes without errors.
+Do not consider a task finished until `just app-build` completes without errors.

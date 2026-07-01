@@ -73,18 +73,20 @@ Platform targets: macOS, Windows, Linux
 
 ## Development
 
-A Makefile is provided for common development tasks:
+A `justfile` is provided as the preferred command surface. The Makefile remains
+available underneath for lower-level legacy targets.
 
-| Target | Description |
+| Recipe | Description |
 |--------|-------------|
-| `make install` | Install frontend dependencies |
-| `make dev` | Run Tauri development server |
-| `make build` | Build Rust library crates |
-| `make test` | Run all tests |
-| `make pre-commit` | Format and lint before committing |
-| `make check` | Full CI-like validation |
+| `just install` | Install frontend dependencies |
+| `just app-dev` | Run Tauri development server |
+| `just build` | Build Rust library crates |
+| `just test` | Run Rust tests |
+| `just pre-commit` | Format and lint before committing |
+| `just app-build` | Build the Tauri app bundle |
+| `just verify` | Full local validation including app bundle build |
 
-Run `make help` for all available targets.
+Run `just --list` for all available recipes, or `make help` for the full legacy target list.
 
 See [Quickstart](specs/001-zbag-desktop-wallet/quickstart.md) for full setup instructions.
 
