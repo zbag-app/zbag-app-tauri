@@ -1,5 +1,6 @@
 //! Transaction command handlers.
 
+use tracing::warn;
 use zbag_core::ipc::v1::commands::transaction::{
     CancelSendRequest, CancelSendResponse, ConfirmSendRequest, ConfirmSendResponse,
     ListTransactionsRequest, ListTransactionsResponse, PrepareSendRequest, PrepareSendResponse,
@@ -7,7 +8,6 @@ use zbag_core::ipc::v1::commands::transaction::{
 };
 use zbag_core::ipc::v1::common::IpcResult;
 use zbag_engine::wallet_manager::WalletManager;
-use tracing::warn;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;

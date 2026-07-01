@@ -13,10 +13,10 @@ pub fn start_sync_impl(
     state: &AppState,
     request: StartSyncRequest,
 ) -> IpcResult<StartSyncResponse> {
+    use std::path::PathBuf;
     use zbag_core::domain::{SyncPhase, SyncProgress, WalletLockStatus};
     use zbag_core::errors;
     use zbag_core::ipc::v1::common::{SCHEMA_VERSION, ensure_schema_version};
-    use std::path::PathBuf;
 
     if let Err(err) = ensure_schema_version(request.schema_version) {
         return IpcResult::Err { err };

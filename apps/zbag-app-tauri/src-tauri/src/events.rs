@@ -1,8 +1,8 @@
+use tauri::{Emitter, Runtime};
 use zbag_core::ipc::v1::events::{
     BalanceChangedEvent, JobProgressEvent, ServerFailoverEvent, SwapChangedEvent,
     SyncProgressEvent, TorStatusEvent, TransactionChangedEvent, WalletStatusEvent,
 };
-use tauri::{Emitter, Runtime};
 
 pub const CHANNEL_SYNC: &str = "zbag://sync";
 pub const CHANNEL_BALANCE: &str = "zbag://balance";

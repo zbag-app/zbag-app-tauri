@@ -1,7 +1,7 @@
 #![cfg(all(feature = "cef-runtime", not(feature = "test-bridge")))]
 
-use zbag_app_tauri_lib::{CEF_DISABLED_FEATURES, CEF_HOST_RESOLVER_RULES, cef_runtime_args};
 use std::collections::BTreeSet;
+use zbag_app_tauri_lib::{CEF_DISABLED_FEATURES, CEF_HOST_RESOLVER_RULES, cef_runtime_args};
 
 const EXPECTED_SWITCHES: &[&str] = &[
     "disable-background-networking",

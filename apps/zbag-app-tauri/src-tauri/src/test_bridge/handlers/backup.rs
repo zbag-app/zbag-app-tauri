@@ -1,11 +1,11 @@
 //! Backup and restore command handlers.
 
+use tracing::warn;
 use zbag_core::ipc::v1::commands::backup::{
     GetBackupChallengeRequest, GetBackupChallengeResponse, RestoreWalletRequest,
     RestoreWalletResponse, VerifyBackupRequest, VerifyBackupResponse,
 };
 use zbag_core::ipc::v1::common::IpcResult;
-use tracing::warn;
 
 use crate::state::AppState;
 use crate::test_bridge::helpers::map_anyhow;

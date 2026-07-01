@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use zbag_core::sensitive::SensitiveString;
 use uuid::Uuid;
+use zbag_core::sensitive::SensitiveString;
 
 fn cleanup_db_files(path: &Path) {
     let _ = std::fs::remove_file(path);

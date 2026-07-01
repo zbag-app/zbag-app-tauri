@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use zbag_core::permissions::create_dir_all_secure;
 use clap::{Parser, Subcommand};
+use zbag_core::permissions::create_dir_all_secure;
 
 mod cli_app_state;
 mod commands;
