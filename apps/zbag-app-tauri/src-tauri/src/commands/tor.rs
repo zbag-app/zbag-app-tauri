@@ -59,10 +59,10 @@ pub fn zbag_set_tor_enabled<R: Runtime>(
             let mut mgr = state.wallet_manager.lock().expect("mutex poisoned");
             let mut tx_svc = state.tx_service.lock().expect("mutex poisoned");
             for wallet_id in running_wallets {
-                if let Ok((wallet, lock_status)) = mgr.load_wallet(wallet_id, &mut tx_svc) {
-                    if lock_status == WalletLockStatus::Unlocked {
-                        let _ = start_sync_with_handlers(&app, &state, &mut mgr, &wallet);
-                    }
+                if let Ok((wallet, lock_status)) = mgr.load_wallet(wallet_id, &mut tx_svc)
+                    && lock_status == WalletLockStatus::Unlocked
+                {
+                    let _ = start_sync_with_handlers(&app, &state, &mut mgr, &wallet);
                 }
             }
         }

@@ -41,7 +41,7 @@ pub fn zbag_prepare_send(
         "send lifecycle event"
     );
 
-    let result = (|| {
+    let result = {
         let (mut mgr, mut tx_svc) = state.lock_wallet_then_tx_service();
         mgr.prepare_send(
             request.account_id,
@@ -51,7 +51,7 @@ pub fn zbag_prepare_send(
             request.allow_transparent_recipient,
             &mut tx_svc,
         )
-    })();
+    };
 
     match result {
         Ok(response) => {

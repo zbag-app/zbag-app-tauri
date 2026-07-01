@@ -96,7 +96,7 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
         let separator2 = PredefinedMenuItem::separator(app)?;
         let separator3 = PredefinedMenuItem::separator(app)?;
 
-        return Submenu::with_items(
+        Submenu::with_items(
             app,
             "zbag",
             true,
@@ -111,7 +111,7 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
                 &separator3,
                 &quit,
             ],
-        );
+        )
     }
 
     #[cfg(not(target_os = "macos"))]
