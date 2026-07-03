@@ -100,8 +100,12 @@ pub fn temporary_debug_enabled() -> bool {
 }
 
 pub fn init_logging() -> anyhow::Result<LoggingGuard> {
+    init_logging_in(default_log_directory()?)
+}
+
+pub fn init_logging_in(log_directory: impl AsRef<Path>) -> anyhow::Result<LoggingGuard> {
     let temp_debug_enabled = temporary_debug_enabled();
-    let log_directory = default_log_directory()?;
+    let log_directory = log_directory.as_ref().to_path_buf();
     // Create log directory with secure permissions (0700 on Unix)
     create_dir_all_secure(&log_directory).with_context(|| {
         format!(

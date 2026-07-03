@@ -59,7 +59,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
-      - run: cargo audit
+      - run: cargo audit --deny yanked
 
   rust-clippy:
     name: Rust Clippy

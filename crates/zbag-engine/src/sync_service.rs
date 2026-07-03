@@ -1933,8 +1933,8 @@ fn with_eta(state: &mut State, wallet_id: Uuid, mut progress: SyncProgress) -> S
     {
         let done = progress.scan_frontier_height.saturating_sub(start) as u64;
         let total = target.saturating_sub(start) as u64;
-        if total > 0 {
-            let mut pct = ((done.saturating_mul(100)) / total) as u8;
+        if let Some(raw_pct) = done.saturating_mul(100).checked_div(total) {
+            let mut pct = raw_pct.min(100) as u8;
             if pct >= 100 {
                 pct = if progress.phase == SyncPhase::Idle {
                     100

@@ -113,7 +113,7 @@ pre-commit: fmt clippy check-telemetry check-cef-network-hardening check-cef-arg
 check: fmt-check clippy-strict check-telemetry check-cef-network-hardening check-cef-args cef-smoketest-selftest test ## CI-like checks (no mutations)
 
 audit: ## Security audit
-	@cargo audit
+	@cargo audit --deny yanked
 
 check-telemetry: ## Check for telemetry code
 	@./scripts/check-no-telemetry.sh

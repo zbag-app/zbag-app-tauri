@@ -11,6 +11,9 @@ use zbag_engine::wallet_manager::WalletManager;
 use zbag_network::exchange_rate::ExchangeRateService;
 use zbag_network::near_intents::NearIntentsClient;
 
+#[cfg(not(feature = "test-bridge"))]
+const LEGACY_DATA_DIR_NAME: &str = ".zbag-legacy";
+
 pub struct AppState {
     /// Global lock-order rule: if both mutexes are needed, always acquire
     /// `wallet_manager` first and `tx_service` second.
@@ -40,9 +43,10 @@ impl AppState {
     }
 
     pub fn new() -> anyhow::Result<Self> {
-        let logging_guard = zbag_engine::logging::init_logging()?;
-        let app_db_path = default_app_db_path()?;
-        let wallets_root = default_wallets_root()?;
+        let data_root = zbag_data_root()?;
+        let logging_guard = zbag_engine::logging::init_logging_in(data_root.join("logs"))?;
+        let app_db_path = default_app_db_path(&data_root);
+        let wallets_root = default_wallets_root(&data_root);
         let key_store = Box::new(KeyStoreKeychain::new(wallets_root.clone()));
         let wallet_manager =
             WalletManager::new_with_wallets_root(app_db_path.clone(), wallets_root, key_store)?;
@@ -50,7 +54,7 @@ impl AppState {
         let tor_state = zbag_engine::db::tor_meta::get_tor_state(wallet_manager.app_db().conn())
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let tor_dir = default_tor_dir()?;
+        let tor_dir = default_tor_dir(&data_root);
         let tor_manager = Arc::new(zbag_tor::TorManager::new(
             zbag_tor::TorManagerConfig::new(tor_dir),
             tor_state,
@@ -85,19 +89,16 @@ impl AppState {
     }
 }
 
-fn default_app_db_path() -> anyhow::Result<PathBuf> {
-    let root = zbag_data_root()?;
-    Ok(root.join("app.db"))
+fn default_app_db_path(root: &std::path::Path) -> PathBuf {
+    root.join("app.db")
 }
 
-fn default_wallets_root() -> anyhow::Result<PathBuf> {
-    let root = zbag_data_root()?;
-    Ok(root.join("wallets"))
+fn default_wallets_root(root: &std::path::Path) -> PathBuf {
+    root.join("wallets")
 }
 
-fn default_tor_dir() -> anyhow::Result<PathBuf> {
-    let root = zbag_data_root()?;
-    Ok(root.join("tor"))
+fn default_tor_dir(root: &std::path::Path) -> PathBuf {
+    root.join("tor")
 }
 
 fn zbag_data_root() -> anyhow::Result<PathBuf> {
@@ -123,7 +124,17 @@ fn zbag_data_root() -> anyhow::Result<PathBuf> {
 
     #[cfg(not(feature = "test-bridge"))]
     {
+        if let Ok(root) = std::env::var("ZBAG_DATA_DIR") {
+            let trimmed = root.trim();
+            if trimmed.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "ZBAG_DATA_DIR is set but empty or whitespace"
+                ));
+            }
+            return Ok(PathBuf::from(trimmed));
+        }
+
         let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
-        Ok(PathBuf::from(home).join(".zbag"))
+        Ok(PathBuf::from(home).join(LEGACY_DATA_DIR_NAME))
     }
 }
